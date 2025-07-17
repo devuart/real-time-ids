@@ -1,0 +1,89 @@
+# Directories
+__pycache__/
+*.egg-info/
+*.dist-info/
+*.pytest_cache/
+*.mypy_cache/
+*.tox/
+*.idea/
+*.vscode/
+*.ipynb_checkpoints/
+*.env/
+*.venv/
+venv/
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.db3
+*.db3-journal
+*.db3-wal
+*.db3-shm
+*.db4
+*.db4-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*sqlite
+*sqlite3
+
+# Model files
+*.pth
+*.onnx
+*.pkl
+models/*.pth
+models/*.onnx
+models/*.pkl
+backend/models/*.pth
+backend/models/*.pkl
+
+# Log files
+*.log
+logs/
+
+# Python artifacts
+*.pyc
+*.pyo
+*.pyd
+
+# Data files
+*.csv
+*.json
+*list cmd.txt
+*Updated Comprehensive Execution Logic Analysis with Additional Files.txt
+*.xml
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.svg
+*.webp
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.gz
+*.rar
+*.7z
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+*.env
+
+# Coverage reports
+.coverage

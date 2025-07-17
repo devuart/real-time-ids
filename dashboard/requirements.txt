@@ -1,0 +1,16 @@
+flask
+flask-socketio
+flask-jwt-extended
+flask-restful
+sqlalchemy
+scapy
+numpy
+pandas
+joblib
+gunicorn
+eventlet
+python-dotenv
+psutil
+flask-cors
+requests
+scikit-learn

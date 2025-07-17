@@ -1,0 +1,96 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDS Attack Logs</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+</head>
+<body>
+    <h2>Intrusion Detection System - Attack Logs</h2>
+    
+    <button id="darkModeToggle">Toggle Dark Mode</button>
+
+    <div id="loading">Loading logs...</div>
+
+    <table id="logsTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Source IP</th>
+                <th>Destination IP</th>
+                <th>Protocol</th>
+                <th>Attack Type</th>
+            </tr>
+        </thead>
+        <tbody id="logsBody">
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.timestamp }}</td>
+                <td>{{ log.source_ip }}</td>
+                <td>{{ log.destination_ip }}</td>
+                <td>{{ log.protocol }}</td>
+                <td>{{ log.attack_type }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p id="noLogsMessage" style="display: none; color: red;">No attack logs available.</p>
+
+    <script>
+        // Get WebSocket URL dynamically
+        const socket = io(`ws://${window.location.host}`);
+
+        socket.on("connect", () => {
+            console.log("Connected to WebSocket");
+            socket.emit("fetch_logs");
+        });
+
+        socket.on("logs_update", (logs) => {
+            const logsBody = document.getElementById("logsBody");
+            logsBody.innerHTML = "";
+
+            if (logs.length === 0) {
+                document.getElementById("logsTable").style.display = "none";
+                document.getElementById("noLogsMessage").style.display = "block";
+            } else {
+                document.getElementById("loading").style.display = "none";
+                document.getElementById("logsTable").style.display = "table";
+                document.getElementById("noLogsMessage").style.display = "none";
+
+                logs.forEach(log => {
+                    const row = `<tr>
+                        <td>${log.timestamp}</td>
+                        <td>${log.source_ip}</td>
+                        <td>${log.destination_ip}</td>
+                        <td>${log.protocol}</td>
+                        <td>${log.attack_type}</td>
+                    </tr>`;
+                    logsBody.innerHTML += row;
+                });
+            }
+        });
+
+        socket.on("disconnect", () => {
+            console.log("Disconnected from WebSocket");
+        });
+
+        // Dark Mode Toggle
+        document.addEventListener("DOMContentLoaded", function() {
+            const toggleButton = document.getElementById("darkModeToggle");
+            const body = document.body;
+
+            if (localStorage.getItem("darkMode") === "enabled") {
+                body.classList.add("dark-mode");
+            }
+
+            toggleButton.addEventListener("click", function() {
+                body.classList.toggle("dark-mode");
+                localStorage.setItem("darkMode", body.classList.contains("dark-mode") ? "enabled" : "disabled");
+            });
+        });
+    </script>
+</body>
+</html>

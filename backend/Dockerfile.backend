@@ -1,0 +1,33 @@
+# Use official Python image
+FROM python:3.9
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    DATABASE_URL="sqlite:///logs/ids_logs.db" \
+    SOCKETIO_CORS_ALLOWED_ORIGINS="*" \
+    JWT_SECRET_KEY="super-secret-key" \
+    PACKET_SNIFF_INTERFACE="eth0" \
+    PACKET_SNIFF_FILTER="tcp or udp" \
+    ANOMALY_THRESHOLD=0.5 \
+    DEBUG_MODE=True
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files (excluding logs directory)
+COPY backend/ ./backend
+COPY models/ ./models
+COPY config.py requirements.txt ./
+
+# Ensure necessary directories exist
+RUN mkdir -p logs models
+
+# Install dependencies (TensorFlow removed)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Expose API and WebSocket ports
+EXPOSE 5001 5003
+
+# Start both API and WebSocket server
+# CMD ["bash", "-c", "python backend/api.py & python backend/websocket.py & wait"]
+CMD ["bash", "-c", "python backend/api.py & python backend/ws_server.py & wait"]

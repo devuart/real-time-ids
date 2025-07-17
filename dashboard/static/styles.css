@@ -1,0 +1,96 @@
+/* General Styling */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    margin: 20px;
+    text-align: center;
+    transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Mode */
+body.dark-mode {
+    background-color: #1e1e1e;
+    color: #f4f4f4;
+}
+
+h2 {
+    color: inherit;
+}
+
+/* Table Styling */
+table {
+    width: 90%;
+    margin: 20px auto;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    transition: background 0.3s ease;
+}
+
+body.dark-mode table {
+    background: #2a2a2a;
+    box-shadow: 0px 0px 10px rgba(255, 255, 255, 0.1);
+}
+
+th, td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+}
+
+/* Improve header contrast in Dark Mode */
+th {
+    background-color: #007bff;
+    color: white;
+    text-transform: uppercase;
+}
+
+body.dark-mode th {
+    background-color: #0080ff;
+}
+
+/* Improved Hover Effects */
+tr:hover {
+    background-color: #e0e0e0; /* Darker gray for better contrast */
+}
+
+body.dark-mode tr:hover {
+    background-color: #3a3a3a;
+}
+
+/* Dark Mode Toggle Button */
+#darkModeToggle {
+    margin: 15px;
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+/* Improve Dark Mode Button Visibility */
+body.dark-mode #darkModeToggle {
+    background-color: #0080ff;  /* Brighter blue */
+    color: white;
+}
+
+body.dark-mode #darkModeToggle:hover {
+    background-color: #0099ff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    table {
+        width: 100%;
+    }
+
+    th, td {
+        padding: 8px;
+    }
+}
