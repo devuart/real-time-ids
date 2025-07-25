@@ -4,23 +4,55 @@ import argparse
 import pandas as pd
 import joblib
 from pathlib import Path
-from typing import Optional, Tuple, Dict, List
+from typing import Optional, Tuple, Dict, List, Union
 import time
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_recall_fscore_support
 import torch
-from deep_learning import Autoencoder  # Assuming you have an autoencoder implementation
+from deep_learning import Autoencoder
+from hybrid_detector import hybrid_detect
+from sklearn.preprocessing import StandardScaler
+import logging
+import traceback
+import sys
+import os
+from collections import defaultdict
+
+# Setup logging
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE_NAME = "test_onnx_model.log"
+LOG_FILE = LOG_DIR / LOG_FILE_NAME
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Set UTF-8 encoding for Windows compatibility
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 def load_real_test_data(num_samples: int = 100, include_labels: bool = False) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
     """Load balanced test data with equal class representation."""
     try:
-        df = pd.read_csv("models/preprocessed_dataset.csv")
+        data_path = Path("models/preprocessed_dataset.csv")
+        if not data_path.exists():
+            raise FileNotFoundError(f"Dataset file not found: {data_path}")
+        
+        df = pd.read_csv(data_path)
         
         # Stratified sampling to maintain class balance
-        min_samples = min(
-            len(df[df['Label'] == 0]), 
-            len(df[df['Label'] == 1]), 
-            num_samples // 2
-        )
+        class_counts = df['Label'].value_counts()
+        if len(class_counts) < 2:
+            raise ValueError("Dataset must contain both normal and attack samples")
+            
+        min_samples = min(class_counts[0], class_counts[1], num_samples // 2)
         if min_samples == 0:
             raise ValueError("Insufficient samples for both classes")
             
@@ -35,60 +67,88 @@ def load_real_test_data(num_samples: int = 100, include_labels: bool = False) ->
         X = balanced_df.drop(columns=["Label"]).values.astype(np.float32)
         y = balanced_df["Label"].values.astype(int) if include_labels else None
         
-        print(f"[INFO] Loaded {X.shape[0]} balanced test samples")
+        logger.info(f"Loaded {X.shape[0]} balanced test samples")
         if include_labels:
-            print(f"[INFO] Label distribution - Normal: {np.sum(y == 0)}, Attack: {np.sum(y == 1)}")
+            logger.info(f"Label distribution - Normal: {np.sum(y == 0)}, Attack: {np.sum(y == 1)}")
         
         return X, y
     except Exception as e:
-        print(f"[WARNING] Could not load balanced data: {str(e)}")
+        logger.error(f"Could not load balanced data: {str(e)}")
         return None, None
 
 def create_adversarial_samples(base_samples: np.ndarray, noise_level: float = 0.1) -> np.ndarray:
-    """Generate adversarial samples by adding noise and perturbations."""
-    # Gaussian noise
-    noise = np.random.normal(0, noise_level, size=base_samples.shape)
-    
-    # Feature-specific perturbations
-    perturbations = np.zeros_like(base_samples)
-    for i in range(perturbations.shape[1]):
-        if i % 5 == 0:  # Perturb every 5th feature more aggressively
-            perturbations[:, i] = np.random.uniform(-0.5, 0.5, size=perturbations.shape[0])
-    
-    adversarial_samples = np.clip(
-        base_samples + noise + perturbations,
-        a_min=0.1,  # Min value from your preprocessing
-        a_max=0.9    # Max value from your preprocessing
-    )
-    return adversarial_samples.astype(np.float32)
+    """Generate adversarial samples with realistic noise and perturbations."""
+    try:
+        # Gaussian noise
+        noise = np.random.normal(0, noise_level, size=base_samples.shape)
+        
+        # Feature-specific perturbations (more aggressive on certain features)
+        perturbations = np.zeros_like(base_samples)
+        for i in range(perturbations.shape[1]):
+            if i % 5 == 0:  # Perturb every 5th feature more aggressively
+                perturbations[:, i] = np.random.uniform(-0.5, 0.5, size=perturbations.shape[0])
+        
+        # Create adversarial samples with clipping to valid range
+        adversarial_samples = np.clip(
+            base_samples + noise + perturbations,
+            a_min=0.1,  # Min value from preprocessing
+            a_max=0.9    # Max value from preprocessing
+        )
+        return adversarial_samples.astype(np.float32)
+    except Exception as e:
+        logger.error(f"Error creating adversarial samples: {str(e)}")
+        raise
 
 def test_adversarial_robustness(model_path: str, num_samples: int = 50) -> Tuple[np.ndarray, np.ndarray]:
-    """Test model against adversarial samples."""
-    session = ort.InferenceSession(model_path)
-    input_name = session.get_inputs()[0].name
-    
-    # Load or create clean samples
-    clean_samples, _ = load_real_test_data(num_samples=num_samples)
-    if clean_samples is None:
-        clean_samples = create_sample_input(num_samples=num_samples)
-    
-    # Generate adversarial samples
-    adversarial_samples = create_adversarial_samples(clean_samples)
-    
-    # Run predictions
-    clean_preds = session.run(None, {input_name: clean_samples})[0]
-    adv_preds = session.run(None, {input_name: adversarial_samples})[0]
-    
-    # Calculate detection rate difference
-    clean_attack_rate = np.mean(np.argmax(clean_preds, axis=1))
-    adv_attack_rate = np.mean(np.argmax(adv_preds, axis=1))
-    
-    print(f"\n=== Adversarial Robustness Test ===")
-    print(f"Clean samples attack rate: {clean_attack_rate:.2%}")
-    print(f"Adversarial samples attack rate: {adv_attack_rate:.2%}")
-    print(f"Detection rate change: {adv_attack_rate - clean_attack_rate:.2%}")
-    
-    return clean_preds, adv_preds
+    """Test model against adversarial samples with comprehensive metrics."""
+    try:
+        # Validate model path
+        if not Path(model_path).exists():
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        
+        # Create optimized inference session
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session = ort.InferenceSession(model_path, session_options)
+        input_name = session.get_inputs()[0].name
+        
+        # Load or create clean samples
+        clean_samples, _ = load_real_test_data(num_samples=num_samples)
+        if clean_samples is None:
+            logger.warning("Using synthetic samples as fallback")
+            _, feature_size = get_model_input_shape(session)
+            clean_samples = create_sample_input(feature_size=feature_size, num_samples=num_samples)
+        
+        # Generate adversarial samples
+        adversarial_samples = create_adversarial_samples(clean_samples)
+        
+        # Run predictions
+        clean_preds = session.run(None, {input_name: clean_samples})[0]
+        adv_preds = session.run(None, {input_name: adversarial_samples})[0]
+        
+        # Calculate metrics
+        clean_probs = softmax(clean_preds)
+        adv_probs = softmax(adv_preds)
+        
+        clean_attack_rate = np.mean(np.argmax(clean_probs, axis=1))
+        adv_attack_rate = np.mean(np.argmax(adv_probs, axis=1))
+        
+        # Calculate confidence changes
+        clean_conf = np.max(clean_probs, axis=1)
+        adv_conf = np.max(adv_probs, axis=1)
+        conf_change = np.mean(adv_conf - clean_conf)
+        
+        print("\n=== Adversarial Robustness Test ===")
+        print(f"Clean samples attack rate: {clean_attack_rate:.2%}")
+        print(f"Adversarial samples attack rate: {adv_attack_rate:.2%}")
+        print(f"Detection rate change: {adv_attack_rate - clean_attack_rate:+.2%}")
+        print(f"Average confidence change: {conf_change:+.4f}")
+        
+        return clean_preds, adv_preds
+    except Exception as e:
+        logger.error(f"Adversarial test failed: {str(e)}")
+        traceback.print_exc()
+        return None, None
 
 def test_hybrid_detection(threshold_tolerance: float = 0.1) -> Optional[List[Dict]]:
     """Comprehensive hybrid system testing with edge cases."""
@@ -142,116 +202,249 @@ def test_hybrid_detection(threshold_tolerance: float = 0.1) -> Optional[List[Dic
         print(f"[ERROR] Hybrid test failed: {str(e)}")
         return None
 
-def benchmark_performance(model_path: str, num_runs: int = 1000) -> Dict[int, Dict]:
-    """Comprehensive performance benchmarking."""
-    session = ort.InferenceSession(model_path)
-    input_name = session.get_inputs()[0].name
+def softmax(x: np.ndarray) -> np.ndarray:
+    """Numerically stable softmax function."""
+    e_x = np.exp(x - np.max(x, axis=1, keepdims=True))
+    return e_x / e_x.sum(axis=1, keepdims=True)
+
+def benchmark_performance(model_path: str, num_runs: int = 1000) -> Dict[int, Dict[str, float]]:
+    """
+    Comprehensive performance benchmarking.
     
-    # Test with different batch sizes
-    batch_sizes = [1, 8, 16, 32, 64]
+    Args:
+        model_path: Path to ONNX model file
+        num_runs: Number of iterations to run for each batch size
+        
+    Returns:
+        Dictionary containing performance metrics for each batch size
+    """
     results = {}
     
-    for bs in batch_sizes:
-        # Create test data
-        test_data = create_sample_input(num_samples=bs)
+    try:
+        # Validate model path
+        if not Path(model_path).exists():
+            raise FileNotFoundError(f"Model file not found: {model_path}")
         
-        # Warm up
-        for _ in range(10):
-            session.run(None, {input_name: test_data})
+        # Create optimized inference session
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session = ort.InferenceSession(model_path, session_options)
+        input_name = session.get_inputs()[0].name
         
-        # Benchmark
-        times = []
-        for _ in range(num_runs):
-            start = time.perf_counter()
-            session.run(None, {input_name: test_data})
-            times.append(time.perf_counter() - start)
+        # Get model input requirements
+        input_shape, feature_size = get_model_input_shape(session)
+        logger.info(f"Benchmarking with input shape: {input_shape}")
         
-        # Calculate metrics
-        avg_time = np.mean(times) * 1000  # ms
-        throughput = bs / (np.mean(times))  # samples/sec
+        # Test with different batch sizes
+        batch_sizes = [1, 8, 16, 32, 64]
         
-        results[bs] = {
-            'avg_time': avg_time,
-            'throughput': throughput,
-            'time_per_sample': avg_time / bs
-        }
+        for bs in batch_sizes:
+            try:
+                # Create properly shaped test data
+                test_data = create_sample_input(num_samples=bs, feature_size=feature_size)
+                
+                # Warm up (with progress indicator)
+                print(f"\nWarming up for batch size {bs}...")
+                for _ in range(10):
+                    session.run(None, {input_name: test_data})
+                    if _ % 2 == 0:
+                        print(f"Warm-up progress:", end="", flush=True)
+                print("Done.")
+                
+                # Benchmark with precise timing
+                times = []
+                logger.info(f"Starting benchmark for batch size {bs} with {num_runs} runs...")
+                for _ in range(num_runs):
+                    start = time.perf_counter_ns()
+                    session.run(None, {input_name: test_data})
+                    end = time.perf_counter_ns()
+                    times.append((time.perf_counter_ns() - start) / 1e6)  # ms
+                    
+                    # Progress indicator
+                    if _ % (num_runs // 10) == 0:
+                        progress = (_ / num_runs) * 100
+                        print(f"\rProgress: {progress:.1f}%", end="", flush=True)
+                print("\nBenchmark completed.")
+                logger.info(f"Batch size {bs} benchmarked successfully.")
+                
+                # Calculate comprehensive metrics
+                times_ms = np.array(times)
+                metrics = {
+                    'avg_time': np.mean(times_ms),
+                    'std_dev': np.std(times_ms),
+                    'throughput': (bs * 1000) / np.mean(times_ms),
+                    'time_per_sample': np.mean(times_ms) / bs,
+                    'p95_time': np.percentile(times_ms, 95),
+                    'min_time': np.min(times_ms),
+                    'max_time': np.max(times_ms),
+                    'samples_per_sec': (bs * 1e6) / np.mean(times_ms)
+                }
+                results[bs] = metrics
+                
+            except Exception as e:
+                logger.error(f"Error benchmarking batch size {bs}: {str(e)}")
+                results[bs] = {'error': str(e)}
+        
+        # Print comprehensive results
+        print("\n=== Performance Benchmark Results ===")
+        print(f"Model: {Path(model_path).name}")
+        print(f"Input Shape: {input_shape}")
+        print(f"Feature Size: {feature_size}")
+        print(f"Test Config: {num_runs} iterations per batch size")
+        print("\nBatch Size | Avg Time (ms) | Throughput (samples/s) | Time/Sample (ms) | 95th %ile (ms)")
+        print("-"*100)
+        for bs, metrics in sorted(results.items()):
+            if 'error' in metrics:
+                print(f"{bs:>11} | Error: {metrics['error']}")
+            else:
+                print(f"{bs:>11} | {metrics['avg_time']:>14.2f} | "
+                      f"{metrics['throughput']:>20.2f} | "
+                      f"{metrics['time_per_sample']:>16.4f} | "
+                      f"{metrics['p95_time']:>14.2f}")
+        return results
     
-    # Print results
-    print("\n=== Performance Benchmark ===")
-    print(f"Tested with {num_runs} iterations per batch size")
-    print("Batch Size | Avg Time (ms) | Throughput (samples/sec) | Time/Sample (ms)")
-    print("-"*65)
-    for bs, metrics in results.items():
-        print(f"{bs:9d} | {metrics['avg_time']:12.4f} | {metrics['throughput']:19.2f} | {metrics['time_per_sample']:15.4f}")
-    
-    return results
+    except Exception as e:
+        logger.error(f"Performance benchmark failed: {str(e)}")
+        traceback.print_exc()
+        return {'error': str(e)}
 
 def get_model_input_shape(session: ort.InferenceSession) -> Tuple[Tuple[int, int], int]:
-    """Extract actual input dimensions from ONNX model."""
-    input_info = session.get_inputs()[0]
-    shape = input_info.shape
+    """
+    Extract and validate input dimensions from ONNX model.
     
-    # Handle dynamic shapes - replace symbolic names with actual values
-    batch_size = 1  # Default batch size for testing
-    feature_size = None
+    Args:
+        session: Initialized ONNX Runtime inference session
+        
+    Returns:
+        tuple: (full_input_shape, feature_size)
+    """
+    try:
+        input_info = session.get_inputs()[0]
+        shape = list(input_info.shape)  # Make mutable
+        
+        # Default values
+        batch_size = 1
+        feature_size = None
+        
+        # Process each dimension
+        for i, dim in enumerate(shape):
+            if isinstance(dim, str):  # Dynamic dimension
+                if 'batch' in dim.lower():
+                    shape[i] = batch_size
+                else:
+                    # Try to get feature size from preprocessing artifacts
+                    try:
+                        artifacts = joblib.load("models/preprocessing_artifacts.pkl")
+                        feature_size = len(artifacts["feature_names"])
+                        shape[i] = feature_size
+                        logger.info(f"Detected feature size from artifacts: {feature_size}")
+                    except:
+                        logger.warning(f"Could not load preprocessing artifacts: {str(e)}")
+                        # Fallback to default feature size
+                        feature_size = 20  # Default expected size
+                        shape[i] = feature_size
+                        logger.warning(f"Using default feature size: {feature_size}")
+            else:  # Static dimension
+                if i == 1:  # Assume second dimension is features
+                    feature_size = dim
+        
+        # Final validation and fallback
+        if feature_size is None:
+            feature_size = 20
+            logger.warning(f"Could not determine feature size, using default: {feature_size}")
+            if len(shape) > 1:
+                shape[1] = feature_size
+        
+        # Ensure we have at least 2 dimensions (batch, features)
+        if len(shape) < 2:
+            shape = [batch_size, feature_size]
+        
+        return tuple(shape), feature_size
     
-    for i, dim in enumerate(shape):
-        if isinstance(dim, str):
-            if 'batch' in dim.lower():
-                shape[i] = batch_size
-            else:
-                # For other symbolic dimensions, try to infer from preprocessing artifacts
-                try:
-                    artifacts = joblib.load("models/preprocessing_artifacts.pkl")
-                    shape[i] = len(artifacts["feature_names"])
-                    feature_size = shape[i]
-                except:
-                    # Fallback to known size
-                    shape[i] = 14
-                    feature_size = 14
-        else:
-            if i == 1:  # Assume second dimension is features
-                feature_size = dim
-    
-    return tuple(shape), feature_size
+    except Exception as e:
+        logger.error(f"Error getting model input shape: {str(e)}")
+        # Return safe defaults
+        return (1, 20), 20
 
-def evaluate_model_performance(predictions: np.ndarray, ground_truth: np.ndarray) -> dict:
-    """Evaluate model performance against ground truth labels."""
-    # Convert predictions to class labels
-    predicted_classes = np.argmax(predictions, axis=1)
+def evaluate_model_performance(
+    predictions: np.ndarray,
+    ground_truth: np.ndarray,
+    class_names: List[str] = ["Normal", "Attack"]
+) -> Dict[str, Union[float, np.ndarray]]:
+    """
+    Evaluate model performance against ground truth labels.
     
-    # Calculate metrics
-    accuracy = accuracy_score(ground_truth, predicted_classes)
-    precision, recall, f1, support = precision_recall_fscore_support(
-        ground_truth, predicted_classes, average=None, labels=[0, 1]
-    )
+    Args:
+        predictions: Model output predictions (2D array)
+        ground_truth: True labels (1D array)
+        class_names: List of class names for labeling
+        
+    Returns:
+        Dictionary containing all evaluation metrics
+    """
+    try:
+        # Input validation
+        if predictions.ndim != 2:
+            raise ValueError("Predictions must be a 2D array, got {predictions.ndim}D")
+        if ground_truth.ndim != 1:
+            raise ValueError("Ground truth must be a 1D array, got {ground_truth.ndim}D")
+        if predictions.shape[0] != ground_truth.shape[0]:
+            raise ValueError(
+                f"Predictions and ground truth must have the same number of samples, "
+                f"got {predictions.shape[0]} vs {ground_truth.shape[0]}"
+            )
+        
+        # Convert predictions to probabilities and class labels
+        probs = softmax(predictions)
+        pred_classes = np.argmax(probs, axis=1)
+        
+        # Calculate all metrics
+        metrics = {
+            'accuracy': accuracy_score(ground_truth, pred_classes),
+            'confusion_matrix': confusion_matrix(ground_truth, pred_classes),
+            'classification_report': classification_report(
+                ground_truth, pred_classes, target_names=class_names, output_dict=True
+            ),
+            'predicted_classes': pred_classes,
+            'probabilities': probs
+        }
+        
+        # Per-class metrics
+        precision, recall, f1, support = precision_recall_fscore_support(
+            ground_truth, pred_classes, average=None, labels=[0, 1]
+        )
+        for i, name in enumerate(class_names):
+            metrics.update({
+                f'precision_{name.lower()}': precision[i],
+                f'recall_{name.lower()}': recall[i],
+                f'f1_{name.lower()}': f1[i],
+                f'support_{name.lower()}': support[i]
+            })
+        
+        # Weighted averages
+        precision_avg, recall_avg, f1_avg, _ = precision_recall_fscore_support(
+            ground_truth, pred_classes, average='weighted'
+        )
+        metrics.update({
+            'precision_avg': precision_avg,
+            'recall_avg': recall_avg,
+            'f1_avg': f1_avg
+        })
+        
+        # Additional metrics from confusion matrix
+        tn, fp, fn, tp = metrics['confusion_matrix'].ravel()
+        metrics.update({
+            'true_negative_rate': tn / (tn + fp) if (tn + fp) > 0 else 0,
+            'false_positive_rate': fp / (fp + tn) if (fp + tn) > 0 else 0,
+            'true_positive_rate': tp / (tp + fn) if (tp + fn) > 0 else 0,
+            'false_negative_rate': fn / (fn + tp) if (fn + tp) > 0 else 0
+        })
+        
+        return metrics
     
-    # Overall metrics
-    precision_avg, recall_avg, f1_avg, _ = precision_recall_fscore_support(
-        ground_truth, predicted_classes, average='weighted'
-    )
-    
-    # Confusion matrix
-    cm = confusion_matrix(ground_truth, predicted_classes)
-    
-    results = {
-        'accuracy': accuracy,
-        'precision_normal': precision[0] if len(precision) > 0 else 0,
-        'precision_attack': precision[1] if len(precision) > 1 else 0,
-        'recall_normal': recall[0] if len(recall) > 0 else 0,
-        'recall_attack': recall[1] if len(recall) > 1 else 0,
-        'f1_normal': f1[0] if len(f1) > 0 else 0,
-        'f1_attack': f1[1] if len(f1) > 1 else 0,
-        'precision_avg': precision_avg,
-        'recall_avg': recall_avg,
-        'f1_avg': f1_avg,
-        'confusion_matrix': cm,
-        'predicted_classes': predicted_classes,
-        'support_normal': support[0] if len(support) > 0 else 0,
-        'support_attack': support[1] if len(support) > 1 else 0
-    }
-    
-    return results
+    except Exception as e:
+        logger.error(f"Error evaluating model performance: {str(e)}")
+        return {'error': str(e)}
 
 def print_detailed_metrics(metrics: dict) -> None:
     """Print detailed performance metrics."""
@@ -312,14 +505,26 @@ def analyze_prediction_confidence(predictions: np.ndarray, probabilities: np.nda
     print(f"Medium Confidence (0.7-0.9): {med_conf} ({med_conf/len(confidence_scores)*100:.1f}%)")
     print(f"Low Confidence (<0.7): {low_conf} ({low_conf/len(confidence_scores)*100:.1f}%)")
 
-def test_model_with_validation(model_path: str, test_sample: np.ndarray = None, 
-                              ground_truth: np.ndarray = None, num_test_samples: int = 100) -> None:
-    """Run comprehensive model tests with ground truth validation."""
+def test_model_with_validation(
+    model_path: str,
+    test_sample: Optional[np.ndarray] = None,
+    ground_truth: Optional[np.ndarray] = None,
+    num_test_samples: int = 100
+) -> None:
+    """Run comprehensive model tests with ground truth validation
+    Args:
+        model_path: Path to the ONNX model file
+        test_sample: Optional numpy array of test input data
+        ground_truth: Optional numpy array of ground truth labels
+        num_test_samples: Number of samples to use if test_sample is not provided
+    """
     try:
         print("\n=== ONNX Model Testing with Validation ===")
         
-        # Load model
-        session = ort.InferenceSession(model_path)
+        # Load model with optimized settings
+        session_options = ort.SessionOptions()
+        session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session = ort.InferenceSession(model_path, session_options)
         input_info = session.get_inputs()[0]
         output_info = session.get_outputs()[0]
         
@@ -330,6 +535,8 @@ def test_model_with_validation(model_path: str, test_sample: np.ndarray = None,
         print(f"4. Output name: {output_info.name}")
         print(f"5. Output shape (symbolic): {output_info.shape}")
         print(f"6. Output type: {output_info.type}")
+        print(f"Feature size: {input_info.shape[1] if len(input_info.shape) > 1 else input_info.shape[0]}")
+        print(f"[INFO] Model loaded successfully with ONNX Runtime version: {ort.__version__}")
         
         # Get actual input shape
         actual_shape, feature_size = get_model_input_shape(session)
@@ -372,7 +579,7 @@ def test_model_with_validation(model_path: str, test_sample: np.ndarray = None,
         )[0]
         
         # Convert to probabilities
-        probabilities = np.exp(predictions) / np.sum(np.exp(predictions), axis=1, keepdims=True)
+        probabilities = softmax(predictions)
         
         # Basic results
         print(f"\n[SUCCESS] Inference completed successfully!")
@@ -381,6 +588,7 @@ def test_model_with_validation(model_path: str, test_sample: np.ndarray = None,
         print(f"3. Output range: [{predictions.min():.4f}, {predictions.max():.4f}]")
         
         # Show sample predictions
+        print("\n=== Sample Predictions ===")
         num_samples_to_show = min(5, len(predictions))
         for i in range(num_samples_to_show):
             pred = predictions[i]
@@ -388,7 +596,7 @@ def test_model_with_validation(model_path: str, test_sample: np.ndarray = None,
             predicted_class = np.argmax(prob)
             confidence = prob[predicted_class]
             actual_class = ground_truth[i] if ground_truth is not None else "Unknown"
-            correct = "✓" if ground_truth is not None and predicted_class == ground_truth[i] else "✗"
+            correct = "[success]" if ground_truth is not None and predicted_class == ground_truth[i] else "[error]"
             
             print(f"\nSample {i+1}:")
             print(f"  Raw output: [{pred[0]:.4f}, {pred[1]:.4f}]")
@@ -399,7 +607,7 @@ def test_model_with_validation(model_path: str, test_sample: np.ndarray = None,
         
         # Detailed validation if ground truth is available
         if ground_truth is not None:
-            metrics = evaluate_model_performance(probabilities, ground_truth)
+            metrics = evaluate_model_performance(predictions, ground_truth)
             print_detailed_metrics(metrics)
             analyze_prediction_confidence(predictions, probabilities)
             
@@ -413,21 +621,25 @@ def test_model_with_validation(model_path: str, test_sample: np.ndarray = None,
         # Performance test
         print(f"\n[INFO] Running performance test...")
         
-        # Warm up
-        for _ in range(5):
+        # Warm up with progress indicator
+        print("Warming up the model for performance testing...")
+        for _ in range(10):
             session.run([output_info.name], {input_info.name: test_sample[:10]})
+            if _ % 2 == 0:
+                print(f"Warm-up progress:", end="", flush=True)
+        print("[INFO] Warm-up completed.")
         
         # Measure inference time
         single_sample = test_sample[:1]
         times = []
         for _ in range(100):
-            start = time.time()
+            start = time.perf_counter_ns()
             session.run([output_info.name], {input_info.name: single_sample})
-            times.append(time.time() - start)
+            times.append((time.perf_counter_ns() - start) / 1e6)  # Convert to milliseconds
         
-        avg_time = np.mean(times) * 1000  # Convert to milliseconds
-        print(f"Average inference time: {avg_time:.2f} ms (over 100 runs)")
-        print(f"Throughput: {1000/avg_time:.1f} inferences/second")
+        avg_time = np.mean(times)
+        print(f"Average inference time: {avg_time:.4f} ms (over 100 runs)")
+        print(f"Throughput: {1000/avg_time:.2f} inferences/second")
         
         # Batch processing performance
         if len(test_sample) > 1:
@@ -436,59 +648,79 @@ def test_model_with_validation(model_path: str, test_sample: np.ndarray = None,
             batch_data = test_sample[:batch_size]
             
             for _ in range(10):
-                start = time.time()
+                start = time.perf_counter_ns()
                 session.run([output_info.name], {input_info.name: batch_data})
-                batch_times.append(time.time() - start)
+                batch_times.append((time.perf_counter_ns() - start) / 1e6)
             
-            avg_batch_time = np.mean(batch_times) * 1000  # ms
+            avg_batch_time = np.mean(batch_times)
             per_sample_batch = avg_batch_time / batch_size
 
-            print(f"Batch processing ({batch_size} samples): {avg_batch_time:.2f} ms total")
+            print(f"Batch processing ({batch_size} samples): {avg_batch_time:.4f} ms total")
             print(f"Per-sample in batch: {per_sample_batch:.4f} ms")
-
-            if per_sample_batch > 0:
-                print(f"Batch throughput: {1000/per_sample_batch:.1f} samples/second")
-            else:
-                print("Batch throughput: ∞ (too fast to measure reliably)")
-
+            print(f"Batch throughput: {1000/per_sample_batch:.2f} samples/second")
         
     except Exception as e:
-        print(f"\n[ERROR] Testing failed: {str(e)}")
-        import traceback
+        # Log the error
+        mod_validation_error = f"Model validation failed: {str(e)}"
+        logger.error(mod_validation_error)
+        print(f"[ERROR] {mod_validation_error}")
+        
+        # Print traceback for debugging
+        print("\n=== Traceback ===")
         traceback.print_exc()
+        
+        # Suggest troubleshooting steps
         suggest_troubleshooting(model_path)
 
-def create_sample_input(feature_size: int = 14, num_samples: int = 3) -> np.ndarray:
+def create_sample_input(feature_size: int = 20, num_samples: int = 1) -> np.ndarray:
     """Create realistic sample input data."""
-    samples = []
+    samples = np.zeros((num_samples, feature_size), dtype=np.float32)
     
     for i in range(num_samples):
-        # Generate realistic network flow values
-        sample = np.array([
-            np.random.uniform(0.1, 0.9),  # Normalized flow features
-            np.random.uniform(0.0, 1.0),  # Protocol indicators
-            np.random.uniform(0.2, 0.8),  # Packet counts
-            np.random.uniform(0.1, 0.7),  # Byte counts
-            np.random.uniform(0.0, 1.0),  # Flags
-            *np.random.uniform(0.1, 0.9, feature_size - 5)  # Additional features
-        ], dtype=np.float32)
-        samples.append(sample)
+        # Generate realistic network traffic features
+        samples[i, 0] = np.random.uniform(0.1, 0.9)  # Duration
+        samples[i, 1] = np.random.choice([0.0, 0.33, 0.66, 1.0])  # Protocol
+        samples[i, 2] = np.random.uniform(0.1, 0.8)  # Packet count
+        samples[i, 3] = np.random.uniform(0.1, 0.7)  # Byte count
+        samples[i, 4] = np.random.uniform(0.0, 1.0)  # Flags
+        samples[i, 5:] = np.random.uniform(0.1, 0.9, feature_size - 5)  # Other features
     
-    return np.array(samples)
+    return samples
 
 def suggest_troubleshooting(model_path: str) -> None:
-    """Provide troubleshooting suggestions."""
-    print("\n=== Troubleshooting Suggestions ===")
+    """Provide detailed troubleshooting suggestions."""
+    print("\n=== Troubleshooting Guide ===")
+    
+    # Check model file
     if not Path(model_path).exists():
-        print("[ERROR] Model file not found")
-        print("   → Run: python convert_to_onnx.py")
-    else:
-        print("[INFO] Possible issues:")
-        print("   → Check input shape matches model expectations")
-        print("   → Verify ONNX runtime is properly installed: pip install onnxruntime")
-        print("   → Ensure preprocessing artifacts exist: models/preprocessing_artifacts.pkl")
-        print("   → Try with --input flag to provide custom input data")
-        print("   → Check if preprocessed_dataset.csv exists for ground truth validation")
+        print("[error] Model file not found")
+        print("  [!] Verify the model path is correct")
+        print("  [!] Check if you need to run model training/export first")
+        return
+    
+    # Check ONNX runtime
+    try:
+        ort.InferenceSession(model_path)
+    except Exception as e:
+        print(f"[error] ONNX Runtime Error: {str(e)}")
+        print("  [!] Ensure onnxruntime is properly installed")
+        print("  [!] Check if the model file is corrupted")
+        return
+    
+    # Check input data
+    print("[success] Model loads successfully")
+    print("\nCommon Issues:")
+    print("1. Input Shape Mismatch:")
+    print("  [!] Verify your input data matches the model's expected shape")
+    print("  [!] Use get_model_input_shape() to check requirements")
+    
+    print("\n2. Preprocessing Issues:")
+    print("  [!] Ensure input data is properly normalized/scaled")
+    print("  [!] Check if preprocessing_artifacts.pkl exists")
+    
+    print("\n3. Performance Problems:")
+    print("  [!] Try enabling ONNX runtime optimizations")
+    print("  [!] Consider quantizing the model for better performance")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -497,7 +729,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--model", default="models/ids_model.onnx", help="Path to ONNX model")
     parser.add_argument("--input", help="Path to numpy input file (.npy)")
-    parser.add_argument("--samples", type=int, default=200, help="Number of test samples")
+    parser.add_argument("--samples", type=int, default=100, help="Number of test samples")
     parser.add_argument("--validate", action="store_true", help="Run validation tests")
     parser.add_argument("--adversarial", action="store_true", help="Test adversarial robustness")
     parser.add_argument("--hybrid", action="store_true", help="Test hybrid detection")
@@ -514,35 +746,36 @@ if __name__ == "__main__":
     
     # Load test input if provided
     test_input = None
-    if args.input and Path(args.input).exists():
+    if args.input:
         try:
             test_input = np.load(args.input)
-            print(f"[INFO] Loaded test input from {args.input}")
+            print(f"Loaded test input from {args.input}")
         except Exception as e:
-            print(f"[WARNING] Could not load input file: {str(e)}")
+            print(f"Could not load input file: {str(e)}")
     
+    # Run selected tests
     if args.validate:
-        print("\n" + "="*50)
-        print("Running Validation Tests".center(50))
-        print("="*50)
+        print("\n" + "=" * 50)
+        print("Running validation tests".center(50))
+        print("=" * 50)
         test_model_with_validation(args.model, test_input, None, args.samples)
     
     if args.adversarial:
-        print("\n" + "="*50)
-        print("Running Adversarial Tests".center(50))
-        print("="*50)
-        test_adversarial_robustness(args.model)
+        print("\n" + "=" * 50)
+        print("Testing adversarial robustness".center(50))
+        print("=" * 50)
+        test_adversarial_robustness(args.model, args.samples)
     
     if args.hybrid:
-        print("\n" + "="*50)
-        print("Running Hybrid Detection Tests".center(50))
-        print("="*50)
+        print("\n" + "=" * 50)
+        print("Testing hybrid detection system".center(50))
+        print("=" * 50)
         test_hybrid_detection()
     
     if args.benchmark:
-        print("\n" + "="*50)
-        print("Running Performance Benchmarks".center(50))
-        print("="*50)
+        print("\n" + "=" * 50)
+        print("Running performance benchmarks".center(50))
+        print("=" * 50)
         benchmark_performance(args.model)
     
     if not any([args.validate, args.adversarial, args.hybrid, args.benchmark, args.all]):
