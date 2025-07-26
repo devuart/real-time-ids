@@ -29,7 +29,10 @@ from torch.cuda.amp import GradScaler, autocast
 from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 import torch.backends.cudnn as cudnn
-import torch.serialization
+import torch._logging
+from torch.serialization import add_safe_globals
+import torch.utils.data
+import torch.utils.data.distributed
 
 # Scikit-learn imports
 from sklearn.metrics import (
@@ -74,6 +77,59 @@ import shutil
 
 # Initialize colorama
 init(autoreset=True)
+
+# Declare the class names that will be defined later
+class IDSModel:
+    pass  # Forward declaration
+
+class UnicodeStreamHandler:
+    pass  # Forward declaration
+
+# Whitelist TorchVersion for safe loading
+add_safe_globals([
+    # PyTorch essentials
+    torch.Tensor,
+    torch.nn.Module,
+    torch.nn.parameter.Parameter,
+    torch.optim.Optimizer,
+    torch.optim.AdamW,
+    torch.optim.lr_scheduler.ReduceLROnPlateau,
+    torch.utils.data.Dataset,
+    torch.utils.data.DataLoader,
+    torch.utils.data.distributed.DistributedSampler,
+    
+    # Version handling
+    torch.torch_version.TorchVersion,
+    
+    # Numpy types
+    np.ndarray,
+    np.float32,
+    np.int64,
+    np._core.multiarray._reconstruct,
+    np._core.multiarray.scalar,
+    np.dtype,
+    np.number,
+    np.float64,
+    np._core.multiarray.array,
+    np.dtypes.Float64DType,
+    
+    # Pandas types
+    pd.DataFrame,
+    pd.Series,
+    
+    # Custom classes (forward declared above)
+    IDSModel,
+    UnicodeStreamHandler,
+    
+    # Other necessary classes
+    TensorDataset,
+    WeightedRandomSampler,
+    MinMaxScaler,
+    StandardScaler
+])
+
+# Disable PyTorch's duplicate logging
+torch._logging.set_logs(all=logging.ERROR)
 
 # Initialize logger at module level
 logger = logging.getLogger(__name__)
@@ -155,32 +211,28 @@ class UnicodeStreamHandler(logging.StreamHandler):
             self.handleError(record)
 
 def setup_logging(log_dir: Path) -> logging.Logger:
-    """Configure comprehensive logging system with clean console output."""
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = log_dir / f"train_{timestamp}.log"
-    
-    # Clear any existing handlers
-    for handler in logging.root.handlers[:]:
-        logging.root.removeHandler(handler)
-    
-    # Create logger
+    """Configure logging with handler deduplication"""
     logger = logging.getLogger(__name__)
+    
+    # Clear existing handlers if any
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    
+    # Rest of your logging setup...
     logger.setLevel(logging.DEBUG)
     
-    # File handler (verbose, with timestamps)
-    file_handler = logging.FileHandler(log_file, encoding='utf-8')
-    file_handler.setFormatter(logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    ))
+    # Add handlers ONLY if they don't exist
+    if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_handler = logging.FileHandler(log_dir / f"train_{timestamp}.log", encoding='utf-8')
+        file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        logger.addHandler(file_handler)
     
-    # Console handler (clean output for info, normal for warnings/errors)
-    console_handler = UnicodeStreamHandler()
-    console_formatter = logging.Formatter('%(message)s')
-    console_handler.setFormatter(console_formatter)
-    console_handler.setLevel(logging.INFO)  # Show info and above
-    
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
+    if not any(isinstance(h, UnicodeStreamHandler) for h in logger.handlers):
+        console_handler = UnicodeStreamHandler()
+        console_handler.setFormatter(logging.Formatter('%(message)s'))
+        console_handler.setLevel(logging.INFO)
+        logger.addHandler(console_handler)
     
     return logger
 
@@ -195,7 +247,8 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
         'data': base_dir / "data",
         'figures': base_dir / "figures" / timestamp,
         'tensorboard': base_dir / "runs" / timestamp,
-        'checkpoints': base_dir / "checkpoints" / timestamp
+        'checkpoints': base_dir / "checkpoints" / timestamp,
+        'docs': base_dir / "docs" / timestamp
     }
     
     # Create directories
@@ -357,6 +410,7 @@ try:
     FIGURE_DIR = directories['figures']
     TB_DIR = directories['tensorboard']
     CHECKPOINT_DIR = directories['checkpoints']
+    DOCS_DIR = directories['docs']
 except Exception as e:
     logger.error(f"Failed to set up directories: {str(e)}")
     sys.exit(1)
@@ -829,19 +883,7 @@ def load_checkpoint(
     model: Optional[nn.Module] = None
 ) -> Tuple[Optional[Dict], Optional[Dict], Optional[Dict], Dict, Dict]:
     """Safely load checkpoint with multiple fallback mechanisms."""
-    # Define safe numpy globals
-    numpy_globals = [
-        np._core.multiarray._reconstruct,
-        np._core.multiarray.scalar,
-        np.dtype,
-        np.ndarray,
-        np.number,
-        np.float64,
-        np.int64,
-        np._core.multiarray.array,
-        np.dtypes.Float64DType
-    ]
-    
+    # Define default metrics
     default_metrics = {
         'epoch': -1,
         'val_loss': float('inf'),
@@ -862,31 +904,36 @@ def load_checkpoint(
             logger.warning(f"Checksum mismatch for {filename}")
 
     try:
-        # First try with weights_only=True and safe_globals
-        with torch.serialization.safe_globals(numpy_globals):
-            checkpoint = torch.load(filename, weights_only=True)
-            if model:
-                model.load_state_dict(checkpoint['model_state_dict'])
-            
-            # Convert lists back to numpy arrays
-            metrics = checkpoint.get('best_metrics', {})
-            for k, v in metrics.items():
-                if isinstance(v, list):
-                    metrics[k] = np.array(v)
-            
-            return (
-                checkpoint.get('model_state_dict'),
-                checkpoint.get('optimizer_state_dict'),
-                checkpoint.get('scheduler_state_dict'),
-                metrics,
-                checkpoint.get('training_meta', {})
-            )
+        # First try with weights_only=True
+        checkpoint = torch.load(filename, weights_only=True)
+        if model:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Convert lists back to numpy arrays
+        metrics = checkpoint.get('best_metrics', {})
+        for k, v in metrics.items():
+            if isinstance(v, list):
+                metrics[k] = np.array(v)
+        
+        return (
+            checkpoint.get('model_state_dict'),
+            checkpoint.get('optimizer_state_dict'),
+            checkpoint.get('scheduler_state_dict'),
+            metrics,
+            checkpoint.get('training_meta', {})
+        )
     except Exception as e:
         logger.warning(f"Safe load failed ({str(e)}), trying fallback methods...")
         
-        # Fallback to weights_only=False
         try:
-            checkpoint = torch.load(filename, weights_only=False)
+            # Fallback with map_location for device compatibility
+            checkpoint = torch.load(
+                filename,
+                map_location='cpu',  # Ensures loading works across devices
+                pickle_module=pickle,  # Use standard pickle
+                weights_only=False  # Only if you trust the source
+            )
+            
             if model:
                 model.load_state_dict(checkpoint['model_state_dict'])
             
@@ -904,6 +951,7 @@ def load_checkpoint(
             )
         except Exception as e:
             logger.error(f"All loading methods failed: {str(e)}")
+            traceback.print_exc()
             return None, None, None, default_metrics, {}
 
 def save_training_artifacts(
@@ -919,6 +967,14 @@ def save_training_artifacts(
         # Save final model
         torch.save(model.state_dict(), MODEL_DIR / "ids_model.pth")
         
+        # Calculate class distribution
+        labels = best_metrics.get('labels', [])
+        if len(labels) > 0:
+            unique_labels, counts = np.unique(labels, return_counts=True)
+            class_distribution = dict(zip(unique_labels.tolist(), counts.tolist()))
+        else:
+            class_distribution = {}
+        
         # Save comprehensive training metadata
         training_meta = {
             'input_size': input_size,
@@ -930,8 +986,7 @@ def save_training_artifacts(
             'val_ap': best_metrics.get('ap', best_metrics['val_auc']),
             'train_loss': best_metrics.get('train_loss', float('inf')),
             'train_acc': best_metrics.get('train_acc', 0.0),
-            'class_distribution': dict(zip(*np.unique(best_metrics.get('labels', [])), 
-                                      return_counts=True)) if len(best_metrics.get('labels', [])) > 0 else {},
+            'class_distribution': class_distribution,
             'class_weights': class_weights.cpu().numpy().tolist(),
             'timestamp': timestamp,
             'environment': {
@@ -942,6 +997,7 @@ def save_training_artifacts(
             }
         }
         
+        # Save metadata
         joblib.dump(training_meta, MODEL_DIR / "training_metadata.pkl")
         
         # Save human-readable JSON version
@@ -953,8 +1009,10 @@ def save_training_artifacts(
         logger.info(f"Best model saved to {MODEL_DIR / 'ids_model.pth'}")
         logger.info(f"Best validation metrics - Loss: {best_metrics['val_loss']:.4f}, "
                    f"Accuracy: {best_metrics['val_acc']:.2%}, AUC: {best_metrics['val_auc']:.4f}")
+                   
     except Exception as e:
         logger.error(f"Failed to save training artifacts: {str(e)}")
+        raise
 
 def banner() -> None:
     """Print banner"""
@@ -1117,9 +1175,15 @@ def interactive_main() -> None:
             print(Fore.GREEN + f"Using device: {device}")
         elif choice == "5":
             print(Fore.YELLOW + "\nStarting training pipeline...")
+            # Skip re-initializing logging if already set up
+            if not logger.handlers:
+                logger = setup_logging(LOG_DIR)
             train_model(use_mock=False)
         elif choice == "6":
             print(Fore.YELLOW + "\nStarting training with synthetic data...")
+            # Skip re-initializing logging if already set up
+            if not logger.handlers:
+                logger = setup_logging(LOG_DIR)
             train_model(use_mock=True)
         elif choice == "7":
             show_config()
@@ -1172,9 +1236,41 @@ def train_model(use_mock: bool = False) -> None:
         logger.info(f"Data prepared - Input size: {input_size}, Classes: {num_classes}")
         logger.info(f"Training batches: {len(train_loader)}, Validation batches: {len(val_loader)}")
         
+    except FileNotFoundError as e:
+        logger.error(Fore.RED + "FILE ERROR:" + Style.RESET_ALL + f" {str(e)}")
+        logger.error("Troubleshooting steps:")
+        logger.error("1. Check file paths and permissions")
+        logger.error("2. Verify preprocessing outputs exist")
+        logger.error("3. Ensure CSV files are in the correct location")
+        logger.error(f"See {DOCS_DIR}/TROUBLESHOOTING.md#file-errors for details")
+        sys.exit("Data preparation failed - missing files. Check logs for details.")
+
+    except ValueError as e:
+        if "SMOTE" in str(e):
+            logger.error(Fore.RED + "SMOTE CONFIGURATION ERROR:" + Style.RESET_ALL + f" {str(e)}")
+            logger.error("Troubleshooting steps:")
+            logger.error("1. Verify sampling_strategy matches your class distribution")
+            logger.error("2. Check random_state for reproducibility")
+            logger.error("3. Ensure k_neighbors is appropriate for dataset size")
+            logger.error(f"See {DOCS_DIR}/SMOTE_GUIDE.md for detailed guidance")
+        else:
+            logger.error(Fore.RED + "DATA VALIDATION ERROR:" + Style.RESET_ALL + f" {str(e)}")
+            logger.error("Troubleshooting steps:")
+            logger.error("1. Check feature shapes and dtypes")
+            logger.error("2. Verify no missing/NULL values exist")
+            logger.error("3. Ensure categorical features are properly encoded")
+            logger.error(f"See {DOCS_DIR}/TROUBLESHOOTING.md#validation-errors for details")
+        sys.exit("Data preparation failed - validation error. Check logs for details.")
+
     except Exception as e:
-        logger.error(f"Data preparation failed: {str(e)}", exc_info=True)
-        sys.exit(1)
+        logger.error(Fore.RED + "DATA PREPARATION ERROR:" + Style.RESET_ALL + f" {str(e)}")
+        logger.error("Troubleshooting steps:")
+        logger.error("1. Verify input files exist and are accessible")
+        logger.error("2. Check CSV file integrity (headers, delimiters)")
+        logger.error("3. Validate feature consistency (shapes, dtypes)")
+        logger.error(f"See {DOCS_DIR}/TROUBLESHOOTING.md for complete troubleshooting guide")
+        
+        sys.exit("Data preparation failed. Check logs and documentation for assistance.")
 
     # Model configuration
     model = IDSModel(input_size, num_classes).to(device)
@@ -1198,7 +1294,7 @@ def train_model(use_mock: bool = False) -> None:
     scaler = GradScaler(enabled=False)  # Disable for CPU-only
     
     # Training loop
-    logger.info("\nStarting training...")
+    logger.info("\n=== Starting Training ===")
     best_metrics = {
         'epoch': -1,
         'val_loss': float('inf'),

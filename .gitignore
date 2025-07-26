@@ -40,6 +40,8 @@ models/*.onnx
 models/*.pkl
 backend/models/*.pth
 backend/models/*.pkl
+backend/models/*
+backend/runs/*
 
 # Log files
 *.log
@@ -87,3 +89,4 @@ Thumbs.db
 
 # Coverage reports
 .coverage
+backend/latest.txt
