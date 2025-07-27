@@ -1,6 +1,7 @@
 # Standard library imports
 import argparse
 import datetime
+import time
 import hashlib
 import json
 import logging
@@ -12,9 +13,14 @@ import sys
 import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
+from collections import defaultdict
 from colorama import Fore, Style, init
 import re
 import traceback
+import tarfile
+import zipfile
+import shutil
+import contextlib
 
 # Third-party imports
 import numpy as np
@@ -26,7 +32,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.cuda.amp import GradScaler, autocast
-from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler
+from torch.utils.data import DataLoader, TensorDataset, WeightedRandomSampler, RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 import torch.backends.cudnn as cudnn
 import torch._logging
@@ -69,11 +75,11 @@ import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib import rcParams
+from tqdm import tqdm
 
 # Serialization
 import joblib
 import pickle
-import shutil
 
 # Initialize colorama
 init(autoreset=True)
@@ -248,7 +254,13 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
         'figures': base_dir / "figures" / timestamp,
         'tensorboard': base_dir / "runs" / timestamp,
         'checkpoints': base_dir / "checkpoints" / timestamp,
-        'docs': base_dir / "docs" / timestamp
+        'config': base_dir / "config" / timestamp,
+        'results': base_dir / "results" / timestamp,
+        'metrics': base_dir / "metrics" / timestamp,
+        'reports': base_dir / "reports" / timestamp,
+        'latest': base_dir / "latest",
+        'info': base_dir / "info" / timestamp,
+        'artifacts': base_dir / "artifacts" / timestamp
     }
     
     # Create directories
@@ -366,7 +378,7 @@ def check_versions(logger: logging.Logger) -> bool:
         output_lines.append(line)
 
     # Print clean output to console
-    print("\n".join(output_lines))
+    print(Fore.GREEN + "\n".join(output_lines) + Style.RESET_ALL)
     
     # Log the complete version info at DEBUG level
     logger.debug("\n".join(output_lines))
@@ -410,14 +422,21 @@ try:
     FIGURE_DIR = directories['figures']
     TB_DIR = directories['tensorboard']
     CHECKPOINT_DIR = directories['checkpoints']
-    DOCS_DIR = directories['docs']
+    CONFIG_DIR = directories['config']
+    RESULTS_DIR = directories['results']
+    METRICS_DIR = directories['metrics']
+    REPORTS_DIR = directories['reports']
+    LATEST_DIR = directories['latest']
+    INFO_DIR = directories['info']
+    ARTIFACTS_DIR = directories['artifacts']
+    DOCS_DIR = Path("docs")
 except Exception as e:
-    logger.error(f"Failed to set up directories: {str(e)}")
+    logger.error(Fore.RED + f"Failed to set up directories: {str(e)}" + Style.RESET_ALL)
     sys.exit(1)
 
 # Check package versions
 if not check_versions(logger):
-    logger.error("Some package requirements not met!")
+    logger.error(Fore.RED + "Some package requirements not met!" + Style.RESET_ALL)
 
 # Setup GPU or CPU
 device = setup_gpu(logger)
@@ -476,155 +495,803 @@ class IDSModel(nn.Module):
         return self.net(x)
 
 # Data preprocessing and validation
-def check_preprocessing_outputs() -> bool:
-    """Verify all required preprocessing outputs exist."""
-    required_files = [
-        "models/preprocessed_dataset.csv",
-        "models/preprocessing_artifacts.pkl"
-    ]
-    return all(Path(f).exists() for f in required_files)
+def check_preprocessing_outputs(
+    strict: bool = False,
+    use_color: bool = True,
+    min_csv_size: int = 1024,
+    min_pkl_size: int = 128,
+    validate_csv: bool = True,
+    validate_pickle: bool = True
+) -> bool:
+    """Verify preprocessing outputs with optional validation.
+    
+    Args:
+        strict: Enable content validation (default: False)
+        use_color: Enable colored output (default: True)
+        min_csv_size: Minimum CSV file size in bytes
+        min_pkl_size: Minimum pickle file size in bytes
+        validate_csv: Perform CSV content checks
+        validate_pickle: Perform pickle structure checks
+        
+    Returns:
+        bool: True if all files exist (and are valid in strict mode)
+        
+    Raises:
+        RuntimeWarning: For suspicious but accepted files
+    """
+    # Color setup
+    red = Fore.RED if use_color else ""
+    yellow = Fore.YELLOW if use_color else ""
+    reset = Style.RESET_ALL if use_color else ""
+    
+    required_files = {
+        "models/preprocessed_dataset.csv": {
+            "min_size": min_csv_size,
+            "checks": ["header", "delimiter"] if validate_csv else []
+        },
+        "models/preprocessing_artifacts.pkl": {
+            "min_size": min_pkl_size,
+            "required_keys": ["feature_names", "scaler"] if validate_pickle else []
+        }
+    }
+    
+    for filepath, requirements in required_files.items():
+        path = Path(filepath)
+        
+        # File existence check (always performed)
+        if not path.exists():
+            logger.error(f"{red}Missing required file: {filepath}{reset}")
+            return False
+            
+        # Skip validation in non-strict mode
+        if not strict:
+            continue
+            
+        # File size validation
+        file_size = path.stat().st_size
+        if file_size < requirements["min_size"]:
+            logger.warning(f"{yellow}File appears small ({file_size} bytes): {filepath}{reset}")
+            
+        # CSV validation
+        if filepath.endswith('.csv') and validate_csv:
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    header = f.readline()
+                    if not header.strip():
+                        logger.error(f"{red}Empty CSV file: {filepath}{reset}")
+                        return False
+                        
+                    if "delimiter" in requirements["checks"]:
+                        if len(header.split(',')) < 2:
+                            logger.error(f"{red}Invalid CSV format in: {filepath}{reset}")
+                            return False
+            except UnicodeDecodeError:
+                logger.error(f"{red}Invalid CSV encoding: {filepath}{reset}")
+                return False
+            except Exception as e:
+                logger.error(f"{red}CSV validation failed: {filepath} - {str(e)}{reset}")
+                return False
+                
+        # Pickle validation
+        elif filepath.endswith('.pkl') and validate_pickle:
+            try:
+                with open(path, 'rb') as f:
+                    data = joblib.load(f)
+                    for key in requirements["required_keys"]:
+                        if key not in data:
+                            logger.error(f"{red}Missing key '{key}' in: {filepath}{reset}")
+                            return False
+            except Exception as e:
+                logger.error(f"{red}Pickle load failed: {filepath} - {str(e)}{reset}")
+                return False
+    
+    return True
 
-def run_preprocessing() -> bool:
-    """Execute preprocessing.py with proper error handling."""
-    logger.info("Running preprocessing pipeline...")
+def run_preprocessing(
+    timeout_minutes: float = 30.0,
+    cleanup: bool = True,
+    use_color: bool = True,
+    strict_output_check: bool = True,
+    reproducible: bool = True,
+    debug: bool = False
+) -> bool:
+    """Execute preprocessing with enhanced controls.
+    
+    Args:
+        timeout_minutes: Maximum runtime in minutes
+        cleanup: Remove existing output files
+        use_color: Enable colored output
+        strict_output_check: Use strict validation
+        reproducible: Set PYTHONHASHSEED for reproducibility
+        debug: Enable verbose debugging output
+        
+    Returns:
+        bool: True if preprocessing succeeded
+        
+    Raises:
+        RuntimeError: For unrecoverable failures
+        FileNotFoundError: If script is missing
+    """
+    # Configure output styling
+    red = Fore.RED if use_color else ""
+    yellow = Fore.YELLOW if use_color else ""
+    green = Fore.GREEN if use_color else ""
+    reset = Style.RESET_ALL if use_color else ""
+
+    logger.info(f"{yellow}=== Preprocessing Pipeline ==={reset}")
+    
+    # Validate script existence
+    if not Path("preprocessing.py").exists():
+        logger.error(f"{red}Preprocessing script not found{reset}")
+        raise FileNotFoundError("preprocessing.py not found")
+
     try:
+        # Cleanup previous outputs
+        output_files = [
+            "models/preprocessed_dataset.csv",
+            "models/preprocessing_artifacts.pkl"
+        ]
+        
+        if cleanup:
+            for fpath in output_files:
+                if Path(fpath).exists():
+                    logger.info(f"{yellow}Cleaning up: {fpath}{reset}")
+                    Path(fpath).unlink(missing_ok=True)
+
+        # Prepare environment
+        env = os.environ.copy()
+        if reproducible:
+            env["PYTHONHASHSEED"] = "42"
+
+        # Execute with timeout
+        timeout_seconds = int(timeout_minutes * 60)
         result = subprocess.run(
             [sys.executable, "preprocessing.py"],
             check=True,
             capture_output=True,
-            text=True
+            text=True,
+            timeout=timeout_seconds,
+            env=env
         )
-        logger.info(result.stdout)
-        if not check_preprocessing_outputs():
-            logger.error("Preprocessing ran but outputs not created")
+
+        # Stream output
+        for line in result.stdout.splitlines():
+            logger.info(f"{green}{line[:500]}{reset}")
+            if debug:
+                logger.debug(f"STDOUT: {line[:200]}")
+
+        # Validate outputs
+        if not check_preprocessing_outputs(strict=strict_output_check):
+            logger.error(f"{red}Output validation failed{reset}")
+            log_troubleshooting("validation")
             return False
+
+        logger.info(f"{green}Preprocessing completed successfully{reset}")
         return True
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Preprocessing failed: {e.stderr}")
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"{red}Timeout after {timeout_minutes} minutes{reset}")
+        log_troubleshooting("timeout")
         return False
 
-def load_and_validate_data() -> Tuple[pd.DataFrame, Dict]:
-    """Load and validate training data with comprehensive checks."""
-    try:
-        logger.info("Starting data loading and validation...")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"{red}Process failed (code {e.returncode}){reset}")
+        log_error_output(e.stderr, use_color)
+        log_troubleshooting("execution")
+        return False
+
+    except Exception as e:
+        logger.error(f"{red}Unexpected error: {type(e).__name__}{reset}")
+        if debug:
+            logger.error(f"{red}{traceback.format_exc()}{reset}")
+        log_troubleshooting("unexpected")
+        raise RuntimeError("Preprocessing failed") from e
+
+def log_troubleshooting(error_type: str):
+    """Centralized troubleshooting guides."""
+    guides = {
+        "validation": [
+            "1. Verify preprocessing script generates correct outputs",
+            "2. Check file permissions in models/ directory",
+            "3. Validate disk space is available"
+        ],
+        "timeout": [
+            "1. Optimize preprocessing steps",
+            "2. Increase timeout_minutes parameter",
+            "3. Check for infinite loops"
+        ],
+        "execution": [
+            "1. Run preprocessing.py manually to debug",
+            "2. Check dependency versions",
+            "3. Validate input data quality"
+        ],
+        "unexpected": [
+            "1. Check system resource limits",
+            "2. Verify Python environment consistency",
+            "3. Enable debug mode for details"
+        ]
+    }
+    logger.warning("Troubleshooting steps:")
+    for step in guides.get(error_type, guides["unexpected"]):
+        logger.warning(f"  {step}")
+
+def log_error_output(stderr: str, use_color: bool):
+    """Log last 20 lines of error output."""
+    red = Fore.RED if use_color else ""
+    reset = Style.RESET_ALL if use_color else ""
+    logger.error(f"{red}Last error lines:{reset}")
+    for line in stderr.splitlines()[-20:]:
+        logger.error(f"{red}{line[:200]}{reset}")
+
+def load_preprocessing_artifacts(
+    filepath: str = "models/preprocessing_artifacts.pkl",
+    strict: bool = True,
+    use_color: bool = True,
+    required_keys: List[str] = None,
+    validate_scaler: bool = True,
+    debug: bool = False
+) -> Dict:
+    """Load preprocessing artifacts with enhanced validation.
+    
+    Args:
+        filepath: Path to artifacts file
+        strict: Enable comprehensive validation
+        use_color: Enable colored output
+        required_keys: List of required keys (default: ['feature_names', 'scaler'])
+        validate_scaler: Verify scaler type
+        debug: Enable verbose debugging output
         
-        # Load artifacts with version mismatch handling
+    Returns:
+        Dict: Validated preprocessing artifacts
+        
+    Raises:
+        RuntimeError: For invalid artifacts (when strict=True)
+        FileNotFoundError: If file is missing
+    """
+    # Setup styling
+    red = Fore.RED if use_color else ""
+    yellow = Fore.YELLOW if use_color else ""
+    reset = Style.RESET_ALL if use_color else ""
+    
+    # Default required keys
+    if required_keys is None:
+        required_keys = ["feature_names", "scaler"]
+    
+    try:
+        # Load with warning suppression
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            if debug:
+                logger.debug(f"Loading artifacts from {filepath}")
+            artifacts = joblib.load(filepath)
+        
+        # Basic validation
+        if not isinstance(artifacts, dict):
+            raise ValueError("Artifacts must be a dictionary")
+            
+        # Key validation
+        missing_keys = [k for k in required_keys if k not in artifacts]
+        if missing_keys:
+            raise KeyError(f"Missing required keys: {missing_keys}")
+        
+        # Scaler validation
+        if validate_scaler and "scaler" in artifacts:
+            scaler = artifacts["scaler"]
+            valid_scalers = (MinMaxScaler, StandardScaler)
+            if not isinstance(scaler, valid_scalers):
+                raise TypeError(f"Invalid scaler type: {type(scaler).__name__}")
+        
+        # Version-aware feature names
+        feature_names = artifacts["feature_names"]
+        if hasattr(artifacts.get("scaler"), 'feature_names_in_'):
+            feature_names = artifacts["scaler"].feature_names_in_.tolist()
+            if debug:
+                logger.debug("Using scaler-derived feature names")
+        
+        # Prepare return dict
+        result = {
+            "feature_names": feature_names,
+            "scaler": artifacts.get("scaler"),
+            "chunk_size": artifacts.get("chunk_size", 100000)
+        }
+        
+        if debug:
+            logger.debug(f"Artifacts loaded successfully: {list(result.keys())}")
+        
+        return result
+        
+    except FileNotFoundError as e:
+        logger.error(f"{red}Artifacts file not found: {filepath}{reset}")
+        if debug:
+            logger.debug(f"{red}{traceback.format_exc()}{reset}")
+        raise FileNotFoundError(f"Artifacts file not found: {filepath}") from e
+        
+    except Exception as e:
+        error_type = type(e).__name__
+        logger.error(f"{red}Artifact loading failed ({error_type}): {str(e)}{reset}")
+        
+        if strict:
+            troubleshooting = [
+                "1. Verify preprocessing script completed successfully",
+                "2. Check artifact file integrity",
+                f"3. Validate required keys: {required_keys}",
+                "4. For scaler issues, check sklearn version compatibility"
+            ]
+            logger.info(f"{yellow}Troubleshooting steps:\n  " + "\n  ".join(troubleshooting) + reset)
+            
+            if debug:
+                logger.debug(f"{red}Full traceback:\n{traceback.format_exc()}{reset}")
+            
+            raise RuntimeError(f"Failed to load artifacts: {str(e)}") from e
+        else:
+            logger.warning(f"{yellow}Using partial artifacts with validation disabled{reset}")
+            return {
+                "feature_names": [],
+                "scaler": None,
+                "chunk_size": 100000
+            }
+
+def load_and_clean_data(
+    filepath: str,
+    feature_names: List[str],
+    *,
+    chunk_size: int = 100000,
+    max_value: float = 1e6,
+    min_value: float = -1e6,
+    keep_extreme_values: bool = False,
+    label_col: str = "Label",
+    label_dtype: str = "float32",
+    use_color: bool = True,
+    debug: bool = False,
+    safe_dtype_conversion: bool = True,
+    sample_size: int = 10000,
+    on_bad_lines: str = 'warn',
+    float_precision: str = 'high'
+) -> pd.DataFrame:
+    """Enhanced data loader with comprehensive validation and robust dtype handling.
+    
+    Args:
+        filepath: Path to CSV file
+        feature_names: List of feature columns to keep
+        chunk_size: Rows per chunk (default: 100000)
+        max_value: Maximum valid feature value (default: 1e6)
+        min_value: Minimum valid feature value (default: -1e6)
+        keep_extreme_values: Whether to keep out-of-range values
+        label_col: Name of label column (default: "Label")
+        label_dtype: Data type for label (default: "int32")
+        use_color: Enable colored output
+        debug: Enable verbose debugging
+        safe_dtype_conversion: Automatically handle dtype mismatches (default: True)
+        sample_size: Number of rows to sample for dtype inference (default: 10000)
+        on_bad_lines: How to handle bad CSV lines ('warn', 'skip', or 'error')
+        float_precision: Float precision for CSV parsing ('high', 'round_trip')
+        
+    Returns:
+        Cleaned DataFrame
+        
+    Raises:
+        RuntimeError: For file/parsing issues
+        ValueError: For data validation failures
+    """
+    # Setup styling
+    red = Fore.RED if use_color else ""
+    yellow = Fore.YELLOW if use_color else ""
+    green = Fore.GREEN if use_color else ""
+    reset = Style.RESET_ALL if use_color else ""
+    
+    stats = {
+        'original': 0,
+        'duplicates': 0,
+        'nan_rows': 0,
+        'feature_nans': 0,
+        'label_nans': 0,
+        'invalid_values': 0,
+        'cleaned': 0,
+        'total_chunks': 0,
+        'dtype_conversions': 0,
+        'skipped_rows': 0,
+        'bad_lines': 0,
+        'failed_conversions': 0
+    }
+    
+    chunks = []
+    required_cols = feature_names + [label_col]
+    
+    try:
+        logger.info(f"{yellow}=== Data Loading Started ==={reset}")
+        
+        # Validate CSV structure first
         try:
+            with open(filepath, 'r') as f:
+                header = f.readline().strip().split(',')
+                missing_cols = set(required_cols) - set(header)
+                if missing_cols:
+                    raise ValueError(f"Missing required columns: {missing_cols}")
+        except Exception as e:
+            logger.error(f"{red}CSV validation failed: {str(e)}{reset}")
+            raise RuntimeError(f"CSV validation failed: {str(e)}") from e
+        
+        # Improved dtype inference with float32 as default for features
+        logger.info(f"{yellow}Analyzing data types...{reset}")
+        try:
+            sample_df = pd.read_csv(
+                filepath, 
+                nrows=sample_size,
+                usecols=required_cols,
+                engine='c',
+                on_bad_lines='warn',
+                float_precision=float_precision
+            )
+            
+            dtypes_map = {}
+            for col in sample_df.columns:
+                if col == label_col:
+                    dtypes_map[col] = label_dtype
+                elif col in feature_names:
+                    # Default to float32 for all features to prevent int conversion issues
+                    dtypes_map[col] = 'float32'
+                    if debug:
+                        actual_dtype = str(sample_df[col].dtype)
+                        logger.debug(f"{col}: sampled as {actual_dtype}, using float32")
+            
+            if debug:
+                logger.debug(f"{green}Final dtype mapping:{reset}\n{dtypes_map}")
+        except Exception as e:
+            logger.warning(f"{yellow}Dtype inference failed, using safe defaults: {str(e)}{reset}")
+            dtypes_map = {col: 'float32' for col in feature_names}
+            dtypes_map[label_col] = label_dtype
+        
+        # Main loading loop with robust dtype handling
+        for chunk in pd.read_csv(
+            filepath,
+            dtype=dtypes_map,
+            usecols=required_cols,
+            chunksize=chunk_size,
+            engine='c',
+            na_values=['nan', 'NaN', 'null', 'NULL', '', 'inf', '-inf'],
+            keep_default_na=True,
+            on_bad_lines=on_bad_lines,
+            float_precision=float_precision
+        ):
+            if len(chunk) == 0:
+                stats['bad_lines'] += chunk_size
+                continue
+                
+            stats['original'] += len(chunk)
+            stats['total_chunks'] += 1
+            
+            # Robust dtype conversion handling
+            for col in chunk.columns:
+                try:
+                    # First try the specified dtype
+                    chunk[col] = chunk[col].astype(dtypes_map.get(col, 'float32'))
+                except (ValueError, TypeError) as e:
+                    if safe_dtype_conversion:
+                        try:
+                            # Try converting to numeric first
+                            converted = pd.to_numeric(chunk[col], errors='coerce')
+                            if converted.isna().any():
+                                stats['failed_conversions'] += converted.isna().sum()
+                                if debug:
+                                    logger.debug(f"{yellow}Partial conversion failure in {col}: {converted.isna().sum()} NA values introduced{reset}")
+                            
+                            # Then convert to target dtype
+                            chunk[col] = converted.astype(dtypes_map.get(col, 'float32'))
+                            stats['dtype_conversions'] += 1
+                            
+                            if debug:
+                                logger.debug(f"{yellow}Converted {col} via safe method{reset}")
+                        except Exception as inner_e:
+                            stats['failed_conversions'] += len(chunk)
+                            logger.warning(f"{yellow}Failed to convert {col}: {str(inner_e)}{reset}")
+                            raise ValueError(f"Critical dtype conversion failed for {col}") from inner_e
+                    else:
+                        raise ValueError(f"Failed to convert {col} to {dtypes_map.get(col)}") from e
+            
+            # Duplicate removal
+            dup_count = chunk.duplicated().sum()
+            stats['duplicates'] += dup_count
+            chunk = chunk.drop_duplicates()
+            
+            # NaN handling
+            nan_rows = chunk.isna().any(axis=1).sum()
+            stats['nan_rows'] += nan_rows
+            
+            for col in feature_names:
+                col_nans = chunk[col].isna().sum()
+                if col_nans > 0:
+                    stats['feature_nans'] += col_nans
+                    chunk[col] = chunk[col].fillna(0)
+            
+            label_nans = chunk[label_col].isna().sum()
+            stats['label_nans'] += label_nans
+            chunk = chunk.dropna(subset=required_cols)
+            
+            # Value range validation
+            if not keep_extreme_values:
+                invalid_mask = pd.DataFrame(False, index=chunk.index, columns=feature_names)
+                for col in feature_names:
+                    invalid_mask[col] = (chunk[col] > max_value) | (chunk[col] < min_value)
+                
+                invalid_count = invalid_mask.any(axis=1).sum()
+                if invalid_count > 0:
+                    stats['invalid_values'] += invalid_count
+                    chunk = chunk[~invalid_mask.any(axis=1)]
+            
+            stats['cleaned'] += len(chunk)
+            
+            if len(chunk) > 0:
+                chunks.append(chunk)
+            elif debug:
+                logger.debug(f"{yellow}Empty chunk after cleaning{reset}")
+            
+            # Progress reporting
+            if stats['total_chunks'] % 10 == 0 or debug:
+                logger.info(
+                    f"{green}Processed {stats['original']:,} rows | "
+                    f"Chunk {stats['total_chunks']} | "
+                    f"Clean: {stats['cleaned']:,} | "
+                    f"Dtype conversions: {stats['dtype_conversions']:,} | "
+                    f"Failed conversions: {stats['failed_conversions']:,} | "
+                    f"Bad lines: {stats['bad_lines']:,}{reset}"
+                )
+    
+    except FileNotFoundError:
+        logger.error(f"{red}Data file not found: {filepath}{reset}")
+        raise RuntimeError(f"Data file not found: {filepath}") from None
+    except pd.errors.EmptyDataError:
+        logger.error(f"{red}CSV file is empty{reset}")
+        raise RuntimeError("CSV file is empty") from None
+    except Exception as e:
+        logger.error(f"{red}Data loading failed: {str(e)}{reset}")
+        if debug:
+            logger.debug(f"{red}{traceback.format_exc()}{reset}")
+        raise RuntimeError("Data loading failed") from e
+    
+    # Final validation
+    if not chunks:
+        logger.error(f"{red}No valid data remaining after cleaning{reset}")
+        raise ValueError("No valid data remaining after cleaning")
+    
+    df = pd.concat(chunks, ignore_index=True)
+    
+    # Validation report
+    logger.info(f"\n{yellow}=== Data Validation Report ==={reset}")
+    logger.info(f"Original samples: {stats['original']:,}")
+    logger.info(f"Removed duplicates: {stats['duplicates']:,}")
+    logger.info(f"Removed NaN rows: {stats['nan_rows']:,}")
+    logger.info(f"Feature NaN values filled: {stats['feature_nans']:,}")
+    logger.info(f"Label NaN rows removed: {stats['label_nans']:,}")
+    logger.info(f"Extreme values removed: {stats['invalid_values']:,}")
+    logger.info(f"Dtype conversions performed: {stats['dtype_conversions']:,}")
+    logger.info(f"Failed conversions: {stats['failed_conversions']:,}")
+    logger.info(f"Bad lines skipped: {stats['bad_lines']:,}")
+    logger.info(f"{green}Clean samples remaining: {len(df):,} ({len(df)/stats['original']:.1%}){reset}")
+    
+    return df
+
+def handle_class_imbalance(
+    df: pd.DataFrame,
+    artifacts: Dict,
+    *,
+    apply_smote: bool = True,
+    imbalance_threshold: float = 10.0,
+    label_col: str = "Label",
+    sampling_strategy: str = "auto",
+    random_state: int = 42,
+    use_color: bool = True,
+    debug: bool = False
+) -> pd.DataFrame:
+    """Enhanced class imbalance handler with flexible controls.
+    
+    Args:
+        df: Input DataFrame
+        artifacts: Preprocessing artifacts dict
+        apply_smote: Whether to apply SMOTE (default: True)
+        imbalance_threshold: Ratio to consider imbalance (default: 10.0)
+        label_col: Name of label column (default: "Label")
+        sampling_strategy: SMOTE sampling strategy
+        random_state: Random seed for reproducibility
+        use_color: Enable colored output
+        debug: Enable verbose debugging
+        
+    Returns:
+        Balanced DataFrame if SMOTE applied, else original
+        
+    Raises:
+        ValueError: For invalid inputs or single-class data
+        RuntimeError: For SMOTE application failures
+    """
+    # Setup styling
+    red = Fore.RED if use_color else ""
+    yellow = Fore.YELLOW if use_color else ""
+    green = Fore.GREEN if use_color else ""
+    reset = Style.RESET_ALL if use_color else ""
+    
+    # Validate inputs
+    if label_col not in df.columns:
+        raise ValueError(f"{red}Label column '{label_col}' not found{reset}")
+        
+    if not isinstance(artifacts, dict) or 'feature_names' not in artifacts:
+        raise ValueError(f"{red}Invalid artifacts - must contain feature_names{reset}")
+    
+    # Get class distribution
+    class_counts = df[label_col].value_counts()
+    n_classes = len(class_counts)
+    
+    logger.info(f"\n{yellow}=== Class Distribution ==={reset}")
+    logger.info(class_counts.to_string())
+    
+    # Basic validation
+    if n_classes < 2:
+        raise ValueError(f"{red}Dataset must contain at least 2 classes{reset}")
+    
+    # Calculate imbalance
+    min_samples = class_counts.min()
+    max_samples = class_counts.max()
+    imbalance_ratio = max_samples / min_samples
+    
+    logger.info(f"{yellow}Imbalance ratio: {imbalance_ratio:.1f}:1{reset}")
+    
+    # Handle imbalance if exceeds threshold
+    if imbalance_ratio > imbalance_threshold:
+        logger.warning(
+            f"{yellow}Significant imbalance detected ({imbalance_ratio:.1f}:1) "
+            f"(threshold: {imbalance_threshold}:1){reset}"
+        )
+        
+        if not apply_smote:
+            logger.warning(f"{yellow}SMOTE not applied (apply_smote=False){reset}")
+            return df
+            
+        try:
+            # Validate features
+            missing_features = [
+                f for f in artifacts['feature_names'] 
+                if f not in df.columns
+            ]
+            if missing_features:
+                raise ValueError(
+                    f"{red}Missing features for SMOTE: {missing_features[:3]}...{reset}"
+                )
+            
+            # Safe SMOTE configuration
+            k_neighbors = min(5, min_samples - 1)
+            if k_neighbors < 1:
+                raise ValueError(
+                    f"{red}Cannot apply SMOTE - minority class has only {min_samples} samples{reset}"
+                )
+            
+            logger.info(f"{green}Applying SMOTE (k_neighbors={k_neighbors})...{reset}")
+            
+            smote = SMOTE(
+                sampling_strategy=sampling_strategy,
+                k_neighbors=k_neighbors,
+                random_state=random_state
+            )
+            
+            X_res, y_res = smote.fit_resample(
+                df[artifacts['feature_names']],
+                df[label_col]
+            )
+            
+            # Create balanced DataFrame
+            balanced_df = pd.DataFrame(X_res, columns=artifacts['feature_names'])
+            balanced_df[label_col] = y_res
+            
+            # Report results
+            new_counts = balanced_df[label_col].value_counts()
+            new_ratio = new_counts.max() / new_counts.min()
+            
+            logger.info(f"\n{green}=== After SMOTE ==={reset}")
+            logger.info(f"Total samples: {len(balanced_df):,}")
+            logger.info(f"New distribution:\n{new_counts.to_string()}")
+            logger.info(f"New imbalance ratio: {new_ratio:.1f}:1")
+            
+            return balanced_df
+            
+        except Exception as e:
+            logger.error(f"{red}SMOTE failed: {str(e)}{reset}")
+            if debug:
+                logger.debug(f"{red}{traceback.format_exc()}{reset}")
+            
+            raise RuntimeError("Class balancing failed") from e
+    
+    else:
+        logger.info(f"{green}Class distribution within acceptable limits{reset}")
+        return df
+
+def load_and_validate_data(
+    enhanced: bool = True,
+    use_color: bool = None,
+    **kwargs
+) -> Tuple[pd.DataFrame, Dict]:
+    """Load and validate training data with configurable enhancements.
+    
+    Args:
+        enhanced: Use improved validation pipeline (default: True)
+        use_color: Enable colored output (None=auto-detect)
+        **kwargs: Forwarded to helper functions
+        
+    Returns:
+        Tuple of (cleaned DataFrame, preprocessing artifacts)
+        
+    Raises:
+        RuntimeError: If loading fails, with troubleshooting info
+    """
+    # Auto-detect color support if not specified
+    if use_color is None:
+        use_color = sys.stdout.isatty()
+    
+    # Setup styling
+    reset = Style.RESET_ALL if use_color else ""
+    color_kwargs = {'use_color': use_color, **kwargs}
+    
+    try:
+        if not enhanced:
+            # Legacy mode - use original simplified implementation
+            logger.info("Starting data loading (legacy mode)...")
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=UserWarning)
                 artifacts = joblib.load("models/preprocessing_artifacts.pkl")
-        except Exception as e:
-            logger.error(f"Failed to load artifacts: {str(e)}")
-            raise RuntimeError("Artifacts loading failed") from e
-
-        # Validate artifacts structure
-        feature_names = artifacts.get("feature_names", [])
-        if not feature_names:
-            raise ValueError("No feature names found in artifacts")
             
-        # Load and clean data in chunks
-        chunksize = 100000
-        df_chunks = []
-        stats = {
-            'original': 0,
-            'duplicates': 0,
-            'nan_rows': 0,
-            'feature_nans': 0,
-            'label_nans': 0
-        }
-        
-        try:
+            feature_names = artifacts.get("feature_names", [])
+            if not feature_names:
+                raise ValueError("No feature names found in artifacts")
+                
+            # Original chunked loading
+            chunksize = kwargs.get('chunk_size', 100000)
+            df_chunks = []
             for chunk in pd.read_csv("models/preprocessed_dataset.csv", chunksize=chunksize):
-                stats['original'] += len(chunk)
-                stats['duplicates'] += chunk.duplicated().sum()
-                
-                # Track NaN types
-                stats['nan_rows'] += chunk.isna().any(axis=1).sum()
-                stats['feature_nans'] += chunk[feature_names].isna().sum().sum()
-                stats['label_nans'] += chunk['Label'].isna().sum()
-                
-                # Clean chunk
                 chunk = chunk.drop_duplicates().dropna(subset=feature_names + ["Label"])
                 df_chunks.append(chunk)
                 
-        except Exception as e:
-            logger.error(f"Data reading failed: {str(e)}")
-            raise RuntimeError("CSV reading failed") from e
-
-        # Combine cleaned chunks
-        if not df_chunks:
-            raise ValueError("No valid data remaining after cleaning")
-        df = pd.concat(df_chunks, ignore_index=True)
+            df = pd.concat(df_chunks, ignore_index=True)
+            return df, artifacts
         
-        # Data validation report
-        logger.info("\n=== Data Validation Report ===")
-        logger.info(f"Original samples: {stats['original']:,}")
-        logger.info(f"Removed duplicates: {stats['duplicates']:,}")
-        logger.info(f"Removed NaN rows: {stats['nan_rows']:,} (Features: {stats['feature_nans']:,}, Labels: {stats['label_nans']:,})")
-        logger.info(f"Clean samples remaining: {len(df):,} ({len(df)/stats['original']:.1%})")
+        # Enhanced mode
+        logger.info(f"{Fore.YELLOW if use_color else ''}=== Starting Enhanced Data Loading ==={reset}")
         
-        # Feature validation
-        missing_features = [f for f in feature_names if f not in df.columns]
-        if missing_features:
-            raise ValueError(f"Missing features: {missing_features[:5]}...")
-        logger.info(f"Validated {len(feature_names)} features")
+        # Load with helper functions
+        artifacts = load_preprocessing_artifacts(**color_kwargs)
+        df = load_and_clean_data("models/preprocessed_dataset.csv", 
+                               artifacts["feature_names"],
+                               **color_kwargs)
+        df = handle_class_imbalance(df, artifacts, **color_kwargs)
         
-        # Label validation
-        if "Label" not in df.columns:
-            raise ValueError("'Label' column missing")
-            
-        df["Label"] = df["Label"].astype(int)
-        class_counts = df["Label"].value_counts()
-        
-        logger.info("\n=== Class Distribution ===")
-        logger.info(class_counts.to_string())
-        
-        if len(class_counts) < 2:
-            raise ValueError("Dataset must contain both classes (normal and attack)")
-        
-        # Version-safe scaler handling
+        # Version-safe scaler handling (preserve original logic)
         if "scaler" in artifacts:
+            feature_names = artifacts["feature_names"]
             try:
-                # Align feature names if needed
                 if hasattr(artifacts['scaler'], 'feature_names_in_'):
                     feature_map = dict(zip(feature_names, artifacts['scaler'].feature_names_in_))
                     df = df.rename(columns=feature_map)
-                    feature_names = list(artifacts['scaler'].feature_names_in_)
                 
-                # Test and apply scaler
                 test_sample = df[feature_names].iloc[:1]
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     artifacts["scaler"].transform(test_sample)
-                logger.info("Scaler validated successfully")
-                
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
                     df[feature_names] = artifacts["scaler"].transform(df[feature_names])
-                logger.info("Applied feature scaling")
-                
             except Exception as e:
-                logger.warning(f"Scaler issue ({str(e)}), recreating...")
-                new_scaler = MinMaxScaler()
-                new_scaler.fit(df[feature_names])
+                logger.warning(f"Scaler issue, recreating: {str(e)}")
+                new_scaler = MinMaxScaler().fit(df[feature_names])
                 artifacts["scaler"] = new_scaler
-                logger.info("New scaler created and fitted")
         
-        # Final quality checks
-        if df.isna().any().any():
-            remaining_nans = df.isna().sum().sum()
-            logger.warning(f"Remaining NaNs: {remaining_nans}, filling with 0")
-            df = df.fillna(0)
-        
-        logger.info("Data validation completed successfully")
+        logger.info(f"{Fore.GREEN if use_color else ''}Data validation completed successfully{reset}")
         return df, artifacts
         
     except Exception as e:
-        logger.error(f"Data loading failed: {str(e)}")
-        logger.error("Troubleshooting steps:")
-        logger.error("1. Verify preprocessing artifacts exist")
-        logger.error("2. Check CSV file integrity")
-        logger.error("3. Ensure feature consistency")
+        logger.error(f"{Fore.RED if use_color else ''}Data loading failed: {str(e)}{reset}")
+        
+        # Enhanced troubleshooting
+        if enhanced:
+            logger.error(f"{Fore.YELLOW if use_color else ''}=== TROUBLESHOOTING ==={reset}")
+            logger.error("1. Verify preprocessing outputs exist:")
+            logger.error("   - models/preprocessed_dataset.csv")
+            logger.error("   - models/preprocessing_artifacts.pkl")
+            logger.error("2. Check file permissions and disk space")
+            logger.error(f"3. Test with enhanced=False to use legacy loader{reset}")
+        
         raise RuntimeError("Data loading failed") from e
 
 def create_synthetic_data() -> Tuple[pd.DataFrame, Dict]:
