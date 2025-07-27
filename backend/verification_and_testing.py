@@ -451,9 +451,9 @@ def substitute_command(cmd: List[str], config: Dict[str, Any]) -> List[str]:
     return [part.format(**config) if isinstance(part, str) else part for part in cmd]
 
 def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> bool:
-    """Run a step synchronously with progress indication"""
+    """Run a step synchronously with simulated progress"""
     print(Fore.MAGENTA + Style.BRIGHT + f"\n=== {label} ===")
-    logger.info(Fore.YELLOW + Style.BRIGHT + f"Starting {label}")
+    logger.info(f"Starting {label}")
     start = datetime.now()
     
     entry = {
@@ -470,49 +470,95 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
             if part.startswith("--") and part[2:] in config and not validate_path(config[part[2:]]):
                 raise ConfigError(f"Path does not exist: {config[part[2:]]}")
         
-        print(Fore.YELLOW + Style.BRIGHT + "[progress] Running...", end='', flush=True)
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        try:
+            from tqdm import tqdm
+            import time
+            
+            # Create progress bar with custom format
+            with tqdm(
+                total=100,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+                desc=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
+                ncols=80
+            ) as pbar:
+                # Start the subprocess
+                proc = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                
+                # Simulate progress while process is running
+                while proc.poll() is None:
+                    # Update progress in 5% increments
+                    if pbar.n < 95:  # Don't go to 100% until done
+                        pbar.update(5)
+                    time.sleep(0.1)  # Update interval
+                
+                # Get final output
+                stdout, stderr = proc.communicate()
+                pbar.update(100 - pbar.n)  # Complete to 100%
+                
+                if proc.returncode != 0:
+                    raise subprocess.CalledProcessError(proc.returncode, command, stdout, stderr)
+                
+                result = subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
+                
+        except ImportError:
+            # Fallback to original behavior if tqdm not available
+            print(Fore.YELLOW + Style.BRIGHT + "[progress] Running...", end='', flush=True)
+            result = subprocess.run(command, check=True, capture_output=True, text=True)
         
         duration = datetime.now() - start
-        entry["status"] = "SUCCESS"
-        entry["duration"] = str(duration).split(".")[0]
-        entry["output"] = result.stdout
+        entry.update({
+            "status": "SUCCESS",
+            "duration": str(duration).split(".")[0],
+            "output": result.stdout
+        })
         
-        print(Fore.GREEN + Style.BRIGHT + "\r[success] " + f"{label} completed successfully in {entry['duration']}")
-        logger.info(Fore.GREEN + Style.BRIGHT + f"{label} completed successfully")
+        print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed successfully in {entry['duration']}")
+        logger.info(f"{label} completed successfully")
         return True
+        
     except subprocess.CalledProcessError as e:
         duration = datetime.now() - start
-        entry["duration"] = str(duration).split(".")[0]
-        entry["error"] = e.stderr
-        
-        print(Fore.RED + Style.BRIGHT + "\r[error] " + f"{label} failed after {entry['duration']}")
-        logger.error(Fore.RED + Style.BRIGHT + f"{label} failed: {e.stderr}")
+        entry.update({
+            "duration": str(duration).split(".")[0],
+            "error": e.stderr
+        })
+        print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}")
+        logger.error(f"{label} failed: {e.stderr}")
         return False
+        
     except ConfigError as e:
         duration = datetime.now() - start
-        entry["duration"] = str(duration).split(".")[0]
-        entry["error"] = str(e)
-        
-        print(Fore.RED + Style.BRIGHT + "\r[error] " + f"{label} configuration error: {e}")
-        logger.error(Fore.RED + Style.BRIGHT + f"{label} configuration error: {e}")
+        entry.update({
+            "duration": str(duration).split(".")[0],
+            "error": str(e)
+        })
+        print(Fore.RED + Style.BRIGHT + f"\r[error] {label} configuration error: {e}")
+        logger.error(f"{label} configuration error: {e}")
         return False
+        
     except Exception as e:
         duration = datetime.now() - start
-        entry["duration"] = str(duration).split(".")[0]
-        entry["error"] = str(e)
-        
-        print(Fore.RED + Style.BRIGHT + "\r[error] " + f"{label} unexpected error: {e}")
-        logger.error(Fore.RED + Style.BRIGHT + f"{label} unexpected error: {str(e)}")
+        entry.update({
+            "duration": str(duration).split(".")[0],
+            "error": str(e)
+        })
+        print(Fore.RED + Style.BRIGHT + f"\r[error] {label} unexpected error: {e}")
+        logger.error(f"{label} unexpected error: {str(e)}")
         traceback.print_exc()
         return False
+        
     finally:
         save_history(entry)
 
 async def run_step_async(label: str, command: List[str], config: Dict[str, Any]) -> bool:
-    """Run a step asynchronously with progress indication"""
+    """Run a step asynchronously with simulated progress"""
     print(Fore.MAGENTA + Style.BRIGHT + f"\n>>> {label} started")
-    logger.info(Fore.WHITE + Style.BRIGHT + f"Starting {label} (async)")
+    logger.info(f"Starting {label} (async)")
     start = datetime.now()
     
     entry = {
@@ -529,48 +575,83 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
             if part.startswith("--") and part[2:] in config and not validate_path(config[part[2:]]):
                 raise ConfigError(f"Path does not exist: {config[part[2:]]}")
         
-        print(Fore.YELLOW + Style.BRIGHT + f"[progress] {label} running...", end='', flush=True)
-        proc = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        
-        stdout, stderr = await proc.communicate()
-        
+        try:
+            from tqdm.asyncio import tqdm
+            import time
+            
+            # Create async progress bar
+            with tqdm(
+                total=100,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+                desc=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
+                ncols=80
+            ) as pbar:
+                # Start the subprocess
+                proc = await asyncio.create_subprocess_exec(
+                    *command,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                
+                # Simulate progress while process is running
+                while proc.returncode is None:
+                    # Update progress in 5% increments
+                    if pbar.n < 95:  # Don't go to 100% until done
+                        pbar.update(5)
+                    await asyncio.sleep(0.1)  # Update interval
+                
+                # Get final output
+                stdout, stderr = await proc.communicate()
+                pbar.update(100 - pbar.n)  # Complete to 100%
+                
+        except ImportError:
+            # Fallback to original behavior
+            print(Fore.YELLOW + Style.BRIGHT + f"[progress] {label} running...", end='', flush=True)
+            proc = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+
         duration = datetime.now() - start
         entry["duration"] = str(duration).split(".")[0]
         
         if proc.returncode == 0:
-            entry["status"] = "SUCCESS"
-            entry["output"] = stdout.decode()
-            
+            entry.update({
+                "status": "SUCCESS",
+                "output": stdout.decode()
+            })
             print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed in {entry['duration']}")
-            logger.info(Fore.GREEN + Style.BRIGHT + f"{label} (async) completed successfully")
+            logger.info(f"{label} (async) completed successfully")
             return True
         else:
             entry["error"] = stderr.decode()
-            
             print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}")
-            logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) failed: {entry['error']}")
+            logger.error(f"{label} (async) failed: {entry['error']}")
             return False
+            
     except ConfigError as e:
         duration = datetime.now() - start
-        entry["duration"] = str(duration).split(".")[0]
-        entry["error"] = str(e)
-        
+        entry.update({
+            "duration": str(duration).split(".")[0],
+            "error": str(e)
+        })
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} configuration error: {e}")
-        logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) configuration error: {e}")
+        logger.error(f"{label} (async) configuration error: {e}")
         return False
+        
     except Exception as e:
         duration = datetime.now() - start
-        entry["duration"] = str(duration).split(".")[0]
-        entry["error"] = str(e)
-        
+        entry.update({
+            "duration": str(duration).split(".")[0],
+            "error": str(e)
+        })
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} unexpected error: {e}")
-        logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) unexpected error: {str(e)}")
+        logger.error(f"{label} (async) unexpected error: {str(e)}")
         traceback.print_exc()
         return False
+        
     finally:
         save_history(entry)
 
