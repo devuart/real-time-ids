@@ -121,10 +121,7 @@ def save_history(entry: Dict[str, Any]) -> None:
                     logger.error("History file corrupted, starting fresh")
                     history = []
 
-            # Clean the status field before saving
-            clean_entry = entry.copy()
-            clean_entry['status'] = entry['status'].replace('**', '')
-            history.append(clean_entry)
+            history.append(entry)
             
             with open(HISTORY_PATH, "w") as f:
                 json.dump(history, f, indent=2)
@@ -156,7 +153,7 @@ def write_summary(history: List[Dict[str, Any]], format: OutputFormat = OutputFo
         logger.error(f"Error writing summary: {str(e)}")
 
 def _write_markdown_summary(filtered_history: List[Dict[str, Any]]) -> None:
-    """Write markdown summary with multiple formatting options"""
+    """Write markdown summary with multiple formatting options and robust fallbacks"""
     try:
         # Header content
         header_content = [
@@ -173,7 +170,7 @@ def _write_markdown_summary(filtered_history: List[Dict[str, Any]]) -> None:
             rows = [
                 [
                     entry['label'],
-                    entry['status'],
+                    f"**{entry['status']}**" if entry['status'] == "SUCCESS" else entry['status'],
                     entry['duration'],
                     entry['timestamp']
                 ]
@@ -246,6 +243,23 @@ def _write_markdown_summary(filtered_history: List[Dict[str, Any]]) -> None:
         logger.error(f"Error writing summary: {str(e)}")
         raise
 
+def _write_simple_markdown(filtered_history: List[Dict[str, Any]]) -> None:
+    """Fallback markdown writer without tabulate"""
+    lines = [
+        "# Verification & Testing Run Summary",
+        "",
+        f"**Last Run:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "",
+        "| Step | Status | Duration | Timestamp |",
+        "|------|--------|----------|-----------|"
+    ]
+    
+    for entry in filtered_history:
+        lines.append(f"| {entry['label']} | {entry['status']} | {entry['duration']} | {entry['timestamp']} |")
+
+    with open(SUMMARY_MD, "w") as f:
+        f.write("\n".join(lines))
+
 def _write_html_summary(filtered_history: List[Dict[str, Any]]) -> None:
     """Write HTML version with styling"""
     status_colors = {
@@ -313,7 +327,7 @@ def _write_html_summary(filtered_history: List[Dict[str, Any]]) -> None:
         f.write(html)
 
 def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
-    """Display rich terminal output"""
+    """Display rich terminal output with proper ANSI handling"""
     try:
         from rich.console import Console
         from rich.table import Table
@@ -329,10 +343,10 @@ def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
             show_lines=True
         )
         
-        table.add_column("Step", style="cyan", width=25)
-        table.add_column("Status", justify="center", width=12)
-        table.add_column("Duration", justify="right", width=10)
-        table.add_column("Timestamp", style="dim", width=20)
+        table.add_column("Step", style="bold cyan", width=25)
+        table.add_column("Status", justify="center", style="bold", width=12)
+        table.add_column("Duration", justify="right", style="bold", width=10)
+        table.add_column("Timestamp", style="bold dim", width=20)
         
         status_styles = {
             "SUCCESS": "bold green",
@@ -343,16 +357,22 @@ def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
         
         for entry in filtered_history:
             status = entry['status'].split()[0]
-            status_style = status_styles.get(status, "")
+            status_style = status_styles.get(status, "bold")
             table.add_row(
-                entry['label'],
-                Text(entry['status'], style=status_style),
-                entry['duration'],
-                entry['timestamp']
+                f"[cyan]{entry['label']}",
+                f"[{status_style}]{entry['status']}",
+                f"[bold]{entry['duration']}",
+                f"[dim]{entry['timestamp']}"
             )
         
         console.print(table)
-        console.print(f"[dim]Last Run: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        # Create styled text that matches Fore.WHITE + Style.BRIGHT + dim timestamp
+        last_run_text = Text.assemble(
+            ("Last Run: ", "bold white"),
+            (f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "bold magenta")
+        )
+        console.print(last_run_text)
         
     except ImportError:
         logger.warning("rich not available, falling back to simple print")
@@ -364,7 +384,7 @@ def show_last_summary(format: OutputFormat = OutputFormat.TERMINAL) -> None:
     """Show the last summary in the specified format"""
     try:
         if not HISTORY_PATH.exists():
-            print(Fore.RED + "\nNo history found. Run at least one step first.")
+            print(Fore.RED + Style.BRIGHT + "\nNo history found. Run at least one step first.")
             return
 
         with open(HISTORY_PATH) as f:
@@ -381,7 +401,7 @@ def show_last_summary(format: OutputFormat = OutputFormat.TERMINAL) -> None:
             with open(SUMMARY_MD) as f:
                 print(f.read())
     except Exception as e:
-        logger.error(f"Error showing summary: {str(e)}")
+        logger.error(Fore.RED + Style.BRIGHT + f"Error showing summary: {str(e)}")
 
 def _read_history_from_md() -> List[Dict[str, Any]]:
     """Helper to read history from markdown file"""
@@ -389,7 +409,11 @@ def _read_history_from_md() -> List[Dict[str, Any]]:
     if SUMMARY_MD.exists():
         with open(SUMMARY_MD) as f:
             for line in f:
-                if line.startswith('|') and not line.startswith('|---') and 'Step' not in line:
+                line = line.strip()
+                # Skip separator lines and header rows
+                if (line.startswith('|') and not line.startswith('|---') 
+                    and 'Step' not in line and 'Status' not in line
+                    and ':--------' not in line):  # Add this to catch separator patterns
                     parts = [p.strip() for p in line.split('|')[1:-1]]
                     if len(parts) == 4:
                         history.append({
@@ -434,7 +458,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
     
     entry = {
         "label": label,
-        "timestamp": start.strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": start.strftime("%Y-%m-%d %H:%M:%S:%f"),
         "command": " ".join(command),
         "status": "FAILED",
         "duration": "0s"
@@ -493,7 +517,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
     
     entry = {
         "label": label,
-        "timestamp": start.strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": start.strftime("%Y-%m-%d %H:%M:%S:%f"),
         "command": " ".join(command),
         "status": "FAILED",
         "duration": "0s"
@@ -683,9 +707,9 @@ def show_config(edit_mode: bool = False) -> None:
             if edit_mode:
                 table.add_column("#", style="dim", width=3)
             
-            table.add_column("Setting", style="cyan", width=20)
-            table.add_column("Value", style="green", overflow="fold")
-            table.add_column("Status", width=5) if path_status else None
+            table.add_column("Setting", style="bold cyan", width=20)
+            table.add_column("Value", style="bold green", overflow="fold")
+            table.add_column("Status", justify="center", width=6) if path_status else None
             
             for i, (key, value) in enumerate(config.items(), 1):
                 row = []
@@ -843,7 +867,7 @@ def main() -> None:
             show_last_summary(OutputFormat.HTML)
         elif choice == "11":
             try:
-                days = int(input("Enter number of days to keep (default 7): ") or "7")
+                days = int(input(Fore.WHITE + Style.BRIGHT + "Enter number of days to keep (default 7): ") or "7")
                 cleanup_old_results(days)
             except ValueError:
                 print(Fore.RED + Style.BRIGHT + "Invalid input. Please enter a number.")
@@ -857,7 +881,7 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(Fore.RED + "\n\nInterrupted by user. Exiting...")
+        print(Fore.RED + Style.BRIGHT + "\n\nInterrupted by user. Exiting...")
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
+        logger.error(Fore.RED + Style.BRIGHT + f"Unexpected error: {str(e)}")
         traceback.print_exc()
