@@ -19,6 +19,7 @@ from typing import Optional, Dict, Tuple, Union
 import logging
 import pandas as pd
 import optuna.visualization as vis
+import plotly
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio

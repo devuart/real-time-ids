@@ -8,7 +8,7 @@ from typing import Optional, Tuple, Dict, List, Union
 import time
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_recall_fscore_support
 import torch
-from deep_learning import Autoencoder
+from deep_learning import EnhancedAutoencoder
 from hybrid_detector import hybrid_detect
 from sklearn.preprocessing import StandardScaler
 import logging

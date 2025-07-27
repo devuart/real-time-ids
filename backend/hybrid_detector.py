@@ -5,7 +5,7 @@ import joblib
 from pathlib import Path
 from typing import Optional
 import logging
-from deep_learning import Autoencoder
+from deep_learning import EnhancedAutoencoder
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
