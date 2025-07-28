@@ -13,6 +13,10 @@ import re
 from colorama import Fore, Style, init
 from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum, auto
+import threading
+import itertools
+import time
+from alive_progress import alive_bar
 
 # Get virtual environment's Python path
 VENV_PYTHON = Path(sys.executable)
@@ -451,11 +455,11 @@ def substitute_command(cmd: List[str], config: Dict[str, Any]) -> List[str]:
     return [part.format(**config) if isinstance(part, str) else part for part in cmd]
 
 def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> bool:
-    """Run a step synchronously with simulated progress"""
+    """Run a step synchronously with alive-progress indication"""
     print(Fore.MAGENTA + Style.BRIGHT + f"\n=== {label} ===")
     logger.info(f"Starting {label}")
     start = datetime.now()
-    
+
     entry = {
         "label": label,
         "timestamp": start.strftime("%Y-%m-%d %H:%M:%S:%f"),
@@ -463,64 +467,56 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
         "status": "FAILED",
         "duration": "0s"
     }
-    
+
     try:
         # Validate paths in command
         for part in command:
             if part.startswith("--") and part[2:] in config and not validate_path(config[part[2:]]):
                 raise ConfigError(f"Path does not exist: {config[part[2:]]}")
-        
+
         try:
-            from tqdm import tqdm
-            import time
-            
-            # Create progress bar with custom format
-            with tqdm(
-                total=100,
-                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                desc=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
-                ncols=80
-            ) as pbar:
-                # Start the subprocess
+            # Start the progress bar
+            with alive_bar(
+                manual=False,
+                title=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
+                bar='smooth',
+                spinner='dots_waves',
+                stats=False,
+                monitor=False
+            ) as bar:
                 proc = subprocess.Popen(
                     command,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True
                 )
-                
-                # Simulate progress while process is running
+
                 while proc.poll() is None:
-                    # Update progress in 5% increments
-                    if pbar.n < 95:  # Don't go to 100% until done
-                        pbar.update(5)
-                    time.sleep(0.1)  # Update interval
-                
-                # Get final output
+                    bar()
+                    time.sleep(0.2)
+
                 stdout, stderr = proc.communicate()
-                pbar.update(100 - pbar.n)  # Complete to 100%
-                
+
                 if proc.returncode != 0:
                     raise subprocess.CalledProcessError(proc.returncode, command, stdout, stderr)
-                
+
                 result = subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
-                
+
         except ImportError:
-            # Fallback to original behavior if tqdm not available
             print(Fore.YELLOW + Style.BRIGHT + "[progress] Running...", end='', flush=True)
             result = subprocess.run(command, check=True, capture_output=True, text=True)
-        
+
         duration = datetime.now() - start
         entry.update({
             "status": "SUCCESS",
             "duration": str(duration).split(".")[0],
             "output": result.stdout
         })
-        
+
         print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed successfully in {entry['duration']}")
         logger.info(f"{label} completed successfully")
         return True
-        
+
     except subprocess.CalledProcessError as e:
         duration = datetime.now() - start
         entry.update({
@@ -530,7 +526,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}")
         logger.error(f"{label} failed: {e.stderr}")
         return False
-        
+
     except ConfigError as e:
         duration = datetime.now() - start
         entry.update({
@@ -540,7 +536,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} configuration error: {e}")
         logger.error(f"{label} configuration error: {e}")
         return False
-        
+
     except Exception as e:
         duration = datetime.now() - start
         entry.update({
@@ -551,16 +547,16 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
         logger.error(f"{label} unexpected error: {str(e)}")
         traceback.print_exc()
         return False
-        
+
     finally:
         save_history(entry)
 
 async def run_step_async(label: str, command: List[str], config: Dict[str, Any]) -> bool:
-    """Run a step asynchronously with simulated progress"""
+    """Run a step asynchronously with alive-progress indication"""
     print(Fore.MAGENTA + Style.BRIGHT + f"\n>>> {label} started")
     logger.info(f"Starting {label} (async)")
     start = datetime.now()
-    
+
     entry = {
         "label": label,
         "timestamp": start.strftime("%Y-%m-%d %H:%M:%S:%f"),
@@ -568,44 +564,35 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
         "status": "FAILED",
         "duration": "0s"
     }
-    
+
     try:
         # Validate paths in command
         for part in command:
             if part.startswith("--") and part[2:] in config and not validate_path(config[part[2:]]):
                 raise ConfigError(f"Path does not exist: {config[part[2:]]}")
-        
+
         try:
-            from tqdm.asyncio import tqdm
-            import time
-            
-            # Create async progress bar
-            with tqdm(
-                total=100,
-                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                desc=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
-                ncols=80
-            ) as pbar:
-                # Start the subprocess
+            with alive_bar(
+                manual=False,
+                title=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
+                bar='smooth',
+                spinner='dots_waves',
+                stats=False,
+                monitor=False
+            ) as bar:
                 proc = await asyncio.create_subprocess_exec(
                     *command,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                
-                # Simulate progress while process is running
-                while proc.returncode is None:
-                    # Update progress in 5% increments
-                    if pbar.n < 95:  # Don't go to 100% until done
-                        pbar.update(5)
-                    await asyncio.sleep(0.1)  # Update interval
-                
-                # Get final output
+
+                while await proc.wait() is None:
+                    bar()
+                    await asyncio.sleep(0.2)
+
                 stdout, stderr = await proc.communicate()
-                pbar.update(100 - pbar.n)  # Complete to 100%
-                
+
         except ImportError:
-            # Fallback to original behavior
             print(Fore.YELLOW + Style.BRIGHT + f"[progress] {label} running...", end='', flush=True)
             proc = await asyncio.create_subprocess_exec(
                 *command,
@@ -616,7 +603,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
 
         duration = datetime.now() - start
         entry["duration"] = str(duration).split(".")[0]
-        
+
         if proc.returncode == 0:
             entry.update({
                 "status": "SUCCESS",
@@ -630,7 +617,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
             print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}")
             logger.error(f"{label} (async) failed: {entry['error']}")
             return False
-            
+
     except ConfigError as e:
         duration = datetime.now() - start
         entry.update({
@@ -640,7 +627,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} configuration error: {e}")
         logger.error(f"{label} (async) configuration error: {e}")
         return False
-        
+
     except Exception as e:
         duration = datetime.now() - start
         entry.update({
@@ -651,7 +638,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
         logger.error(f"{label} (async) unexpected error: {str(e)}")
         traceback.print_exc()
         return False
-        
+
     finally:
         save_history(entry)
 
