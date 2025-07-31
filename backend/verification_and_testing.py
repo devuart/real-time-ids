@@ -17,6 +17,8 @@ import threading
 import itertools
 import time
 from alive_progress import alive_bar
+import tqdm
+from tqdm.asyncio import tqdm
 
 # Get virtual environment's Python path
 VENV_PYTHON = Path(sys.executable)
@@ -371,7 +373,6 @@ def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
         
         console.print(table)
         
-        # Create styled text that matches Fore.WHITE + Style.BRIGHT + dim timestamp
         last_run_text = Text.assemble(
             ("Last Run: ", "bold white"),
             (f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "bold magenta")
@@ -491,7 +492,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
                     text=True
                 )
 
-                while proc.poll() is None:
+                while proc.poll() is int | None:
                     bar()
                     time.sleep(0.2)
 
@@ -572,25 +573,50 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
                 raise ConfigError(f"Path does not exist: {config[part[2:]]}")
 
         try:
-            with alive_bar(
-                manual=False,
-                title=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
-                bar='smooth',
-                spinner='dots_waves',
-                stats=False,
-                monitor=False
-            ) as bar:
+            # Create async progress bar
+            with tqdm(
+                total=100,
+                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+                desc=f"{Fore.WHITE}{Style.BRIGHT}[progress] {label}",
+                ncols=80
+            ) as pbar:
+                # Start the subprocess
                 proc = await asyncio.create_subprocess_exec(
                     *command,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-
-                while await proc.wait() is None:
-                    bar()
-                    await asyncio.sleep(0.2)
-
+                
+                # Simulate progress while process is running
+                while proc.returncode is None:
+                    # Update progress in 5% increments
+                    if pbar.n < 95:  # Don't go to 100% until done
+                        pbar.update(5)
+                    await asyncio.sleep(0.1)  # Update interval
+                
+                # Get final output
                 stdout, stderr = await proc.communicate()
+                pbar.update(100 - pbar.n)  # Complete to 100%
+
+            # with alive_bar(
+            #     manual=False,
+            #     title=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
+            #     bar='smooth',
+            #     spinner='dots_waves',
+            #     stats=False,
+            #     monitor=False
+            # ) as bar:
+            #     proc = await asyncio.create_subprocess_exec(
+            #         *command,
+            #         stdout=asyncio.subprocess.PIPE,
+            #         stderr=asyncio.subprocess.PIPE
+            #     )
+
+            #     while await proc.wait() is None:
+            #         bar()
+            #         await asyncio.sleep(0.2)
+
+            #     stdout, stderr = await proc.communicate()
 
         except ImportError:
             print(Fore.YELLOW + Style.BRIGHT + f"[progress] {label} running...", end='', flush=True)

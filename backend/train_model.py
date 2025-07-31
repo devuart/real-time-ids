@@ -21,6 +21,11 @@ import tarfile
 import zipfile
 import shutil
 import contextlib
+from rich.console import Console
+from rich.table import Table
+from rich import box
+from rich.text import Text
+from rich.panel import Panel
 
 # Third-party imports
 import numpy as np
@@ -83,6 +88,9 @@ import pickle
 
 # Initialize colorama
 init(autoreset=True)
+
+# Initialize rich console
+console = Console()
 
 # Declare the class names that will be defined later
 class IDSModel:
@@ -248,19 +256,19 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
     base_dir = Path().absolute()
     
     directories = {
-        'models': base_dir / "models" / timestamp,
-        'logs': base_dir / "logs" / timestamp,
+        'models': base_dir / "models",
+        'logs': base_dir / "logs",
         'data': base_dir / "data",
-        'figures': base_dir / "figures" / timestamp,
-        'tensorboard': base_dir / "runs" / timestamp,
-        'checkpoints': base_dir / "checkpoints" / timestamp,
-        'config': base_dir / "config" / timestamp,
-        'results': base_dir / "results" / timestamp,
-        'metrics': base_dir / "metrics" / timestamp,
-        'reports': base_dir / "reports" / timestamp,
+        'figures': base_dir / "figures",
+        'tensorboard': base_dir / "tensorboard",
+        'checkpoints': base_dir / "checkpoints",
+        'config': base_dir / "config",
+        'results': base_dir / "results",
+        'metrics': base_dir / "metrics",
+        'reports': base_dir / "reports",
         'latest': base_dir / "latest",
-        'info': base_dir / "info" / timestamp,
-        'artifacts': base_dir / "artifacts" / timestamp
+        'info': base_dir / "info",
+        'artifacts': base_dir / "artifacts"
     }
     
     # Create directories
@@ -409,7 +417,7 @@ configure_visualization()
 set_seed(42)
 
 # Setup logging and directories
-LOG_DIR = Path("logs") / datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_DIR = Path("logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 logger = setup_logging(LOG_DIR)
 
@@ -723,6 +731,250 @@ def log_error_output(stderr: str, use_color: bool):
     for line in stderr.splitlines()[-20:]:
         logger.error(f"{red}{line[:200]}{reset}")
 
+def display_data_loading_header(filepath: str) -> None:
+    """Display data loading header with rich formatting."""
+    console.print(Panel.fit(
+        f"[bold green]Data Loading Started[/bold green]\n"
+        f"[bold]Source:[/bold] [bold cyan]{filepath}",
+        title="[bold yellow]Data Processing Pipeline[/bold yellow]",
+        border_style="blue"
+    ))
+
+def display_chunk_progress(stats: Dict[str, Any], history: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """
+    Display chunk progress in a single updating table with:
+    - Dynamic updates (clears previous output)
+    - Full history of chunks
+    - Threshold-based styling (clean samples <50% = yellow, <30% = red)
+    """
+    # Initialize history if first run
+    if history is None:
+        history = []
+    
+    # Add current stats to history
+    history.append(stats.copy())
+    
+    # Create table
+    # table = Table(
+    #     title="[bold]Chunk Processing Progress[/bold]",
+    #     box=box.ROUNDED,
+    #     header_style="bold blue",
+    #     title_style="bold yellow",
+    #     title_justify="left",
+    #     show_lines=True
+    # )
+
+    # Define columns
+    # table.add_column("Chunk #", justify="center", style="cyan", width=8)
+    # table.add_column("Processed", justify="right", style="magenta", width=12)
+    # table.add_column("Clean Samples", justify="right", width=16)
+    # table.add_column("Clean %", justify="right", width=10)
+    # table.add_column("Dtype Conv", justify="right", width=10)
+    # table.add_column("Failed", justify="right", width=10)
+
+    # Add all historical rows
+    for chunk_stats in history:
+        clean_pct = chunk_stats['cleaned'] / chunk_stats['original']
+        
+        # Conditional styling
+        if clean_pct < 0.3:
+            pct_style = "bold red"
+        elif clean_pct < 0.5:
+            pct_style = "bold yellow"
+        else:
+            pct_style = "bold green"
+
+        # Create table
+        table = Table(
+            title="[bold]Chunk Processing Progress[/bold]",
+            box=box.ROUNDED,
+            header_style="bold blue",
+            title_style="bold yellow",
+            title_justify="left",
+            show_lines=True
+        )
+
+        # Define columns
+        table.add_column("Chunk #", justify="center", style="cyan", width=8)
+        table.add_column("Processed", justify="right", style="magenta", width=12)
+        table.add_column("Clean Samples", justify="right", width=16)
+        table.add_column("Clean %", justify="right", width=10)
+        table.add_column("Dtype Conv", justify="right", width=10)
+        table.add_column("Failed", justify="right", width=10)
+        
+        table.add_row(
+            str(chunk_stats['total_chunks']),
+            f"{chunk_stats['original']:,}",
+            f"{chunk_stats['cleaned']:,}",
+            f"[{pct_style}]{clean_pct:.1%}",
+            f"{chunk_stats['dtype_conversions']:,}",
+            f"[red]{chunk_stats['failed_conversions']:,}" if chunk_stats['failed_conversions'] > 0 
+              else f"{chunk_stats['failed_conversions']:,}"
+        )
+    
+    # Clear console before printing new table
+    console.clear()
+    console.print(table)
+    return history
+
+def display_data_validation_summary(stats: Dict[str, Any]) -> None:
+    """Display data validation summary in a rich table."""
+    # Main table
+    table = Table(
+        title="[bold]Data Validation Report[/bold]",
+        box=box.ROUNDED,
+        header_style="bold blue",
+        title_style="bold yellow",
+        show_lines=True
+    )
+    
+    table.add_column("Metric", style="cyan", width=35)
+    table.add_column("Count", style="magenta", justify="right")
+    table.add_column("Impact", style="green", justify="right")
+    
+    # Helper function for consistent row styling
+    def add_row(metric: str, value: Any, impact: str = "", style: str = ""):
+        table.add_row(
+            metric,
+            str(value) if not isinstance(value, (int, float)) else f"{value:,}",
+            impact,
+            style=style
+        )
+    
+    # Add rows with conditional styling
+    add_row("Original Samples", stats['original'])
+    add_row("Removed Duplicates", stats['duplicates'], 
+           f"{-stats['duplicates']/stats['original']:.1%}", "red")
+    add_row("Removed NaN Rows", stats['nan_rows'],
+           f"{-stats['nan_rows']/stats['original']:.1%}", "red")
+    add_row("Feature NaN Values Filled", stats['feature_nans'])
+    add_row("Label NaN Rows Removed", stats['label_nans'])
+    add_row("Extreme Values Removed", stats['invalid_values'])
+    add_row("Dtype Conversions", stats['dtype_conversions'])
+    add_row("Failed Conversions", stats['failed_conversions'])
+    add_row("Bad Lines Skipped", stats['bad_lines'])
+    
+    # Final summary row
+    clean_percent = stats['clean_samples'] / stats['original']
+    final_style = "bold green" if clean_percent > 0.5 else "bold yellow"
+    table.add_row(
+        "[bold]Clean Samples Remaining",
+        f"[{final_style}]{stats['clean_samples']:,}",
+        f"[{final_style}]{clean_percent:.1%}"
+    )
+    
+    console.print(table)
+
+def display_class_distribution(class_counts: pd.Series) -> None:
+    """Display class distribution in a rich table."""
+    table = Table(
+        title="[bold]Class Distribution Analysis[/bold]",
+        box=box.ROUNDED,
+        header_style="bold blue",
+        title_style="bold yellow",
+        show_lines=True
+    )
+    
+    table.add_column("Class", style="cyan", width=15)
+    table.add_column("Count", style="magenta", justify="right")
+    table.add_column("Percentage", style="green", justify="right")
+    
+    total_samples = class_counts.sum()
+    for class_label, count in class_counts.items():
+        percentage = (count / total_samples) * 100
+        table.add_row(
+            str(class_label),
+            f"{count:,}",
+            f"{percentage:.2f}%"
+        )
+    
+    console.print(table)
+
+def display_imbalance_analysis(imbalance_ratio: float, threshold: float) -> None:
+    """Display imbalance analysis with visual indicators."""
+    status_style = "bold red" if imbalance_ratio > threshold else "bold green"
+    status_text = "[Warning] Above Threshold" if imbalance_ratio > threshold else "[Success] Within Threshold"
+    
+    ratio_table = Table(
+        box=box.SIMPLE,
+        show_header=False,
+        show_lines=False,
+        padding=(0, 2)
+    )
+    ratio_table.add_column("Metric", style="bold")
+    ratio_table.add_column("Value", style=status_style)
+    
+    ratio_table.add_row("Imbalance Ratio", f"{imbalance_ratio:.1f}:1")
+    ratio_table.add_row("Threshold", f"{threshold}:1")
+    ratio_table.add_row("Status", status_text)
+    
+    console.print(Panel.fit(
+        ratio_table,
+        title="[bold]Class Imbalance Analysis[/bold]",
+        border_style="blue"
+    ))
+
+def display_smote_results(original_counts: pd.Series, new_counts: pd.Series) -> None:
+    """Display SMOTE resampling results in rich tables."""
+    # Main results table
+    table = Table(
+        title="[bold]SMOTE Resampling Results[/bold]",
+        box=box.ROUNDED,
+        header_style="bold blue",
+        title_style="bold yellow",
+        show_lines=True
+    )
+    
+    table.add_column("Class", style="cyan", width=15)
+    table.add_column("Original", style="magenta", justify="right")
+    table.add_column("New Count", style="green", justify="right")
+    table.add_column("Change", justify="right")
+    
+    for class_label in original_counts.index:
+        orig = original_counts[class_label]
+        new = new_counts[class_label]
+        change = new - orig
+        change_pct = (change / orig) * 100 if orig else 0
+        
+        style = "bold green" if change > 0 else ""
+        table.add_row(
+            str(class_label),
+            f"{orig:,}",
+            f"{new:,}",
+            f"[{style}]{change:+,} ({change_pct:+.1f}%)"
+        )
+    
+    # Summary table
+    summary_table = Table(
+        box=box.SIMPLE,
+        show_header=False,
+        show_lines=False,
+        padding=(0, 2)
+    )
+    summary_table.add_column("Metric", style="bold")
+    summary_table.add_column("Original", style="magenta", justify="right")
+    summary_table.add_column("New", style="green", justify="right")
+    summary_table.add_column("Change", justify="right")
+    
+    orig_total = original_counts.sum()
+    new_total = new_counts.sum()
+    change_total = new_total - orig_total
+    change_pct_total = (change_total / orig_total) * 100
+    
+    summary_table.add_row(
+        "[bold]Total Samples",
+        f"{orig_total:,}",
+        f"{new_total:,}",
+        f"[bold]{change_total:+,} ({change_pct_total:+.1f}%)"
+    )
+    
+    console.print(table)
+    console.print(Panel.fit(
+        summary_table,
+        title="[bold]Resampling Summary[/bold]",
+        border_style="blue"
+    ))
+
 def load_preprocessing_artifacts(
     filepath: str = "models/preprocessing_artifacts.pkl",
     strict: bool = True,
@@ -762,17 +1014,32 @@ def load_preprocessing_artifacts(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=UserWarning)
             if debug:
-                logger.debug(f"Loading artifacts from {filepath}")
+                console.print(f"[dim]Debug: Loading artifacts from {filepath}[/dim]")
             artifacts = joblib.load(filepath)
+        
+        # Validation table
+        validation_table = Table(
+            title="[bold]Artifact Validation[/bold]",
+            box=box.ROUNDED,
+            header_style="bold blue",
+            title_style="bold yellow",
+            title_justify="left",
+            show_lines=True,
+            padding=(0, 2)
+        )
+        validation_table.add_column("Check", style="bold cyan", width=30)
+        validation_table.add_column("Status", style="bold green")
         
         # Basic validation
         if not isinstance(artifacts, dict):
             raise ValueError("Artifacts must be a dictionary")
+        validation_table.add_row("[bold]Artifact Type[/bold]", "[ ✓ ] Valid Dictionary")
             
         # Key validation
         missing_keys = [k for k in required_keys if k not in artifacts]
         if missing_keys:
             raise KeyError(f"Missing required keys: {missing_keys}")
+        validation_table.add_row("[bold]Required Keys[/bold]", "[ ✓ ] All Present")
         
         # Scaler validation
         if validate_scaler and "scaler" in artifacts:
@@ -780,13 +1047,19 @@ def load_preprocessing_artifacts(
             valid_scalers = (MinMaxScaler, StandardScaler)
             if not isinstance(scaler, valid_scalers):
                 raise TypeError(f"Invalid scaler type: {type(scaler).__name__}")
+            validation_table.add_row("[bold]Scaler Type[/bold]", "[ ✓ ] Valid Scaler")
         
         # Version-aware feature names
         feature_names = artifacts["feature_names"]
         if hasattr(artifacts.get("scaler"), 'feature_names_in_'):
             feature_names = artifacts["scaler"].feature_names_in_.tolist()
             if debug:
-                logger.debug("Using scaler-derived feature names")
+                console.print("[dim]Debug: Using scaler-derived feature names[/dim]")
+            validation_table.add_row("[bold]Feature Names[/bold]", "[ ✓ ] From Scaler")
+        else:
+            validation_table.add_row("[bold]Feature Names[/bold]", "[ ✓ ] From Artifacts")
+        
+        console.print(validation_table)
         
         # Prepare return dict
         result = {
@@ -796,35 +1069,44 @@ def load_preprocessing_artifacts(
         }
         
         if debug:
-            logger.debug(f"Artifacts loaded successfully: {list(result.keys())}")
+            console.print(f"[dim]Debug: Artifacts loaded successfully: {list(result.keys())}[/dim]")
         
         return result
         
     except FileNotFoundError as e:
-        logger.error(f"{red}Artifacts file not found: {filepath}{reset}")
+        console.print(f"[bold red]Error: Artifacts file not found: {filepath}[/bold red]")
         if debug:
-            logger.debug(f"{red}{traceback.format_exc()}{reset}")
+            console.print_exception()
         raise FileNotFoundError(f"Artifacts file not found: {filepath}") from e
         
     except Exception as e:
         error_type = type(e).__name__
-        logger.error(f"{red}Artifact loading failed ({error_type}): {str(e)}{reset}")
+        console.print(f"[bold red]Error: Artifact loading failed ({error_type}): {str(e)}[/bold red]")
         
         if strict:
-            troubleshooting = [
-                "1. Verify preprocessing script completed successfully",
-                "2. Check artifact file integrity",
-                f"3. Validate required keys: {required_keys}",
-                "4. For scaler issues, check sklearn version compatibility"
-            ]
-            logger.info(f"{yellow}Troubleshooting steps:\n  " + "\n  ".join(troubleshooting) + reset)
+            troubleshooting = Table(
+                title="[bold]Troubleshooting Steps[/bold]",
+                box=box.SIMPLE,
+                show_header=False,
+                show_lines=False,
+                padding=(0, 2)
+            )
+            troubleshooting.add_column("Step", style="cyan")
+            troubleshooting.add_column("Action", style="white")
+            
+            troubleshooting.add_row("1", "Verify preprocessing script completed successfully")
+            troubleshooting.add_row("2", "Check artifact file integrity")
+            troubleshooting.add_row("3", f"Validate required keys: {required_keys}")
+            troubleshooting.add_row("4", "Check sklearn version compatibility")
+            
+            console.print(troubleshooting)
             
             if debug:
-                logger.debug(f"{red}Full traceback:\n{traceback.format_exc()}{reset}")
+                console.print_exception()
             
             raise RuntimeError(f"Failed to load artifacts: {str(e)}") from e
         else:
-            logger.warning(f"{yellow}Using partial artifacts with validation disabled{reset}")
+            console.print("[bold yellow]Warning: Using partial artifacts with validation disabled[/bold yellow]")
             return {
                 "feature_names": [],
                 "scaler": None,
@@ -891,14 +1173,15 @@ def load_and_clean_data(
         'dtype_conversions': 0,
         'skipped_rows': 0,
         'bad_lines': 0,
-        'failed_conversions': 0
+        'failed_conversions': 0,
+        'clean_samples': 0
     }
     
     chunks = []
     required_cols = feature_names + [label_col]
     
     try:
-        logger.info(f"{yellow}=== Data Loading Started ==={reset}")
+        display_data_loading_header(filepath)
         
         # Validate CSV structure first
         try:
@@ -908,11 +1191,24 @@ def load_and_clean_data(
                 if missing_cols:
                     raise ValueError(f"Missing required columns: {missing_cols}")
         except Exception as e:
-            logger.error(f"{red}CSV validation failed: {str(e)}{reset}")
+            console.print(f"[bold red]CSV validation failed: {str(e)}[/bold red]")
             raise RuntimeError(f"CSV validation failed: {str(e)}") from e
         
         # Improved dtype inference with float32 as default for features
-        logger.info(f"{yellow}Analyzing data types...{reset}")
+        dtype_table = Table(
+            title="[bold]Data Type Analysis[/bold]",
+            box=box.ROUNDED,
+            header_style="bold blue",
+            title_style="bold yellow",
+            title_justify="left",
+            show_lines=True,
+            padding=(0, 2)
+        )
+        
+        dtype_table.add_column("Column", style="cyan")
+        dtype_table.add_column("Sampled Type", style="magenta")
+        dtype_table.add_column("Using Type", style="green")
+        
         try:
             sample_df = pd.read_csv(
                 filepath, 
@@ -928,16 +1224,13 @@ def load_and_clean_data(
                 if col == label_col:
                     dtypes_map[col] = label_dtype
                 elif col in feature_names:
-                    # Default to float32 for all features to prevent int conversion issues
                     dtypes_map[col] = 'float32'
-                    if debug:
-                        actual_dtype = str(sample_df[col].dtype)
-                        logger.debug(f"{col}: sampled as {actual_dtype}, using float32")
+                    actual_dtype = str(sample_df[col].dtype)
+                    dtype_table.add_row(col, actual_dtype, 'float32')
             
-            if debug:
-                logger.debug(f"{green}Final dtype mapping:{reset}\n{dtypes_map}")
+            console.print(dtype_table)
         except Exception as e:
-            logger.warning(f"{yellow}Dtype inference failed, using safe defaults: {str(e)}{reset}")
+            console.print(f"[bold yellow]Warning: Dtype inference failed, using safe defaults: {str(e)}[/bold yellow]")
             dtypes_map = {col: 'float32' for col in feature_names}
             dtypes_map[label_col] = label_dtype
         
@@ -1027,47 +1320,29 @@ def load_and_clean_data(
             
             # Progress reporting
             if stats['total_chunks'] % 10 == 0 or debug:
-                logger.info(
-                    f"{green}Processed {stats['original']:,} rows | "
-                    f"Chunk {stats['total_chunks']} | "
-                    f"Clean: {stats['cleaned']:,} | "
-                    f"Dtype conversions: {stats['dtype_conversions']:,} | "
-                    f"Failed conversions: {stats['failed_conversions']:,} | "
-                    f"Bad lines: {stats['bad_lines']:,}{reset}"
-                )
+                display_chunk_progress(stats)
     
     except FileNotFoundError:
-        logger.error(f"{red}Data file not found: {filepath}{reset}")
+        console.print(f"[bold red]Error: Data file not found: {filepath}[/bold red]")
         raise RuntimeError(f"Data file not found: {filepath}") from None
     except pd.errors.EmptyDataError:
-        logger.error(f"{red}CSV file is empty{reset}")
+        console.print("[bold red]Error: CSV file is empty[/bold red]")
         raise RuntimeError("CSV file is empty") from None
     except Exception as e:
-        logger.error(f"{red}Data loading failed: {str(e)}{reset}")
+        console.print(f"[bold red]Error: Data loading failed: {str(e)}[/bold red]")
         if debug:
-            logger.debug(f"{red}{traceback.format_exc()}{reset}")
+            console.print_exception()
         raise RuntimeError("Data loading failed") from e
     
     # Final validation
     if not chunks:
-        logger.error(f"{red}No valid data remaining after cleaning{reset}")
+        console.print("[bold red]Error: No valid data remaining after cleaning[/bold red]")
         raise ValueError("No valid data remaining after cleaning")
     
     df = pd.concat(chunks, ignore_index=True)
+    stats['clean_samples'] = len(df)
     
-    # Validation report
-    logger.info(f"\n{yellow}=== Data Validation Report ==={reset}")
-    logger.info(f"Original samples: {stats['original']:,}")
-    logger.info(f"Removed duplicates: {stats['duplicates']:,}")
-    logger.info(f"Removed NaN rows: {stats['nan_rows']:,}")
-    logger.info(f"Feature NaN values filled: {stats['feature_nans']:,}")
-    logger.info(f"Label NaN rows removed: {stats['label_nans']:,}")
-    logger.info(f"Extreme values removed: {stats['invalid_values']:,}")
-    logger.info(f"Dtype conversions performed: {stats['dtype_conversions']:,}")
-    logger.info(f"Failed conversions: {stats['failed_conversions']:,}")
-    logger.info(f"Bad lines skipped: {stats['bad_lines']:,}")
-    logger.info(f"{green}Clean samples remaining: {len(df):,} ({len(df)/stats['original']:.1%}){reset}")
-    
+    display_data_validation_summary(stats)
     return df
 
 def handle_class_imbalance(
@@ -1108,30 +1383,34 @@ def handle_class_imbalance(
     green = Fore.GREEN if use_color else ""
     reset = Style.RESET_ALL if use_color else ""
     
+    console.print(Panel.fit(
+        "[bold green]Class Imbalance Analysis[/bold green]",
+        border_style="blue"
+    ))
+    
     # Validate inputs
     if label_col not in df.columns:
-        raise ValueError(f"{red}Label column '{label_col}' not found{reset}")
+        raise ValueError(f"Label column '{label_col}' not found")
         
     if not isinstance(artifacts, dict) or 'feature_names' not in artifacts:
-        raise ValueError(f"{red}Invalid artifacts - must contain feature_names{reset}")
+        raise ValueError("Invalid artifacts - must contain feature_names")
     
     # Get class distribution
     class_counts = df[label_col].value_counts()
     n_classes = len(class_counts)
     
-    logger.info(f"\n{yellow}=== Class Distribution ==={reset}")
-    logger.info(class_counts.to_string())
-    
-    # Basic validation
     if n_classes < 2:
-        raise ValueError(f"{red}Dataset must contain at least 2 classes{reset}")
+        raise ValueError("Dataset must contain at least 2 classes")
+    
+    # Display class distribution
+    display_class_distribution(class_counts)
     
     # Calculate imbalance
     min_samples = class_counts.min()
     max_samples = class_counts.max()
     imbalance_ratio = max_samples / min_samples
     
-    logger.info(f"{yellow}Imbalance ratio: {imbalance_ratio:.1f}:1{reset}")
+    display_imbalance_analysis(imbalance_ratio, imbalance_threshold)
     
     # Handle imbalance if exceeds threshold
     if imbalance_ratio > imbalance_threshold:
@@ -1141,7 +1420,7 @@ def handle_class_imbalance(
         )
         
         if not apply_smote:
-            logger.warning(f"{yellow}SMOTE not applied (apply_smote=False){reset}")
+            console.print("[bold yellow]SMOTE not applied (apply_smote=False)[/bold yellow]")
             return df
             
         try:
@@ -1152,17 +1431,17 @@ def handle_class_imbalance(
             ]
             if missing_features:
                 raise ValueError(
-                    f"{red}Missing features for SMOTE: {missing_features[:3]}...{reset}"
+                    f"Missing features for SMOTE: {missing_features[:3]}..."
                 )
             
             # Safe SMOTE configuration
             k_neighbors = min(5, min_samples - 1)
             if k_neighbors < 1:
                 raise ValueError(
-                    f"{red}Cannot apply SMOTE - minority class has only {min_samples} samples{reset}"
+                    f"Cannot apply SMOTE - minority class has only {min_samples} samples"
                 )
             
-            logger.info(f"{green}Applying SMOTE (k_neighbors={k_neighbors})...{reset}")
+            console.print(f"[bold green]Applying SMOTE (k_neighbors={k_neighbors})...[/bold green]")
             
             smote = SMOTE(
                 sampling_strategy=sampling_strategy,
@@ -1181,24 +1460,18 @@ def handle_class_imbalance(
             
             # Report results
             new_counts = balanced_df[label_col].value_counts()
-            new_ratio = new_counts.max() / new_counts.min()
-            
-            logger.info(f"\n{green}=== After SMOTE ==={reset}")
-            logger.info(f"Total samples: {len(balanced_df):,}")
-            logger.info(f"New distribution:\n{new_counts.to_string()}")
-            logger.info(f"New imbalance ratio: {new_ratio:.1f}:1")
+            display_smote_results(class_counts, new_counts)
             
             return balanced_df
             
         except Exception as e:
-            logger.error(f"{red}SMOTE failed: {str(e)}{reset}")
+            console.print(f"[bold red]SMOTE failed: {str(e)}[/bold red]")
             if debug:
-                logger.debug(f"{red}{traceback.format_exc()}{reset}")
-            
+                console.print_exception()
             raise RuntimeError("Class balancing failed") from e
     
     else:
-        logger.info(f"{green}Class distribution within acceptable limits{reset}")
+        console.print("[bold green]Class distribution within acceptable limits[/bold green]")
         return df
 
 def load_and_validate_data(
@@ -1250,14 +1523,18 @@ def load_and_validate_data(
             return df, artifacts
         
         # Enhanced mode
-        logger.info(f"{Fore.YELLOW if use_color else ''}=== Starting Enhanced Data Loading ==={reset}")
+        console.print(Panel.fit(
+            "[bold green]Starting Enhanced Data Loading[/bold green]",
+            border_style="blue"
+        ))
         
-        # Load with helper functions
-        artifacts = load_preprocessing_artifacts(**color_kwargs)
-        df = load_and_clean_data("models/preprocessed_dataset.csv", 
-                               artifacts["feature_names"],
-                               **color_kwargs)
-        df = handle_class_imbalance(df, artifacts, **color_kwargs)
+        artifacts = load_preprocessing_artifacts(**kwargs)
+        df = load_and_clean_data(
+            "models/preprocessed_dataset.csv", 
+            artifacts["feature_names"],
+            **kwargs
+        )
+        df = handle_class_imbalance(df, artifacts, **kwargs)
         
         # Version-safe scaler handling (preserve original logic)
         if "scaler" in artifacts:
@@ -1273,138 +1550,209 @@ def load_and_validate_data(
                     artifacts["scaler"].transform(test_sample)
                     df[feature_names] = artifacts["scaler"].transform(df[feature_names])
             except Exception as e:
-                logger.warning(f"Scaler issue, recreating: {str(e)}")
+                console.print(f"[bold yellow]Warning: Scaler issue, recreating: {str(e)}[/bold yellow]")
                 new_scaler = MinMaxScaler().fit(df[feature_names])
                 artifacts["scaler"] = new_scaler
         
-        logger.info(f"{Fore.GREEN if use_color else ''}Data validation completed successfully{reset}")
+        console.print(Panel.fit(
+            "[bold green]Data validation completed successfully[/bold green]",
+            border_style="green"
+        ))
+        
         return df, artifacts
         
     except Exception as e:
-        logger.error(f"{Fore.RED if use_color else ''}Data loading failed: {str(e)}{reset}")
+        console.print(Panel.fit(
+            f"[bold red]Data loading failed: {str(e)}[/bold red]",
+            border_style="red"
+        ))
         
         # Enhanced troubleshooting
-        if enhanced:
-            logger.error(f"{Fore.YELLOW if use_color else ''}=== TROUBLESHOOTING ==={reset}")
-            logger.error("1. Verify preprocessing outputs exist:")
-            logger.error("   - models/preprocessed_dataset.csv")
-            logger.error("   - models/preprocessing_artifacts.pkl")
-            logger.error("2. Check file permissions and disk space")
-            logger.error(f"3. Test with enhanced=False to use legacy loader{reset}")
+        troubleshooting = Table(
+            title="[bold]Troubleshooting Steps[/bold]",
+            box=box.SIMPLE,
+            show_header=False,
+            show_lines=False,
+            padding=(0, 2)
+        )
+        troubleshooting.add_column("Step", style="cyan")
+        troubleshooting.add_column("Action", style="white")
+        
+        troubleshooting.add_row("1", "Verify preprocessing outputs exist:")
+        troubleshooting.add_row("", "   - models/preprocessed_dataset.csv")
+        troubleshooting.add_row("", "   - models/preprocessing_artifacts.pkl")
+        troubleshooting.add_row("2", "Check file permissions and disk space")
+        troubleshooting.add_row("3", "Test with enhanced=False for legacy loader")
+        
+        console.print(troubleshooting)
         
         raise RuntimeError("Data loading failed") from e
 
 def create_synthetic_data() -> Tuple[pd.DataFrame, Dict]:
-    """Generate balanced synthetic dataset with realistic characteristics."""
+    """Generate realistic synthetic data as fallback with logging."""
     logger.warning("Generating synthetic dataset as fallback")
-    num_samples = 10000
-    num_features = 20
-    
-    # Create separable classes
-    np.random.seed(42)
-    X_normal = np.random.normal(0.2, 0.1, (num_samples//2, num_features))
-    X_attack = np.random.normal(0.8, 0.1, (num_samples//2, num_features))
-    X = np.vstack([X_normal, X_attack])
-    y = np.array([0]*(num_samples//2) + [1]*(num_samples//2))
-    
-    # Clip to [0,1] range
-    X = np.clip(X, 0, 1)
-    
-    return (
-        pd.DataFrame(X, columns=[f"feature_{i}" for i in range(num_features)])
-        .assign(Label=y),
-        {
-            "feature_names": [f"feature_{i}" for i in range(num_features)],
-            "scaler": None,
-            "chunk_size": 1000
-        }
-    )
+    try:
+        num_samples = 10000
+        num_features = 20
+        
+        # Create separable classes with realistic distributions
+        np.random.seed(42)
+        X_normal = np.random.normal(0.2, 0.1, (num_samples//2, num_features))
+        X_attack = np.random.normal(0.8, 0.1, (num_samples//2, num_features))
+        X = np.vstack([X_normal, X_attack])
+        y = np.array([0]*(num_samples//2) + [1]*(num_samples//2))
+        
+        # Add realistic noise and artifacts
+        X += np.random.normal(0, 0.05, X.shape)  # Add noise
+        X = np.clip(X, 0, 1)  # Clip to [0,1] range
+        
+        # Create feature names
+        feature_names = [f"feature_{i}" for i in range(num_features)]
+        
+        logger.info(f"Generated synthetic dataset with {num_samples} samples")
+        return (
+            pd.DataFrame(X, columns=feature_names).assign(Label=y),
+            {
+                "feature_names": feature_names,
+                "scaler": None,
+                "chunksize": 100000,  # Default chunk size for compatibility
+                "synthetic": True  # Flag indicating synthetic data
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate synthetic data: {str(e)}")
+        raise RuntimeError("Synthetic data generation failed") from e
 
 def prepare_dataloaders(
     df: pd.DataFrame,
-    artifacts: Dict,
-    batch_size: int = 64
+    artifacts: Dict[str, Any],
+    batch_size: int = 64,
+    test_size: float = 0.2,
+    random_state: int = 42
 ) -> Tuple[DataLoader, DataLoader, int, int]:
-    """Prepare optimized dataloaders with proper stratification."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    pin_memory = device.type == 'cuda'
+    """
+    Prepare optimized dataloaders with proper stratification and imbalance handling.
     
-    # Prepare features and labels
-    X = df[artifacts["feature_names"]].values
-    y = df['Label'].values
-    
-    # Convert to tensors
-    X_tensor = torch.tensor(X, dtype=torch.float32)
-    y_tensor = torch.tensor(y, dtype=torch.long)
-    
-    # Stratified split
-    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    train_idx, val_idx = next(sss.split(X, y))
-    
-    # Handle extreme class imbalance
-    class_counts = torch.bincount(y_tensor[train_idx])
-    logger.info(f"Raw class distribution in training set: {class_counts.tolist()}")
-    
-    if torch.min(class_counts) < 1000:  # Threshold for extreme imbalance
-        logger.warning("Extreme class imbalance detected, applying SMOTE...")
-        smote = SMOTE(random_state=42)
-        X_res, y_res = smote.fit_resample(
-            X[train_idx], 
-            y[train_idx]
+    Args:
+        df: DataFrame containing features and labels
+        artifacts: Dictionary with preprocessing artifacts
+        batch_size: Base batch size (will be doubled for validation)
+        test_size: Fraction of data to use for validation
+        random_state: Random seed for reproducibility
+        
+    Returns:
+        Tuple of (train_loader, val_loader, input_size, num_classes)
+        
+    Raises:
+        ValueError: If input data is invalid
+        RuntimeError: If data preparation fails
+    """
+    try:
+        # Validate inputs
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            raise ValueError("Input DataFrame is empty or invalid")
+            
+        if 'feature_names' not in artifacts:
+            raise ValueError("Artifacts must contain feature_names")
+            
+        feature_names = artifacts['feature_names']
+        if not all(col in df.columns for col in feature_names + ['Label']):
+            missing = [col for col in feature_names + ['Label'] if col not in df.columns]
+            raise ValueError(f"Missing columns in DataFrame: {missing}")
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        pin_memory = device.type == 'cuda'
+        
+        # Prepare features and labels
+        X = df[feature_names].values
+        y = df['Label'].values
+        
+        # Convert data to tensors
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        y_tensor = torch.tensor(y, dtype=torch.long)
+        
+        # Stratified split
+        sss = StratifiedShuffleSplit(
+            n_splits=1, 
+            test_size=test_size, 
+            random_state=random_state
         )
-        X_tensor = torch.tensor(np.vstack([X_res, X[val_idx]]), dtype=torch.float32)
-        y_tensor = torch.tensor(np.concatenate([y_res, y[val_idx]]), dtype=torch.long)
+        train_idx, val_idx = next(sss.split(X, y))
         
-        # Recalculate indices after SMOTE
-        train_size = len(X_res)
-        train_idx = np.arange(train_size)
-        val_idx = np.arange(train_size, len(X_tensor))
-        
+        # Handle class imbalance
         class_counts = torch.bincount(y_tensor[train_idx])
-        logger.info(f"Class distribution after SMOTE: {class_counts.tolist()}")
-    
-    # Create weighted sampler
-    class_weights = 1. / class_counts
-    sample_weights = class_weights[y_tensor[train_idx]]
-    sampler = WeightedRandomSampler(
-        weights=sample_weights,
-        num_samples=len(sample_weights),
-        replacement=True
-    )
-    
-    # Create datasets
-    train_dataset = TensorDataset(X_tensor[train_idx], y_tensor[train_idx])
-    val_dataset = TensorDataset(X_tensor[val_idx], y_tensor[val_idx])
-    
-    # Configure dataloaders
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size*2,
-        sampler=sampler,
-        pin_memory=pin_memory,
-        worker_init_fn=lambda worker_id: np.random.seed(torch.initial_seed() + worker_id),
-        num_workers=2 if pin_memory else 0,
-        persistent_workers=pin_memory
-    )
-    
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size*2,
-        shuffle=False,
-        pin_memory=pin_memory
-    )
-    
-    # Calculate batch counts
-    train_batches = len(train_loader.dataset) // batch_size
-    if len(train_loader.dataset) % batch_size != 0:
-        train_batches += 1
-    val_batches = len(val_loader.dataset) // (batch_size*2)
-    if len(val_loader.dataset) % (batch_size*2) != 0:
-        val_batches += 1
+        logger.info(f"Initial class distribution: {class_counts.tolist()}")
         
-    logger.info(f"Training batches: {train_batches}, Validation batches: {val_batches}")
-    
-    return train_loader, val_loader, X.shape[1], len(class_counts)
+        if torch.min(class_counts) < 1000:  # Threshold for extreme imbalance
+            logger.warning("Extreme class imbalance detected, applying SMOTE...")
+            try:
+                smote = SMOTE(
+                    random_state=random_state,
+                    k_neighbors=min(5, torch.min(class_counts).item() - 1)
+                )
+                X_res, y_res = smote.fit_resample(X[train_idx], y[train_idx])
+                
+                # Rebuild tensors with augmented data
+                X_tensor = torch.tensor(
+                    np.vstack([X_res, X[val_idx]]), 
+                    dtype=torch.float32
+                )
+                y_tensor = torch.tensor(
+                    np.concatenate([y_res, y[val_idx]]), 
+                    dtype=torch.long
+                )
+                
+                # Update indices
+                train_size = len(X_res)
+                train_idx = np.arange(train_size)
+                val_idx = np.arange(train_size, len(X_tensor))
+                
+                class_counts = torch.bincount(y_tensor[train_idx])
+                logger.info(f"Class distribution after SMOTE: {class_counts.tolist()}")
+            except Exception as e:
+                logger.error(f"SMOTE failed: {str(e)}")
+                raise RuntimeError("Failed to balance classes") from e
+        
+        # Create weighted sampler
+        if torch.min(class_counts) < 1000:
+            class_weights = 1.0 / class_counts.float()
+            sample_weights = class_weights[y_tensor[train_idx]]
+            sampler = WeightedRandomSampler(
+                weights=sample_weights,
+                num_samples=len(train_idx),
+                replacement=True
+            )
+        else:
+            sampler = RandomSampler(train_idx)
+        
+        # Create datasets
+        train_dataset = TensorDataset(X_tensor[train_idx], y_tensor[train_idx])
+        val_dataset = TensorDataset(X_tensor[val_idx], y_tensor[val_idx])
+        
+        # Configure dataloaders
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size * 2,  # Larger batches for training
+            sampler=sampler,
+            pin_memory=pin_memory,
+            worker_init_fn=lambda worker_id: np.random.seed(random_state + worker_id),
+            num_workers=min(4, os.cpu_count() or 1) if pin_memory else 0,
+            persistent_workers=pin_memory
+        )
+        
+        val_loader = DataLoader(
+            val_dataset,
+            batch_size=batch_size * 2,
+            shuffle=False,
+            pin_memory=pin_memory
+        )
+        
+        logger.info(f"Prepared dataloaders with {len(train_dataset)} training and {len(val_dataset)} validation samples")
+        return train_loader, val_loader, X.shape[1], len(class_counts)
+        
+    except Exception as e:
+        logger.error(f"Failed to prepare dataloaders: {str(e)}")
+        raise RuntimeError("DataLoader preparation failed") from e
 
 # Training and validation functions
 def train_epoch(
@@ -1413,291 +1761,485 @@ def train_epoch(
     criterion: nn.Module,
     optimizer: optim.Optimizer,
     device: torch.device,
-    grad_clip: float = 1.0
+    grad_clip: float = 1.0,
+    grad_accum_steps: int = 4,
+    scaler: Optional[GradScaler] = None
 ) -> Tuple[float, float]:
-    """Train model for one epoch with gradient clipping."""
+    """
+    Train model for one epoch with gradient handling and optional mixed precision.
+    
+    Args:
+        model: Model to train
+        loader: DataLoader for training data
+        criterion: Loss function
+        optimizer: Optimization algorithm
+        device: Target device (cuda/cpu)
+        grad_clip: Maximum gradient norm
+        grad_accum_steps: Gradient accumulation steps
+        scaler: Gradient scaler for mixed precision
+        
+    Returns:
+        Tuple of (average loss, accuracy)
+        
+    Raises:
+        RuntimeError: If training fails
+    """
     model.train()
-    total_loss = 0
+    total_loss = 0.0
     correct = 0
     total = 0
     
-    for X_batch, y_batch in loader:
-        X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        
+    try:
         optimizer.zero_grad()
-        outputs = model(X_batch)
-        loss = criterion(outputs, y_batch)
-        loss.backward()
         
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-        optimizer.step()
+        for batch_idx, (X_batch, y_batch) in enumerate(loader):
+            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            
+            # Mixed precision context
+            # with autocast(enabled=scaler is not None):
+            #     outputs = model(X_batch)
+            #     loss = criterion(outputs, y_batch) / grad_accum_steps
+            
+            # Mixed precision context
+            with autocast(enabled=False):
+                outputs = model(X_batch)
+                loss = criterion(outputs, y_batch) / grad_accum_steps
+            
+            # Backpropagation
+            if scaler:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()
+            
+            # Gradient accumulation
+            if (batch_idx + 1) % grad_accum_steps == 0:
+                if scaler:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                    optimizer.step()
+                optimizer.zero_grad()
+            
+            # Metrics
+            total_loss += loss.item() * grad_accum_steps
+            _, predicted = torch.max(outputs.data, 1)
+            total += y_batch.size(0)
+            correct += (predicted == y_batch).sum().item()
+            
+            # Clean up
+            torch.cuda.empty_cache()
         
-        total_loss += loss.item()
-        _, predicted = torch.max(outputs.data, 1)
-        total += y_batch.size(0)
-        correct += (predicted == y_batch).sum().item()
-    
-    return total_loss / len(loader), correct / total
+        avg_loss = total_loss / len(loader)
+        accuracy = correct / total
+        return avg_loss, accuracy
+        
+    except Exception as e:
+        logger.error(f"Training failed at batch {batch_idx}: {str(e)}")
+        raise RuntimeError("Training epoch failed") from e
 
 def validate(
     model: nn.Module,
     loader: DataLoader,
     criterion: nn.Module,
-    device: torch.device
+    device: torch.device,
+    class_names: Optional[List[str]] = None
 ) -> Dict[str, Any]:
-    """Validate model performance with comprehensive metrics."""
+    """
+    Validate model performance with comprehensive metrics.
+    
+    Args:
+        model: Model to evaluate
+        loader: DataLoader for validation data
+        criterion: Loss function
+        device: Target device (cuda/cpu)
+        class_names: Optional list of class names for reporting
+        
+    Returns:
+        Dictionary containing:
+        - val_loss: Average loss
+        - val_acc: Accuracy
+        - val_auc: ROC AUC score
+        - val_ap: Average precision
+        - preds: Array of predictions
+        - labels: Array of true labels
+        - probs: Array of predicted probabilities
+        - report: Classification report (if class_names provided)
+        
+    Raises:
+        RuntimeError: If validation fails
+    """
     model.eval()
-    total_loss = 0
+    total_loss = 0.0
     all_preds = []
     all_labels = []
     all_probs = []
     
-    with torch.no_grad():
-        for X_batch, y_batch in loader:
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-            outputs = model(X_batch)
-            probs = torch.softmax(outputs, dim=1)
-            loss = criterion(outputs, y_batch)
-            
-            total_loss += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            
-            all_preds.extend(predicted.cpu().numpy())
-            all_labels.extend(y_batch.cpu().numpy())
-            all_probs.extend(probs[:, 1].cpu().numpy())
-    
-    # Convert to numpy arrays
-    all_preds = np.array(all_preds)
-    all_labels = np.array(all_labels)
-    all_probs = np.array(all_probs)
-    
-    # Calculate metrics
-    val_loss = total_loss / len(loader)
-    val_acc = (all_preds == all_labels).mean()
-    val_auc = roc_auc_score(all_labels, all_probs)
-    val_ap = average_precision_score(all_labels, all_probs)
-    
-    return {
-        'val_loss': val_loss,
-        'val_acc': val_acc,
-        'val_auc': val_auc,
-        'val_ap': val_ap,
-        'preds': all_preds,
-        'labels': all_labels,
-        'probs': all_probs
-    }
-
-def visualize_data_distribution(df: pd.DataFrame, log_dir: Path) -> None:
-    """Visualize data distribution using PCA."""
     try:
-        logger.info("Creating PCA visualization of data distribution...")
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(df.iloc[:, :-1])
+        with torch.no_grad():
+            for X_batch, y_batch in loader:
+                X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+                outputs = model(X_batch)
+                probs = torch.softmax(outputs, dim=1)
+                loss = criterion(outputs, y_batch)
+                
+                total_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                
+                all_preds.extend(predicted.cpu().numpy())
+                all_labels.extend(y_batch.cpu().numpy())
+                all_probs.extend(probs.cpu().numpy())
         
-        plt.figure(figsize=(10,6))
-        plt.scatter(X_pca[:,0], X_pca[:,1], c=df['Label'], alpha=0.1, cmap='viridis')
-        plt.title("PCA of Dataset")
-        plt.colorbar()
-        plt.savefig(log_dir / "data_pca.png")
+        # Convert to numpy arrays
+        all_preds = np.array(all_preds)
+        all_labels = np.array(all_labels)
+        all_probs = np.array(all_probs)
+        
+        # Calculate metrics
+        val_loss = total_loss / len(loader)
+        val_acc = accuracy_score(all_labels, all_preds)
+        
+        # Handle binary and multiclass cases
+        if len(np.unique(all_labels)) == 2:  # Binary classification
+            val_auc = roc_auc_score(all_labels, all_probs[:, 1])
+            val_ap = average_precision_score(all_labels, all_probs[:, 1])
+        else:  # Multiclass
+            val_auc = roc_auc_score(all_labels, all_probs, multi_class='ovr')
+            val_ap = average_precision_score(all_labels, all_probs)
+        
+        results = {
+            'val_loss': val_loss,
+            'val_acc': val_acc,
+            'val_auc': val_auc,
+            'val_ap': val_ap,
+            'preds': all_preds,
+            'labels': all_labels,
+            'probs': all_probs
+        }
+        
+        # Add classification report if class names provided
+        if class_names:
+            results['report'] = classification_report(
+                all_labels, all_preds,
+                target_names=class_names,
+                digits=4,
+                output_dict=True
+            )
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Validation failed: {str(e)}")
+        raise RuntimeError("Validation failed") from e
+
+def visualize_data_distribution(
+    df: pd.DataFrame,
+    log_dir: Path,
+    max_samples: int = 10000,
+    random_state: int = 42
+) -> Optional[Path]:
+    """
+    Visualize data distribution using PCA and save plot.
+    
+    Args:
+        df: DataFrame containing features and labels
+        log_dir: Directory to save visualization
+        max_samples: Maximum samples to plot (for large datasets)
+        random_state: Random seed for sampling
+        
+    Returns:
+        Path to saved visualization or None if failed
+        
+    Raises:
+        ValueError: If input data is invalid
+    """
+    try:
+        logger.info(Fore.YELLOW + "=== Creating PCA visualization of data distribution ===")
+        if not isinstance(df, pd.DataFrame) or df.empty:
+            raise ValueError(Fore.RED + "Input DataFrame is empty or invalid")
+            
+        if 'Label' not in df.columns:
+            raise ValueError(Fore.RED + "DataFrame must contain 'Label' column")
+            
+        # Sample data if too large
+        if len(df) > max_samples:
+            df = df.sample(max_samples, random_state=random_state)
+        
+        # Prepare data
+        X = df.drop(columns=['Label']).values
+        y = df['Label'].values
+        
+        # Apply PCA
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X)
+        
+        # Create plot
+        plt.figure(figsize=(12, 8))
+        scatter = plt.scatter(
+            X_pca[:, 0], X_pca[:, 1],
+            c=y, alpha=0.5, cmap='viridis',
+            edgecolors='w', linewidths=0.5
+        )
+        
+        plt.title("Data Distribution (PCA)", fontsize=14)
+        plt.colorbar(scatter, label='Class')
+        plt.xlabel("Principal Component 1")
+        plt.ylabel("Principal Component 2")
+        plt.grid(alpha=0.3)
+        
+        # Save plot
+        log_dir = Path(log_dir)
+        if log_dir.suffix == '.log':
+            log_dir = log_dir.parent
+        log_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        plot_path = log_dir / f"data_pca_distribution_{timestamp}.png"
+        plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         plt.close()
         
-        logger.info("Saved PCA visualization of data distribution")
+        logger.info(Fore.GREEN + f"Saved PCA visualization of data distribution {plot_path}")
+        return plot_path
+        
     except Exception as e:
-        logger.warning(f"Could not create PCA visualization: {str(e)}")
+        logger.warning(Fore.RED + f"Could not create PCA visualization: {str(e)}")
+        return None
 
 def save_checkpoint(
     model: nn.Module,
     optimizer: optim.Optimizer,
-    scheduler: optim.lr_scheduler._LRScheduler,
+    scheduler: Optional[optim.lr_scheduler._LRScheduler],
     epoch: int,
-    best_metrics: Dict[str, Any],
+    metrics: Dict[str, Any],
     filename: Path,
-    training_meta: Dict[str, Any]
-) -> None:
-    """Save model checkpoint with comprehensive metadata and checksum."""
+    config: Dict[str, Any],
+    safe_mode: bool = True
+) -> bool:
+    """
+    Save training checkpoint with verification.
+    
+    Args:
+        model: Model to save
+        optimizer: Optimizer state
+        scheduler: Learning rate scheduler
+        epoch: Current epoch
+        metrics: Dictionary of metrics
+        filename: Path to save checkpoint (relative to CHECKPOINT_DIR)
+        config: Training configuration
+        safe_mode: Use safe serialization
+        
+    Returns:
+        True if successful, False otherwise
+    """
     try:
         checkpoint = {
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
-            'scheduler_state_dict': scheduler.state_dict(),
-            'best_metrics': {k: v.tolist() if isinstance(v, np.ndarray) else v 
-                           for k, v in best_metrics.items()},
-            'training_meta': training_meta,
+            'metrics': {k: v.tolist() if isinstance(v, np.ndarray) else v 
+                       for k, v in metrics.items()},
+            'config': config,
             'environment': {
-                'pytorch_version': torch.__version__,
                 'numpy_version': np.__version__,
+                'pytorch_version': torch.__version__,
                 'python_version': platform.python_version(),
-                'device': str(device)
+                'device': str(device),
+                'timestamp': datetime.datetime.now().isoformat()
             }
         }
         
-        torch.save(checkpoint, filename)
+        if scheduler is not None:
+            checkpoint['scheduler_state_dict'] = scheduler.state_dict()
         
-        # Calculate and save checksum
-        with open(filename, 'rb') as f:
-            checksum = hashlib.md5(f.read()).hexdigest()
-        with open(f"{filename}.md5", 'w') as f:
+        # Create full path in CHECKPOINT_DIR
+        full_path = Path(filename).absolute()
+        
+        # Create parent directory if needed
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if safe_mode:
+            # Safe serialization
+            torch.save(
+                checkpoint,
+                full_path,
+                _use_new_zipfile_serialization=True,
+                pickle_protocol=pickle.HIGHEST_PROTOCOL
+            )
+        else:
+            torch.save(checkpoint, full_path)
+        
+        # Calculate and verify checksum
+        checksum = hashlib.md5(full_path.read_bytes()).hexdigest()
+        with open(f"{full_path}.md5", 'w') as f:
             f.write(checksum)
-            
-        logger.info(f"Saved checkpoint to {filename} with checksum {checksum}")
+        
+        logger.info(Fore.GREEN + f"Checkpoint saved successfully to {full_path} (checksum: {checksum})")
+        return True
+        
     except Exception as e:
-        logger.error(f"Failed to save checkpoint: {str(e)}")
+        logger.error(Fore.RED + f"Failed to save checkpoint: {str(e)}")
+        return False
 
 def load_checkpoint(
     filename: Path,
-    model: Optional[nn.Module] = None
-) -> Tuple[Optional[Dict], Optional[Dict], Optional[Dict], Dict, Dict]:
-    """Safely load checkpoint with multiple fallback mechanisms."""
-    # Define default metrics
-    default_metrics = {
-        'epoch': -1,
-        'val_loss': float('inf'),
-        'val_acc': 0.0,
-        'val_auc': 0.0,
-        'preds': [],
-        'labels': [],
-        'probs': []
-    }
+    model: Optional[nn.Module] = None,
+    device: torch.device = torch.device('cpu'),
+    verify: bool = True
+) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Load training checkpoint with verification.
     
-    # Verify checksum if available
-    if Path(f"{filename}.md5").exists():
-        with open(f"{filename}.md5", 'r') as f:
-            expected_checksum = f.read().strip()
-        with open(filename, 'rb') as f:
-            actual_checksum = hashlib.md5(f.read()).hexdigest()
-        if expected_checksum != actual_checksum:
-            logger.warning(f"Checksum mismatch for {filename}")
-
+    Args:
+        filename: Path to checkpoint file (relative to CHECKPOINT_DIR)
+        model: Optional model to load state into
+        device: Target device for model
+        verify: Verify checksum if available
+        
+    Returns:
+        Tuple of (checkpoint_data, error_message) where error_message is None if successful
+        
+    Raises:
+        ValueError: If checkpoint is invalid
+    """
     try:
-        # First try with weights_only=True
-        checkpoint = torch.load(filename, weights_only=True)
-        if model:
-            model.load_state_dict(checkpoint['model_state_dict'])
+        # Create full path in CHECKPOINT_DIR
+        full_path = Path(filename).absolute()
         
-        # Convert lists back to numpy arrays
-        metrics = checkpoint.get('best_metrics', {})
-        for k, v in metrics.items():
-            if isinstance(v, list):
-                metrics[k] = np.array(v)
+        # Verify checksum
+        if verify and full_path.with_suffix('.md5').exists():
+            with open(full_path.with_suffix('.md5'), 'r') as f:
+                expected_checksum = f.read().strip()
+            
+            actual_checksum = hashlib.md5(full_path.read_bytes()).hexdigest()
+            if expected_checksum != actual_checksum:
+                logger.warning(Fore.YELLOW + f"Checksum mismatch for {full_path}")
+                return None, Fore.RED + "Checksum verification failed"
         
-        return (
-            checkpoint.get('model_state_dict'),
-            checkpoint.get('optimizer_state_dict'),
-            checkpoint.get('scheduler_state_dict'),
-            metrics,
-            checkpoint.get('training_meta', {})
-        )
-    except Exception as e:
-        logger.warning(f"Safe load failed ({str(e)}), trying fallback methods...")
-        
+        # Load with safe mode first
         try:
-            # Fallback with map_location for device compatibility
-            checkpoint = torch.load(
-                filename,
-                map_location='cpu',  # Ensures loading works across devices
-                pickle_module=pickle,  # Use standard pickle
-                weights_only=False  # Only if you trust the source
-            )
-            
-            if model:
-                model.load_state_dict(checkpoint['model_state_dict'])
-            
-            metrics = checkpoint.get('best_metrics', {})
-            for k, v in metrics.items():
-                if isinstance(v, list):
-                    metrics[k] = np.array(v)
-            
-            return (
-                checkpoint.get('model_state_dict'),
-                checkpoint.get('optimizer_state_dict'),
-                checkpoint.get('scheduler_state_dict'),
-                metrics,
-                checkpoint.get('training_meta', {})
-            )
-        except Exception as e:
-            logger.error(f"All loading methods failed: {str(e)}")
-            traceback.print_exc()
-            return None, None, None, default_metrics, {}
+            checkpoint = torch.load(full_path, map_location=device, weights_only=True)
+        except:
+            # Fallback to unsafe load if needed
+            checkpoint = torch.load(full_path, map_location=device)
+        
+        # Validate structure
+        required_keys = {'epoch', 'model_state_dict', 'metrics'}
+        if not required_keys.issubset(checkpoint.keys()):
+            missing = required_keys - checkpoint.keys()
+            raise ValueError(Fore.RED + f"Checkpoint missing required keys: {missing}")
+        
+        # Load model state if provided
+        if model is not None:
+            model.load_state_dict(checkpoint['model_state_dict'])
+            model.to(device)
+        
+        # Convert metrics back to numpy arrays
+        for k, v in checkpoint['metrics'].items():
+            if isinstance(v, list):
+                checkpoint['metrics'][k] = np.array(v)
+        
+        logger.info(Fore.GREEN + f"Loaded checkpoint from {full_path} (epoch {checkpoint['epoch']})")
+        return checkpoint, None
+        
+    except Exception as e:
+        logger.error(Fore.RED + f"Failed to load checkpoint from {full_path}: {str(e)}")
+        return None, str(e)
 
 def save_training_artifacts(
     model: nn.Module,
-    best_metrics: Dict[str, Any],
-    input_size: int,
-    num_classes: int,
-    class_weights: torch.Tensor,
-    timestamp: str
-) -> None:
-    """Save all training artifacts including model and metadata."""
+    metrics: Dict[str, Any],
+    config: Dict[str, Any],
+    class_names: Optional[List[str]] = None,
+    feature_names: Optional[List[str]] = None
+) -> bool:
+    """
+    Save all training artifacts including model, metrics, and configuration.
+    
+    Args:
+        model: Trained model
+        metrics: Evaluation metrics
+        config: Training configuration
+        class_names: Optional list of class names
+        feature_names: Optional list of feature names
+        
+    Returns:
+        True if successful, False otherwise
+    """
     try:
-        # Save final model
-        torch.save(model.state_dict(), MODEL_DIR / "ids_model.pth")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         
-        # Calculate class distribution
-        labels = best_metrics.get('labels', [])
-        if len(labels) > 0:
-            unique_labels, counts = np.unique(labels, return_counts=True)
-            class_distribution = dict(zip(unique_labels.tolist(), counts.tolist()))
-        else:
-            class_distribution = {}
+        # 1. Save model (in MODELS_DIR)
+        model_path = MODEL_DIR / f"ids_model_{timestamp}.pth"
+        torch.save(model.state_dict(), model_path)
         
-        # Save comprehensive training metadata
-        training_meta = {
-            'input_size': input_size,
-            'num_classes': num_classes,
-            'best_epoch': best_metrics['epoch'],
-            'val_loss': best_metrics['val_loss'],
-            'val_acc': best_metrics['val_acc'],
-            'val_auc': best_metrics['val_auc'],
-            'val_ap': best_metrics.get('ap', best_metrics['val_auc']),
-            'train_loss': best_metrics.get('train_loss', float('inf')),
-            'train_acc': best_metrics.get('train_acc', 0.0),
-            'class_distribution': class_distribution,
-            'class_weights': class_weights.cpu().numpy().tolist(),
+        # 2. Save metrics (in METRICS_DIR)
+        metrics_path = METRICS_DIR / f"ids_model_metrics_{timestamp}.json"
+        with open(metrics_path, 'w') as f:
+            json.dump({
+                k: v.tolist() if isinstance(v, np.ndarray) else v
+                for k, v in metrics.items()
+            }, f, indent=2)
+        
+        # 3. Save configuration (in CONFIG_DIR)
+        config_path = CONFIG_DIR / f"ids_model_config_{timestamp}.json"
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
+        
+        # 4. Save additional info (in INFO_DIR)
+        info = {
             'timestamp': timestamp,
+            'class_names': class_names,
+            'feature_names': feature_names,
             'environment': {
                 'pytorch_version': torch.__version__,
-                'numpy_version': np.__version__,
                 'python_version': platform.python_version(),
-                'device': str(device)
+                'host': platform.node()
             }
         }
+        info_path = INFO_DIR / f"ids_model_info_{timestamp}.json"
+        with open(info_path, 'w') as f:
+            json.dump(info, f, indent=2)
         
-        # Save metadata
-        joblib.dump(training_meta, MODEL_DIR / "training_metadata.pkl")
+        # 5. Create archive of all files in ARTIFACTS_DIR
+        archive_file = f"ids_model_artifacts_{timestamp}.tar.gz"
+        archive_path = ARTIFACTS_DIR / archive_file
+        with tarfile.open(archive_path, "w:gz") as tar:
+            for file in [model_path, metrics_path, config_path, info_path]:
+                tar.add(file, arcname=file.name)
         
-        # Save human-readable JSON version
-        with open(MODEL_DIR / "training_metadata.json", 'w') as f:
-            json.dump({k: str(v) if isinstance(v, (np.ndarray, pd.Timestamp)) else v 
-                     for k, v in training_meta.items()}, f, indent=2)
+        saved_artifacts = {
+            'model': model_path,
+            'metrics': metrics_path,
+            'config': config_path,
+            'info': info_path,
+            'archive': archive_path
+        }
+        # Log saved artifacts
+        logger.info(Fore.GREEN + f"Saved training artifacts: {saved_artifacts}")
+        return True
         
-        logger.info("\n=== Training Summary ===")
-        logger.info(f"Best model saved to {MODEL_DIR / 'ids_model.pth'}")
-        logger.info(f"Best validation metrics - Loss: {best_metrics['val_loss']:.4f}, "
-                   f"Accuracy: {best_metrics['val_acc']:.2%}, AUC: {best_metrics['val_auc']:.4f}")
-                   
     except Exception as e:
         logger.error(f"Failed to save training artifacts: {str(e)}")
-        raise
+        return False
 
 def banner() -> None:
     """Print banner"""
     print(Fore.CYAN + Style.BRIGHT + "\n" + "=" * 60)
-    print("      IDS | MODEL TRAINING SUITE".center(60))
-    print("=" * 60 + Style.RESET_ALL)
+    print(Fore.LIGHTYELLOW_EX + Style.BRIGHT + "      IDS | MODEL TRAINING SUITE".center(60))
+    print(Fore.CYAN + Style.BRIGHT + "=" * 60 + Style.RESET_ALL)
 
 def print_menu() -> None:
     """Print menu options"""
-    print(Fore.YELLOW + "\nAvailable Options:")
-    print("1. Configure System Settings")
-    print("2. Setup Directories")
-    print("3. Check Package Versions")
-    print("4. Setup GPU/CPU")
-    print("5. Run Training Pipeline")
-    print("6. Run Training with Synthetic Data")
-    print("7. Show Current Configuration")
-    print("8. Exit")
+    print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Options:")
+    print(Fore.WHITE + Style.BRIGHT + "1. Configure System Settings")
+    print(Fore.WHITE + Style.BRIGHT + "2. Setup Directories")
+    print(Fore.WHITE + Style.BRIGHT + "3. Check Package Versions")
+    print(Fore.WHITE + Style.BRIGHT + "4. Setup GPU/CPU")
+    print(Fore.WHITE + Style.BRIGHT + "5. Run Training Pipeline")
+    print(Fore.WHITE + Style.BRIGHT + "6. Run Training with Synthetic Data")
+    print(Fore.WHITE + Style.BRIGHT + "7. Show Current Configuration")
+    print(Fore.RED + Style.BRIGHT + "8. Exit")
 
 def sanitize_input(input_str: str) -> str:
     """Sanitize user input to prevent command injection"""
@@ -1803,7 +2345,7 @@ def interactive_main() -> None:
     set_seed(42)
     
     # Setup logging and directories
-    LOG_DIR = Path("logs") / datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    LOG_DIR = Path("logs")
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     logger = setup_logging(LOG_DIR)
     
@@ -1815,39 +2357,48 @@ def interactive_main() -> None:
         FIGURE_DIR = directories['figures']
         TB_DIR = directories['tensorboard']
         CHECKPOINT_DIR = directories['checkpoints']
+        CONFIG_DIR = directories['config']
+        RESULTS_DIR = directories['results']
+        METRICS_DIR = directories['metrics']
+        REPORTS_DIR = directories['reports']
+        LATEST_DIR = directories['latest']
+        INFO_DIR = directories['info']
+        ARTIFACTS_DIR = directories['artifacts']
+        DOCS_DIR = Path("docs")
+        
     except Exception as e:
         logger.error(f"Failed to set up directories: {str(e)}")
         sys.exit(1)
     
     while True:
         print_menu()
-        choice = input(Fore.WHITE + "\nSelect an option (1-8): ").strip()
+        choice = input(Fore.WHITE + Style.BRIGHT + "\nSelect an option (1-8): ").strip()
         
         if choice == "1":
             configure_system()
-            print(Fore.GREEN + "System configuration applied")
+            print(Fore.GREEN + Style.BRIGHT + "System configuration applied")
         elif choice == "2":
             try:
                 directories = setup_directories(logger)
-                print(Fore.GREEN + "Directories set up successfully")
+                print(Fore.GREEN + Style.BRIGHT + "Directories set up successfully")
             except Exception as e:
-                print(Fore.RED + f"Directory setup failed: {str(e)}")
+                print(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
         elif choice == "3":
             if check_versions(logger):
-                print(Fore.GREEN + "All package versions are compatible")
+                print(Fore.GREEN + Style.BRIGHT + "All package versions are compatible")
             else:
-                print(Fore.RED + "Some package versions are incompatible")
+                print(Fore.RED + Style.BRIGHT + "Some package versions are incompatible")
         elif choice == "4":
             device = setup_gpu(logger)
-            print(Fore.GREEN + f"Using device: {device}")
+            print(Fore.GREEN + Style.BRIGHT + f"Using device: {device}")
         elif choice == "5":
-            print(Fore.YELLOW + "\nStarting training pipeline...")
+            print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline...")
             # Skip re-initializing logging if already set up
             if not logger.handlers:
                 logger = setup_logging(LOG_DIR)
             train_model(use_mock=False)
         elif choice == "6":
-            print(Fore.YELLOW + "\nStarting training with synthetic data...")
+            print(Fore.YELLOW + Style.BRIGHT + "\nStarting training with synthetic data...")
             # Skip re-initializing logging if already set up
             if not logger.handlers:
                 logger = setup_logging(LOG_DIR)
@@ -1855,350 +2406,564 @@ def interactive_main() -> None:
         elif choice == "7":
             show_config()
         elif choice == "8":
-            print(Fore.CYAN + "\nExiting... Goodbye!")
+            print(Fore.CYAN + Style.BRIGHT + "\nExiting... Goodbye!")
             break
         else:
-            print(Fore.RED + "Invalid selection. Choose 1-8.")
+            print(Fore.RED + Style.BRIGHT + "Invalid selection. Choose 1-8.")
 
-def train_model(use_mock: bool = False) -> None:
-    """Complete training pipeline with all enhancements."""
-    # Setup
+class TrainingError(Exception):
+    """Base class for training-related exceptions"""
+    pass
+
+class DataPreparationError(TrainingError):
+    """Exception raised for errors in data preparation phase"""
+    def __init__(self, message: str, original_exception: Optional[Exception] = None):
+        super().__init__(message)
+        self.original_exception = original_exception
+        self.phase = "data_preparation"
+
+class ModelConfigurationError(TrainingError):
+    """Exception raised for errors in model setup phase"""
+    def __init__(self, message: str, original_exception: Optional[Exception] = None):
+        super().__init__(message)
+        self.original_exception = original_exception
+        self.phase = "model_configuration"
+
+class TrainingExecutionError(TrainingError):
+    """Exception raised for errors during training execution"""
+    def __init__(self, message: str, epoch: Optional[int] = None, original_exception: Optional[Exception] = None):
+        super().__init__(message)
+        self.epoch = epoch
+        self.original_exception = original_exception
+        self.phase = "training_execution"
+
+class ModelSavingError(TrainingError):
+    """Exception raised for errors in model saving phase"""
+    def __init__(self, message: str, original_exception: Optional[Exception] = None):
+        super().__init__(message)
+        self.original_exception = original_exception
+        self.phase = "model_saving"
+
+def train_model(
+    use_mock: bool = False,
+    config: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Complete training pipeline with enhanced error handling and monitoring.
+    
+    Args:
+        use_mock: Whether to use synthetic data (default: False)
+        config: Optional configuration dictionary to override defaults
+        
+    Returns:
+        Dictionary containing training results and metrics
+        
+    Raises:
+        DataPreparationError: If data loading/preprocessing fails
+        TrainingError: If training process fails
+        ModelSavingError: If model artifacts cannot be saved
+    """
+    # Initialize training
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = LOG_DIR / f"train_{timestamp}"
-    log_dir.mkdir(parents=True, exist_ok=True)
-    writer = SummaryWriter(log_dir=log_dir)
+    run_id = f"run_{timestamp}"
     
-    # Data preparation
-    try:
-        if use_mock:
-            logger.info("Using synthetic data by request")
-            df, artifacts = create_synthetic_data()
-        else:
-            if not check_preprocessing_outputs():
-                logger.warning("Preprocessing outputs not found")
-                if not run_preprocessing():
-                    raise RuntimeError("Preprocessing failed")
-                logger.info("Preprocessing completed successfully")
-            
-            df, artifacts = load_and_validate_data()
-            logger.info(f"Loaded {len(df)} validated samples")
-            
-            # Handle extreme imbalance
-            if len(df['Label'].value_counts()) < 2 or df['Label'].value_counts().min() < 1000:
-                logger.warning("Extreme class imbalance detected, applying SMOTE...")
-                smote = SMOTE(random_state=42)
-                X_res, y_res = smote.fit_resample(
-                    df[artifacts['feature_names']], 
-                    df['Label']
-                )
-                df = pd.DataFrame(X_res, columns=artifacts['feature_names'])
-                df['Label'] = y_res
-                logger.info(f"After SMOTE: {len(df)} samples")
-        
-        # Visualize data distribution
-        visualize_data_distribution(df, log_dir)
-        
-        # Prepare dataloaders
-        train_loader, val_loader, input_size, num_classes = prepare_dataloaders(df, artifacts)
-        logger.info(f"Data prepared - Input size: {input_size}, Classes: {num_classes}")
-        logger.info(f"Training batches: {len(train_loader)}, Validation batches: {len(val_loader)}")
-        
-    except FileNotFoundError as e:
-        logger.error(Fore.RED + "FILE ERROR:" + Style.RESET_ALL + f" {str(e)}")
-        logger.error("Troubleshooting steps:")
-        logger.error("1. Check file paths and permissions")
-        logger.error("2. Verify preprocessing outputs exist")
-        logger.error("3. Ensure CSV files are in the correct location")
-        logger.error(f"See {DOCS_DIR}/TROUBLESHOOTING.md#file-errors for details")
-        sys.exit("Data preparation failed - missing files. Check logs for details.")
-
-    except ValueError as e:
-        if "SMOTE" in str(e):
-            logger.error(Fore.RED + "SMOTE CONFIGURATION ERROR:" + Style.RESET_ALL + f" {str(e)}")
-            logger.error("Troubleshooting steps:")
-            logger.error("1. Verify sampling_strategy matches your class distribution")
-            logger.error("2. Check random_state for reproducibility")
-            logger.error("3. Ensure k_neighbors is appropriate for dataset size")
-            logger.error(f"See {DOCS_DIR}/SMOTE_GUIDE.md for detailed guidance")
-        else:
-            logger.error(Fore.RED + "DATA VALIDATION ERROR:" + Style.RESET_ALL + f" {str(e)}")
-            logger.error("Troubleshooting steps:")
-            logger.error("1. Check feature shapes and dtypes")
-            logger.error("2. Verify no missing/NULL values exist")
-            logger.error("3. Ensure categorical features are properly encoded")
-            logger.error(f"See {DOCS_DIR}/TROUBLESHOOTING.md#validation-errors for details")
-        sys.exit("Data preparation failed - validation error. Check logs for details.")
-
-    except Exception as e:
-        logger.error(Fore.RED + "DATA PREPARATION ERROR:" + Style.RESET_ALL + f" {str(e)}")
-        logger.error("Troubleshooting steps:")
-        logger.error("1. Verify input files exist and are accessible")
-        logger.error("2. Check CSV file integrity (headers, delimiters)")
-        logger.error("3. Validate feature consistency (shapes, dtypes)")
-        logger.error(f"See {DOCS_DIR}/TROUBLESHOOTING.md for complete troubleshooting guide")
-        
-        sys.exit("Data preparation failed. Check logs and documentation for assistance.")
-
-    # Model configuration
-    model = IDSModel(input_size, num_classes).to(device)
+    # Create run-specific directories
+    run_log_dir = LOG_DIR / run_id
+    run_figure_dir = FIGURE_DIR / run_id
+    run_checkpoint_dir = CHECKPOINT_DIR / run_id
+    run_tb_dir = TB_DIR / run_id
+    run_artifact_dir = ARTIFACTS_DIR / run_id
     
-    # Enhanced class weighting
-    class_counts = torch.tensor(df['Label'].value_counts().sort_index().values, dtype=torch.float32)
-    class_weights = (1. / class_counts) * (class_counts.sum() / num_classes)
-    class_weights = class_weights / class_weights.sum()
-    logger.info(f"Class weights: {class_weights.tolist()}")
-    
-    criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
-    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, 
-        mode='max', 
-        patience=3, 
-        factor=0.5
-    )
+    # Ensure directories exist
+    for dir_path in [run_log_dir, run_figure_dir, run_checkpoint_dir, run_tb_dir, run_artifact_dir]:
+        dir_path.mkdir(parents=True, exist_ok=True)
 
-    # Initialize mixed precision training
-    scaler = GradScaler(enabled=False)  # Disable for CPU-only
-    
-    # Training loop
-    logger.info("\n=== Starting Training ===")
-    best_metrics = {
-        'epoch': -1,
-        'val_loss': float('inf'),
-        'val_acc': 0.0,
-        'val_auc': 0.0,
-        'preds': np.array([]),
-        'labels': np.array([]),
-        'probs': np.array([]),
-        'train_loss': float('inf'),
-        'train_acc': 0.0,
-        'ap': 0.0
+    training_meta = {
+        'start_time': timestamp,
+        'run_id': run_id,
+        'config': config or {},
+        'environment': {
+            'pytorch_version': torch.__version__,
+            'python_version': platform.python_version(),
+            'device': str(device)
+        },
+        'directories': {
+            'logs': str(run_log_dir),
+            'figures': str(run_figure_dir),
+            'checkpoints': str(run_checkpoint_dir),
+            'tensorboard': str(run_tb_dir),
+            'artifacts': str(run_artifact_dir)
+        }
     }
-    best_score = float('inf')
-    patience_counter = 0
-    
-    for epoch in range(DEFAULT_EPOCHS):
-        # Training phase with mixed precision
-        model.train()
-        train_loss, correct, total = 0, 0, 0
-        optimizer.zero_grad()
-        
-        for batch_idx, (X_batch, y_batch) in enumerate(train_loader):
-            X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-            
-            with autocast(enabled=False):
-                outputs = model(X_batch)
-                loss = criterion(outputs, y_batch) / GRADIENT_ACCUMULATION_STEPS
-            
-            scaler.scale(loss).backward()
-            
-            if (batch_idx + 1) % GRADIENT_ACCUMULATION_STEPS == 0:
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), GRADIENT_CLIP)
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
-            
-            train_loss += loss.item() * GRADIENT_ACCUMULATION_STEPS
-            _, predicted = torch.max(outputs.data, 1)
-            total += y_batch.size(0)
-            correct += (predicted == y_batch).sum().item()
-            
-            # Clear memory
-            del X_batch, y_batch, outputs, predicted
-            torch.cuda.empty_cache()
 
-        # Validation phase
-        val_metrics = validate(model, val_loader, criterion, device)
-        
-        # Calculate training metrics
-        train_loss = train_loss / len(train_loader)
-        train_acc = correct / total
-        
-        # Learning rate adjustment
-        scheduler.step(val_metrics['val_loss'])
-        
-        # Logging
-        writer.add_scalar('Loss/train', train_loss, epoch)
-        writer.add_scalar('Loss/val', val_metrics['val_loss'], epoch)
-        writer.add_scalar('Accuracy/train', train_acc, epoch)
-        writer.add_scalar('Accuracy/val', val_metrics['val_acc'], epoch)
-        writer.add_scalar('AUC/val', val_metrics['val_auc'], epoch)
-        writer.add_scalar('AP/val', val_metrics['val_ap'], epoch)
-        writer.add_scalar('LR', optimizer.param_groups[0]['lr'], epoch)
-        
-        logger.info(
-            f"Epoch {epoch+1:03d}: "
-            f"Train Loss: {train_loss:.4f} | "
-            f"Val Loss: {val_metrics['val_loss']:.4f} | "
-            f"Acc: {val_metrics['val_acc']:.2%} | "
-            f"AUC: {val_metrics['val_auc']:.4f} | "
-            f"AP: {val_metrics['val_ap']:.4f} | "
-            f"LR: {optimizer.param_groups[0]['lr']:.2e}"
-        )
-
-        # Early stopping and checkpointing
-        if val_metrics['val_loss'] < best_score:
-            best_score = val_metrics['val_loss']
-            patience_counter = 0
-            best_metrics = {
-                'epoch': epoch,
-                'val_loss': val_metrics['val_loss'],
-                'val_acc': val_metrics['val_acc'],
-                'val_auc': val_metrics['val_auc'],
-                'val_ap': val_metrics['val_ap'],
-                'preds': val_metrics['preds'],
-                'labels': val_metrics['labels'],
-                'probs': val_metrics['probs'],
-                'train_loss': train_loss,
-                'train_acc': train_acc
-            }
-            
-            # Save the best model with checksum
-            save_checkpoint(
-                model=model,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                epoch=epoch,
-                best_metrics=best_metrics,
-                filename=MODEL_DIR / "best_model.pth",
-                training_meta={
-                    'input_size': input_size,
-                    'num_classes': num_classes,
-                    'class_weights': class_weights.cpu().numpy().tolist(),
-                    'timestamp': timestamp
-                }
-            )
-        else:
-            patience_counter += 1
-            if patience_counter >= EARLY_STOPPING_PATIENCE:
-                logger.info(f"Early stopping at epoch {epoch+1}")
-                break
-
-    # Final evaluation
-    logger.info("\nTraining complete. Loading best model...")
     try:
-        # Try loading with enhanced safety
-        _, _, _, loaded_metrics, _ = load_checkpoint(
-            MODEL_DIR / "best_model.pth",
-            model=model
-        )
+        # Setup logging
+        log_file = run_log_dir / f"training_{timestamp}.log"
+        logger = setup_logging(run_log_dir)
+        writer = SummaryWriter(log_dir=run_tb_dir)
+
+        # Data preparation
+        try:
+            if use_mock:
+                logger.info("Using synthetic data by request")
+                df, artifacts = create_synthetic_data()
+                training_meta['data_source'] = 'synthetic'
+            else:
+                if not check_preprocessing_outputs():
+                    logger.warning("Preprocessing outputs not found")
+                    if not run_preprocessing():
+                        raise DataPreparationError("Preprocessing failed")
+                    logger.info("Preprocessing completed successfully")
+                
+                df, artifacts = load_and_validate_data()
+                logger.info(f"Loaded {len(df)} validated samples")
+                training_meta['data_source'] = 'real'
+                training_meta['original_samples'] = len(df)
+
+            # Handle class imbalance
+            df = handle_class_imbalance(df, artifacts, apply_smote=True)
+            training_meta['final_samples'] = len(df)
+            
+            # Visualize data
+            viz_path = visualize_data_distribution(df, run_figure_dir)
+            if viz_path:
+                training_meta['visualization'] = str(viz_path)
+
+            # Prepare dataloaders
+            train_loader, val_loader, input_size, num_classes = prepare_dataloaders(
+                df, 
+                artifacts,
+                batch_size=config.get('batch_size', DEFAULT_BATCH_SIZE) if config else DEFAULT_BATCH_SIZE
+            )
+            training_meta.update({
+                'input_size': input_size,
+                'num_classes': num_classes,
+                'train_batches': len(train_loader),
+                'val_batches': len(val_loader)
+            })
+            logger.info(f"Data prepared - Input size: {input_size}, Classes: {num_classes}")
+
+        except Exception as e:
+            raise DataPreparationError(f"Data preparation failed: {str(e)}") from e
+
+        # Model configuration
+        try:
+            model = IDSModel(input_size, num_classes).to(device)
+            
+            # Class weighting
+            class_counts = torch.tensor(df['Label'].value_counts().sort_index().values, dtype=torch.float32)
+            class_weights = (1. / class_counts) * (class_counts.sum() / num_classes)
+            class_weights = class_weights / class_weights.sum()
+            logger.info(f"Class weights: {class_weights.tolist()}")
+            training_meta['class_weights'] = class_weights.cpu().numpy().tolist()
+            
+            # Training components
+            criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
+            optimizer = optim.AdamW(
+                model.parameters(),
+                lr=config.get('learning_rate', LEARNING_RATE) if config else LEARNING_RATE,
+                weight_decay=config.get('weight_decay', WEIGHT_DECAY) if config else WEIGHT_DECAY
+            )
+            
+            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode='max',
+                patience=config.get('lr_patience', 3) if config else 3,
+                factor=0.5
+            )
+            
+            scaler = GradScaler(enabled=False)  # Disable for CPU-only
+
+        except Exception as e:
+            raise ModelConfigurationError(f"Model setup failed: {str(e)}") from e
+
+        # Training loop
+        best_metrics = {
+            'epoch': -1,
+            'val_loss': float('inf'),
+            'val_acc': 0.0,
+            'val_auc': 0.0,
+            'train_loss': float('inf'),
+            'train_acc': 0.0,
+            'learning_rate': 0.0
+        }
+        early_stop_patience = config.get('early_stopping', EARLY_STOPPING_PATIENCE) if config else EARLY_STOPPING_PATIENCE
+        patience_counter = 0
         
-        if loaded_metrics['epoch'] != -1:  # Only update if loading succeeded
-            best_metrics = loaded_metrics
+        logger.info("\n=== Starting Training ===")
+        start_time = time.time()
+        
+        try:
+            for epoch in range(config.get('epochs', DEFAULT_EPOCHS) if config else DEFAULT_EPOCHS):
+                epoch_start = time.time()
+                
+                # Train epoch
+                train_loss, train_acc = train_epoch(
+                    model=model,
+                    loader=train_loader,
+                    criterion=criterion,
+                    optimizer=optimizer,
+                    device=device,
+                    grad_clip=config.get('gradient_clip', GRADIENT_CLIP) if config else GRADIENT_CLIP,
+                    grad_accum_steps=config.get('grad_accum_steps', 1) if config else 1,
+                    scaler=scaler
+                )
+                
+                # Validate
+                val_metrics = validate(
+                    model=model,
+                    loader=val_loader,
+                    criterion=criterion,
+                    device=device,
+                    class_names=['Normal', 'Attack']
+                )
+                
+                # Learning rate adjustment
+                current_lr = optimizer.param_groups[0]['lr']
+                scheduler.step(val_metrics['val_acc'])
+                
+                # Update best metrics
+                if val_metrics['val_loss'] < best_metrics['val_loss']:
+                    best_metrics.update({
+                        'epoch': epoch,
+                        'val_loss': val_metrics['val_loss'],
+                        'val_acc': val_metrics['val_acc'],
+                        'val_auc': val_metrics['val_auc'],
+                        'train_loss': train_loss,
+                        'train_acc': train_acc,
+                        'learning_rate': current_lr,
+                        'preds': val_metrics['preds'],
+                        'labels': val_metrics['labels'],
+                        'probs': val_metrics['probs']
+                    })
+                    patience_counter = 0
+                    
+                    # Save best model
+                    save_checkpoint(
+                        model=model,
+                        optimizer=optimizer,
+                        scheduler=scheduler,
+                        epoch=epoch,
+                        metrics=best_metrics,
+                        filename=f"best_model_{timestamp}.pth",
+                        config=training_meta,
+                        output_dir=run_checkpoint_dir
+                    )
+                else:
+                    patience_counter += 1
+                
+                # Logging
+                epoch_time = time.time() - epoch_start
+                writer.add_scalar('Time/epoch', epoch_time, epoch)
+                writer.add_scalar('LR', current_lr, epoch)
+                
+                logger.info(
+                    f"Epoch {epoch+1:03d}/{config.get('epochs', DEFAULT_EPOCHS) if config else DEFAULT_EPOCHS} | "
+                    f"Time: {epoch_time:.1f}s | "
+                    f"Train Loss: {train_loss:.4f} | Val Loss: {val_metrics['val_loss']:.4f} | "
+                    f"Train Acc: {train_acc:.2%} | Val Acc: {val_metrics['val_acc']:.2%} | "
+                    f"Val AUC: {val_metrics['val_auc']:.4f} | LR: {current_lr:.2e} | "
+                    f"Patience: {patience_counter}/{early_stop_patience}"
+                )
+                
+                # Early stopping
+                if patience_counter >= early_stop_patience:
+                    logger.info(f"Early stopping triggered at epoch {epoch+1}")
+                    break
+
+        except Exception as e:
+            raise TrainingExecutionError(
+                f"Training execution failed at epoch {epoch}: {str(e)}",
+                epoch=epoch,
+                original_exception=e
+            ) from e
+
+        # Final evaluation and reporting
+        training_meta.update({
+            'end_time': datetime.datetime.now().strftime("%Y%m%d_%H%M%S"),
+            'training_time': time.time() - start_time,
+            'best_epoch': best_metrics['epoch'],
+            'early_stop': patience_counter >= early_stop_patience
+        })
+        
+        # Load best model for final evaluation
+        try:
+            checkpoint, error = load_checkpoint(
+                run_checkpoint_dir / f"best_model_{timestamp}.pth",
+                model=model,
+                device=device
+            )
+            if error:
+                logger.warning(f"Could not load best model: {error}")
+        except Exception as e:
+            logger.error(f"Failed to load best model: {str(e)}")
+
+        # Generate reports
+        logger.info("\n=== Training Summary ===")
+        logger.info(f"Best epoch: {best_metrics['epoch'] + 1}")
+        logger.info(f"Best validation loss: {best_metrics['val_loss']:.4f}")
+        logger.info(f"Best validation accuracy: {best_metrics['val_acc']:.2%}")
+        logger.info(f"Best validation AUC: {best_metrics['val_auc']:.4f}")
+        
+        if 'preds' in best_metrics and 'labels' in best_metrics:
+            logger.info("\n=== Classification Report ===")
+            logger.info(classification_report(
+                best_metrics['labels'],
+                best_metrics['preds'],
+                target_names=['Normal', 'Attack'],
+                digits=4
+            ))
+            
+            # Save confusion matrix
+            cm = confusion_matrix(best_metrics['labels'], best_metrics['preds'])
+            plt.figure(figsize=(8, 6))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+            plt.title("Confusion Matrix")
+            plt.xlabel("Predicted")
+            plt.ylabel("True")
+            cm_path = run_figure_dir / f"confusion_matrix_{timestamp}.png"
+            plt.savefig(cm_path, bbox_inches='tight')
+            plt.close()
+            training_meta['confusion_matrix'] = str(cm_path)
+
+        # Save final artifacts
+        try:
+            artifacts_saved = save_training_artifacts(
+                model=model,
+                metrics=best_metrics,
+                config=training_meta,
+                output_dir=run_artifact_dir,
+                class_names=['Normal', 'Attack'],
+                feature_names=artifacts.get('feature_names')
+            )
+            
+            if not artifacts_saved:
+                raise ModelSavingError("Failed to save some training artifacts")
+                
+        except Exception as e:
+            raise ModelSavingError(f"Failed to save training artifacts: {str(e)}") from e
+
+        writer.close()
+        return {
+            'metrics': best_metrics,
+            'meta': training_meta,
+            'artifacts_dir': str(run_artifact_dir)
+        }
+
+    except DataPreparationError as e:
+        logger.error(f"Data preparation failed: {str(e)}")
+        raise
+    except TrainingError as e:
+        logger.error(f"Training failed: {str(e)}")
+        raise
+    except ModelSavingError as e:
+        logger.error(f"Model saving failed: {str(e)}")
+        raise
     except Exception as e:
-        logger.error(f"Failed to load best model: {str(e)}")
-
-    # Generate final reports
-    logger.info("\n=== Classification Report ===")
-    if len(best_metrics['labels']) > 0 and len(best_metrics['preds']) > 0:
-        logger.info(classification_report(
-            y_true=best_metrics['labels'],
-            y_pred=best_metrics['preds'],
-            target_names=['Normal', 'Attack'],
-            digits=4
-        ))
-        
-        logger.info("\nConfusion Matrix:")
-        logger.info(confusion_matrix(best_metrics['labels'], best_metrics['preds']))
-    else:
-        logger.warning("No validation metrics available")
-
-    # Save final artifacts
-    save_training_artifacts(
-        model=model,
-        best_metrics=best_metrics,
-        input_size=input_size,
-        num_classes=num_classes,
-        class_weights=class_weights,
-        timestamp=timestamp
-    )
-    
-    writer.close()
+        logger.error(f"Unexpected error during training: {str(e)}")
+        raise TrainingError(f"Unexpected training error: {str(e)}") from e
 
 # Main entry point
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Enhanced IDS Model Trainer")
+    # Initialize colorama for colored console output
+    init(autoreset=True)
+    
+    # Configure argument parser with enhanced help
+    parser = argparse.ArgumentParser(
+        description="Enhanced IDS Model Trainer",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     parser.add_argument(
         "--use-mock",
         action="store_true",
-        help="Use synthetic data for training"
+        help="Use synthetic data for training (useful when real data is unavailable)"
     )
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug logging"
+        help="Enable debug logging (more verbose output)"
     )
     parser.add_argument(
         "--batch-size",
         type=int,
         default=DEFAULT_BATCH_SIZE,
-        help=f"Batch size (default: {DEFAULT_BATCH_SIZE})"
+        help=f"Training batch size (default: {DEFAULT_BATCH_SIZE})"
     )
     parser.add_argument(
         "--epochs",
         type=int,
         default=DEFAULT_EPOCHS,
-        help=f"Number of epochs (default: {DEFAULT_EPOCHS})"
+        help=f"Maximum number of training epochs (default: {DEFAULT_EPOCHS})"
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=LEARNING_RATE,
+        help=f"Initial learning rate (default: {LEARNING_RATE})"
+    )
+    parser.add_argument(
+        "--early-stopping",
+        type=int,
+        default=EARLY_STOPPING_PATIENCE,
+        help=f"Patience for early stopping (default: {EARLY_STOPPING_PATIENCE})"
     )
     parser.add_argument(
         "--interactive",
         action="store_true",
-        help="Launch interactive mode"
+        help="Launch interactive configuration mode"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=".",
+        help="Base directory for output files"
     )
     args = parser.parse_args()
 
-    # Initial setup
-    configure_system()
-    configure_visualization()
-    set_seed(42)
-    
-    # Setup logging and directories
-    LOG_DIR = Path("logs") / datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    logger = setup_logging(LOG_DIR)
-    
     try:
-        directories = setup_directories(logger)
-        MODEL_DIR = directories['models']
-        LOG_DIR = directories['logs']
-        DATA_DIR = directories['data']
-        FIGURE_DIR = directories['figures']
-        TB_DIR = directories['tensorboard']
-        CHECKPOINT_DIR = directories['checkpoints']
+        # Initial system configuration
+        configure_system()
+        configure_visualization()
+        set_seed(42)  # For reproducibility
+        
+        # Setup logging and directories with timestamp
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        base_dir = Path(args.output_dir)
+        
+        try:
+            directories = {
+                'base': base_dir,
+                'logs': base_dir / "logs",
+                'models': base_dir / "models",
+                'data': base_dir / "data",
+                'figures': base_dir / "figures",
+                'tensorboard': base_dir / "tensorboard",
+                'checkpoints': base_dir / "checkpoints",
+                'config': base_dir / "config",
+                'results': base_dir / "results",
+                'metrics': base_dir / "metrics",
+                'reports': base_dir / "reports",
+                'latest': base_dir / "latest",
+                'info': base_dir / "info",
+                'artifacts': base_dir / "artifacts"
+            }
+            
+            # Create all directories
+            for dir_path in directories.values():
+                dir_path.mkdir(parents=True, exist_ok=True)
+                
+            # Set global directory variables
+            MODEL_DIR = directories['models']
+            LOG_DIR = directories['logs']
+            DATA_DIR = directories['data']
+            FIGURE_DIR = directories['figures']
+            TB_DIR = directories['tensorboard']
+            CHECKPOINT_DIR = directories['checkpoints']
+            CONFIG_DIR = directories['config']
+            RESULTS_DIR = directories['results']
+            METRICS_DIR = directories['metrics']
+            REPORTS_DIR = directories['reports']
+            LATEST_DIR = directories['latest']
+            INFO_DIR = directories['info']
+            ARTIFACTS_DIR = directories['artifacts']
+            
+        except Exception as e:
+            logger.error(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
+            raise SystemExit(1) from e
+
+        # Configure logging
+        logger = setup_logging(LOG_DIR)
+        if args.debug:
+            logger.setLevel(logging.DEBUG)
+            logger.debug("Debug logging enabled")
+            torch._logging.set_logs(all=logging.DEBUG)
+        else:
+            logger.setLevel(logging.INFO)
+
+        if args.interactive:
+            # Interactive mode
+            try:
+                print(Fore.MAGENTA + Style.BRIGHT + "\n                    === Interactive Mode ===".center(60))
+                interactive_main()
+            except KeyboardInterrupt:
+                print(Fore.YELLOW + Style.BRIGHT + "\n\nOperation cancelled by user")
+                sys.exit(0)
+            except Exception as e:
+                logger.critical(
+                    Fore.RED + Style.BRIGHT + f"Interactive session failed: {str(e)}", 
+                    exc_info=args.debug
+                )
+                sys.exit(1)
+        else:
+            # Command-line mode execution
+            logger.info(Fore.CYAN + Style.BRIGHT + "\n=== Enhanced Network Intrusion Detection Model Trainer ===")
+            logger.info(Fore.GREEN + Style.BRIGHT + f"Starting training at {timestamp}")
+            logger.info(Fore.MAGENTA + Style.BRIGHT + "Configuration:")
+            logger.info(Fore.WHITE + Style.BRIGHT + f"  Batch size: {args.batch_size}")
+            logger.info(Fore.WHITE + Style.BRIGHT + f"  Epochs: {args.epochs}")
+            logger.info(Fore.WHITE + Style.BRIGHT + f"  Learning rate: {args.learning_rate}")
+            logger.info(Fore.WHITE + Style.BRIGHT + f"  Early stopping patience: {args.early_stopping}")
+            logger.info(Fore.WHITE + Style.BRIGHT + f"  Using {'synthetic' if args.use_mock else 'real'} data")
+            
+            # Prepare training configuration
+            training_config = {
+                'batch_size': args.batch_size,
+                'epochs': args.epochs,
+                'learning_rate': args.learning_rate,
+                'early_stopping': args.early_stopping,
+                'gradient_clip': GRADIENT_CLIP,
+                'mixed_precision': MIXED_PRECISION
+            }
+            
+            try:
+                # Execute training
+                results = train_model(
+                    use_mock=args.use_mock,
+                    config=training_config
+                )
+                
+                # Final report
+                logger.info(Fore.GREEN + Style.BRIGHT + "\n=== Training Completed Successfully ===")
+                logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Best validation accuracy: {results['metrics']['val_acc']:.2%}")
+                logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Best validation AUC: {results['metrics']['val_auc']:.4f}")
+                logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Artifacts saved to: {results['artifacts_dir']}")
+                logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Training time: {results['meta']['training_time']:.2f} seconds")
+                
+            except DataPreparationError as e:
+                logger.error(Fore.RED + Style.BRIGHT + "\nData Preparation Failed:")
+                logger.error(Fore.RED + Style.BRIGHT + f"Error: {str(e)}")
+                if e.original_exception:
+                    logger.debug(f"Original exception: {str(e.original_exception)}")
+                sys.exit(1)
+                
+            except ModelConfigurationError as e:
+                logger.error(Fore.RED + Style.BRIGHT + "\nModel Configuration Failed:")
+                logger.error(Fore.RED + Style.BRIGHT + f"Error: {str(e)}")
+                sys.exit(1)
+                
+            except TrainingExecutionError as e:
+                logger.error(Fore.RED + Style.BRIGHT + "\nTraining Execution Failed:")
+                logger.error(Fore.RED + Style.BRIGHT + f"Error at epoch {e.epoch if e.epoch else 'N/A'}: {str(e)}")
+                sys.exit(1)
+                
+            except ModelSavingError as e:
+                logger.error(Fore.RED + Style.BRIGHT + "\nModel Saving Failed:")
+                logger.error(Fore.RED + Style.BRIGHT + f"Error: {str(e)}")
+                sys.exit(1)
+                
+            except Exception as e:
+                logger.critical(
+                    Fore.RED + Style.BRIGHT + "\nUnexpected Error:",
+                    exc_info=args.debug
+                )
+                sys.exit(1)
+
+    except KeyboardInterrupt:
+        print(Fore.YELLOW + Style.BRIGHT + "\n\nOperation cancelled by user")
+        sys.exit(0)
     except Exception as e:
-        logger.error(f"Failed to set up directories: {str(e)}")
+        logger.critical(
+            Fore.RED + Style.BRIGHT + f"Fatal initialization error: {str(e)}",
+            exc_info=args.debug
+        )
         sys.exit(1)
-    
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-        logger.debug("Debug mode enabled")
-    
-    if args.interactive:
-        # Interactive mode
-        try:
-            interactive_main()
-        except KeyboardInterrupt:
-            print(Fore.RED + "\n\nInterrupted by user. Exiting...")
-        except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            traceback.print_exc()
-    else:
-        # Command-line mode
-        logger.info("\n=== Enhanced Network Intrusion Detection Model Trainer ===")
-        logger.info(f"Command line arguments: {vars(args)}")
-        
-        # Update config from command line args
-        if args.batch_size != DEFAULT_BATCH_SIZE:
-            DEFAULT_BATCH_SIZE = args.batch_size
-            logger.info(f"Using batch size: {DEFAULT_BATCH_SIZE}")
-        
-        if args.epochs != DEFAULT_EPOCHS:
-            DEFAULT_EPOCHS = args.epochs
-            logger.info(f"Using epochs: {DEFAULT_EPOCHS}")
-        
-        try:
-            train_model(use_mock=args.use_mock)
-        except Exception as e:
-            logger.error(f"Training failed: {str(e)}", exc_info=True)
-            sys.exit(1)
