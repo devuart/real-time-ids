@@ -878,7 +878,7 @@ def show_config(edit_mode: bool = False) -> None:
         print(Fore.RED + Style.BRIGHT + "\nError displaying configuration. Check logs for details.")
 
 def cleanup_old_results(days_to_keep: int = 7) -> None:
-    """Cleanup old result files"""
+    """Cleanup old result files with robust timestamp handling"""
     try:
         now = datetime.now()
         cutoff = now.timestamp() - (days_to_keep * 86400)
@@ -888,27 +888,70 @@ def cleanup_old_results(days_to_keep: int = 7) -> None:
             with open(HISTORY_PATH) as f:
                 history = json.load(f)
             
-            filtered_history = [
-                entry for entry in history
-                if datetime.strptime(entry['timestamp'], '%Y-%m-%d %H:%M:%S').timestamp() > cutoff
-            ]
+            filtered_history = []
+            removed_count = 0
             
-            if len(filtered_history) < len(history):
+            for entry in history:
+                try:
+                    timestamp_str = entry.get('timestamp', '')
+                    
+                    # Skip if no timestamp exists
+                    if not timestamp_str:
+                        filtered_history.append(entry)
+                        continue
+                        
+                    # Handle different timestamp formats
+                    try:
+                        # Try standard format first
+                        dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        try:
+                            # Handle timestamps with microseconds (e.g., "2023-01-01 12:00:00:123456")
+                            parts = timestamp_str.split(':')
+                            if len(parts) >= 3:
+                                dt = datetime.strptime(':'.join(parts[:3]), '%Y-%m-%d %H:%M:%S')
+                            else:
+                                raise ValueError("Invalid timestamp format")
+                        except (ValueError, IndexError):
+                            # If all parsing fails, keep the entry to be safe
+                            filtered_history.append(entry)
+                            logger.warning(f"Could not parse timestamp in history entry: {timestamp_str}")
+                            continue
+                    
+                    if dt.timestamp() > cutoff:
+                        filtered_history.append(entry)
+                    else:
+                        removed_count += 1
+                        
+                except Exception as e:
+                    logger.warning(f"Error processing history entry: {str(e)}")
+                    filtered_history.append(entry)  # Keep entry if there's any error
+                    continue
+            
+            if removed_count > 0:
                 with open(HISTORY_PATH, "w") as f:
                     json.dump(filtered_history, f, indent=2)
-                print(Fore.GREEN + f"Removed {len(history) - len(filtered_history)} old history entries")
+                print(Fore.GREEN + f"Removed {removed_count} old history entries")
         
         # Cleanup old report files
         report_files = list(SUMMARY_DIR.glob("verification_testing_summary*"))
+        removed_reports = 0
         for report_file in report_files:
-            file_time = datetime.fromtimestamp(report_file.stat().st_mtime)
-            if file_time.timestamp() < cutoff:
-                report_file.unlink()
-                print(Fore.YELLOW + f"Removed old report: {report_file.name}")
+            try:
+                file_time = datetime.fromtimestamp(report_file.stat().st_mtime)
+                if file_time.timestamp() < cutoff:
+                    report_file.unlink()
+                    removed_reports += 1
+                    print(Fore.YELLOW + f"Removed old report: {report_file.name}")
+            except Exception as e:
+                logger.warning(f"Could not remove report {report_file.name}: {str(e)}")
+                continue
         
-        print(Fore.GREEN + "Cleanup completed")
+        print(Fore.GREEN + f"Cleanup completed. Removed {removed_count} history entries and {removed_reports} report files.")
+        
     except Exception as e:
         logger.error(f"Error during cleanup: {str(e)}")
+        print(Fore.RED + "Error during cleanup. Check logs for details.")
 
 def main() -> None:
     """Main function"""
