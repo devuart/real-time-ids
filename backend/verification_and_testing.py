@@ -19,6 +19,11 @@ import time
 from alive_progress import alive_bar
 import tqdm
 from tqdm.asyncio import tqdm
+from rich.console import Console
+from rich.table import Table
+from rich import box
+from rich.text import Text
+from tabulate import tabulate
 
 # Get virtual environment's Python path
 VENV_PYTHON = Path(sys.executable)
@@ -62,7 +67,10 @@ SUMMARY_HTML = SUMMARY_DIR / (SUMMARY_FILE_NAME + ".html")
 # Default configuration values
 DEFAULT_CONFIG = {
     "model_path": "models/ids_model.onnx",
-    "dataset_path": "models/preprocessed_dataset.csv"
+    "dataset_path": "models/preprocessed_dataset.csv",
+    # Default number of days to keep
+    "cleanup_days": 7,
+    "_last_modified": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 }
 
 # Steps to run
@@ -171,7 +179,6 @@ def _write_markdown_summary(filtered_history: List[Dict[str, Any]]) -> None:
 
         # Try tabulate first (prettiest format)
         try:
-            from tabulate import tabulate
             headers = ["Step", "Status", "Duration", "Timestamp"]
             rows = [
                 [
@@ -333,13 +340,8 @@ def _write_html_summary(filtered_history: List[Dict[str, Any]]) -> None:
         f.write(html)
 
 def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
-    """Display rich terminal output with proper ANSI handling"""
+    """Display rich terminal output with proper ANSI handling and relative timestamps"""
     try:
-        from rich.console import Console
-        from rich.table import Table
-        from rich import box
-        from rich.text import Text
-        
         console = Console()
         table = Table(
             title="Verification & Testing Run Summary",
@@ -350,9 +352,9 @@ def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
         )
         
         table.add_column("Step", style="bold cyan", width=25)
-        table.add_column("Status", justify="center", style="bold", width=12)
-        table.add_column("Duration", justify="right", style="bold", width=10)
-        table.add_column("Timestamp", style="bold dim", width=20)
+        table.add_column("Status", justify="left", style="bold", width=12)
+        table.add_column("Duration", justify="left", style="bold", width=10)
+        table.add_column("Timestamp", style="bold dim", width=35)
         
         status_styles = {
             "SUCCESS": "bold green",
@@ -361,21 +363,74 @@ def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
             "ERROR": "bold red"
         }
         
+        current_time = datetime.now()
+        
         for entry in filtered_history:
-            status = entry['status'].split()[0]
-            status_style = status_styles.get(status, "bold")
+            # Clean status text by removing markdown formatting
+            raw_status = entry['status'].replace('**', '').replace('*', '').strip()
+            status_key = raw_status.split()[0]  # Get first word for styling
+            
+            # Parse timestamp and calculate relative time
+            timestamp_str = entry['timestamp']
+            try:
+                # Handle different timestamp formats (with or without microseconds)
+                if ':' in timestamp_str and timestamp_str.count(':') > 2:
+                    # Timestamp with microseconds (e.g., "2025-08-01 00:12:16:149907")
+                    dt = datetime.strptime(':'.join(timestamp_str.split(':')[:3]), '%Y-%m-%d %H:%M:%S')
+                else:
+                    # Standard timestamp (e.g., "2025-08-01 00:12:16")
+                    dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                
+                time_diff = current_time - dt
+                total_seconds = int(time_diff.total_seconds())
+                
+                # Calculate relative time string
+                if time_diff.days > 365:
+                    years = time_diff.days // 365
+                    relative_time = f"{years} year{'s' if years > 1 else ''} ago"
+                elif time_diff.days > 30:
+                    months = time_diff.days // 30
+                    relative_time = f"{months} month{'s' if months > 1 else ''} ago"
+                elif time_diff.days > 0:
+                    relative_time = f"{time_diff.days} day{'s' if time_diff.days > 1 else ''} ago"
+                elif total_seconds >= 3600:
+                    hours = total_seconds // 3600
+                    relative_time = f"{hours} hour{'s' if hours > 1 else ''} ago"
+                elif total_seconds >= 60:
+                    minutes = total_seconds // 60
+                    relative_time = f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+                elif total_seconds >= 5:
+                    # Only show exact seconds if divisible by 5, otherwise show rounded
+                    if total_seconds % 5 == 0:
+                        relative_time = f"{total_seconds} seconds ago"
+                    else:
+                        rounded_seconds = 5 * round(total_seconds / 5)
+                        relative_time = f"~{rounded_seconds} seconds ago"
+                elif total_seconds > 1:
+                    # Show exact count for 2-4 seconds
+                    relative_time = f"{total_seconds} second{'s' if total_seconds > 1 else ''} ago"
+                else:
+                    relative_time = "just now"
+                
+                timestamp_display = f"{timestamp_str.split('.')[0]}\n[dim italic]({relative_time})"
+                
+            except ValueError:
+                # Fallback if parsing fails
+                timestamp_display = timestamp_str
+            
+            status_style = status_styles.get(status_key, "bold")
             table.add_row(
                 f"[cyan]{entry['label']}",
-                f"[{status_style}]{entry['status']}",
+                f"[{status_style}]{raw_status}",
                 f"[bold]{entry['duration']}",
-                f"[dim]{entry['timestamp']}"
+                timestamp_display
             )
         
         console.print(table)
         
         last_run_text = Text.assemble(
             ("Last Run: ", "bold white"),
-            (f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "bold magenta")
+            (f"{current_time.strftime('%Y-%m-%d %H:%M:%S')}", "bold magenta")
         )
         console.print(last_run_text)
         
@@ -446,8 +501,8 @@ def print_menu() -> None:
     print(Fore.WHITE + Style.BRIGHT + "6. Run All Tests Concurrently" + Fore.LIGHTGREEN_EX + Style.BRIGHT + "  (async mode)")
     print(Fore.WHITE + Style.BRIGHT + "7. Edit Config")
     print(Fore.WHITE + Style.BRIGHT + "8. Show Config")
-    print(Fore.WHITE + Style.BRIGHT + "9. Show Last Summary")
-    print(Fore.WHITE + Style.BRIGHT + "10. Show Last HTML Summary")
+    print(Fore.WHITE + Style.BRIGHT + "9. Show Last Summary" + Fore.LIGHTGREEN_EX + Style.BRIGHT + "           (console)")
+    print(Fore.WHITE + Style.BRIGHT + "10. Show Last HTML Summary" + Fore.LIGHTGREEN_EX + Style.BRIGHT + "     (browser)")
     print(Fore.WHITE + Style.BRIGHT + "11. Cleanup Old Results")
     print(Fore.RED + Style.BRIGHT + "12. Exit")
 
@@ -510,7 +565,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
         duration = datetime.now() - start
         entry.update({
             "status": "SUCCESS",
-            "duration": str(duration).split(".")[0],
+            "duration": str(duration).split(":")[2],
             "output": result.stdout
         })
 
@@ -699,19 +754,23 @@ def edit_config() -> None:
         
         while True:
             # Clear screen and show config
-            print("\033c", end="")  # Clear terminal
+            print("\033c", end="")
             show_config(edit_mode=True)
             
             # Get user selection
             print(Fore.WHITE + Style.BRIGHT + "\n" + "-" * 40)
             print(Fore.MAGENTA + Style.BRIGHT + "Edit options:")
-            print(Fore.CYAN + Style.BRIGHT + "1-{0} to edit setting".format(len(config)))
+            # Subtract 1 to exclude _last_modified
+            print(Fore.CYAN + Style.BRIGHT + "1-{0} to edit setting".format(len(config)-1))
             print(Fore.YELLOW + Style.BRIGHT + "s" + Fore.WHITE + Style.BRIGHT + " - Save and exit")
             print(Fore.YELLOW + Style.BRIGHT + "q" + Fore.WHITE + Style.BRIGHT + " - Quit without saving")
             choice = input(Fore.WHITE + Style.BRIGHT + "\nSelect option: ").strip().lower()
             
             if choice == 's':
                 try:
+                    # Update last modified timestamp
+                    config['_last_modified'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    
                     with open(CONFIG_PATH, "w") as f:
                         json.dump(config, f, indent=2)
                     print(Fore.GREEN + "\n[success] Configuration saved.\n")
@@ -725,13 +784,17 @@ def edit_config() -> None:
                 print(Fore.YELLOW + "\nDiscarding changes...")
                 break
                 
-            elif choice.isdigit() and 1 <= int(choice) <= len(config):
-                key = list(config.keys())[int(choice)-1]
+            # Adjust for _last_modified
+            elif choice.isdigit() and 1 <= int(choice) <= len(config)-1:
+                # Get only editable keys (exclude _last_modified)
+                editable_keys = [k for k in config.keys() if not k.startswith('_')]
+                key = editable_keys[int(choice)-1]
                 current_val = config[key]
                 
                 while True:
                     new_val = input(f"\nNew value for {key} [{current_val}]: ").strip()
-                    if not new_val:  # User pressed enter without input
+                    # User pressed enter without input
+                    if not new_val:
                         break
                         
                     new_val = sanitize_input(new_val)
@@ -739,7 +802,7 @@ def edit_config() -> None:
                     # Special handling for paths
                     if key.endswith('_path'):
                         if not validate_path(new_val):
-                            print(Fore.RED + Style.BRIGHT + f"⚠ Path does not exist: {new_val}")
+                            print(Fore.RED + Style.BRIGHT + f"[WARNING] Path does not exist: {new_val}")
                             print(Fore.YELLOW + Style.BRIGHT + "a - Accept anyway")
                             print(Fore.YELLOW + Style.BRIGHT + "r - Re-enter value")
                             print(Fore.YELLOW + Style.BRIGHT + "c - Cancel")
@@ -753,6 +816,18 @@ def edit_config() -> None:
                             else:
                                 break
                     
+                    # Special validation for cleanup_days
+                    elif key == 'cleanup_days':
+                        try:
+                            days = int(new_val)
+                            if days <= 0:
+                                raise ValueError("Days must be positive")
+                            config[key] = days
+                            break
+                        except ValueError:
+                            print(Fore.RED + Style.BRIGHT + "Invalid number of days. Must be a positive integer.")
+                            continue
+                    
                     config[key] = new_val
                     break
             else:
@@ -761,7 +836,7 @@ def edit_config() -> None:
                 
     except Exception as e:
         logger.error(f"Error in edit_config: {str(e)}")
-        print(Fore.RED + "\nError in configuration editor!")
+        print(Fore.RED + Style.BRIGHT + "\nError in configuration editor!")
         traceback.print_exc()
 
 def show_config(edit_mode: bool = False) -> None:
@@ -773,21 +848,23 @@ def show_config(edit_mode: bool = False) -> None:
     try:
         config = load_config()
         print(Fore.CYAN + "\n[CONFIGURATION]")
-        print(Fore.BLUE + f"Config file: {CONFIG_PATH.resolve()}\n")
+        print(Fore.BLUE + f"Config file: {CONFIG_PATH.resolve()}")
         
-        # Prepare validation indicators
+        # Display last modified time if available
+        last_modified = config.get('_last_modified', 'Unknown')
+        print(Fore.BLUE + f"Last modified: {last_modified}\n")
+        
+        # Prepare validation indicators (only for real settings, not metadata)
         path_status = {}
         for key, value in config.items():
-            if key.endswith('_path'):
+            if key.endswith('_path') and not key.startswith('_'):
                 path_status[key] = "✓" if validate_path(value) else "✗"
+        
+        # Get only editable config items (exclude metadata keys starting with _)
+        display_config = {k: v for k, v in config.items() if not k.startswith('_')}
         
         # Try rich formatting first
         try:
-            from rich.console import Console
-            from rich.table import Table
-            from rich import box
-            from rich.text import Text
-            
             console = Console()
             table = Table(
                 title="Current configuration",
@@ -805,7 +882,7 @@ def show_config(edit_mode: bool = False) -> None:
             table.add_column("Value", style="bold green", overflow="fold")
             table.add_column("Status", justify="center", width=6) if path_status else None
             
-            for i, (key, value) in enumerate(config.items(), 1):
+            for i, (key, value) in enumerate(display_config.items(), 1):
                 row = []
                 if edit_mode:
                     row.append(str(i))
@@ -831,19 +908,18 @@ def show_config(edit_mode: bool = False) -> None:
             return
             
         except ImportError:
-            pass  # Fall through to next formatting option
+            # Fall through to next formatting option
+            pass
         
         # Try tabulate formatting
         try:
-            from tabulate import tabulate
-            
             headers = ["#"] if edit_mode else []
             headers += ["Setting", "Value"]
             if path_status:
                 headers.append("Status")
             
             rows = []
-            for i, (key, value) in enumerate(config.items(), 1):
+            for i, (key, value) in enumerate(display_config.items(), 1):
                 row = [str(i)] if edit_mode else []
                 row.append(key)
                 
@@ -863,11 +939,12 @@ def show_config(edit_mode: bool = False) -> None:
             return
             
         except ImportError:
-            pass  # Fall through to basic formatting
+            # Fall through to basic formatting
+            pass
         
         # Basic formatting with alignment
-        max_key_len = max(len(key) for key in config.keys())
-        for i, (key, value) in enumerate(config.items(), 1):
+        max_key_len = max(len(key) for key in display_config.keys())
+        for i, (key, value) in enumerate(display_config.items(), 1):
             prefix = f"{i}. " if edit_mode else ""
             status = f" [{path_status[key]}]" if key in path_status else ""
             modified = " *" if value != DEFAULT_CONFIG.get(key) else ""
@@ -877,13 +954,190 @@ def show_config(edit_mode: bool = False) -> None:
         logger.error(Fore.RED + Style.BRIGHT + f"Error displaying config: {str(e)}")
         print(Fore.RED + Style.BRIGHT + "\nError displaying configuration. Check logs for details.")
 
-def cleanup_old_results(days_to_keep: int = 7) -> None:
-    """Cleanup old result files with robust timestamp handling"""
+def cleanup_old_results() -> None:
+    """Cleanup old result files with configurable retention period and rich UI"""
     try:
+        config = load_config()
+        default_days = config.get('cleanup_days', 7)
+        
+        # First scan to show available results in rich table
+        if HISTORY_PATH.exists():
+            with open(HISTORY_PATH) as f:
+                history = json.load(f)
+            
+            if history:
+                # Get all timestamps and last cleanup info
+                timestamps = []
+                last_cleanup = None
+                for entry in history:
+                    timestamp_str = entry.get('timestamp', '')
+                    if timestamp_str:
+                        try:
+                            # Try standard format first
+                            dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                            timestamps.append(dt)
+                        except ValueError:
+                            try:
+                                # Handle timestamps with microseconds
+                                parts = timestamp_str.split(':')
+                                if len(parts) >= 3:
+                                    dt = datetime.strptime(':'.join(parts[:3]), '%Y-%m-%d %H:%M:%S')
+                                    timestamps.append(dt)
+                            except (ValueError, IndexError):
+                                continue
+                    # Check if this entry is a cleanup record
+                    if entry.get('action') in ['started', 'completed']:
+                        last_cleanup = entry.get('timestamp')
+                
+                if timestamps:
+                    oldest = min(timestamps)
+                    newest = max(timestamps)
+                    age_days = (datetime.now() - oldest).days
+                    
+                    # Create rich table for available results
+                    console = Console()
+                    table = Table(
+                        title="[bold]Available Results Summary[/bold]",
+                        box=box.ROUNDED,
+                        header_style="bold blue",
+                        title_style="bold green"
+                    )
+                    
+                    table.add_column("Metric", style="cyan", width=25)
+                    table.add_column("Value", style="magenta")
+                    
+                    table.add_row("Total Entries", f"[bold]{len(history)}")
+                    table.add_row("Oldest Entry", 
+                                f"[bold]{oldest.strftime('%Y-%m-%d %H:%M:%S')} "
+                                f"[dim]({age_days} days old)")
+                    table.add_row("Newest Entry", f"[bold]{newest.strftime('%Y-%m-%d %H:%M:%S')}")
+                    if last_cleanup:
+                        table.add_row("Last Cleanup", f"[bold yellow]{last_cleanup}")
+                    else:
+                        table.add_row("Last Cleanup", "[dim]No cleanup records found")
+                    
+                    console.print(table)
+        
+        # Get number of days from user
+        days_input = input(
+            Fore.WHITE + Style.BRIGHT + 
+            f"\nEnter number of days to keep (default {default_days}): "
+        ).strip()
+        
+        try:
+            days_to_keep = int(days_input) if days_input else default_days
+        except ValueError:
+            print(Fore.RED + Style.BRIGHT + "Invalid input. Using default value.")
+            days_to_keep = default_days
+        
         now = datetime.now()
         cutoff = now.timestamp() - (days_to_keep * 86400)
         
-        # Cleanup old history entries
+        # Preview what will be removed in rich table
+        if HISTORY_PATH.exists():
+            with open(HISTORY_PATH) as f:
+                history = json.load(f)
+            
+            removable_entries = []
+            removable_reports = 0
+            report_files = list(SUMMARY_DIR.glob("verification_testing_summary*"))
+            
+            for entry in history:
+                timestamp_str = entry.get('timestamp', '')
+                if timestamp_str:
+                    try:
+                        dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        try:
+                            parts = timestamp_str.split(':')
+                            if len(parts) >= 3:
+                                dt = datetime.strptime(':'.join(parts[:3]), '%Y-%m-%d %H:%M:%S')
+                        except (ValueError, IndexError):
+                            continue
+                    
+                    if dt.timestamp() <= cutoff:
+                        removable_entries.append({
+                            'label': entry.get('label', 'Unknown'),
+                            'timestamp': timestamp_str,
+                            'status': entry.get('status', 'Unknown')
+                        })
+            
+            for report_file in report_files:
+                try:
+                    file_time = datetime.fromtimestamp(report_file.stat().st_mtime)
+                    if file_time.timestamp() < cutoff:
+                        removable_reports += 1
+                except Exception:
+                    continue
+            
+            # Create rich preview table
+            console = Console()
+            preview_table = Table(
+                title=f"[bold]Cleanup Preview (Keeping last {days_to_keep} days)[/bold]",
+                box=box.ROUNDED,
+                header_style="bold yellow",
+                title_style="bold red"
+            )
+            
+            preview_table.add_column("Type", style="cyan")
+            preview_table.add_column("Count", style="magenta", justify="right")
+            preview_table.add_column("Details", style="dim")
+            
+            preview_table.add_row(
+                "History Entries", 
+                f"[bold red]{len(removable_entries)}",
+                f"Oldest: {removable_entries[0]['timestamp'] if removable_entries else 'N/A'}"
+            )
+            preview_table.add_row(
+                "Report Files",
+                f"[bold red]{removable_reports}",
+                f"Located in: {str(SUMMARY_DIR)}"
+            )
+            
+            # Add sample of entries to be removed
+            if removable_entries:
+                sample_table = Table(
+                    title="[dim]Sample of entries to be removed",
+                    box=box.SIMPLE,
+                    show_header=True,
+                    show_lines=False
+                )
+                sample_table.add_column("Label", style="cyan")
+                sample_table.add_column("Timestamp", style="magenta")
+                sample_table.add_column("Status", style="red")
+                
+                for entry in removable_entries[:3]:  # Show first 3 as sample
+                    sample_table.add_row(
+                        entry['label'],
+                        entry['timestamp'],
+                        entry['status']
+                    )
+                if len(removable_entries) > 3:
+                    sample_table.add_row(
+                        f"... {len(removable_entries)-3} more", 
+                        "", 
+                        ""
+                    )
+                
+                preview_table.add_row("", "", sample_table)
+            
+            console.print(preview_table)
+            
+            # Get confirmation
+            confirm = input(Fore.WHITE + Style.BRIGHT + "\nProceed with cleanup? (y/n): ").strip().lower()
+            if confirm != 'y':
+                print(Fore.YELLOW + "Cleanup canceled")
+                return
+        
+        # Log cleanup attempt
+        cleanup_log = {
+            "timestamp": now.strftime('%Y-%m-%d %H:%M:%S'),
+            "days_to_keep": days_to_keep,
+            "action": "started"
+        }
+        logger.info(f"Cleanup started: {json.dumps(cleanup_log)}")
+        
+        # Actual cleanup process (same as before)
         if HISTORY_PATH.exists():
             with open(HISTORY_PATH) as f:
                 history = json.load(f)
@@ -894,46 +1148,36 @@ def cleanup_old_results(days_to_keep: int = 7) -> None:
             for entry in history:
                 try:
                     timestamp_str = entry.get('timestamp', '')
-                    
-                    # Skip if no timestamp exists
                     if not timestamp_str:
                         filtered_history.append(entry)
                         continue
                         
-                    # Handle different timestamp formats
                     try:
-                        # Try standard format first
                         dt = datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
                     except ValueError:
                         try:
-                            # Handle timestamps with microseconds (e.g., "2023-01-01 12:00:00:123456")
                             parts = timestamp_str.split(':')
                             if len(parts) >= 3:
                                 dt = datetime.strptime(':'.join(parts[:3]), '%Y-%m-%d %H:%M:%S')
                             else:
                                 raise ValueError("Invalid timestamp format")
                         except (ValueError, IndexError):
-                            # If all parsing fails, keep the entry to be safe
                             filtered_history.append(entry)
-                            logger.warning(f"Could not parse timestamp in history entry: {timestamp_str}")
                             continue
                     
                     if dt.timestamp() > cutoff:
                         filtered_history.append(entry)
                     else:
                         removed_count += 1
-                        
-                except Exception as e:
-                    logger.warning(f"Error processing history entry: {str(e)}")
-                    filtered_history.append(entry)  # Keep entry if there's any error
+                except Exception:
+                    filtered_history.append(entry)
                     continue
             
             if removed_count > 0:
                 with open(HISTORY_PATH, "w") as f:
                     json.dump(filtered_history, f, indent=2)
-                print(Fore.GREEN + f"Removed {removed_count} old history entries")
         
-        # Cleanup old report files
+        # Cleanup report files
         report_files = list(SUMMARY_DIR.glob("verification_testing_summary*"))
         removed_reports = 0
         for report_file in report_files:
@@ -942,16 +1186,68 @@ def cleanup_old_results(days_to_keep: int = 7) -> None:
                 if file_time.timestamp() < cutoff:
                     report_file.unlink()
                     removed_reports += 1
-                    print(Fore.YELLOW + f"Removed old report: {report_file.name}")
-            except Exception as e:
-                logger.warning(f"Could not remove report {report_file.name}: {str(e)}")
+            except Exception:
                 continue
         
-        print(Fore.GREEN + f"Cleanup completed. Removed {removed_count} history entries and {removed_reports} report files.")
+        # Log cleanup completion
+        cleanup_log.update({
+            "action": "completed",
+            "removed_history_entries": removed_count,
+            "removed_reports": removed_reports,
+            "status": "success"
+        })
+        logger.info(f"Cleanup completed: {json.dumps(cleanup_log)}")
+        
+        # Show results in rich table
+        result_table = Table(
+            title="[bold green]Cleanup Results[/bold green]",
+            box=box.ROUNDED,
+            header_style="bold blue"
+        )
+        
+        result_table.add_column("Item", style="cyan")
+        result_table.add_column("Removed", style="magenta", justify="right")
+        result_table.add_column("Retained", style="green", justify="right")
+        
+        if HISTORY_PATH.exists():
+            with open(HISTORY_PATH) as f:
+                current_history = json.load(f)
+            retained_entries = len(current_history)
+        else:
+            retained_entries = 0
+        
+        result_table.add_row(
+            "History Entries",
+            f"[bold red]{removed_count}",
+            f"[bold green]{retained_entries}"
+        )
+        result_table.add_row(
+            "Report Files",
+            f"[bold red]{removed_reports}",
+            f"[bold green]{len(report_files) - removed_reports}"
+        )
+        result_table.add_row(
+            "Retention Period",
+            f"[dim]{days_to_keep} days",
+            f"[dim]{now.strftime('%Y-%m-%d')}"
+        )
+        
+        console.print(result_table)
         
     except Exception as e:
-        logger.error(f"Error during cleanup: {str(e)}")
-        print(Fore.RED + "Error during cleanup. Check logs for details.")
+        logger.error(f"Cleanup failed: {str(e)}")
+        error_table = Table(
+            title="[bold red]Cleanup Error[/bold red]",
+            box=box.ROUNDED,
+            header_style="bold white",
+            title_style="bold red"
+        )
+        error_table.add_column("Error Details", style="red")
+        error_table.add_row(str(e))
+        
+        console = Console()
+        console.print(error_table)
+        print(Fore.RED + "\nCheck logs for more details.")
 
 def main() -> None:
     """Main function"""
@@ -993,21 +1289,18 @@ def main() -> None:
             asyncio.run(run_all_parallel(config))
         elif choice == "7":
             edit_config()
-            config = load_config()  # Reload config after editing
+            # Reload config after editing
+            config = load_config()
         elif choice == "8":
             show_config()
         elif choice == "9":
             print(Fore.CYAN + Style.BRIGHT + "\n[LAST SUMMARY]")
             show_last_summary(OutputFormat.TERMINAL)
         elif choice == "10":
-            print(Fore.CYAN + Style.BRIGHT + "\n[LAST HTML SUMMARY]")
+            print(Fore.CYAN + Style.BRIGHT + "\n[OPENING LAST HTML SUMMARY...]")
             show_last_summary(OutputFormat.HTML)
         elif choice == "11":
-            try:
-                days = int(input(Fore.WHITE + Style.BRIGHT + "Enter number of days to keep (default 7): ") or "7")
-                cleanup_old_results(days)
-            except ValueError:
-                print(Fore.RED + Style.BRIGHT + "Invalid input. Please enter a number.")
+            cleanup_old_results()
         elif choice == "12":
             print(Fore.CYAN + Style.BRIGHT + "\nExiting... Goodbye!")
             break
