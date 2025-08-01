@@ -344,10 +344,11 @@ def _display_rich_summary(filtered_history: List[Dict[str, Any]]) -> None:
     try:
         console = Console()
         table = Table(
-            title="Verification & Testing Run Summary",
+            title="\nVerification & Testing Run Summary",
             box=box.ROUNDED,
             header_style="bold magenta",
             title_style="bold yellow",
+            title_justify="left",
             show_lines=True
         )
         
@@ -513,7 +514,7 @@ def substitute_command(cmd: List[str], config: Dict[str, Any]) -> List[str]:
 def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> bool:
     """Run a step synchronously with alive-progress indication"""
     print(Fore.MAGENTA + Style.BRIGHT + f"\n=== {label} ===")
-    logger.info(f"Starting {label}")
+    logger.info(Fore.YELLOW + Style.BRIGHT + f"Starting {label}")
     start = datetime.now()
 
     entry = {
@@ -559,7 +560,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
                 result = subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
 
         except ImportError:
-            print(Fore.YELLOW + Style.BRIGHT + "[progress] Running...", end='', flush=True)
+            print(Fore.CYAN + Style.BRIGHT + "[progress] Running...", end='', flush=True)
             result = subprocess.run(command, check=True, capture_output=True, text=True)
 
         duration = datetime.now() - start
@@ -569,24 +570,24 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
             "output": result.stdout
         })
 
-        print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed successfully in {entry['duration']}")
-        logger.info(f"{label} completed successfully")
+        print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed successfully in {entry['duration']}s")
+        logger.info(Fore.MAGENTA + Style.BRIGHT + f"{label} completed successfully")
         return True
 
     except subprocess.CalledProcessError as e:
         duration = datetime.now() - start
         entry.update({
-            "duration": str(duration).split(".")[0],
+            "duration": str(duration).split(":")[2],
             "error": e.stderr
         })
-        print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}")
+        print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}s")
         logger.error(f"{label} failed: {e.stderr}")
         return False
 
     except ConfigError as e:
         duration = datetime.now() - start
         entry.update({
-            "duration": str(duration).split(".")[0],
+            "duration": str(duration).split(":")[2],
             "error": str(e)
         })
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} configuration error: {e}")
@@ -596,7 +597,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
     except Exception as e:
         duration = datetime.now() - start
         entry.update({
-            "duration": str(duration).split(".")[0],
+            "duration": str(duration).split(":")[2],
             "error": str(e)
         })
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} unexpected error: {e}")
@@ -610,7 +611,7 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
 async def run_step_async(label: str, command: List[str], config: Dict[str, Any]) -> bool:
     """Run a step asynchronously with alive-progress indication"""
     print(Fore.MAGENTA + Style.BRIGHT + f"\n>>> {label} started")
-    logger.info(f"Starting {label} (async)")
+    logger.info(Fore.YELLOW + Style.BRIGHT + f"Starting {label} (async)")
     start = datetime.now()
 
     entry = {
@@ -632,7 +633,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
             with tqdm(
                 total=100,
                 bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                desc=f"{Fore.WHITE}{Style.BRIGHT}[progress] {label}",
+                desc=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
                 ncols=80
             ) as pbar:
                 # Start the subprocess
@@ -644,14 +645,17 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
                 
                 # Simulate progress while process is running
                 while proc.returncode is None:
-                    # Update progress in 5% increments
-                    if pbar.n < 95:  # Don't go to 100% until done
+                    # Don't go to 100% until done
+                    if pbar.n < 95:
+                        # Update progress in 5% increments
                         pbar.update(5)
-                    await asyncio.sleep(0.1)  # Update interval
+                    # Update interval
+                    await asyncio.sleep(0.1)
                 
                 # Get final output
                 stdout, stderr = await proc.communicate()
-                pbar.update(100 - pbar.n)  # Complete to 100%
+                # Complete to 100%
+                pbar.update(100 - pbar.n)
 
             # with alive_bar(
             #     manual=False,
@@ -674,7 +678,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
             #     stdout, stderr = await proc.communicate()
 
         except ImportError:
-            print(Fore.YELLOW + Style.BRIGHT + f"[progress] {label} running...", end='', flush=True)
+            print(Fore.CYAN + Style.BRIGHT + f"[progress] {label} running...", end='', flush=True)
             proc = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.PIPE,
@@ -683,40 +687,40 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
             stdout, stderr = await proc.communicate()
 
         duration = datetime.now() - start
-        entry["duration"] = str(duration).split(".")[0]
+        entry["duration"] = str(duration).split(":")[2]
 
         if proc.returncode == 0:
             entry.update({
                 "status": "SUCCESS",
                 "output": stdout.decode()
             })
-            print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed in {entry['duration']}")
-            logger.info(f"{label} (async) completed successfully")
+            print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed in {entry['duration']}s")
+            logger.info(Fore.MAGENTA + Style.BRIGHT + f"{label} (async) completed successfully")
             return True
         else:
             entry["error"] = stderr.decode()
-            print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}")
-            logger.error(f"{label} (async) failed: {entry['error']}")
+            print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}s")
+            logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) failed: {entry['error']}")
             return False
 
     except ConfigError as e:
         duration = datetime.now() - start
         entry.update({
-            "duration": str(duration).split(".")[0],
+            "duration": str(duration).split(":")[2],
             "error": str(e)
         })
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} configuration error: {e}")
-        logger.error(f"{label} (async) configuration error: {e}")
+        logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) configuration error: {e}")
         return False
 
     except Exception as e:
         duration = datetime.now() - start
         entry.update({
-            "duration": str(duration).split(".")[0],
+            "duration": str(duration).split(":")[2],
             "error": str(e)
         })
         print(Fore.RED + Style.BRIGHT + f"\r[error] {label} unexpected error: {e}")
-        logger.error(f"{label} (async) unexpected error: {str(e)}")
+        logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) unexpected error: {str(e)}")
         traceback.print_exc()
         return False
 
@@ -725,8 +729,8 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
 
 async def run_all_parallel(config: Dict[str, Any]) -> None:
     """Run all steps in parallel"""
-    print(Fore.CYAN + "\n[INFO] Running all steps concurrently...\n")
-    print(Fore.YELLOW + "This may take a few minutes depending on your system and model size.\n")
+    print(Fore.CYAN + Style.BRIGHT + "\n[INFO] Running all steps in parallel...\n")
+    print(Fore.YELLOW + Style.BRIGHT + "This may take a few minutes depending on your system and model size.\n")
     
     config = load_config()
     config['model_path'] = config.get('model_path', DEFAULT_CONFIG['model_path'])
@@ -871,6 +875,7 @@ def show_config(edit_mode: bool = False) -> None:
                 box=box.ROUNDED,
                 header_style="bold magenta",
                 title_style="bold yellow",
+                title_justify="left",
                 show_header=True,
                 highlight=edit_mode
             )
@@ -997,14 +1002,15 @@ def cleanup_old_results() -> None:
                     # Create rich table for available results
                     console = Console()
                     table = Table(
-                        title="[bold]Available Results Summary[/bold]",
+                        title="\n[bold]Available Results Summary[/bold]",
                         box=box.ROUNDED,
                         header_style="bold blue",
+                        title_justify="left",
                         title_style="bold green"
                     )
                     
-                    table.add_column("Metric", style="cyan", width=25)
-                    table.add_column("Value", style="magenta")
+                    table.add_column("Metric", style="bold cyan", width=25)
+                    table.add_column("Value", style="bold magenta")
                     
                     table.add_row("Total Entries", f"[bold]{len(history)}")
                     table.add_row("Oldest Entry", 
@@ -1016,12 +1022,13 @@ def cleanup_old_results() -> None:
                     else:
                         table.add_row("Last Cleanup", "[dim]No cleanup records found")
                     
+                    console.clear()
                     console.print(table)
         
         # Get number of days from user
         days_input = input(
             Fore.WHITE + Style.BRIGHT + 
-            f"\nEnter number of days to keep (default {default_days}): "
+            f"\nEnter number of days to keep " + Fore.YELLOW + Style.BRIGHT + f"(default {default_days}): "
         ).strip()
         
         try:
@@ -1073,15 +1080,16 @@ def cleanup_old_results() -> None:
             # Create rich preview table
             console = Console()
             preview_table = Table(
-                title=f"[bold]Cleanup Preview (Keeping last {days_to_keep} days)[/bold]",
+                title=f"\n[bold]Cleanup Preview (Keeping last {days_to_keep} days)[/bold]",
                 box=box.ROUNDED,
                 header_style="bold yellow",
+                title_justify="left",
                 title_style="bold red"
             )
             
-            preview_table.add_column("Type", style="cyan")
-            preview_table.add_column("Count", style="magenta", justify="right")
-            preview_table.add_column("Details", style="dim")
+            preview_table.add_column("Type", style="bold cyan")
+            preview_table.add_column("Count", style="bold magenta", justify="center")
+            preview_table.add_column("Details", style="bold dim")
             
             preview_table.add_row(
                 "History Entries", 
@@ -1097,16 +1105,17 @@ def cleanup_old_results() -> None:
             # Add sample of entries to be removed
             if removable_entries:
                 sample_table = Table(
-                    title="[dim]Sample of entries to be removed",
+                    title="\n[bold dim]Sample of entries to be removed",
                     box=box.SIMPLE,
                     show_header=True,
                     show_lines=False
                 )
-                sample_table.add_column("Label", style="cyan")
-                sample_table.add_column("Timestamp", style="magenta")
-                sample_table.add_column("Status", style="red")
+                sample_table.add_column("Label", style="bold cyan")
+                sample_table.add_column("Timestamp", style="bold magenta")
+                sample_table.add_column("Status", style="bold red")
                 
-                for entry in removable_entries[:3]:  # Show first 3 as sample
+                # Show first 3 as sample
+                for entry in removable_entries[:3]:
                     sample_table.add_row(
                         entry['label'],
                         entry['timestamp'],
@@ -1124,9 +1133,9 @@ def cleanup_old_results() -> None:
             console.print(preview_table)
             
             # Get confirmation
-            confirm = input(Fore.WHITE + Style.BRIGHT + "\nProceed with cleanup? (y/n): ").strip().lower()
+            confirm = input(Fore.WHITE + Style.BRIGHT + "\nProceed with cleanup? (y/N): ").strip().lower()
             if confirm != 'y':
-                print(Fore.YELLOW + "Cleanup canceled")
+                print(Fore.RED + Style.BRIGHT + "\nCleanup canceled")
                 return
         
         # Log cleanup attempt
@@ -1135,9 +1144,11 @@ def cleanup_old_results() -> None:
             "days_to_keep": days_to_keep,
             "action": "started"
         }
-        logger.info(f"Cleanup started: {json.dumps(cleanup_log)}")
+        json.dumps(cleanup_log)
+        #logger.info(f"Cleanup started: {json.dumps(cleanup_log)}")
+        logger.info(Fore.YELLOW + Style.BRIGHT + "Cleanup started...")
         
-        # Actual cleanup process (same as before)
+        # Actual cleanup process
         if HISTORY_PATH.exists():
             with open(HISTORY_PATH) as f:
                 history = json.load(f)
@@ -1196,18 +1207,21 @@ def cleanup_old_results() -> None:
             "removed_reports": removed_reports,
             "status": "success"
         })
-        logger.info(f"Cleanup completed: {json.dumps(cleanup_log)}")
+        #logger.info(f"Cleanup completed: {json.dumps(cleanup_log)}")
+        json.dumps(cleanup_log)
+        logger.info(Fore.GREEN + Style.BRIGHT + "Cleanup completed.")
         
         # Show results in rich table
         result_table = Table(
-            title="[bold green]Cleanup Results[/bold green]",
+            title="\n[bold green]Cleanup Results[/bold green]",
             box=box.ROUNDED,
+            title_justify="left",
             header_style="bold blue"
         )
         
-        result_table.add_column("Item", style="cyan")
-        result_table.add_column("Removed", style="magenta", justify="right")
-        result_table.add_column("Retained", style="green", justify="right")
+        result_table.add_column("Item", style="bold cyan")
+        result_table.add_column("Removed", style="bold magenta", justify="left")
+        result_table.add_column("Retained", style="bold green", justify="left")
         
         if HISTORY_PATH.exists():
             with open(HISTORY_PATH) as f:
@@ -1235,44 +1249,52 @@ def cleanup_old_results() -> None:
         console.print(result_table)
         
     except Exception as e:
-        logger.error(f"Cleanup failed: {str(e)}")
+        logger.error(f"\nCleanup failed: {str(e)}")
         error_table = Table(
-            title="[bold red]Cleanup Error[/bold red]",
+            title="\n[bold red]Cleanup Error[/bold red]",
             box=box.ROUNDED,
             header_style="bold white",
             title_style="bold red"
         )
-        error_table.add_column("Error Details", style="red")
+        error_table.add_column("Error Details", style="bold red")
         error_table.add_row(str(e))
         
         console = Console()
         console.print(error_table)
-        print(Fore.RED + "\nCheck logs for more details.")
+        print(Fore.RED + Style.BRIGHT + "\nCheck logs for more details.")
 
 def main() -> None:
     """Main function"""
+    print("\033c", end="")
     config = load_config()
-    banner()
+    #banner()
     
     while True:
+        
+        banner()
         print_menu()
         choice = input(Fore.WHITE + Style.BRIGHT + "\nSelect an option (1–12): ").strip()
         
         if choice == "1":
+            print("\033c", end="")
             run_step_sync("Input Validation", [str(VENV_PYTHON), "check.py"], config)
         elif choice == "2":
+            print("\033c", end="")
             cmd = substitute_command([str(VENV_PYTHON), "check2.py", "--model", "{model_path}"], config)
             run_step_sync("Output Validation", cmd, config)
         elif choice == "3":
+            print("\033c", end="")
             cmd = substitute_command(
                 [str(VENV_PYTHON), "test_onnx_model.py", "--model", "{model_path}", "--validate", "--benchmark"], 
                 config
             )
             run_step_sync("Inference + Evaluation", cmd, config)
         elif choice == "4":
+            print("\033c", end="")
             cmd = substitute_command([str(VENV_PYTHON), "verify.py", "--model", "{model_path}"], config)
             run_step_sync("Quick Sanity Check", cmd, config)
         elif choice == "5":
+            print("\033c", end="")
             print(Fore.YELLOW + "\nRunning all steps sequentially...")
             for step in STEPS:
                 cmd = substitute_command(step["command"], config)
@@ -1285,6 +1307,7 @@ def main() -> None:
                     except Exception as e:
                         logger.error(Fore.RED + Style.BRIGHT + f"Error updating summary: {str(e)}")
         elif choice == "6":
+            print("\033c", end="")
             print(Fore.YELLOW + Style.BRIGHT + "\nRunning all steps concurrently...")
             asyncio.run(run_all_parallel(config))
         elif choice == "7":
