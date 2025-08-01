@@ -2834,10 +2834,6 @@ def configure_model() -> None:
             )
         )
 
-# Initialize configuration at module level
-# config = initialize_config(logger)
-# update_global_config(config)
-
 def interactive_main() -> None:
     """Interactive main function"""
     #banner()
