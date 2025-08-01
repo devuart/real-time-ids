@@ -26,6 +26,8 @@ from rich.table import Table
 from rich import box
 from rich.text import Text
 from rich.panel import Panel
+from rich.columns import Columns
+from copy import deepcopy
 
 # Third-party imports
 import numpy as np
@@ -767,6 +769,7 @@ def log_error_output(stderr: str, use_color: bool):
 
 def display_data_loading_header(filepath: str) -> None:
     """Display data loading header with rich formatting."""
+    console.print("\n")
     console.print(Panel.fit(
         f"[bold green]Data Loading Started[/bold green]\n"
         f"[bold]Source:[/bold] [bold cyan]{filepath}",
@@ -829,12 +832,12 @@ def display_chunk_progress(stats: Dict[str, Any], history: List[Dict[str, Any]] 
         )
 
         # Define columns
-        table.add_column("Chunk #", justify="center", style="cyan", width=8)
-        table.add_column("Processed", justify="right", style="magenta", width=12)
-        table.add_column("Clean Samples", justify="right", width=16)
-        table.add_column("Clean %", justify="right", width=10)
-        table.add_column("Dtype Conv", justify="right", width=10)
-        table.add_column("Failed", justify="right", width=10)
+        table.add_column("Chunk #", justify="left", style="bold cyan", width=8)
+        table.add_column("Processed", justify="left", style="bold magenta", width=12)
+        table.add_column("Clean Samples", justify="left", style="bold white", width=16)
+        table.add_column("Clean %", justify="left", width=10)
+        table.add_column("Dtype Conv", justify="left",  style="bold white", width=10)
+        table.add_column("Failed", justify="left", style="bold red", width=10)
         
         table.add_row(
             str(chunk_stats['total_chunks']),
@@ -859,12 +862,13 @@ def display_data_validation_summary(stats: Dict[str, Any]) -> None:
         box=box.ROUNDED,
         header_style="bold blue",
         title_style="bold yellow",
+        title_justify="left",
         show_lines=True
     )
     
-    table.add_column("Metric", style="cyan", width=35)
-    table.add_column("Count", style="magenta", justify="right")
-    table.add_column("Impact", style="green", justify="right")
+    table.add_column("Metric", style="bold cyan", width=35)
+    table.add_column("Count", style="bold magenta", justify="left")
+    table.add_column("Impact", style="bold green", justify="left")
     
     # Helper function for consistent row styling
     def add_row(metric: str, value: Any, impact: str = "", style: str = ""):
@@ -906,12 +910,13 @@ def display_class_distribution(class_counts: pd.Series) -> None:
         box=box.ROUNDED,
         header_style="bold blue",
         title_style="bold yellow",
+        title_justify="left",
         show_lines=True
     )
     
-    table.add_column("Class", style="cyan", width=15)
-    table.add_column("Count", style="magenta", justify="right")
-    table.add_column("Percentage", style="green", justify="right")
+    table.add_column("Class", style="bold cyan")
+    table.add_column("Count", style="bold magenta", justify="left")
+    table.add_column("Percentage", style="bold green", justify="left")
     
     total_samples = class_counts.sum()
     for class_label, count in class_counts.items():
@@ -933,7 +938,7 @@ def display_imbalance_analysis(imbalance_ratio: float, threshold: float) -> None
         box=box.SIMPLE,
         show_header=False,
         show_lines=False,
-        padding=(0, 2)
+        padding=(0, 1)
     )
     ratio_table.add_column("Metric", style="bold")
     ratio_table.add_column("Value", style=status_style)
@@ -956,13 +961,14 @@ def display_smote_results(original_counts: pd.Series, new_counts: pd.Series) -> 
         box=box.ROUNDED,
         header_style="bold blue",
         title_style="bold yellow",
+        title_justify="left",
         show_lines=True
     )
     
-    table.add_column("Class", style="cyan", width=15)
-    table.add_column("Original", style="magenta", justify="right")
-    table.add_column("New Count", style="green", justify="right")
-    table.add_column("Change", justify="right")
+    table.add_column("Class", style="bold cyan", width=15)
+    table.add_column("Original", style="bold magenta", justify="left")
+    table.add_column("New Count", style="bold green", justify="left")
+    table.add_column("Change", justify="left")
     
     for class_label in original_counts.index:
         orig = original_counts[class_label]
@@ -983,12 +989,12 @@ def display_smote_results(original_counts: pd.Series, new_counts: pd.Series) -> 
         box=box.SIMPLE,
         show_header=False,
         show_lines=False,
-        padding=(0, 2)
+        padding=(0, 1)
     )
     summary_table.add_column("Metric", style="bold")
-    summary_table.add_column("Original", style="magenta", justify="right")
-    summary_table.add_column("New", style="green", justify="right")
-    summary_table.add_column("Change", justify="right")
+    summary_table.add_column("Original", style="bold magenta", justify="left")
+    summary_table.add_column("New", style="bold green", justify="left")
+    summary_table.add_column("Change", justify="left", style="bold")
     
     orig_total = original_counts.sum()
     new_total = new_counts.sum()
@@ -1235,8 +1241,8 @@ def load_and_clean_data(
             header_style="bold blue",
             title_style="bold yellow",
             title_justify="left",
-            show_lines=True,
-            padding=(0, 2)
+            show_lines=True
+            #padding=(0, 2)
         )
         
         dtype_table.add_column("Column", style="cyan")
@@ -1417,6 +1423,7 @@ def handle_class_imbalance(
     green = Fore.GREEN if use_color else ""
     reset = Style.RESET_ALL if use_color else ""
     
+    console.print("\n")
     console.print(Panel.fit(
         "[bold green]Class Imbalance Analysis[/bold green]",
         border_style="blue"
@@ -1445,6 +1452,7 @@ def handle_class_imbalance(
     imbalance_ratio = max_samples / min_samples
     
     display_imbalance_analysis(imbalance_ratio, imbalance_threshold)
+    console.print("\n")
     
     # Handle imbalance if exceeds threshold
     if imbalance_ratio > imbalance_threshold:
@@ -1715,7 +1723,7 @@ def prepare_dataloaders(
         
         # Handle class imbalance
         class_counts = torch.bincount(y_tensor[train_idx])
-        logger.info(f"Initial class distribution: {class_counts.tolist()}")
+        logger.info(Fore.CYAN + Style.BRIGHT + "Initial class distribution:" + Fore.YELLOW + Style.BRIGHT + f"{class_counts.tolist()}")
         
         if torch.min(class_counts) < 1000:  # Threshold for extreme imbalance
             logger.warning("Extreme class imbalance detected, applying SMOTE...")
@@ -1742,9 +1750,9 @@ def prepare_dataloaders(
                 val_idx = np.arange(train_size, len(X_tensor))
                 
                 class_counts = torch.bincount(y_tensor[train_idx])
-                logger.info(f"Class distribution after SMOTE: {class_counts.tolist()}")
+                logger.info(Fore.WHITE + Style.BRIGHT + "Class distribution after SMOTE:" + Fore.YELLOW + Style.BRIGHT + f"{class_counts.tolist()}")
             except Exception as e:
-                logger.error(f"SMOTE failed: {str(e)}")
+                logger.error(Fore.RED + Style.BRIGHT + f"SMOTE failed: {str(e)}")
                 raise RuntimeError("Failed to balance classes") from e
         
         # Create weighted sampler
@@ -1781,7 +1789,7 @@ def prepare_dataloaders(
             pin_memory=pin_memory
         )
         
-        logger.info(f"Prepared dataloaders with {len(train_dataset)} training and {len(val_dataset)} validation samples")
+        logger.info(Fore.MAGENTA + Style.BRIGHT + f"Prepared dataloaders with " + Fore.YELLOW + Style.BRIGHT + f"{len(train_dataset)}" + Fore.MAGENTA + Style.BRIGHT + " training and " + Fore.YELLOW + Style.BRIGHT + f"{len(val_dataset)}" + Fore.MAGENTA + Style.BRIGHT + " validation samples")
         return train_loader, val_loader, X.shape[1], len(class_counts)
         
     except Exception as e:
@@ -1970,7 +1978,8 @@ def validate(
 
 def visualize_data_distribution(
     df: pd.DataFrame,
-    log_dir: Path,
+    #log_dir: Path,
+    filename: Path,
     max_samples: int = 10000,
     random_state: int = 42
 ) -> Optional[Path]:
@@ -1990,7 +1999,7 @@ def visualize_data_distribution(
         ValueError: If input data is invalid
     """
     try:
-        logger.info(Fore.YELLOW + "=== Creating PCA visualization of data distribution ===")
+        logger.info(Fore.YELLOW + Style.BRIGHT + "\n=== Creating PCA visualization of data distribution ===")
         if not isinstance(df, pd.DataFrame) or df.empty:
             raise ValueError(Fore.RED + "Input DataFrame is empty or invalid")
             
@@ -2024,20 +2033,20 @@ def visualize_data_distribution(
         plt.grid(alpha=0.3)
         
         # Save plot
-        log_dir = Path(log_dir)
-        if log_dir.suffix == '.log':
-            log_dir = log_dir.parent
-        log_dir.mkdir(parents=True, exist_ok=True)
+        #plot_dir = Path(filename).absolute()
+        plot_dir = Path("figures")
+        plot_dir.parent.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        plot_path = log_dir / f"data_pca_distribution_{timestamp}.png"
+        plot_file = f"data_pca_distribution_{timestamp}.png"
+        plot_path = plot_dir / plot_file
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         plt.close()
         
-        logger.info(Fore.GREEN + f"Saved PCA visualization of data distribution {plot_path}")
+        logger.info(Fore.GREEN + Style.BRIGHT + "Saved PCA visualization of data distribution " + Fore.CYAN +Style.BRIGHT + f"{plot_path}")
         return plot_path
         
     except Exception as e:
-        logger.warning(Fore.RED + f"Could not create PCA visualization: {str(e)}")
+        logger.warning(Fore.RED + Style.BRIGHT + f"Could not create PCA visualization: {str(e)}")
         return None
 
 def save_checkpoint(
@@ -2136,6 +2145,18 @@ def load_checkpoint(
     Raises:
         ValueError: If checkpoint is invalid
     """
+    # Define default metrics
+    default_metrics = {
+        'epoch': -1,
+        'val_loss': float('inf'),
+        'val_acc': 0.0,
+        'val_auc': 0.0,
+        'preds': np.array([]),
+        'labels': np.array([]),
+        'probs': np.array([])
+    }
+    returns = (None, None, None, default_metrics, {})
+
     try:
         # Create full path in CHECKPOINT_DIR
         full_path = Path(filename).absolute()
@@ -2151,11 +2172,25 @@ def load_checkpoint(
                 return None, Fore.RED + "Checksum verification failed"
         
         # Load with safe mode first
-        try:
-            checkpoint = torch.load(full_path, map_location=device, weights_only=True)
-        except:
-            # Fallback to unsafe load if needed
-            checkpoint = torch.load(full_path, map_location=device)
+        checkpoint = torch.load(filename, weights_only=False)
+        if model:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # Convert lists back to numpy arrays
+        metrics = checkpoint.get('metrics', {})
+        for k, v in metrics.items():
+            if isinstance(v, list):
+                metrics[k] = np.array(v)
+        
+        return (
+            checkpoint.get('model_state_dict'),
+            checkpoint.get('optimizer_state_dict'),
+            checkpoint.get('scheduler_state_dict'),
+            metrics,
+            checkpoint.get('training_meta', {})
+        )
+    except Exception as e:
+        logger.warning(f"Safe load failed ({str(e)}), trying fallback methods...")
         
         # Validate structure
         required_keys = {'epoch', 'model_state_dict', 'metrics'}
@@ -2185,42 +2220,52 @@ def save_training_artifacts(
     metrics: Dict[str, Any],
     config: Dict[str, Any],
     class_names: Optional[List[str]] = None,
-    feature_names: Optional[List[str]] = None
-) -> bool:
+    feature_names: Optional[List[str]] = None,
+    run_figure_dir: Path = FIGURE_DIR
+) -> Dict[str, Path]:
     """
-    Save all training artifacts including model, metrics, and configuration.
+    Save all training artifacts including model, metrics, configuration, and visualizations.
     
     Args:
         model: Trained model
-        metrics: Evaluation metrics
+        metrics: Evaluation metrics (must contain 'labels' and 'preds' for confusion matrix)
         config: Training configuration
         class_names: Optional list of class names
         feature_names: Optional list of feature names
+        run_figure_dir: Directory to save figures
         
     Returns:
-        True if successful, False otherwise
+        Dictionary of saved artifact paths, or empty dict if failed
     """
+    saved_artifacts = {}
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    
     try:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        
-        # 1. Save model (in MODELS_DIR)
+        # 1. Ensure directories exist
+        for dir_path in [MODEL_DIR, METRICS_DIR, CONFIG_DIR, INFO_DIR, ARTIFACTS_DIR, run_figure_dir]:
+            dir_path.mkdir(parents=True, exist_ok=True)
+
+        # 2. Save model state dict
         model_path = MODEL_DIR / f"ids_model_{timestamp}.pth"
         torch.save(model.state_dict(), model_path)
-        
-        # 2. Save metrics (in METRICS_DIR)
+        saved_artifacts['model'] = model_path
+
+        # 3. Save metrics (convert numpy arrays to lists)
         metrics_path = METRICS_DIR / f"ids_model_metrics_{timestamp}.json"
         with open(metrics_path, 'w') as f:
             json.dump({
                 k: v.tolist() if isinstance(v, np.ndarray) else v
                 for k, v in metrics.items()
             }, f, indent=2)
-        
-        # 3. Save configuration (in CONFIG_DIR)
+        saved_artifacts['metrics'] = metrics_path
+
+        # 4. Save configuration
         config_path = CONFIG_DIR / f"ids_model_config_{timestamp}.json"
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
-        
-        # 4. Save additional info (in INFO_DIR)
+        saved_artifacts['config'] = config_path
+
+        # 5. Save additional info
         info = {
             'timestamp': timestamp,
             'class_names': class_names,
@@ -2234,28 +2279,116 @@ def save_training_artifacts(
         info_path = INFO_DIR / f"ids_model_info_{timestamp}.json"
         with open(info_path, 'w') as f:
             json.dump(info, f, indent=2)
-        
-        # 5. Create archive of all files in ARTIFACTS_DIR
-        archive_file = f"ids_model_artifacts_{timestamp}.tar.gz"
-        archive_path = ARTIFACTS_DIR / archive_file
+        saved_artifacts['info'] = info_path
+
+        # 6. Save confusion matrix if labels and predictions exist
+        if 'labels' in metrics and 'preds' in metrics:
+            try:
+                cm = confusion_matrix(metrics['labels'], metrics['preds'])
+                plt.figure(figsize=(10, 8))
+                
+                # Use class names if available
+                if class_names:
+                    tick_labels = class_names
+                else:
+                    tick_labels = sorted(set(metrics['labels']))
+                
+                sns.heatmap(
+                    cm, 
+                    annot=True, 
+                    fmt='d', 
+                    cmap='Blues',
+                    xticklabels=tick_labels,
+                    yticklabels=tick_labels
+                )
+                plt.title("Confusion Matrix")
+                plt.xlabel("Predicted")
+                plt.ylabel("True")
+                
+                cm_path = run_figure_dir / f"confusion_matrix_{timestamp}.png"
+                plt.savefig(cm_path, bbox_inches='tight', dpi=300)
+                plt.close()
+                saved_artifacts['confusion_matrix'] = cm_path
+            except Exception as cm_error:
+                logger.warning(f"Failed to save confusion matrix: {str(cm_error)}")
+
+        # 7. Create archive of all artifacts
+        archive_path = ARTIFACTS_DIR / f"ids_model_artifacts_{timestamp}.tar.gz"
         with tarfile.open(archive_path, "w:gz") as tar:
             for file in [model_path, metrics_path, config_path, info_path]:
-                tar.add(file, arcname=file.name)
+                if file.exists():
+                    tar.add(file, arcname=file.name)
+            if 'confusion_matrix' in saved_artifacts:
+                tar.add(saved_artifacts['confusion_matrix'], arcname=saved_artifacts['confusion_matrix'].name)
         
-        saved_artifacts = {
-            'model': model_path,
-            'metrics': metrics_path,
-            'config': config_path,
-            'info': info_path,
-            'archive': archive_path
-        }
-        # Log saved artifacts
-        logger.info(Fore.GREEN + f"Saved training artifacts: {saved_artifacts}")
-        return True
+        saved_artifacts['archive'] = archive_path
+
+        # Log success
+        if saved_artifacts:
+            # Create the artifacts table
+            artifacts_table = Table(
+                title="[bold green]Training Artifacts Saved Successfully[/bold green]",
+                box=box.ROUNDED,
+                header_style="bold blue",
+                title_style="bold green",
+                title_justify="left",
+                show_lines=True
+            )
+            
+            artifacts_table.add_column("Artifact Type", style="bold cyan", width=20)
+            artifacts_table.add_column("File Path", style="bold magenta")
+            
+            # Add rows for each artifact
+            for artifact_type, path in saved_artifacts.items():
+                # Format the path for better display
+                display_path = str(path).replace("\\", "/")  # Normalize path
+                if "C:/Users" in display_path:
+                    display_path = display_path.split("backend/")[-1]  # Shorten path
+                
+                artifacts_table.add_row(
+                    artifact_type.replace("_", " ").title(),
+                    display_path
+                )
+            
+            # Print the table
+            console.print()
+            console.print(artifacts_table)
+            
+            # Additional success message
+            success_panel = Panel(
+                Text(f"All artifacts archived at: {saved_artifacts['archive']}", style="bold green"),
+                border_style="green",
+                expand=False
+            )
+            console.print(success_panel)
         
+        return saved_artifacts
+
     except Exception as e:
-        logger.error(f"Failed to save training artifacts: {str(e)}")
-        return False
+        # Create error table
+        error_table = Table(
+            title="[bold red]Artifact Saving Failed[/bold red]",
+            box=box.ROUNDED,
+            header_style="bold red",
+            title_style="bold red",
+            show_lines=True
+        )
+        error_table.add_column("Error Type", style="cyan")
+        error_table.add_column("Details", style="magenta")
+        error_table.add_row(type(e).__name__, str(e))
+        
+        console.print()
+        console.print(error_table)
+        
+        # Clean up any partial saves
+        for path in saved_artifacts.values():
+            try:
+                if path.exists():
+                    path.unlink()
+            except:
+                pass
+        
+        return {}
 
 def banner() -> None:
     """Print banner"""
@@ -2280,95 +2413,430 @@ def sanitize_input(input_str: str) -> str:
     """Sanitize user input to prevent command injection"""
     return re.sub(r'[;&|$]', '', input_str).strip()
 
+def update_config(key_path: str, value: Any, config_path: Path, logger: logging.Logger) -> None:
+    """Update a specific configuration value and track changes."""
+    try:
+        # Load existing config
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        # Update modification timestamp
+        config_data['metadata']['modified'] = datetime.now().isoformat()
+        
+        # Update the specific value
+        keys = key_path.split('.')
+        current_level = config_data['config']
+        
+        for key in keys[:-1]:
+            if key not in current_level:
+                current_level[key] = {}
+            current_level = current_level[key]
+        
+        # Log the change
+        old_value = current_level.get(keys[-1], '<not set>')
+        logger.info(f"Updating config: {key_path} from {old_value} to {value}")
+        
+        current_level[keys[-1]] = value
+        
+        # Save updated config
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=4)
+        
+        logger.info(f"Configuration updated in: {config_path}")
+        
+    except Exception as e:
+        logger.error(f"Failed to update configuration: {str(e)}")
+        raise
+
 def get_current_config() -> Dict[str, Any]:
-    """Get current configuration"""
+    """Get current configuration with all constants."""
     return {
-        'batch_size': DEFAULT_BATCH_SIZE,
-        'epochs': DEFAULT_EPOCHS,
-        'learning_rate': LEARNING_RATE,
-        'weight_decay': WEIGHT_DECAY,
-        'gradient_clip': GRADIENT_CLIP,
-        'mixed_precision': MIXED_PRECISION,
-        'early_stopping': EARLY_STOPPING_PATIENCE,
-        'model_architecture': {
-            'hidden_layers': HIDDEN_LAYER_SIZES,
-            'dropout_rates': DROPOUT_RATES,
-            'activation': ACTIVATION,
-            'use_batch_norm': USE_BATCH_NORM
+        'training': {
+            'batch_size': DEFAULT_BATCH_SIZE,
+            'epochs': DEFAULT_EPOCHS,
+            'learning_rate': LEARNING_RATE,
+            'weight_decay': WEIGHT_DECAY,
+            'gradient_clip': GRADIENT_CLIP,
+            'mixed_precision': MIXED_PRECISION,
+            'early_stopping': EARLY_STOPPING_PATIENCE,
+            'gradient_accumulation_steps': GRADIENT_ACCUMULATION_STEPS
+        },
+        'model': {
+            'architecture': {
+                'hidden_layers': HIDDEN_LAYER_SIZES,
+                'dropout_rates': DROPOUT_RATES,
+                'activation': ACTIVATION,
+                'activation_param': ACTIVATION_PARAM,
+                'use_batch_norm': USE_BATCH_NORM,
+                'use_layer_norm': USE_LAYER_NORM
+            }
+        },
+        'system': {
+            'seed': 42,
+            'logging_level': 'INFO'
         }
     }
 
-def show_config() -> None:
-    """Show current configuration"""
-    config = get_current_config()
-    print(Fore.CYAN + "\nCurrent Configuration:")
-    print(Fore.YELLOW + "\nTraining Parameters:")
-    print(f"  Batch Size: {config['batch_size']}")
-    print(f"  Epochs: {config['epochs']}")
-    print(f"  Learning Rate: {config['learning_rate']}")
-    print(f"  Weight Decay: {config['weight_decay']}")
-    print(f"  Gradient Clip: {config['gradient_clip']}")
-    print(f"  Mixed Precision: {'Enabled' if config['mixed_precision'] else 'Disabled'}")
-    print(f"  Early Stopping Patience: {config['early_stopping']}")
+def save_config(config: Dict[str, Any], config_path: Path, logger: logging.Logger) -> None:
+    """Save configuration to JSON file with metadata and versioning."""
+    try:
+        from datetime import datetime
+        # Add metadata
+        config_with_meta = {
+            "metadata": {
+                "created": datetime.now().isoformat(),
+                "modified": datetime.now().isoformat(),
+                "version": "1.0",
+                "system": {
+                    "python_version": platform.python_version(),
+                    "hostname": platform.node(),
+                    "os": platform.system()
+                }
+            },
+            "config": config
+        }
+        
+        # Create backup if file exists
+        if config_path.exists():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = config_path.parent / f"{config_path.stem}_backup_{timestamp}{config_path.suffix}"
+            shutil.copy(config_path, backup_path)
+            logger.info(f"Created backup of config at: {backup_path}")
+        
+        # Save new config
+        with open(config_path, 'w') as f:
+            json.dump(config_with_meta, f, indent=4)
+        logger.info(f"Configuration saved to: {config_path}")
+        
+    except Exception as e:
+        logger.error(f"Failed to save configuration: {str(e)}")
+        raise
+
+def load_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
+    """Load configuration from JSON file with error handling."""
+    try:
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        logger.info(f"Loaded configuration from: {config_path}")
+        return config_data.get('config', {})
     
-    print(Fore.YELLOW + "\nModel Architecture:")
-    print(f"  Hidden Layers: {config['model_architecture']['hidden_layers']}")
-    print(f"  Dropout Rates: {config['model_architecture']['dropout_rates']}")
-    print(f"  Activation: {config['model_architecture']['activation']}")
-    print(f"  Batch Normalization: {'Enabled' if config['model_architecture']['use_batch_norm'] else 'Disabled'}")
+    except FileNotFoundError:
+        logger.warning(f"Configuration file not found: {config_path}")
+        return {}
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON in configuration file: {config_path}")
+        return {}
+    except Exception as e:
+        logger.error(f"Failed to load configuration: {str(e)}")
+        return {}
+
+def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively update a dictionary with another dictionary."""
+    for key, value in update.items():
+        if isinstance(value, dict) and key in original:
+            original[key] = deep_update(original[key], value)
+        else:
+            original[key] = value
+    return original
+
+def initialize_config(logger: logging.Logger) -> Dict[str, Any]:
+    """Initialize or load configuration with version control."""
+    config_path = CONFIG_DIR / "train_model_config.json"
+    
+    # Try loading existing config
+    loaded_config = load_config(config_path, logger)
+    
+    if loaded_config:
+        # Validate loaded config against current defaults
+        current_config = get_current_config()
+        validated_config = deep_update(current_config, loaded_config)
+        save_config(validated_config, config_path, logger)
+        return validated_config
+    else:
+        # Create new config with defaults
+        current_config = get_current_config()
+        save_config(current_config, config_path, logger)
+        return current_config
+
+def update_global_config(config: Dict[str, Any]) -> None:
+    """Update global variables from configuration."""
+    global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, LEARNING_RATE, WEIGHT_DECAY
+    global GRADIENT_CLIP, MIXED_PRECISION, EARLY_STOPPING_PATIENCE
+    global HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
+    global USE_BATCH_NORM, USE_LAYER_NORM
+    
+    # Update training parameters
+    training = config.get('training', {})
+    DEFAULT_BATCH_SIZE = training.get('batch_size', DEFAULT_BATCH_SIZE)
+    DEFAULT_EPOCHS = training.get('epochs', DEFAULT_EPOCHS)
+    LEARNING_RATE = training.get('learning_rate', LEARNING_RATE)
+    WEIGHT_DECAY = training.get('weight_decay', WEIGHT_DECAY)
+    GRADIENT_CLIP = training.get('gradient_clip', GRADIENT_CLIP)
+    MIXED_PRECISION = training.get('mixed_precision', MIXED_PRECISION)
+    EARLY_STOPPING_PATIENCE = training.get('early_stopping', EARLY_STOPPING_PATIENCE)
+    
+    # Update model architecture
+    model_arch = config.get('model', {}).get('architecture', {})
+    HIDDEN_LAYER_SIZES = model_arch.get('hidden_layers', HIDDEN_LAYER_SIZES)
+    DROPOUT_RATES = model_arch.get('dropout_rates', DROPOUT_RATES)
+    ACTIVATION = model_arch.get('activation', ACTIVATION)
+    ACTIVATION_PARAM = model_arch.get('activation_param', ACTIVATION_PARAM)
+    USE_BATCH_NORM = model_arch.get('use_batch_norm', USE_BATCH_NORM)
+    USE_LAYER_NORM = model_arch.get('use_layer_norm', USE_LAYER_NORM)
+
+def show_config() -> None:
+    """Show current configuration with rich formatting as separate distinct tables"""
+    from datetime import datetime
+    config = get_current_config()
+    
+    # Display main configuration panel
+    console.print()
+    console.print(Panel.fit(
+        Text("Current Configuration", justify="center", style="bold blue"),
+        border_style="blue",
+        padding=(0, 1)
+    ))
+    
+    # Training Parameters Table
+    train_table = Table(
+        title="[bold cyan]Training Parameters[/]",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        border_style="blue",
+        show_header=True,
+        show_lines=False,
+        min_width=40
+    )
+    train_table.add_column("Parameter", style="bold yellow", no_wrap=True, justify="left")
+    train_table.add_column("Value", style="bold white", justify="left")
+    
+    train_table.add_row("Batch Size", str(config['training']['batch_size']))
+    train_table.add_row("Epochs", str(config['training']['epochs']))
+    train_table.add_row("Learning Rate", f"{config['training']['learning_rate']:.0e}")
+    train_table.add_row("Weight Decay", f"{config['training']['weight_decay']:.0e}")
+    train_table.add_row("Gradient Clip", str(config['training']['gradient_clip']))
+    train_table.add_row(
+        "Mixed Precision", 
+        Text("[Enabled]", style="bold green") if config['training']['mixed_precision'] 
+        else Text("[Disabled]", style="bold red")
+    )
+    train_table.add_row("Early Stopping", str(config['training']['early_stopping']))
+    
+    # Model Architecture Table
+    model_table = Table(
+        title="[bold cyan]Model Architecture[/]",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        border_style="blue",
+        show_header=True,
+        show_lines=False,
+        min_width=40
+    )
+    model_table.add_column("Parameter", style="bold yellow", no_wrap=True, justify="left")
+    model_table.add_column("Value", style="bold white", justify="left")
+    
+    model_table.add_row(
+        "Hidden Layers", 
+        Text(", ".join(map(str, config['model']['architecture']['hidden_layers'])))
+    )
+    model_table.add_row(
+        "Dropout Rates", 
+        Text(", ".join(map(str, config['model']['architecture']['dropout_rates'])))
+    )
+    model_table.add_row(
+        "Activation", 
+        Text(config['model']['architecture']['activation'])
+    )
+    model_table.add_row(
+        "Batch Norm", 
+        Text("[Enabled]", style="bold green") if config['model']['architecture']['use_batch_norm'] 
+        else Text("[Disabled]", style="bold red")
+    )
+    model_table.add_row(
+        "Layer Norm", 
+        Text("[Enabled]", style="bold green") if config['model']['architecture']['use_layer_norm'] 
+        else Text("[Disabled]", style="bold red")
+    )
+    
+    # Display tables in a grid layout with proper spacing
+    console.print(Panel.fit(train_table, border_style="blue"))
+    # Add spacing between tables
+    console.print()
+    console.print(Panel.fit(model_table, border_style="blue"))
+    
+    # Add config file info
+    config_path = CONFIG_DIR / "train_model_config.json"
+    if config_path.exists():
+        modified_time = datetime.fromtimestamp(config_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        console.print(
+            Panel.fit(
+                Text(f"Config last saved: {modified_time}\nLocation: {config_path}", style="bold dim"),
+                border_style="dim",
+                padding=(0, 1)
+            )
+        )
+    
+    # Add some vertical spacing
+    console.print()
 
 def configure_training() -> None:
-    """Configure training parameters interactively"""
+    """Configure training parameters interactively with rich formatting"""
     global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, LEARNING_RATE, WEIGHT_DECAY
     global GRADIENT_CLIP, MIXED_PRECISION, EARLY_STOPPING_PATIENCE
     
-    print(Fore.CYAN + "\nTraining Configuration")
+    # Create input panel
+    console.print()
+    input_panel = Panel.fit(
+        Text("Enter new values or press Enter to keep current", style="italic"),
+        title="[bold cyan]Training Configuration[/]",
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(input_panel)
     
     try:
-        DEFAULT_BATCH_SIZE = int(input(f"Batch size [{DEFAULT_BATCH_SIZE}]: ") or DEFAULT_BATCH_SIZE)
-        DEFAULT_EPOCHS = int(input(f"Epochs [{DEFAULT_EPOCHS}]: ") or DEFAULT_EPOCHS)
-        LEARNING_RATE = float(input(f"Learning rate [{LEARNING_RATE}]: ") or LEARNING_RATE)
-        WEIGHT_DECAY = float(input(f"Weight decay [{WEIGHT_DECAY}]: ") or WEIGHT_DECAY)
-        GRADIENT_CLIP = float(input(f"Gradient clip [{GRADIENT_CLIP}]: ") or GRADIENT_CLIP)
-        MIXED_PRECISION = input(f"Use mixed precision? (y/n) [{'y' if MIXED_PRECISION else 'n'}]: ").lower() == 'y'
-        EARLY_STOPPING_PATIENCE = int(input(f"Early stopping patience [{EARLY_STOPPING_PATIENCE}]: ") or EARLY_STOPPING_PATIENCE)
+        # Get inputs with current values as defaults
+        DEFAULT_BATCH_SIZE = int(console.input(f"Batch size [[yellow]{DEFAULT_BATCH_SIZE}[/]]: ") or DEFAULT_BATCH_SIZE)
+        DEFAULT_EPOCHS = int(console.input(f"Epochs [[yellow]{DEFAULT_EPOCHS}[/]]: ") or DEFAULT_EPOCHS)
+        LEARNING_RATE = float(console.input(f"Learning rate [[yellow]{LEARNING_RATE}[/]]: ") or LEARNING_RATE)
+        WEIGHT_DECAY = float(console.input(f"Weight decay [[yellow]{WEIGHT_DECAY}[/]]: ") or WEIGHT_DECAY)
+        GRADIENT_CLIP = float(console.input(f"Gradient clip [[yellow]{GRADIENT_CLIP}[/]]: ") or GRADIENT_CLIP)
+        mp_input = console.input(f"Use mixed precision? (y/n) [[yellow]{'y' if MIXED_PRECISION else 'n'}[/]]: ").lower()
+        MIXED_PRECISION = mp_input == 'y' if mp_input else MIXED_PRECISION
+        EARLY_STOPPING_PATIENCE = int(console.input(
+            f"Early stopping patience [[yellow]{EARLY_STOPPING_PATIENCE}[/]]: "
+        ) or EARLY_STOPPING_PATIENCE)
         
-        print(Fore.GREEN + "Training configuration updated successfully")
+        # Update config file
+        config = get_current_config()
+        config['training'].update({
+            'batch_size': DEFAULT_BATCH_SIZE,
+            'epochs': DEFAULT_EPOCHS,
+            'learning_rate': LEARNING_RATE,
+            'weight_decay': WEIGHT_DECAY,
+            'gradient_clip': GRADIENT_CLIP,
+            'mixed_precision': MIXED_PRECISION,
+            'early_stopping': EARLY_STOPPING_PATIENCE
+        })
+        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+        
+        # Show success message
+        console.print(
+            Panel.fit(
+                Text("Training configuration updated successfully", style="bold green"),
+                border_style="green",
+                padding=(1, 2)
+            )
+        )
     except ValueError as e:
-        print(Fore.RED + f"Invalid input: {str(e)}")
+        console.print(
+            Panel.fit(
+                Text(f"Invalid input: {str(e)}", style="bold red"),
+                title="Error",
+                border_style="red",
+                padding=(1, 2)
+            )
+        )
 
 def configure_model() -> None:
-    """Configure model architecture interactively"""
-    global HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, USE_BATCH_NORM
+    """Configure model architecture interactively with rich formatting"""
+    global HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
+    global USE_BATCH_NORM, USE_LAYER_NORM
     
-    print(Fore.CYAN + "\nModel Architecture Configuration")
+    # Create input panel
+    console.print()
+    input_panel = Panel.fit(
+        Text("Enter new values or press Enter to keep current", style="italic"),
+        title="[bold cyan]Model Architecture Configuration[/]",
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(input_panel)
     
     try:
         # Get hidden layer sizes
-        layers_input = input(f"Hidden layer sizes (comma separated) [{', '.join(map(str, HIDDEN_LAYER_SIZES))}]: ")
+        layers_input = console.input(
+            f"Hidden layer sizes (comma separated) [[yellow]{', '.join(map(str, HIDDEN_LAYER_SIZES))}[/]]: "
+        )
         if layers_input:
             HIDDEN_LAYER_SIZES = [int(x.strip()) for x in layers_input.split(',')]
         
         # Get dropout rates
-        dropout_input = input(f"Dropout rates (comma separated) [{', '.join(map(str, DROPOUT_RATES))}]: ")
+        dropout_input = console.input(
+            f"Dropout rates (comma separated) [[yellow]{', '.join(map(str, DROPOUT_RATES))}[/]]: "
+        )
         if dropout_input:
             DROPOUT_RATES = [float(x.strip()) for x in dropout_input.split(',')]
         
         # Validate layer sizes and dropout rates match
         if len(HIDDEN_LAYER_SIZES) != len(DROPOUT_RATES):
-            print(Fore.RED + "Error: Number of hidden layers must match number of dropout rates")
+            console.print(
+                Panel.fit(
+                    Text("Error: Number of hidden layers must match number of dropout rates", style="bold red"),
+                    title="Error",
+                    border_style="red",
+                    padding=(1, 2)
+                )
+            )
             return
         
         # Get activation function
-        ACTIVATION = input(f"Activation function (relu/leaky_relu/gelu) [{ACTIVATION}]: ") or ACTIVATION
+        act_input = console.input(
+            f"Activation function (relu/leaky_relu/gelu) [[yellow]{ACTIVATION}[/]]: "
+        )
+        ACTIVATION = act_input or ACTIVATION
+        
         if ACTIVATION == 'leaky_relu':
-            ACTIVATION_PARAM = float(input(f"Leaky ReLU negative slope [{ACTIVATION_PARAM}]: ") or ACTIVATION_PARAM)
+            ACTIVATION_PARAM = float(console.input(
+                f"Leaky ReLU negative slope [[yellow]{ACTIVATION_PARAM}[/]]: "
+            ) or ACTIVATION_PARAM)
         
-        USE_BATCH_NORM = input(f"Use batch normalization? (y/n) [{'y' if USE_BATCH_NORM else 'n'}]: ").lower() == 'y'
+        # Get batch norm input
+        bn_input = console.input(
+            f"Use batch normalization? (y/n) [[yellow]{'y' if USE_BATCH_NORM else 'n'}[/]]: "
+        ).lower()
+        USE_BATCH_NORM = bn_input == 'y' if bn_input else USE_BATCH_NORM
         
-        print(Fore.GREEN + "Model configuration updated successfully")
+        # Get layer norm input
+        ln_input = console.input(
+            f"Use layer normalization? (y/n) [[yellow]{'y' if USE_LAYER_NORM else 'n'}[/]]: "
+        ).lower()
+        USE_LAYER_NORM = ln_input == 'y' if ln_input else USE_LAYER_NORM
+        
+        # Update config file
+        config = get_current_config()
+        config['model']['architecture'].update({
+            'hidden_layers': HIDDEN_LAYER_SIZES,
+            'dropout_rates': DROPOUT_RATES,
+            'activation': ACTIVATION,
+            'activation_param': ACTIVATION_PARAM,
+            'use_batch_norm': USE_BATCH_NORM,
+            'use_layer_norm': USE_LAYER_NORM
+        })
+        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+        
+        # Show success message
+        console.print(
+            Panel.fit(
+                Text("Model configuration updated successfully", style="bold green"),
+                border_style="green",
+                padding=(1, 2)
+            )
+        )
     except ValueError as e:
-        print(Fore.RED + f"Invalid input: {str(e)}")
+        console.print(
+            Panel.fit(
+                Text(f"Invalid input: {str(e)}", style="bold red"),
+                title="Error",
+                border_style="red",
+                padding=(1, 2)
+            )
+        )
+
+# Initialize configuration at module level
+# config = initialize_config(logger)
+# update_global_config(config)
 
 def interactive_main() -> None:
     """Interactive main function"""
@@ -2451,7 +2919,8 @@ def interactive_main() -> None:
             print("\033c", end="")
             show_config()
         elif choice == "8":
-            print(Fore.RED + Style.BRIGHT + "\nExiting... Goodbye!")
+            print(Fore.RED + Style.BRIGHT + "\nExiting...")
+            print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
             break
         else:
             print(Fore.RED + Style.BRIGHT + "Invalid selection. Choose 1-8.")
@@ -2489,6 +2958,138 @@ class ModelSavingError(TrainingError):
         self.original_exception = original_exception
         self.phase = "model_saving"
 
+def display_training_summary(best_metrics: Dict[str, Any]) -> None:
+    """Display training summary in a rich table."""
+    summary_table = Table(
+        title="[bold]Training Summary[/bold]",
+        box=box.ROUNDED,
+        header_style="bold blue",
+        title_style="bold yellow",
+        title_justify="left",
+        show_header=True,
+        show_lines=False
+    )
+    
+    summary_table.add_column("Metric", style="bold cyan", width=20)
+    summary_table.add_column("Value", style="bold magenta", justify="left")
+    
+    summary_table.add_row("Best Epoch", str(best_metrics['epoch'] + 1))
+    summary_table.add_row("Validation Loss", f"{best_metrics['val_loss']:.4f}")
+    summary_table.add_row("Validation Accuracy", f"{best_metrics['val_acc']:.2%}")
+    summary_table.add_row("Validation AUC", f"{best_metrics['val_auc']:.4f}")
+    
+    console.print(summary_table)
+
+def display_classification_report(labels: np.ndarray, preds: np.ndarray) -> None:
+    """Display classification report in a rich table."""
+    report = classification_report(
+        labels,
+        preds,
+        target_names=['Normal', 'Attack'],
+        output_dict=True,
+        digits=4
+    )
+    
+    # Main report table
+    report_table = Table(
+        title="[bold]Classification Report[/bold]",
+        box=box.ROUNDED,
+        header_style="bold blue",
+        title_style="bold yellow",
+        title_justify="left",
+        show_header=True,
+        show_lines=True
+    )
+    
+    # Add columns
+    report_table.add_column("Class", style="bold cyan", width=12)
+    report_table.add_column("Precision", style="bold green", justify="left")
+    report_table.add_column("Recall", style="bold green", justify="left")
+    report_table.add_column("F1-Score", style="bold green", justify="left")
+    report_table.add_column("Support", style="bold magenta", justify="left")
+    
+    # Add rows for each class
+    for class_name in ['Normal', 'Attack']:
+        metrics = report[class_name]
+        report_table.add_row(
+            class_name,
+            f"{metrics['precision']:.4f}",
+            f"{metrics['recall']:.4f}",
+            f"{metrics['f1-score']:.4f}",
+            str(metrics['support'])
+        )
+    
+    # Add accuracy row
+    report_table.add_row(
+        "[bold]Accuracy[/bold]",
+        "",
+        "",
+        f"{report['accuracy']:.4f}",
+        str(report['macro avg']['support']),
+        style="bold yellow"
+    )
+    
+    # Add macro avg row
+    report_table.add_row(
+        "[bold]Macro Avg[/bold]",
+        f"{report['macro avg']['precision']:.4f}",
+        f"{report['macro avg']['recall']:.4f}",
+        f"{report['macro avg']['f1-score']:.4f}",
+        str(report['macro avg']['support']),
+        style="bold blue"
+    )
+    
+    console.print(report_table)
+
+def log_epoch_progress(
+    epoch: int,
+    total_epochs: int,
+    epoch_time: float,
+    train_loss: float,
+    train_acc: float,  # Added missing parameter
+    val_metrics: Dict[str, float],
+    current_lr: float,
+    patience_counter: int,
+    early_stop_patience: int
+) -> None:
+    """Display epoch progress in a rich table format."""
+    # Create the epoch table
+    epoch_table = Table(
+        title=f"[bold]Epoch {epoch+1:03d}/{total_epochs:03d}[/bold]",
+        box=box.ROUNDED,
+        show_header=False,
+        show_lines=False,
+        padding=(0, 1),
+        min_width=50
+    )
+    
+    # Add columns for metrics and values
+    epoch_table.add_column("Metric", style="bold cyan", no_wrap=True, width=15)
+    epoch_table.add_column("Value", style="bold magenta", justify="left")
+    
+    # Add rows for each metric with error handling
+    try:
+        epoch_table.add_row("Time", f"{epoch_time:.1f}s")
+        epoch_table.add_row("Train Loss", f"{train_loss:.4f}")
+        epoch_table.add_row("Val Loss", f"{val_metrics.get('val_loss', float('nan')):.4f}")
+        epoch_table.add_row("Train Acc", f"{train_acc:.2%}")
+        epoch_table.add_row("Val Acc", f"{val_metrics.get('val_acc', float('nan')):.2%}")
+        epoch_table.add_row("Val AUC", f"{val_metrics.get('val_auc', float('nan')):.4f}")
+        epoch_table.add_row("Learning Rate", f"{current_lr:.2e}")
+        
+        # Color-code patience counter
+        patience_style = "red" if patience_counter >= early_stop_patience / 2 else "green"
+        epoch_table.add_row(
+            "Patience", 
+            f"[{patience_style}]{patience_counter}[/{patience_style}]/[green]{early_stop_patience}[/green]"
+        )
+        
+        # Print the table
+        console.print(epoch_table)
+        
+    except Exception as e:
+        logger.error(f"Error formatting epoch progress: {str(e)}")
+
 def train_model(
     use_mock: bool = False,
     config: Optional[Dict[str, Any]] = None
@@ -2513,11 +3114,18 @@ def train_model(
     run_id = f"run_{timestamp}"
     
     # Create run-specific directories
-    run_log_dir = LOG_DIR / run_id
-    run_figure_dir = FIGURE_DIR / run_id
-    run_checkpoint_dir = CHECKPOINT_DIR / run_id
-    run_tb_dir = TB_DIR / run_id
-    run_artifact_dir = ARTIFACTS_DIR / run_id
+    # run_log_dir = LOG_DIR / run_id
+    # run_figure_dir = FIGURE_DIR / run_id
+    # run_checkpoint_dir = CHECKPOINT_DIR / run_id
+    # run_tb_dir = TB_DIR / run_id
+    # run_artifact_dir = ARTIFACTS_DIR / run_id
+    
+    # Create run-specific directories
+    run_log_dir = LOG_DIR
+    run_figure_dir = FIGURE_DIR
+    run_checkpoint_dir = CHECKPOINT_DIR
+    run_tb_dir = TB_DIR
+    run_artifact_dir = ARTIFACTS_DIR
     
     # Ensure directories exist
     for dir_path in [run_log_dir, run_figure_dir, run_checkpoint_dir, run_tb_dir, run_artifact_dir]:
@@ -2570,7 +3178,7 @@ def train_model(
             training_meta['final_samples'] = len(df)
             
             # Visualize data
-            viz_path = visualize_data_distribution(df, run_figure_dir)
+            viz_path = visualize_data_distribution(df, filename=run_figure_dir / f"data_pca_distribution_{timestamp}.png")
             if viz_path:
                 training_meta['visualization'] = str(viz_path)
 
@@ -2586,7 +3194,7 @@ def train_model(
                 'train_batches': len(train_loader),
                 'val_batches': len(val_loader)
             })
-            logger.info(f"Data prepared - Input size: {input_size}, Classes: {num_classes}")
+            logger.info(Fore.GREEN + Style.BRIGHT + "Data prepared - Input size: " + Fore.YELLOW + Style.BRIGHT + f"{input_size}" + Fore.GREEN + Style.BRIGHT + ", Classes: " + Fore.YELLOW + Style.BRIGHT + f"{num_classes}")
 
         except Exception as e:
             raise DataPreparationError(f"Data preparation failed: {str(e)}") from e
@@ -2599,7 +3207,7 @@ def train_model(
             class_counts = torch.tensor(df['Label'].value_counts().sort_index().values, dtype=torch.float32)
             class_weights = (1. / class_counts) * (class_counts.sum() / num_classes)
             class_weights = class_weights / class_weights.sum()
-            logger.info(f"Class weights: {class_weights.tolist()}")
+            logger.info(Fore.YELLOW + Style.BRIGHT + "Class weights: " + Fore.WHITE + Style.BRIGHT + f"{class_weights.tolist()}")
             training_meta['class_weights'] = class_weights.cpu().numpy().tolist()
             
             # Training components
@@ -2635,7 +3243,7 @@ def train_model(
         early_stop_patience = config.get('early_stopping', EARLY_STOPPING_PATIENCE) if config else EARLY_STOPPING_PATIENCE
         patience_counter = 0
         
-        logger.info("\n=== Starting Training ===")
+        logger.info(Fore.YELLOW + Style.BRIGHT + "\n=== Starting Training ===")
         start_time = time.time()
         
         try:
@@ -2690,30 +3298,37 @@ def train_model(
                         scheduler=scheduler,
                         epoch=epoch,
                         metrics=best_metrics,
-                        filename=f"best_model_{timestamp}.pth",
+                        filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
                         config=training_meta,
-                        output_dir=run_checkpoint_dir
                     )
                 else:
                     patience_counter += 1
                 
                 # Logging
                 epoch_time = time.time() - epoch_start
-                writer.add_scalar('Time/epoch', epoch_time, epoch)
-                writer.add_scalar('LR', current_lr, epoch)
                 
-                logger.info(
-                    f"Epoch {epoch+1:03d}/{config.get('epochs', DEFAULT_EPOCHS) if config else DEFAULT_EPOCHS} | "
-                    f"Time: {epoch_time:.1f}s | "
-                    f"Train Loss: {train_loss:.4f} | Val Loss: {val_metrics['val_loss']:.4f} | "
-                    f"Train Acc: {train_acc:.2%} | Val Acc: {val_metrics['val_acc']:.2%} | "
-                    f"Val AUC: {val_metrics['val_auc']:.4f} | LR: {current_lr:.2e} | "
-                    f"Patience: {patience_counter}/{early_stop_patience}"
+                log_epoch_progress(
+                    epoch=epoch,
+                    total_epochs=config.get('epochs', DEFAULT_EPOCHS) if config else DEFAULT_EPOCHS,
+                    epoch_time=epoch_time,
+                    train_loss=train_loss,
+                    train_acc=train_acc,
+                    val_metrics=val_metrics,
+                    current_lr=current_lr,
+                    patience_counter=patience_counter,
+                    early_stop_patience=early_stop_patience
                 )
                 
                 # Early stopping
                 if patience_counter >= early_stop_patience:
-                    logger.info(f"Early stopping triggered at epoch {epoch+1}")
+                    console.print(
+                        Panel.fit(
+                            Text(f"Early stopping at epoch {epoch+1}", justify="center"),
+                            title="[bold red]Training Stopped[/bold red]",
+                            border_style="red",
+                            padding=(1, 1)
+                        )
+                    )
                     break
 
         except Exception as e:
@@ -2734,7 +3349,7 @@ def train_model(
         # Load best model for final evaluation
         try:
             checkpoint, error = load_checkpoint(
-                run_checkpoint_dir / f"best_model_{timestamp}.pth",
+                filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
                 model=model,
                 device=device
             )
@@ -2744,20 +3359,12 @@ def train_model(
             logger.error(f"Failed to load best model: {str(e)}")
 
         # Generate reports
-        logger.info("\n=== Training Summary ===")
-        logger.info(f"Best epoch: {best_metrics['epoch'] + 1}")
-        logger.info(f"Best validation loss: {best_metrics['val_loss']:.4f}")
-        logger.info(f"Best validation accuracy: {best_metrics['val_acc']:.2%}")
-        logger.info(f"Best validation AUC: {best_metrics['val_auc']:.4f}")
-        
+        console.print("\n")
+        display_training_summary(best_metrics)
+
         if 'preds' in best_metrics and 'labels' in best_metrics:
-            logger.info("\n=== Classification Report ===")
-            logger.info(classification_report(
-                best_metrics['labels'],
-                best_metrics['preds'],
-                target_names=['Normal', 'Attack'],
-                digits=4
-            ))
+            console.print("\n")
+            display_classification_report(best_metrics['labels'], best_metrics['preds'])
             
             # Save confusion matrix
             cm = confusion_matrix(best_metrics['labels'], best_metrics['preds'])
@@ -2777,7 +3384,7 @@ def train_model(
                 model=model,
                 metrics=best_metrics,
                 config=training_meta,
-                output_dir=run_artifact_dir,
+                #output_dir=run_artifact_dir,
                 class_names=['Normal', 'Attack'],
                 feature_names=artifacts.get('feature_names')
             )
@@ -2869,7 +3476,8 @@ if __name__ == "__main__":
         # Initial system configuration
         configure_system()
         configure_visualization()
-        set_seed(42)  # For reproducibility
+        # For reproducibility
+        set_seed(42)
         
         # Setup logging and directories with timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -2924,6 +3532,9 @@ if __name__ == "__main__":
             torch._logging.set_logs(all=logging.DEBUG)
         else:
             logger.setLevel(logging.INFO)
+        
+        config = initialize_config(logger)
+        update_global_config(config)
 
         if args.interactive:
             # Interactive mode
