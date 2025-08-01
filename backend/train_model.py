@@ -152,9 +152,12 @@ logger = logging.getLogger(__name__)
 def configure_system() -> None:
     """Configure system settings for optimal performance."""
     # Disable verbose logging for libraries
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # TensorFlow
-    os.environ['KMP_WARNINGS'] = '0'  # Intel MKL
-    os.environ['OMP_NUM_THREADS'] = '1'  # OpenMP
+    # TensorFlow
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    # Intel MKL
+    os.environ['KMP_WARNINGS'] = '0'
+    # OpenMP
+    os.environ['OMP_NUM_THREADS'] = '1'
     
     # Set NumPy print options
     np.set_printoptions(precision=4, suppress=True, threshold=10, linewidth=120)
@@ -338,14 +341,14 @@ def setup_gpu(logger: logging.Logger) -> torch.device:
         torch.cuda.set_per_process_memory_fraction(0.9)
     else:
         device = torch.device('cpu')
-        logger.info("Using CPU for training")
+        logger.info(Fore.WHITE + Style.BRIGHT + "Using " + Fore.GREEN + Style.BRIGHT + "CPU " + Fore.WHITE + Style.BRIGHT + "for training")
         torch.set_num_threads(os.cpu_count() or 1)
-        logger.info(f"Using {torch.get_num_threads()} CPU threads")
+        logger.info(Fore.WHITE + Style.BRIGHT + "Using " + Fore.GREEN + Style.BRIGHT + f"{torch.get_num_threads()} CPU threads")
     
     return device
 
 def check_versions(logger: logging.Logger) -> bool:
-    """Verify package versions with clean console output and full logging."""
+    """Verify package versions with rich table output and full logging."""
     requirements = {
         'torch': '1.10.0',
         'torchvision': '0.11.0',
@@ -371,27 +374,58 @@ def check_versions(logger: logging.Logger) -> bool:
             version_data.append((pkg, None, min_ver, False, str(e)))
             logger.warning(f"Package not found: {pkg} - {str(e)}")
 
-    # Calculate column widths
-    max_pkg_len = max(len(item[0]) for item in version_data)
-    max_ver_len = max(len(item[1]) if item[1] else 0 for item in version_data)
+    # Create rich table
+    table = Table(title="Package Versions", box=box.ROUNDED, title_justify="left", title_style="bold yellow")
+    table.add_column("Package", style="bold cyan", no_wrap=True)
+    table.add_column("Installed", style="bold magenta")
+    table.add_column("Required", style="bold green")
+    table.add_column("Status", justify="center")
 
-    # Build clean output
-    output_lines = ["=== Package Versions ==="]
+    # Add rows to table
+    all_ok = True
+    for pkg, current_ver, min_ver, is_ok, error in version_data:
+        if current_ver:
+            status = Text("[OK]", style="bold green") if is_ok else Text(f"[FAILED] Needs >= {min_ver}", style="bold red")
+        else:
+            status = Text("[MISSING]", style="bold red")
+            current_ver = Text("[N/A]", style="italic")
+        
+        if not is_ok:
+            all_ok = False
+        
+        table.add_row(pkg, current_ver, f">= {min_ver}", status)
+
+    # Print the table
+    console.print()
+    console.print(table)
+    
+    # Add summary panel
+    if all_ok:
+        console.print(Panel.fit(
+            Text("All package versions are compatible", style="bold green"),
+            title="Status", style="bold green",
+            border_style="green"
+        ))
+    else:
+        console.print(Panel.fit(
+            Text("Some package versions are incompatible", style="bold red"),
+            title="Status", style="bold red",
+            border_style="red"
+        ))
+
+    # Log the complete version info at DEBUG level
+    debug_output = ["=== Package Versions ==="]
     for pkg, current_ver, min_ver, is_ok, _ in version_data:
         if current_ver:
             status = "[OK]" if is_ok else f"[FAIL] (needs >= {min_ver})"
-            line = f"{pkg:{max_pkg_len}} {current_ver:{max_ver_len}} (>= {min_ver}) {status}"
+            line = f"{pkg} {current_ver} (>= {min_ver}) {status}"
         else:
-            line = f"{pkg:{max_pkg_len}} {'N/A':{max_ver_len}} (>= {min_ver}) [MISSING]"
-        output_lines.append(line)
-
-    # Print clean output to console
-    print(Fore.GREEN + "\n".join(output_lines) + Style.RESET_ALL)
+            line = f"{pkg} [N/A] (>= {min_ver}) [MISSING]"
+        debug_output.append(line)
     
-    # Log the complete version info at DEBUG level
-    logger.debug("\n".join(output_lines))
+    logger.debug("\n".join(debug_output))
 
-    return all(item[3] for item in version_data)
+    return all_ok
 
 # Training constants
 DEFAULT_BATCH_SIZE = 64
@@ -2227,6 +2261,7 @@ def banner() -> None:
     """Print banner"""
     print(Fore.CYAN + Style.BRIGHT + "\n" + "=" * 60)
     print(Fore.LIGHTYELLOW_EX + Style.BRIGHT + "      IDS | MODEL TRAINING SUITE".center(60))
+    print(Fore.MAGENTA + Style.BRIGHT + "      - Interactive Mode -  ".center(60))
     print(Fore.CYAN + Style.BRIGHT + "=" * 60 + Style.RESET_ALL)
 
 def print_menu() -> None:
@@ -2337,7 +2372,7 @@ def configure_model() -> None:
 
 def interactive_main() -> None:
     """Interactive main function"""
-    banner()
+    #banner()
     
     # Initial setup
     configure_system()
@@ -2371,42 +2406,52 @@ def interactive_main() -> None:
         sys.exit(1)
     
     while True:
+        banner()
         print_menu()
-        choice = input(Fore.WHITE + Style.BRIGHT + "\nSelect an option (1-8): ").strip()
+        choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect an option " + Fore.WHITE + Style.BRIGHT + "(1-8): ").strip()
         
         if choice == "1":
+            print("\033c", end="")
             configure_system()
             print(Fore.GREEN + Style.BRIGHT + "System configuration applied")
         elif choice == "2":
             try:
+                print("\033c", end="")
                 directories = setup_directories(logger)
                 print(Fore.GREEN + Style.BRIGHT + "Directories set up successfully")
             except Exception as e:
                 print(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
         elif choice == "3":
-            if check_versions(logger):
-                print(Fore.GREEN + Style.BRIGHT + "All package versions are compatible")
-            else:
-                print(Fore.RED + Style.BRIGHT + "Some package versions are incompatible")
+            # if check_versions(logger):
+            #     print(Fore.GREEN + Style.BRIGHT + "All package versions are compatible")
+            # else:
+            #     print(Fore.RED + Style.BRIGHT + "Some package versions are incompatible")
+            print("\033c", end="")
+            check_versions(logger)
         elif choice == "4":
-            device = setup_gpu(logger)
-            print(Fore.GREEN + Style.BRIGHT + f"Using device: {device}")
+            #device = setup_gpu(logger)
+            # print(Fore.GREEN + Style.BRIGHT + f"Using device: {device}")
+            print("\033c", end="")
+            setup_gpu(logger)
         elif choice == "5":
+            print("\033c", end="")
             print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline...")
             # Skip re-initializing logging if already set up
             if not logger.handlers:
                 logger = setup_logging(LOG_DIR)
             train_model(use_mock=False)
         elif choice == "6":
+            print("\033c", end="")
             print(Fore.YELLOW + Style.BRIGHT + "\nStarting training with synthetic data...")
             # Skip re-initializing logging if already set up
             if not logger.handlers:
                 logger = setup_logging(LOG_DIR)
             train_model(use_mock=True)
         elif choice == "7":
+            print("\033c", end="")
             show_config()
         elif choice == "8":
-            print(Fore.CYAN + Style.BRIGHT + "\nExiting... Goodbye!")
+            print(Fore.RED + Style.BRIGHT + "\nExiting... Goodbye!")
             break
         else:
             print(Fore.RED + Style.BRIGHT + "Invalid selection. Choose 1-8.")
@@ -2883,7 +2928,7 @@ if __name__ == "__main__":
         if args.interactive:
             # Interactive mode
             try:
-                print(Fore.MAGENTA + Style.BRIGHT + "\n                    === Interactive Mode ===".center(60))
+                #print(Fore.MAGENTA + Style.BRIGHT + "\n                    === Interactive Mode ===".center(60))
                 interactive_main()
             except KeyboardInterrupt:
                 print(Fore.YELLOW + Style.BRIGHT + "\n\nOperation cancelled by user")

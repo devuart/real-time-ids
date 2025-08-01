@@ -13,6 +13,15 @@ __pycache__/
 venv/
 backend/latest/
 backend/reports/
+backend/tensorboard/
+backend/figures/
+backend/info/
+backend/metrics/
+backend/results/
+backend/data/
+backend/checkpoints/
+backend/artifacts/
+backend/config/
 
 # Database files
 *.db
