@@ -3035,7 +3035,7 @@ def save_checkpoint(
         with open(f"{full_path}.md5", 'w') as f:
             f.write(checksum)
         
-        logger.info(Fore.GREEN + f"Checkpoint saved successfully to {full_path} (checksum: {checksum})")
+        logger.info(Fore.GREEN + f"Checkpoint saved successfully to \n{full_path} \n(checksum: {checksum})")
         return True
         
     except Exception as e:
@@ -3540,7 +3540,7 @@ def log_epoch_progress(
     """Display epoch progress in a rich table format."""
     # Create the epoch table
     epoch_table = Table(
-        title=f"[bold]Epoch {epoch+1:03d}/{total_epochs:03d}[/bold]",
+        title=f"[bold yellow]Epoch {epoch+1:03d}/{total_epochs:03d}[/bold yellow]",
         box=box.ROUNDED,
         show_header=False,
         show_lines=False,
@@ -3828,15 +3828,32 @@ def train_model(
         
         # Load best model for final evaluation
         try:
-            checkpoint, error = load_checkpoint(
+            model_state, optim_state, scheduler_state, metrics, training_meta = load_checkpoint(
                 filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
                 model=model,
                 device=device
             )
-            if error:
-                logger.warning(f"Could not load best model: {error}")
+            
+            if model_state is None:
+                logger.warning("Could not load best model state")
+            else:
+                # Load the model state
+                model.load_state_dict(model_state)
+                
+                # Load optimizer state if available and optimizer exists
+                if optim_state is not None and optimizer is not None:
+                    optimizer.load_state_dict(optim_state)
+                    
+                # Load scheduler state if available and scheduler exists
+                if scheduler_state is not None and scheduler is not None:
+                    scheduler.load_state_dict(scheduler_state)
+                    
+                logger.info("Successfully loaded best model checkpoint")
+                
         except Exception as e:
             logger.error(f"Failed to load best model: {str(e)}")
+            # Optionally add traceback for debugging
+            logger.debug(f"Error details: {traceback.format_exc()}")
 
         # Generate reports
         console.print("\n")
