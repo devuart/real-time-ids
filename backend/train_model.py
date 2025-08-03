@@ -3139,7 +3139,8 @@ def save_training_artifacts(
     config: Dict[str, Any],
     class_names: Optional[List[str]] = None,
     feature_names: Optional[List[str]] = None,
-    run_figure_dir: Path = FIGURE_DIR
+    #run_figure_dir: Path = FIGURE_DIR
+    output_dir: Optional[Path] = None
 ) -> Dict[str, Path]:
     """
     Save all training artifacts including model, metrics, configuration, and visualizations.
@@ -3160,7 +3161,7 @@ def save_training_artifacts(
     
     try:
         # 1. Ensure directories exist
-        for dir_path in [MODEL_DIR, METRICS_DIR, CONFIG_DIR, INFO_DIR, ARTIFACTS_DIR, run_figure_dir]:
+        for dir_path in [MODEL_DIR, METRICS_DIR, CONFIG_DIR, INFO_DIR, ARTIFACTS_DIR, FIGURE_DIR]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # 2. Save model state dict
@@ -3223,7 +3224,7 @@ def save_training_artifacts(
                 plt.xlabel("Predicted")
                 plt.ylabel("True")
                 
-                cm_path = run_figure_dir / f"confusion_matrix_{timestamp}.png"
+                cm_path = FIGURE_DIR / f"confusion_matrix_{timestamp}.png"
                 plt.savefig(cm_path, bbox_inches='tight', dpi=300)
                 plt.close()
                 saved_artifacts['confusion_matrix'] = cm_path
@@ -3259,9 +3260,11 @@ def save_training_artifacts(
             # Add rows for each artifact
             for artifact_type, path in saved_artifacts.items():
                 # Format the path for better display
-                display_path = str(path).replace("\\", "/")  # Normalize path
+                # Normalize path
+                display_path = str(path).replace("\\", "/")
                 if "C:/Users" in display_path:
-                    display_path = display_path.split("backend/")[-1]  # Shorten path
+                    # Shorten path
+                    display_path = display_path.split("backend/")[-1]
                 
                 artifacts_table.add_row(
                     artifact_type.replace("_", " ").title(),
@@ -3701,7 +3704,8 @@ def train_model(
                 factor=0.5
             )
             
-            scaler = GradScaler(enabled=False)  # Disable for CPU-only
+            # Disable for CPU-only
+            scaler = GradScaler(enabled=False)
 
         except Exception as e:
             raise ModelConfigurationError(f"Model setup failed: {str(e)}") from e
