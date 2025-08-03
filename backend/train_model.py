@@ -14,25 +14,31 @@ import warnings
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 from collections import defaultdict
-from colorama import Fore, Style, init
+from enum import Enum, auto
 import re
 import traceback
 import tarfile
 import zipfile
 import shutil
 import contextlib
+import psutil
+#from datetime import datetime
+
+# Third-party imports
+from colorama import Fore, Style, init
 from rich.console import Console
 from rich.table import Table
 from rich import box
 from rich.text import Text
 from rich.panel import Panel
 from rich.columns import Columns
+from rich.progress import Progress, BarColumn
+from rich.prompt import Prompt
 from copy import deepcopy
-
-# Third-party imports
 import numpy as np
 import pandas as pd
 import pkg_resources
+from pynput.keyboard import Key, Listener
 
 # Machine learning and deep learning imports
 import torch
@@ -150,14 +156,459 @@ torch._logging.set_logs(all=logging.ERROR)
 # Initialize logger at module level
 logger = logging.getLogger(__name__)
 
+# Loading Screen and System Check Framework
+class CheckLevel(Enum):
+    # Must pass for program to run
+    CRITICAL = auto()
+    
+    # Should pass for full functionality
+    IMPORTANT = auto()
+    
+    # Nice-to-have information
+    INFORMATIONAL = auto()
+
+class CheckResult:
+    def __init__(self, passed: bool, message: str, level: CheckLevel = CheckLevel.IMPORTANT):
+        self.passed = passed
+        self.message = message
+        self.level = level
+        self.details: Optional[str] = None
+        self.exception: Optional[Exception] = None
+    
+    def with_details(self, details: str) -> 'CheckResult':
+        self.details = details
+        return self
+    
+    def with_exception(self, exc: Exception) -> 'CheckResult':
+        self.exception = exc
+        return self
+
+def loading_screen(logger: logging.Logger) -> bool:
+    """Display loading screen with system checks. Returns True if all critical checks pass."""
+    console.clear()
+    
+    # ASCII art banner with cyberpunk style
+    console.print(Panel.fit("""
+                            
+    ⠀⠀⠀⢠⣾⣷⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⣰⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⢰⣿⣿⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣤⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣤⣄⣀⣀⣤⣤⣶⣾⣿⣿⣿⡷
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀
+    ⣿⣿⣿⡇⠀⡾⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣧⡀⠁⣀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠉⢹⠉⠙⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣀⠀⣀⣼⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠀⠤⢀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⣿⣿⠿⣿⣿⣿⣿⣿⣿⣿⠿⠋⢃⠈⠢⡁⠒⠄⡀⠈⠁⠀⠀⠀⠀⠀⠀⠀
+    ⣿⣿⠟⠁⠀⠀⠈⠉⠉⠁⠀⠀⠀⠀⠈⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠋  GreyChamp       ⠘⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    
+    """, style="bold blue", subtitle="SYSTEM INITIALIZATION"))
+    
+    # Animated progress bar
+    with Progress(
+        "[progress.description]{task.description}",
+        BarColumn(bar_width=None),
+        "[progress.percentage]{task.percentage:>3.0f}%",
+        transient=True
+    ) as progress:
+        task = progress.add_task("[cyan]Running system diagnostics...", total=100)
+        
+        # Simulate progress while actually running checks
+        for i in range(10):
+            time.sleep(0.05)
+            progress.update(task, advance=10)
+    
+    # Run checks
+    checks = run_system_checks(logger)
+    
+    # Display results table
+    display_check_results(checks)
+    
+    # Determine check status
+    critical_passed = all(
+        check.passed 
+        for name, check in checks.items() 
+        if check.level == CheckLevel.CRITICAL
+    )
+    
+    important_failed = any(
+        not check.passed 
+        for name, check in checks.items() 
+        if check.level == CheckLevel.IMPORTANT
+    )
+    
+    informational_failed = any(
+        not check.passed 
+        for name, check in checks.items() 
+        if check.level == CheckLevel.INFORMATIONAL
+    )
+
+    # Handle different scenarios
+    if not critical_passed:
+        console.print(
+            Panel.fit(
+                "[bold red]CRITICAL SYSTEM CHECKS FAILED[/bold red]\n"
+                "The system cannot continue due to critical failures.",
+                border_style="red"
+            )
+        )
+        logger.critical("Critical system checks failed - cannot continue")
+        return False
+    
+    elif important_failed or informational_failed:
+        # Show failed checks
+        fail_table = Table(
+            title="\n[bold yellow]FAILED NON-CRITICAL CHECKS[/bold yellow]",
+            box=box.SIMPLE,
+            header_style="bold magenta",
+            title_justify="left",
+            show_header=True,
+            show_lines=True
+        )
+        fail_table.add_column("Check", style="bold cyan")
+        fail_table.add_column("Message", style="bold yellow")
+        
+        for name, check in [(n,c) for n,c in checks.items() if not c.passed and c.level != CheckLevel.CRITICAL]:
+            fail_table.add_row(
+                name.replace("_", " ").title(),
+                check.message
+            )
+        
+        console.print(fail_table)
+        
+        # Custom key prompt with proper key handling
+        console.print(
+            Panel.fit(
+                "[bold yellow]WARNING: Some system checks failed[/bold yellow]\n"
+                "[bold white]Press [/bold white][bold green]Enter[/bold green][bold white] to continue or [/bold white]"
+                "[bold red]Esc[/bold red][bold white] to quit[/bold white]",
+                border_style="yellow"
+            )
+        )
+        
+        # Use a flag to track the user's choice
+        user_choice = None
+        
+        def on_press(key):
+            nonlocal user_choice
+            if key == Key.enter:
+                user_choice = True
+                # Stop listener
+                return False
+            elif key == Key.esc:
+                user_choice = False
+                # Stop listener
+                return False
+        
+        with Listener(on_press=on_press) as listener:
+            listener.join()
+        
+        if user_choice is False:
+            logger.warning("User chose to quit after seeing failed checks")
+            # Exit the program completely
+            sys.exit(0)
+        
+        console.clear()
+        return True
+    
+    else:
+        # All checks passed
+        console.print(
+            Panel.fit(
+                "[bold green]ALL SYSTEM CHECKS PASSED[/bold green]\n"
+                "Press [bold green]Enter[/bold green] to continue...",
+                border_style="green"
+            )
+        )
+        
+        # Wait specifically for Enter key
+        def on_press(key):
+            if key == Key.enter:
+                return False  # Stop listener
+        
+        with Listener(on_press=on_press) as listener:
+            listener.join()
+        
+        console.clear()
+        return True
+
+def run_system_checks(logger: logging.Logger) -> Dict[str, CheckResult]:
+    """Run all system checks using existing functions where possible"""
+    checks = {}
+    
+    # Critical checks
+    checks['python_version'] = check_python_version()
+    checks['torch_available'] = check_torch()
+    
+    # Important checks
+    checks['package_versions'] = check_package_versions_wrapper(logger)
+    checks['directory_access'] = check_directory_access_wrapper(logger)
+    checks['disk_space'] = check_disk_space()
+    checks['cuda_available'] = check_cuda()
+    
+    # Informational checks
+    checks['cpu_cores'] = check_cpu_cores()
+    checks['system_ram'] = check_system_ram()
+    checks['system_arch'] = check_system_architecture()
+    checks['logging_setup'] = check_logging_setup(logger)
+    checks['seed_config'] = check_seed_config()
+    
+    return checks
+
+def display_check_results(checks: Dict[str, CheckResult]):
+    """Display check results in a styled table with improved formatting"""
+    result_table = Table(
+        title="\n[bold]SYSTEM DIAGNOSTICS REPORT[/bold]",
+        box=box.ROUNDED,
+        header_style="bold white",
+        border_style="white",
+        title_style="bold yellow",
+        title_justify="left",
+        show_lines=True,
+        expand=False,
+        width=65
+    )
+    
+    result_table.add_column("Check", style="bold cyan", width=20)
+    result_table.add_column("Status", width=10)
+    result_table.add_column("Details", style="dim", min_width=30)
+    
+    # Group by check level
+    for level in CheckLevel:
+        # Add section header
+        level_style = {
+            CheckLevel.CRITICAL: "bold red",
+            CheckLevel.IMPORTANT: "bold yellow",
+            CheckLevel.INFORMATIONAL: "bold magenta"
+        }.get(level, "bold white")
+        
+        result_table.add_row(
+            Text(level.name, style=level_style),
+            "",
+            "",
+            style="dim"
+        )
+        
+        # Add checks for this level
+        for name, check in checks.items():
+            if check.level == level:
+                status_style = "bold green" if check.passed else "bold red" if level == CheckLevel.CRITICAL else "bold yellow"
+                status_text = "PASS" if check.passed else "FAIL" if level == CheckLevel.CRITICAL else "WARN"
+                
+                details = check.message
+                if check.details:
+                    details += f"\n[dim]{check.details}[/dim]"
+                if check.exception:
+                    details += f"\n[bold red]Error: {str(check.exception)}[/bold red]"
+                
+                result_table.add_row(
+                    Text(name.replace("_", " ").title(), style="cyan"),
+                    Text(status_text, style=status_style),
+                    details
+                )
+    
+    console.print(result_table)
+
+# Individual check implementations
+def check_python_version(min_version: Tuple[int, int] = (3, 8)) -> CheckResult:
+    try:
+        current = tuple(map(int, platform.python_version().split('.')[:2]))
+        passed = current >= min_version
+        return CheckResult(
+            passed=passed,
+            message=f"[bold green]Python {platform.python_version()} (requires >= {'.'.join(map(str, min_version))})[/bold green]",
+            level=CheckLevel.CRITICAL
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]Could not determine Python version[/bold red]",
+            level=CheckLevel.CRITICAL
+        ).with_exception(e)
+
+def check_torch() -> CheckResult:
+    try:
+        # Basic functionality test
+        torch.zeros(1)
+        return CheckResult(
+            passed=True,
+            message=f"[bold green]PyTorch {torch.__version__} available[/bold green]",
+            level=CheckLevel.CRITICAL
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]PyTorch not available[/bold red]",
+            level=CheckLevel.CRITICAL
+        ).with_exception(e)
+
+def check_cuda() -> CheckResult:
+    try:
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(0)
+            return CheckResult(
+                passed=True,
+                message=f"[bold green]CUDA available ({props.name}, {props.total_memory/1e9:.1f}GB)[/bold green]",
+                level=CheckLevel.IMPORTANT
+            )
+        return CheckResult(
+            passed=False,
+            message="[bold yellow]CUDA not available - Using CPU[/bold yellow]",
+            level=CheckLevel.IMPORTANT
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]CUDA check failed[/bold red]",
+            level=CheckLevel.IMPORTANT
+        ).with_exception(e)
+
+def check_package_versions_wrapper(logger: logging.Logger) -> CheckResult:
+    try:
+        # Test using check_versions function
+        all_ok = check_versions(logger)
+        return CheckResult(
+            passed=all_ok,
+            message="[bold green]Package version check completed[/bold green]",
+            level=CheckLevel.IMPORTANT
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]Package version check failed[/bold red]",
+            level=CheckLevel.IMPORTANT
+        ).with_exception(e)
+
+def check_directory_access_wrapper(logger: logging.Logger) -> CheckResult:
+    try:
+        # Test using setup_directories function
+        dirs = setup_directories(logger)
+        problematic = []
+        
+        for name, path in dirs.items():
+            try:
+                test_file = path / ".permission_test"
+                test_file.write_text("test")
+                test_file.unlink()
+            except Exception as e:
+                problematic.append(f"{name}: {str(e)}")
+        
+        if not problematic:
+            return CheckResult(
+                passed=True,
+                message="[bold green]All directories accessible[/bold green]",
+                level=CheckLevel.IMPORTANT
+            )
+        
+        return CheckResult(
+            passed=False,
+            message=f"[bold yellow]{len(problematic)} directory issues[/bold yellow]",
+            level=CheckLevel.IMPORTANT
+        ).with_details("\n".join(problematic))
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]Directory check failed[/bold red]",
+            level=CheckLevel.IMPORTANT
+        ).with_exception(e)
+
+def check_disk_space(min_gb: int = 5) -> CheckResult:
+    try:
+        usage = psutil.disk_usage(".")
+        free_gb = usage.free / (1024 ** 3)
+        passed = free_gb >= min_gb
+        return CheckResult(
+            passed=passed,
+            message=f"[bold green]{free_gb:.1f}GB free (needs >= {min_gb}GB)[/bold green]",
+            level=CheckLevel.IMPORTANT
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]Could not check disk space[/bold red]",
+            level=CheckLevel.INFORMATIONAL
+        ).with_exception(e)
+
+def check_cpu_cores() -> CheckResult:
+    cores = os.cpu_count() or 1
+    return CheckResult(
+        passed=True,
+        message=f"[bold green]{cores} logical cores available[/bold green]",
+        level=CheckLevel.INFORMATIONAL
+    )
+
+def check_system_ram() -> CheckResult:
+    ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+    return CheckResult(
+        passed=True,
+        message=f"[bold green]{ram_gb:.1f}GB system RAM[/bold green]",
+        level=CheckLevel.INFORMATIONAL
+    )
+
+def check_system_architecture() -> CheckResult:
+    arch = platform.machine()
+    return CheckResult(
+        passed=True,
+        message=f"[bold green]{arch} architecture[/bold green]",
+        level=CheckLevel.INFORMATIONAL
+    )
+
+def check_logging_setup(logger: logging.Logger) -> CheckResult:
+    try:
+        if logger.handlers:
+            handler_types = [type(h).__name__ for h in logger.handlers]
+            return CheckResult(
+                passed=True,
+                message=f"[bold green]Logging configured ({', '.join(handler_types)})[/bold green]",
+                level=CheckLevel.INFORMATIONAL
+            )
+        return CheckResult(
+            passed=False,
+            message="[bold yellow]Logging not configured[/bold yellow]",
+            level=CheckLevel.IMPORTANT
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]Logging check failed[/bold red]",
+            level=CheckLevel.INFORMATIONAL
+        ).with_exception(e)
+
+def check_seed_config() -> CheckResult:
+    try:
+        seed = int(os.environ.get('PYTHONHASHSEED', '0'))
+        return CheckResult(
+            passed=seed != 0,
+            message=f"[bold green]Reproducibility seed {'set' if seed !=0 else 'not set'}[/bold green]",
+            level=CheckLevel.INFORMATIONAL
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="[bold red]Seed check failed[/bold red]",
+            level=CheckLevel.INFORMATIONAL
+        ).with_exception(e)
+
 # System and environment configuration
 def configure_system() -> None:
     """Configure system settings for optimal performance."""
     # Disable verbose logging for libraries
+    
     # TensorFlow
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    
     # Intel MKL
     os.environ['KMP_WARNINGS'] = '0'
+    
     # OpenMP
     os.environ['OMP_NUM_THREADS'] = '1'
     
@@ -179,9 +630,11 @@ def configure_visualization() -> None:
         plt.style.use('seaborn-v0_8')
         # Set appropriate backend
         if os.environ.get('DISPLAY', '') == '':
-            matplotlib.use('Agg')  # For headless environments
+            # For headless environments
+            matplotlib.use('Agg')
     except:
-        plt.style.use('ggplot')  # Fallback style
+        # Fallback style
+        plt.style.use('ggplot')
     
     # Set global plot parameters
     rcParams['figure.figsize'] = (12, 8)
@@ -196,7 +649,8 @@ def configure_visualization() -> None:
     rcParams['savefig.dpi'] = 300
     rcParams['savefig.bbox'] = 'tight'
     rcParams['savefig.transparent'] = False
-    rcParams['font.family'] = 'DejaVu Sans'  # Better font compatibility
+    # Better font compatibility
+    rcParams['font.family'] = 'DejaVu Sans'
 
 # Reproducibility configuration
 def set_seed(seed: int = 42) -> None:
@@ -206,10 +660,14 @@ def set_seed(seed: int = 42) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     cudnn.deterministic = True
-    cudnn.benchmark = False  # Set to True if input sizes don't vary
+    
+    # Set to True if input sizes don't vary
+    cudnn.benchmark = False
     os.environ['PYTHONHASHSEED'] = str(seed)
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'  # For CUDA reproducibility
+    # For CUDA reproducibility
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
 
+# Logging and Directory Setup
 class UnicodeStreamHandler(logging.StreamHandler):
     """A stream handler that properly handles Unicode characters on Windows."""
     def emit(self, record):
@@ -229,6 +687,11 @@ class UnicodeStreamHandler(logging.StreamHandler):
         except Exception:
             self.handleError(record)
 
+# Global directory variables
+MODEL_DIR = LOG_DIR = DATA_DIR = FIGURE_DIR = TB_DIR = CHECKPOINT_DIR = None
+CONFIG_DIR = RESULTS_DIR = METRICS_DIR = REPORTS_DIR = LATEST_DIR = None
+INFO_DIR = ARTIFACTS_DIR = DOCS_DIR = None
+
 def setup_logging(log_dir: Path) -> logging.Logger:
     """Configure logging with handler deduplication"""
     logger = logging.getLogger(__name__)
@@ -237,7 +700,7 @@ def setup_logging(log_dir: Path) -> logging.Logger:
     if logger.hasHandlers():
         logger.handlers.clear()
     
-    # Rest of your logging setup...
+    # Rest of the logging setup
     logger.setLevel(logging.DEBUG)
     
     # Add handlers ONLY if they don't exist
@@ -258,7 +721,7 @@ def setup_logging(log_dir: Path) -> logging.Logger:
 def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
     """Create and return essential directories with versioned subdirectories."""
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_dir = Path().absolute()
+    base_dir = Path(__file__).resolve().parent
     
     directories = {
         'models': base_dir / "models",
@@ -273,7 +736,8 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
         'reports': base_dir / "reports",
         'latest': base_dir / "latest",
         'info': base_dir / "info",
-        'artifacts': base_dir / "artifacts"
+        'artifacts': base_dir / "artifacts",
+        'docs': base_dir / "docs"
     }
     
     # Create directories
@@ -326,6 +790,40 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
     
     return directories
 
+def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
+    """
+    Creates and assigns global variables for all essential directories.
+    Returns a dictionary with all paths.
+    """
+    global MODEL_DIR, LOG_DIR, DATA_DIR, FIGURE_DIR, TB_DIR, CHECKPOINT_DIR
+    global CONFIG_DIR, RESULTS_DIR, METRICS_DIR, REPORTS_DIR, LATEST_DIR
+    global INFO_DIR, ARTIFACTS_DIR, DOCS_DIR
+
+    try:
+        directories = setup_directories(logger)
+
+        MODEL_DIR = directories['models']
+        LOG_DIR = directories['logs']
+        DATA_DIR = directories['data']
+        FIGURE_DIR = directories['figures']
+        TB_DIR = directories['tensorboard']
+        CHECKPOINT_DIR = directories['checkpoints']
+        CONFIG_DIR = directories['config']
+        RESULTS_DIR = directories['results']
+        METRICS_DIR = directories['metrics']
+        REPORTS_DIR = directories['reports']
+        LATEST_DIR = directories['latest']
+        INFO_DIR = directories['info']
+        ARTIFACTS_DIR = directories['artifacts']
+        DOCS_DIR = directories['docs']
+
+        return directories
+
+    except Exception as e:
+        logger.error(Fore.RED + f"Failed to set up directories: {str(e)}" + Style.RESET_ALL)
+        sys.exit(1)
+
+# Hardware and Package Configuration
 def setup_gpu(logger: logging.Logger) -> torch.device:
     """Configure GPU settings and return appropriate device with detailed info."""
     if torch.cuda.is_available():
@@ -429,6 +927,7 @@ def check_versions(logger: logging.Logger) -> bool:
 
     return all_ok
 
+# Configuration Management
 # Training constants
 DEFAULT_BATCH_SIZE = 64
 DEFAULT_EPOCHS = 100
@@ -447,43 +946,462 @@ ACTIVATION_PARAM = 0.1
 USE_BATCH_NORM = True
 USE_LAYER_NORM = False
 
+def update_config(key_path: str, value: Any, config_path: Path, logger: logging.Logger) -> None:
+    """Update a specific configuration value and track changes."""
+    try:
+        # Load existing config
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        # Update modification timestamp
+        config_data['metadata']['modified'] = datetime.datetime.now().isoformat()
+        
+        # Update the specific value
+        keys = key_path.split('.')
+        current_level = config_data['config']
+        
+        for key in keys[:-1]:
+            if key not in current_level:
+                current_level[key] = {}
+            current_level = current_level[key]
+        
+        # Log the change
+        old_value = current_level.get(keys[-1], '<not set>')
+        logger.info(f"Updating config: {key_path} from {old_value} to {value}")
+        
+        current_level[keys[-1]] = value
+        
+        # Save updated config
+        with open(config_path, 'w') as f:
+            json.dump(config_data, f, indent=4)
+        
+        logger.info(f"Configuration updated in: {config_path}")
+        
+    except Exception as e:
+        logger.error(f"Failed to update configuration: {str(e)}")
+        raise
+
+def get_current_config() -> Dict[str, Any]:
+    """Get current configuration with all constants."""
+    return {
+        'training': {
+            'batch_size': DEFAULT_BATCH_SIZE,
+            'epochs': DEFAULT_EPOCHS,
+            'learning_rate': LEARNING_RATE,
+            'weight_decay': WEIGHT_DECAY,
+            'gradient_clip': GRADIENT_CLIP,
+            'mixed_precision': MIXED_PRECISION,
+            'early_stopping': EARLY_STOPPING_PATIENCE,
+            'gradient_accumulation_steps': GRADIENT_ACCUMULATION_STEPS
+        },
+        'model': {
+            'architecture': {
+                'hidden_layers': HIDDEN_LAYER_SIZES,
+                'dropout_rates': DROPOUT_RATES,
+                'activation': ACTIVATION,
+                'activation_param': ACTIVATION_PARAM,
+                'use_batch_norm': USE_BATCH_NORM,
+                'use_layer_norm': USE_LAYER_NORM
+            }
+        },
+        'system': {
+            'seed': 42,
+            'logging_level': 'INFO'
+        }
+    }
+
+def save_config(config: Dict[str, Any], config_path: Path, logger: logging.Logger) -> None:
+    """Save configuration to JSON file with metadata and versioning."""
+    try:
+        #from datetime import datetime
+        # Add metadata
+        config_with_meta = {
+            "metadata": {
+                "created": datetime.datetime.now().isoformat(),
+                "modified": datetime.datetime.now().isoformat(),
+                "version": "1.0",
+                "system": {
+                    "python_version": platform.python_version(),
+                    "hostname": platform.node(),
+                    "os": platform.system()
+                }
+            },
+            "config": config
+        }
+        
+        # Create backup if file exists
+        if config_path.exists():
+            #timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = config_path.parent / f"{config_path.stem}_backup_{timestamp}{config_path.suffix}"
+            shutil.copy(config_path, backup_path)
+            logger.info(f"Created backup of config at: {backup_path}")
+        
+        # Save new config
+        with open(config_path, 'w') as f:
+            json.dump(config_with_meta, f, indent=4)
+        logger.info(f"Configuration saved to: {config_path}")
+        
+    except Exception as e:
+        logger.error(f"Failed to save configuration: {str(e)}")
+        raise
+
+def load_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
+    """Load configuration from JSON file with error handling."""
+    try:
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        
+        logger.info(f"Loaded configuration from: {config_path}")
+        return config_data.get('config', {})
+    
+    except FileNotFoundError:
+        logger.warning(f"Configuration file not found: {config_path}")
+        return {}
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON in configuration file: {config_path}")
+        return {}
+    except Exception as e:
+        logger.error(f"Failed to load configuration: {str(e)}")
+        return {}
+
+def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively update a dictionary with another dictionary."""
+    for key, value in update.items():
+        if isinstance(value, dict) and key in original:
+            original[key] = deep_update(original[key], value)
+        else:
+            original[key] = value
+    return original
+
+def initialize_config(logger: logging.Logger) -> Dict[str, Any]:
+    """Initialize or load configuration with version control."""
+    config_path = CONFIG_DIR / "train_model_config.json"
+    
+    # Try loading existing config
+    loaded_config = load_config(config_path, logger)
+    
+    if loaded_config:
+        # Validate loaded config against current defaults
+        current_config = get_current_config()
+        validated_config = deep_update(current_config, loaded_config)
+        save_config(validated_config, config_path, logger)
+        return validated_config
+    else:
+        # Create new config with defaults
+        current_config = get_current_config()
+        save_config(current_config, config_path, logger)
+        return current_config
+
+def update_global_config(config: Dict[str, Any]) -> None:
+    """Update global variables from configuration."""
+    global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, LEARNING_RATE, WEIGHT_DECAY
+    global GRADIENT_CLIP, MIXED_PRECISION, EARLY_STOPPING_PATIENCE
+    global HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
+    global USE_BATCH_NORM, USE_LAYER_NORM
+    
+    # Update training parameters
+    training = config.get('training', {})
+    DEFAULT_BATCH_SIZE = training.get('batch_size', DEFAULT_BATCH_SIZE)
+    DEFAULT_EPOCHS = training.get('epochs', DEFAULT_EPOCHS)
+    LEARNING_RATE = training.get('learning_rate', LEARNING_RATE)
+    WEIGHT_DECAY = training.get('weight_decay', WEIGHT_DECAY)
+    GRADIENT_CLIP = training.get('gradient_clip', GRADIENT_CLIP)
+    MIXED_PRECISION = training.get('mixed_precision', MIXED_PRECISION)
+    EARLY_STOPPING_PATIENCE = training.get('early_stopping', EARLY_STOPPING_PATIENCE)
+    
+    # Update model architecture
+    model_arch = config.get('model', {}).get('architecture', {})
+    HIDDEN_LAYER_SIZES = model_arch.get('hidden_layers', HIDDEN_LAYER_SIZES)
+    DROPOUT_RATES = model_arch.get('dropout_rates', DROPOUT_RATES)
+    ACTIVATION = model_arch.get('activation', ACTIVATION)
+    ACTIVATION_PARAM = model_arch.get('activation_param', ACTIVATION_PARAM)
+    USE_BATCH_NORM = model_arch.get('use_batch_norm', USE_BATCH_NORM)
+    USE_LAYER_NORM = model_arch.get('use_layer_norm', USE_LAYER_NORM)
+
+def show_config() -> None:
+    """Show current configuration with rich formatting as separate distinct tables"""
+    #from datetime import datetime
+    config = get_current_config()
+    
+    # Display main configuration panel
+    console.print()
+    console.print(Panel.fit(
+        Text("Current Configuration", justify="center", style="bold blue"),
+        border_style="blue",
+        padding=(0, 1)
+    ))
+    
+    # Training Parameters Table
+    train_table = Table(
+        title="[bold cyan]Training Parameters[/]",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        border_style="blue",
+        show_header=True,
+        show_lines=False,
+        min_width=40
+    )
+    train_table.add_column("Parameter", style="bold yellow", no_wrap=True, justify="left")
+    train_table.add_column("Value", style="bold white", justify="left")
+    
+    train_table.add_row("Batch Size", str(config['training']['batch_size']))
+    train_table.add_row("Epochs", str(config['training']['epochs']))
+    train_table.add_row("Learning Rate", f"{config['training']['learning_rate']:.0e}")
+    train_table.add_row("Weight Decay", f"{config['training']['weight_decay']:.0e}")
+    train_table.add_row("Gradient Clip", str(config['training']['gradient_clip']))
+    train_table.add_row(
+        "Mixed Precision", 
+        Text("[Enabled]", style="bold green") if config['training']['mixed_precision'] 
+        else Text("[Disabled]", style="bold red")
+    )
+    train_table.add_row("Early Stopping", str(config['training']['early_stopping']))
+    
+    # Model Architecture Table
+    model_table = Table(
+        title="[bold cyan]Model Architecture[/]",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        border_style="blue",
+        show_header=True,
+        show_lines=False,
+        min_width=40
+    )
+    model_table.add_column("Parameter", style="bold yellow", no_wrap=True, justify="left")
+    model_table.add_column("Value", style="bold white", justify="left")
+    
+    model_table.add_row(
+        "Hidden Layers", 
+        Text(", ".join(map(str, config['model']['architecture']['hidden_layers'])))
+    )
+    model_table.add_row(
+        "Dropout Rates", 
+        Text(", ".join(map(str, config['model']['architecture']['dropout_rates'])))
+    )
+    model_table.add_row(
+        "Activation", 
+        Text(config['model']['architecture']['activation'])
+    )
+    model_table.add_row(
+        "Batch Norm", 
+        Text("[Enabled]", style="bold green") if config['model']['architecture']['use_batch_norm'] 
+        else Text("[Disabled]", style="bold red")
+    )
+    model_table.add_row(
+        "Layer Norm", 
+        Text("[Enabled]", style="bold green") if config['model']['architecture']['use_layer_norm'] 
+        else Text("[Disabled]", style="bold red")
+    )
+    
+    # Display tables in a grid layout with proper spacing
+    console.print(Panel.fit(train_table, border_style="blue"))
+    # Add spacing between tables
+    console.print()
+    console.print(Panel.fit(model_table, border_style="blue"))
+    
+    # Add config file info
+    config_path = CONFIG_DIR / "train_model_config.json"
+    if config_path.exists():
+        modified_time = datetime.datetime.fromtimestamp(config_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        console.print(
+            Panel.fit(
+                Text(f"Config last saved: {modified_time}\nLocation: {config_path}", style="bold dim"),
+                border_style="dim",
+                padding=(0, 1)
+            )
+        )
+    
+    # Add some vertical spacing
+    console.print()
+
+def configure_training() -> None:
+    """Configure training parameters interactively with rich formatting"""
+    global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, LEARNING_RATE, WEIGHT_DECAY
+    global GRADIENT_CLIP, MIXED_PRECISION, EARLY_STOPPING_PATIENCE
+    
+    # Create input panel
+    console.print()
+    input_panel = Panel.fit(
+        Text("Enter new values or press Enter to keep current", style="italic"),
+        title="[bold cyan]Training Configuration[/]",
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(input_panel)
+    
+    try:
+        # Get inputs with current values as defaults
+        DEFAULT_BATCH_SIZE = int(console.input(f"Batch size [[yellow]{DEFAULT_BATCH_SIZE}[/]]: ") or DEFAULT_BATCH_SIZE)
+        DEFAULT_EPOCHS = int(console.input(f"Epochs [[yellow]{DEFAULT_EPOCHS}[/]]: ") or DEFAULT_EPOCHS)
+        LEARNING_RATE = float(console.input(f"Learning rate [[yellow]{LEARNING_RATE}[/]]: ") or LEARNING_RATE)
+        WEIGHT_DECAY = float(console.input(f"Weight decay [[yellow]{WEIGHT_DECAY}[/]]: ") or WEIGHT_DECAY)
+        GRADIENT_CLIP = float(console.input(f"Gradient clip [[yellow]{GRADIENT_CLIP}[/]]: ") or GRADIENT_CLIP)
+        mp_input = console.input(f"Use mixed precision? (y/n) [[yellow]{'y' if MIXED_PRECISION else 'n'}[/]]: ").lower()
+        MIXED_PRECISION = mp_input == 'y' if mp_input else MIXED_PRECISION
+        EARLY_STOPPING_PATIENCE = int(console.input(
+            f"Early stopping patience [[yellow]{EARLY_STOPPING_PATIENCE}[/]]: "
+        ) or EARLY_STOPPING_PATIENCE)
+        
+        # Update config file
+        config = get_current_config()
+        config['training'].update({
+            'batch_size': DEFAULT_BATCH_SIZE,
+            'epochs': DEFAULT_EPOCHS,
+            'learning_rate': LEARNING_RATE,
+            'weight_decay': WEIGHT_DECAY,
+            'gradient_clip': GRADIENT_CLIP,
+            'mixed_precision': MIXED_PRECISION,
+            'early_stopping': EARLY_STOPPING_PATIENCE
+        })
+        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+        
+        # Show success message
+        console.print(
+            Panel.fit(
+                Text("Training configuration updated successfully", style="bold green"),
+                border_style="green",
+                padding=(1, 2)
+            )
+        )
+    except ValueError as e:
+        console.print(
+            Panel.fit(
+                Text(f"Invalid input: {str(e)}", style="bold red"),
+                title="Error",
+                border_style="red",
+                padding=(1, 2)
+            )
+        )
+
+def configure_model() -> None:
+    """Configure model architecture interactively with rich formatting"""
+    global HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
+    global USE_BATCH_NORM, USE_LAYER_NORM
+    
+    # Create input panel
+    console.print()
+    input_panel = Panel.fit(
+        Text("Enter new values or press Enter to keep current", style="italic"),
+        title="[bold cyan]Model Architecture Configuration[/]",
+        border_style="cyan",
+        padding=(1, 2)
+    )
+    console.print(input_panel)
+    
+    try:
+        # Get hidden layer sizes
+        layers_input = console.input(
+            f"Hidden layer sizes (comma separated) [[yellow]{', '.join(map(str, HIDDEN_LAYER_SIZES))}[/]]: "
+        )
+        if layers_input:
+            HIDDEN_LAYER_SIZES = [int(x.strip()) for x in layers_input.split(',')]
+        
+        # Get dropout rates
+        dropout_input = console.input(
+            f"Dropout rates (comma separated) [[yellow]{', '.join(map(str, DROPOUT_RATES))}[/]]: "
+        )
+        if dropout_input:
+            DROPOUT_RATES = [float(x.strip()) for x in dropout_input.split(',')]
+        
+        # Validate layer sizes and dropout rates match
+        if len(HIDDEN_LAYER_SIZES) != len(DROPOUT_RATES):
+            console.print(
+                Panel.fit(
+                    Text("Error: Number of hidden layers must match number of dropout rates", style="bold red"),
+                    title="Error",
+                    border_style="red",
+                    padding=(1, 2)
+                )
+            )
+            return
+        
+        # Get activation function
+        act_input = console.input(
+            f"Activation function (relu/leaky_relu/gelu) [[yellow]{ACTIVATION}[/]]: "
+        )
+        ACTIVATION = act_input or ACTIVATION
+        
+        if ACTIVATION == 'leaky_relu':
+            ACTIVATION_PARAM = float(console.input(
+                f"Leaky ReLU negative slope [[yellow]{ACTIVATION_PARAM}[/]]: "
+            ) or ACTIVATION_PARAM)
+        
+        # Get batch norm input
+        bn_input = console.input(
+            f"Use batch normalization? (y/n) [[yellow]{'y' if USE_BATCH_NORM else 'n'}[/]]: "
+        ).lower()
+        USE_BATCH_NORM = bn_input == 'y' if bn_input else USE_BATCH_NORM
+        
+        # Get layer norm input
+        ln_input = console.input(
+            f"Use layer normalization? (y/n) [[yellow]{'y' if USE_LAYER_NORM else 'n'}[/]]: "
+        ).lower()
+        USE_LAYER_NORM = ln_input == 'y' if ln_input else USE_LAYER_NORM
+        
+        # Update config file
+        config = get_current_config()
+        config['model']['architecture'].update({
+            'hidden_layers': HIDDEN_LAYER_SIZES,
+            'dropout_rates': DROPOUT_RATES,
+            'activation': ACTIVATION,
+            'activation_param': ACTIVATION_PARAM,
+            'use_batch_norm': USE_BATCH_NORM,
+            'use_layer_norm': USE_LAYER_NORM
+        })
+        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+        
+        # Show success message
+        console.print(
+            Panel.fit(
+                Text("Model configuration updated successfully", style="bold green"),
+                border_style="green",
+                padding=(1, 2)
+            )
+        )
+    except ValueError as e:
+        console.print(
+            Panel.fit(
+                Text(f"Invalid input: {str(e)}", style="bold red"),
+                title="Error",
+                border_style="red",
+                padding=(1, 2)
+            )
+        )
+
 # Main configuration and setup function
-configure_system()
-configure_visualization()
-set_seed(42)
-
-# Setup logging and directories
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-logger = setup_logging(LOG_DIR)
-
-# Setup directories for models, logs, data, etc.
-try:
-    directories = setup_directories(logger)
-    MODEL_DIR = directories['models']
-    LOG_DIR = directories['logs']
-    DATA_DIR = directories['data']
-    FIGURE_DIR = directories['figures']
-    TB_DIR = directories['tensorboard']
-    CHECKPOINT_DIR = directories['checkpoints']
-    CONFIG_DIR = directories['config']
-    RESULTS_DIR = directories['results']
-    METRICS_DIR = directories['metrics']
-    REPORTS_DIR = directories['reports']
-    LATEST_DIR = directories['latest']
-    INFO_DIR = directories['info']
-    ARTIFACTS_DIR = directories['artifacts']
-    DOCS_DIR = Path("docs")
-except Exception as e:
-    logger.error(Fore.RED + f"Failed to set up directories: {str(e)}" + Style.RESET_ALL)
-    sys.exit(1)
-
-# Check package versions
-if not check_versions(logger):
-    logger.error(Fore.RED + "Some package requirements not met!" + Style.RESET_ALL)
-
-# Setup GPU or CPU
-device = setup_gpu(logger)
+def initialize_system():
+    """Centralized system initialization"""
+    # Basic configuration
+    configure_system()
+    configure_visualization()
+    set_seed(42)
+    
+    # Early logging setup
+    early_log_dir = Path("logs")
+    early_log_dir.mkdir(parents=True, exist_ok=True)
+    logger = setup_logging(early_log_dir)
+    
+    # Run loading screen with checks
+    if not loading_screen(logger):
+        console.print(
+            Panel.fit(
+                Text("CRITICAL SYSTEM CHECKS FAILED - Cannot continue", style="bold red"),
+                border_style="red"
+            )
+        )
+        sys.exit(1)
+    
+    # Continue with normal setup if checks passed
+    if not check_versions(logger):
+        logger.error(Fore.RED + "Some package requirements not met!" + Style.RESET_ALL)
+    
+    device = setup_gpu(logger)
+    directories = configure_directories(logger)
+    
+    config = initialize_config(logger)
+    update_global_config(config)
+    
+    return logger, device, directories, config
 
 # Model architecture
 class IDSModel(nn.Module):
@@ -2392,10 +3310,32 @@ def save_training_artifacts(
 
 def banner() -> None:
     """Print banner"""
-    print(Fore.CYAN + Style.BRIGHT + "\n" + "=" * 60)
-    print(Fore.LIGHTYELLOW_EX + Style.BRIGHT + "      IDS | MODEL TRAINING SUITE".center(60))
-    print(Fore.MAGENTA + Style.BRIGHT + "      - Interactive Mode -  ".center(60))
-    print(Fore.CYAN + Style.BRIGHT + "=" * 60 + Style.RESET_ALL)
+
+    # ASCII art banner with cyberpunk style
+    console.print(Panel.fit("""
+                            
+    ⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⣠⣶⠚⠛⠿⠷⠶⣤⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⢀⣴⠟⠉⠀⠀⢠⡄⠀⠀⠀⠀⠀⠉⠙⠳⣄⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⢀⡴⠛⠁⠀⠀⠀⠀⠘⣷⣴⠏⠀⠀⣠⡄⠀⠀⢨⡇⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠺⣇⠀⠀⠀⠀⠀⠀⠀⠘⣿⠀⠀⠘⣻⣻⡆⠀⠀⠙⠦⣄⣀⠀⠀⠀⠀
+    ⠀⠀⠀⢰⡟⢷⡄⠀⠀⠀⠀⠀⠀⢸⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⢻⠶⢤⡀
+    ⠀⠀⠀⣾⣇⠀⠻⣄⠀⠀⠀⠀⠀⢸⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣀⣴⣿
+    ⠀⠀⢸⡟⠻⣆⠀⠈⠳⢄⡀⠀⠀⡼⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠶⠶⢤⣬⡿⠁
+    ⠀⢀⣿⠃⠀⠹⣆⠀⠀⠀⠙⠓⠿⢧⡀⠀⢠⡴⣶⣶⣒⣋⣀⣀⣤⣶⣶⠟⠁⠀
+    ⠀⣼⡏⠀⠀⠀⠙⠀⠀⠀⠀⠀⠀⠀⠙⠳⠶⠤⠵⣶⠒⠚⠻⠿⠋⠁⠀⠀⠀⠀
+    ⢰⣿⡇⠀⠀⠀⠀⠀⠀⠀⣆⠀⠀⠀⠀⠀⠀⠀⢠⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⢿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠘⣦⡀⠀⠀⠀⠀⠀⢸⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⣷⡄⠀⠀⠀⠀⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        GreyChamp  ⠈⢷⡀⠀⠀⠀⢸⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀
+    
+
+    """, style="bold blue"))
+
+    print(Fore.CYAN + Style.BRIGHT + "\n" + "=" * 40)
+    print(Fore.LIGHTYELLOW_EX + Style.BRIGHT + "  IDS | MODEL TRAINING SUITE".center(40))
+    print(Fore.MAGENTA + Style.BRIGHT + "  - Interactive Mode -  ".center(40))
+    print(Fore.CYAN + Style.BRIGHT + "=" * 40 + Style.RESET_ALL)
 
 def print_menu() -> None:
     """Print menu options"""
@@ -2413,462 +3353,14 @@ def sanitize_input(input_str: str) -> str:
     """Sanitize user input to prevent command injection"""
     return re.sub(r'[;&|$]', '', input_str).strip()
 
-def update_config(key_path: str, value: Any, config_path: Path, logger: logging.Logger) -> None:
-    """Update a specific configuration value and track changes."""
-    try:
-        # Load existing config
-        with open(config_path, 'r') as f:
-            config_data = json.load(f)
-        
-        # Update modification timestamp
-        config_data['metadata']['modified'] = datetime.now().isoformat()
-        
-        # Update the specific value
-        keys = key_path.split('.')
-        current_level = config_data['config']
-        
-        for key in keys[:-1]:
-            if key not in current_level:
-                current_level[key] = {}
-            current_level = current_level[key]
-        
-        # Log the change
-        old_value = current_level.get(keys[-1], '<not set>')
-        logger.info(f"Updating config: {key_path} from {old_value} to {value}")
-        
-        current_level[keys[-1]] = value
-        
-        # Save updated config
-        with open(config_path, 'w') as f:
-            json.dump(config_data, f, indent=4)
-        
-        logger.info(f"Configuration updated in: {config_path}")
-        
-    except Exception as e:
-        logger.error(f"Failed to update configuration: {str(e)}")
-        raise
-
-def get_current_config() -> Dict[str, Any]:
-    """Get current configuration with all constants."""
-    return {
-        'training': {
-            'batch_size': DEFAULT_BATCH_SIZE,
-            'epochs': DEFAULT_EPOCHS,
-            'learning_rate': LEARNING_RATE,
-            'weight_decay': WEIGHT_DECAY,
-            'gradient_clip': GRADIENT_CLIP,
-            'mixed_precision': MIXED_PRECISION,
-            'early_stopping': EARLY_STOPPING_PATIENCE,
-            'gradient_accumulation_steps': GRADIENT_ACCUMULATION_STEPS
-        },
-        'model': {
-            'architecture': {
-                'hidden_layers': HIDDEN_LAYER_SIZES,
-                'dropout_rates': DROPOUT_RATES,
-                'activation': ACTIVATION,
-                'activation_param': ACTIVATION_PARAM,
-                'use_batch_norm': USE_BATCH_NORM,
-                'use_layer_norm': USE_LAYER_NORM
-            }
-        },
-        'system': {
-            'seed': 42,
-            'logging_level': 'INFO'
-        }
-    }
-
-def save_config(config: Dict[str, Any], config_path: Path, logger: logging.Logger) -> None:
-    """Save configuration to JSON file with metadata and versioning."""
-    try:
-        from datetime import datetime
-        # Add metadata
-        config_with_meta = {
-            "metadata": {
-                "created": datetime.now().isoformat(),
-                "modified": datetime.now().isoformat(),
-                "version": "1.0",
-                "system": {
-                    "python_version": platform.python_version(),
-                    "hostname": platform.node(),
-                    "os": platform.system()
-                }
-            },
-            "config": config
-        }
-        
-        # Create backup if file exists
-        if config_path.exists():
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = config_path.parent / f"{config_path.stem}_backup_{timestamp}{config_path.suffix}"
-            shutil.copy(config_path, backup_path)
-            logger.info(f"Created backup of config at: {backup_path}")
-        
-        # Save new config
-        with open(config_path, 'w') as f:
-            json.dump(config_with_meta, f, indent=4)
-        logger.info(f"Configuration saved to: {config_path}")
-        
-    except Exception as e:
-        logger.error(f"Failed to save configuration: {str(e)}")
-        raise
-
-def load_config(config_path: Path, logger: logging.Logger) -> Dict[str, Any]:
-    """Load configuration from JSON file with error handling."""
-    try:
-        with open(config_path, 'r') as f:
-            config_data = json.load(f)
-        
-        logger.info(f"Loaded configuration from: {config_path}")
-        return config_data.get('config', {})
-    
-    except FileNotFoundError:
-        logger.warning(f"Configuration file not found: {config_path}")
-        return {}
-    except json.JSONDecodeError:
-        logger.error(f"Invalid JSON in configuration file: {config_path}")
-        return {}
-    except Exception as e:
-        logger.error(f"Failed to load configuration: {str(e)}")
-        return {}
-
-def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, Any]:
-    """Recursively update a dictionary with another dictionary."""
-    for key, value in update.items():
-        if isinstance(value, dict) and key in original:
-            original[key] = deep_update(original[key], value)
-        else:
-            original[key] = value
-    return original
-
-def initialize_config(logger: logging.Logger) -> Dict[str, Any]:
-    """Initialize or load configuration with version control."""
-    config_path = CONFIG_DIR / "train_model_config.json"
-    
-    # Try loading existing config
-    loaded_config = load_config(config_path, logger)
-    
-    if loaded_config:
-        # Validate loaded config against current defaults
-        current_config = get_current_config()
-        validated_config = deep_update(current_config, loaded_config)
-        save_config(validated_config, config_path, logger)
-        return validated_config
-    else:
-        # Create new config with defaults
-        current_config = get_current_config()
-        save_config(current_config, config_path, logger)
-        return current_config
-
-def update_global_config(config: Dict[str, Any]) -> None:
-    """Update global variables from configuration."""
-    global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, LEARNING_RATE, WEIGHT_DECAY
-    global GRADIENT_CLIP, MIXED_PRECISION, EARLY_STOPPING_PATIENCE
-    global HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
-    global USE_BATCH_NORM, USE_LAYER_NORM
-    
-    # Update training parameters
-    training = config.get('training', {})
-    DEFAULT_BATCH_SIZE = training.get('batch_size', DEFAULT_BATCH_SIZE)
-    DEFAULT_EPOCHS = training.get('epochs', DEFAULT_EPOCHS)
-    LEARNING_RATE = training.get('learning_rate', LEARNING_RATE)
-    WEIGHT_DECAY = training.get('weight_decay', WEIGHT_DECAY)
-    GRADIENT_CLIP = training.get('gradient_clip', GRADIENT_CLIP)
-    MIXED_PRECISION = training.get('mixed_precision', MIXED_PRECISION)
-    EARLY_STOPPING_PATIENCE = training.get('early_stopping', EARLY_STOPPING_PATIENCE)
-    
-    # Update model architecture
-    model_arch = config.get('model', {}).get('architecture', {})
-    HIDDEN_LAYER_SIZES = model_arch.get('hidden_layers', HIDDEN_LAYER_SIZES)
-    DROPOUT_RATES = model_arch.get('dropout_rates', DROPOUT_RATES)
-    ACTIVATION = model_arch.get('activation', ACTIVATION)
-    ACTIVATION_PARAM = model_arch.get('activation_param', ACTIVATION_PARAM)
-    USE_BATCH_NORM = model_arch.get('use_batch_norm', USE_BATCH_NORM)
-    USE_LAYER_NORM = model_arch.get('use_layer_norm', USE_LAYER_NORM)
-
-def show_config() -> None:
-    """Show current configuration with rich formatting as separate distinct tables"""
-    from datetime import datetime
-    config = get_current_config()
-    
-    # Display main configuration panel
-    console.print()
-    console.print(Panel.fit(
-        Text("Current Configuration", justify="center", style="bold blue"),
-        border_style="blue",
-        padding=(0, 1)
-    ))
-    
-    # Training Parameters Table
-    train_table = Table(
-        title="[bold cyan]Training Parameters[/]",
-        box=box.ROUNDED,
-        header_style="bold cyan",
-        border_style="blue",
-        show_header=True,
-        show_lines=False,
-        min_width=40
-    )
-    train_table.add_column("Parameter", style="bold yellow", no_wrap=True, justify="left")
-    train_table.add_column("Value", style="bold white", justify="left")
-    
-    train_table.add_row("Batch Size", str(config['training']['batch_size']))
-    train_table.add_row("Epochs", str(config['training']['epochs']))
-    train_table.add_row("Learning Rate", f"{config['training']['learning_rate']:.0e}")
-    train_table.add_row("Weight Decay", f"{config['training']['weight_decay']:.0e}")
-    train_table.add_row("Gradient Clip", str(config['training']['gradient_clip']))
-    train_table.add_row(
-        "Mixed Precision", 
-        Text("[Enabled]", style="bold green") if config['training']['mixed_precision'] 
-        else Text("[Disabled]", style="bold red")
-    )
-    train_table.add_row("Early Stopping", str(config['training']['early_stopping']))
-    
-    # Model Architecture Table
-    model_table = Table(
-        title="[bold cyan]Model Architecture[/]",
-        box=box.ROUNDED,
-        header_style="bold cyan",
-        border_style="blue",
-        show_header=True,
-        show_lines=False,
-        min_width=40
-    )
-    model_table.add_column("Parameter", style="bold yellow", no_wrap=True, justify="left")
-    model_table.add_column("Value", style="bold white", justify="left")
-    
-    model_table.add_row(
-        "Hidden Layers", 
-        Text(", ".join(map(str, config['model']['architecture']['hidden_layers'])))
-    )
-    model_table.add_row(
-        "Dropout Rates", 
-        Text(", ".join(map(str, config['model']['architecture']['dropout_rates'])))
-    )
-    model_table.add_row(
-        "Activation", 
-        Text(config['model']['architecture']['activation'])
-    )
-    model_table.add_row(
-        "Batch Norm", 
-        Text("[Enabled]", style="bold green") if config['model']['architecture']['use_batch_norm'] 
-        else Text("[Disabled]", style="bold red")
-    )
-    model_table.add_row(
-        "Layer Norm", 
-        Text("[Enabled]", style="bold green") if config['model']['architecture']['use_layer_norm'] 
-        else Text("[Disabled]", style="bold red")
-    )
-    
-    # Display tables in a grid layout with proper spacing
-    console.print(Panel.fit(train_table, border_style="blue"))
-    # Add spacing between tables
-    console.print()
-    console.print(Panel.fit(model_table, border_style="blue"))
-    
-    # Add config file info
-    config_path = CONFIG_DIR / "train_model_config.json"
-    if config_path.exists():
-        modified_time = datetime.fromtimestamp(config_path.stat().st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-        console.print(
-            Panel.fit(
-                Text(f"Config last saved: {modified_time}\nLocation: {config_path}", style="bold dim"),
-                border_style="dim",
-                padding=(0, 1)
-            )
-        )
-    
-    # Add some vertical spacing
-    console.print()
-
-def configure_training() -> None:
-    """Configure training parameters interactively with rich formatting"""
-    global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, LEARNING_RATE, WEIGHT_DECAY
-    global GRADIENT_CLIP, MIXED_PRECISION, EARLY_STOPPING_PATIENCE
-    
-    # Create input panel
-    console.print()
-    input_panel = Panel.fit(
-        Text("Enter new values or press Enter to keep current", style="italic"),
-        title="[bold cyan]Training Configuration[/]",
-        border_style="cyan",
-        padding=(1, 2)
-    )
-    console.print(input_panel)
-    
-    try:
-        # Get inputs with current values as defaults
-        DEFAULT_BATCH_SIZE = int(console.input(f"Batch size [[yellow]{DEFAULT_BATCH_SIZE}[/]]: ") or DEFAULT_BATCH_SIZE)
-        DEFAULT_EPOCHS = int(console.input(f"Epochs [[yellow]{DEFAULT_EPOCHS}[/]]: ") or DEFAULT_EPOCHS)
-        LEARNING_RATE = float(console.input(f"Learning rate [[yellow]{LEARNING_RATE}[/]]: ") or LEARNING_RATE)
-        WEIGHT_DECAY = float(console.input(f"Weight decay [[yellow]{WEIGHT_DECAY}[/]]: ") or WEIGHT_DECAY)
-        GRADIENT_CLIP = float(console.input(f"Gradient clip [[yellow]{GRADIENT_CLIP}[/]]: ") or GRADIENT_CLIP)
-        mp_input = console.input(f"Use mixed precision? (y/n) [[yellow]{'y' if MIXED_PRECISION else 'n'}[/]]: ").lower()
-        MIXED_PRECISION = mp_input == 'y' if mp_input else MIXED_PRECISION
-        EARLY_STOPPING_PATIENCE = int(console.input(
-            f"Early stopping patience [[yellow]{EARLY_STOPPING_PATIENCE}[/]]: "
-        ) or EARLY_STOPPING_PATIENCE)
-        
-        # Update config file
-        config = get_current_config()
-        config['training'].update({
-            'batch_size': DEFAULT_BATCH_SIZE,
-            'epochs': DEFAULT_EPOCHS,
-            'learning_rate': LEARNING_RATE,
-            'weight_decay': WEIGHT_DECAY,
-            'gradient_clip': GRADIENT_CLIP,
-            'mixed_precision': MIXED_PRECISION,
-            'early_stopping': EARLY_STOPPING_PATIENCE
-        })
-        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
-        
-        # Show success message
-        console.print(
-            Panel.fit(
-                Text("Training configuration updated successfully", style="bold green"),
-                border_style="green",
-                padding=(1, 2)
-            )
-        )
-    except ValueError as e:
-        console.print(
-            Panel.fit(
-                Text(f"Invalid input: {str(e)}", style="bold red"),
-                title="Error",
-                border_style="red",
-                padding=(1, 2)
-            )
-        )
-
-def configure_model() -> None:
-    """Configure model architecture interactively with rich formatting"""
-    global HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
-    global USE_BATCH_NORM, USE_LAYER_NORM
-    
-    # Create input panel
-    console.print()
-    input_panel = Panel.fit(
-        Text("Enter new values or press Enter to keep current", style="italic"),
-        title="[bold cyan]Model Architecture Configuration[/]",
-        border_style="cyan",
-        padding=(1, 2)
-    )
-    console.print(input_panel)
-    
-    try:
-        # Get hidden layer sizes
-        layers_input = console.input(
-            f"Hidden layer sizes (comma separated) [[yellow]{', '.join(map(str, HIDDEN_LAYER_SIZES))}[/]]: "
-        )
-        if layers_input:
-            HIDDEN_LAYER_SIZES = [int(x.strip()) for x in layers_input.split(',')]
-        
-        # Get dropout rates
-        dropout_input = console.input(
-            f"Dropout rates (comma separated) [[yellow]{', '.join(map(str, DROPOUT_RATES))}[/]]: "
-        )
-        if dropout_input:
-            DROPOUT_RATES = [float(x.strip()) for x in dropout_input.split(',')]
-        
-        # Validate layer sizes and dropout rates match
-        if len(HIDDEN_LAYER_SIZES) != len(DROPOUT_RATES):
-            console.print(
-                Panel.fit(
-                    Text("Error: Number of hidden layers must match number of dropout rates", style="bold red"),
-                    title="Error",
-                    border_style="red",
-                    padding=(1, 2)
-                )
-            )
-            return
-        
-        # Get activation function
-        act_input = console.input(
-            f"Activation function (relu/leaky_relu/gelu) [[yellow]{ACTIVATION}[/]]: "
-        )
-        ACTIVATION = act_input or ACTIVATION
-        
-        if ACTIVATION == 'leaky_relu':
-            ACTIVATION_PARAM = float(console.input(
-                f"Leaky ReLU negative slope [[yellow]{ACTIVATION_PARAM}[/]]: "
-            ) or ACTIVATION_PARAM)
-        
-        # Get batch norm input
-        bn_input = console.input(
-            f"Use batch normalization? (y/n) [[yellow]{'y' if USE_BATCH_NORM else 'n'}[/]]: "
-        ).lower()
-        USE_BATCH_NORM = bn_input == 'y' if bn_input else USE_BATCH_NORM
-        
-        # Get layer norm input
-        ln_input = console.input(
-            f"Use layer normalization? (y/n) [[yellow]{'y' if USE_LAYER_NORM else 'n'}[/]]: "
-        ).lower()
-        USE_LAYER_NORM = ln_input == 'y' if ln_input else USE_LAYER_NORM
-        
-        # Update config file
-        config = get_current_config()
-        config['model']['architecture'].update({
-            'hidden_layers': HIDDEN_LAYER_SIZES,
-            'dropout_rates': DROPOUT_RATES,
-            'activation': ACTIVATION,
-            'activation_param': ACTIVATION_PARAM,
-            'use_batch_norm': USE_BATCH_NORM,
-            'use_layer_norm': USE_LAYER_NORM
-        })
-        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
-        
-        # Show success message
-        console.print(
-            Panel.fit(
-                Text("Model configuration updated successfully", style="bold green"),
-                border_style="green",
-                padding=(1, 2)
-            )
-        )
-    except ValueError as e:
-        console.print(
-            Panel.fit(
-                Text(f"Invalid input: {str(e)}", style="bold red"),
-                title="Error",
-                border_style="red",
-                padding=(1, 2)
-            )
-        )
-
-def interactive_main() -> None:
+def interactive_main(
+    logger: logging.Logger,
+    device: torch.device,
+    config: Dict[str, Any],
+    directories: Dict[str, Path]
+) -> None:
     """Interactive main function"""
-    #banner()
-    
-    # Initial setup
-    configure_system()
-    configure_visualization()
-    set_seed(42)
-    
-    # Setup logging and directories
-    LOG_DIR = Path("logs")
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    logger = setup_logging(LOG_DIR)
-    
-    try:
-        directories = setup_directories(logger)
-        MODEL_DIR = directories['models']
-        LOG_DIR = directories['logs']
-        DATA_DIR = directories['data']
-        FIGURE_DIR = directories['figures']
-        TB_DIR = directories['tensorboard']
-        CHECKPOINT_DIR = directories['checkpoints']
-        CONFIG_DIR = directories['config']
-        RESULTS_DIR = directories['results']
-        METRICS_DIR = directories['metrics']
-        REPORTS_DIR = directories['reports']
-        LATEST_DIR = directories['latest']
-        INFO_DIR = directories['info']
-        ARTIFACTS_DIR = directories['artifacts']
-        DOCS_DIR = Path("docs")
-        
-    except Exception as e:
-        logger.error(f"Failed to set up directories: {str(e)}")
-        sys.exit(1)
-    
+    # Use the initialized objects passed from main
     while True:
         banner()
         print_menu()
@@ -2881,20 +3373,14 @@ def interactive_main() -> None:
         elif choice == "2":
             try:
                 print("\033c", end="")
-                directories = setup_directories(logger)
+                configure_directories(logger)
                 print(Fore.GREEN + Style.BRIGHT + "Directories set up successfully")
             except Exception as e:
                 print(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
         elif choice == "3":
-            # if check_versions(logger):
-            #     print(Fore.GREEN + Style.BRIGHT + "All package versions are compatible")
-            # else:
-            #     print(Fore.RED + Style.BRIGHT + "Some package versions are incompatible")
             print("\033c", end="")
             check_versions(logger)
         elif choice == "4":
-            #device = setup_gpu(logger)
-            # print(Fore.GREEN + Style.BRIGHT + f"Using device: {device}")
             print("\033c", end="")
             setup_gpu(logger)
         elif choice == "5":
@@ -2903,14 +3389,14 @@ def interactive_main() -> None:
             # Skip re-initializing logging if already set up
             if not logger.handlers:
                 logger = setup_logging(LOG_DIR)
-            train_model(use_mock=False)
+            train_model(logger, use_mock=False)
         elif choice == "6":
             print("\033c", end="")
             print(Fore.YELLOW + Style.BRIGHT + "\nStarting training with synthetic data...")
             # Skip re-initializing logging if already set up
             if not logger.handlers:
                 logger = setup_logging(LOG_DIR)
-            train_model(use_mock=True)
+            train_model(logger, use_mock=True)
         elif choice == "7":
             print("\033c", end="")
             show_config()
@@ -3042,7 +3528,7 @@ def log_epoch_progress(
     total_epochs: int,
     epoch_time: float,
     train_loss: float,
-    train_acc: float,  # Added missing parameter
+    train_acc: float,
     val_metrics: Dict[str, float],
     current_lr: float,
     patience_counter: int,
@@ -3087,6 +3573,7 @@ def log_epoch_progress(
         logger.error(f"Error formatting epoch progress: {str(e)}")
 
 def train_model(
+    logger: logging.Logger,
     use_mock: bool = False,
     config: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
@@ -3108,13 +3595,6 @@ def train_model(
     # Initialize training
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = f"run_{timestamp}"
-    
-    # Create run-specific directories
-    # run_log_dir = LOG_DIR / run_id
-    # run_figure_dir = FIGURE_DIR / run_id
-    # run_checkpoint_dir = CHECKPOINT_DIR / run_id
-    # run_tb_dir = TB_DIR / run_id
-    # run_artifact_dir = ARTIFACTS_DIR / run_id
     
     # Create run-specific directories
     run_log_dir = LOG_DIR
@@ -3413,8 +3893,9 @@ def train_model(
 
 # Main entry point
 if __name__ == "__main__":
-    # Initialize colorama for colored console output
+    # Initialize styling for colored console output
     init(autoreset=True)
+    console = Console()
     
     # Configure argument parser with enhanced help
     parser = argparse.ArgumentParser(
@@ -3470,73 +3951,13 @@ if __name__ == "__main__":
 
     try:
         # Initial system configuration
-        configure_system()
-        configure_visualization()
-        # For reproducibility
-        set_seed(42)
-        
-        # Setup logging and directories with timestamp
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        base_dir = Path(args.output_dir)
-        
-        try:
-            directories = {
-                'base': base_dir,
-                'logs': base_dir / "logs",
-                'models': base_dir / "models",
-                'data': base_dir / "data",
-                'figures': base_dir / "figures",
-                'tensorboard': base_dir / "tensorboard",
-                'checkpoints': base_dir / "checkpoints",
-                'config': base_dir / "config",
-                'results': base_dir / "results",
-                'metrics': base_dir / "metrics",
-                'reports': base_dir / "reports",
-                'latest': base_dir / "latest",
-                'info': base_dir / "info",
-                'artifacts': base_dir / "artifacts"
-            }
-            
-            # Create all directories
-            for dir_path in directories.values():
-                dir_path.mkdir(parents=True, exist_ok=True)
-                
-            # Set global directory variables
-            MODEL_DIR = directories['models']
-            LOG_DIR = directories['logs']
-            DATA_DIR = directories['data']
-            FIGURE_DIR = directories['figures']
-            TB_DIR = directories['tensorboard']
-            CHECKPOINT_DIR = directories['checkpoints']
-            CONFIG_DIR = directories['config']
-            RESULTS_DIR = directories['results']
-            METRICS_DIR = directories['metrics']
-            REPORTS_DIR = directories['reports']
-            LATEST_DIR = directories['latest']
-            INFO_DIR = directories['info']
-            ARTIFACTS_DIR = directories['artifacts']
-            
-        except Exception as e:
-            logger.error(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
-            raise SystemExit(1) from e
-
-        # Configure logging
-        logger = setup_logging(LOG_DIR)
-        if args.debug:
-            logger.setLevel(logging.DEBUG)
-            logger.debug("Debug logging enabled")
-            torch._logging.set_logs(all=logging.DEBUG)
-        else:
-            logger.setLevel(logging.INFO)
-        
-        config = initialize_config(logger)
-        update_global_config(config)
+        logger, device, directories, config = initialize_system()
 
         if args.interactive:
             # Interactive mode
             try:
-                #print(Fore.MAGENTA + Style.BRIGHT + "\n                    === Interactive Mode ===".center(60))
-                interactive_main()
+                interactive_main(logger, device, directories, config)
             except KeyboardInterrupt:
                 print(Fore.YELLOW + Style.BRIGHT + "\n\nOperation cancelled by user")
                 sys.exit(0)
