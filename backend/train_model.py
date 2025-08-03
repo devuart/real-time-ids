@@ -1920,7 +1920,7 @@ def display_smote_results(original_counts: pd.Series, new_counts: pd.Series) -> 
     change_pct_total = (change_total / orig_total) * 100
     
     summary_table.add_row(
-        "[bold]Total Samples",
+        "[bold yellow]Total Samples",
         f"{orig_total:,}",
         f"{new_total:,}",
         f"[bold]{change_total:+,} ({change_pct_total:+.1f}%)"
@@ -3648,7 +3648,7 @@ def train_model(
                     logger.info("Preprocessing completed successfully")
                 
                 df, artifacts = load_and_validate_data()
-                logger.info(f"Loaded {len(df)} validated samples")
+                logger.info(Fore.GREEN + Style.BRIGHT + "Loaded" + Fore.YELLOW + Style.BRIGHT + f"{len(df)}" + Fore.GREEN + Style.BRIGHT + "validated samples")
                 training_meta['data_source'] = 'real'
                 training_meta['original_samples'] = len(df)
 
