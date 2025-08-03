@@ -2641,7 +2641,7 @@ def prepare_dataloaders(
         
         # Handle class imbalance
         class_counts = torch.bincount(y_tensor[train_idx])
-        logger.info(Fore.CYAN + Style.BRIGHT + "Initial class distribution:" + Fore.YELLOW + Style.BRIGHT + f"{class_counts.tolist()}")
+        logger.info(Fore.GREEN + Style.BRIGHT + "Initial class distribution:" + Fore.MAGENTA + Style.BRIGHT + f"{class_counts.tolist()}")
         
         if torch.min(class_counts) < 1000:  # Threshold for extreme imbalance
             logger.warning("Extreme class imbalance detected, applying SMOTE...")
@@ -2707,7 +2707,7 @@ def prepare_dataloaders(
             pin_memory=pin_memory
         )
         
-        logger.info(Fore.MAGENTA + Style.BRIGHT + f"Prepared dataloaders with " + Fore.YELLOW + Style.BRIGHT + f"{len(train_dataset)}" + Fore.MAGENTA + Style.BRIGHT + " training and " + Fore.YELLOW + Style.BRIGHT + f"{len(val_dataset)}" + Fore.MAGENTA + Style.BRIGHT + " validation samples")
+        logger.info(Fore.GREEN + Style.BRIGHT + f"Prepared dataloaders with " + Fore.MAGENTA + Style.BRIGHT + f"{len(train_dataset)}" + Fore.GREEN + Style.BRIGHT + " training and " + Fore.MAGENTA + Style.BRIGHT + f"{len(val_dataset)}" + Fore.GREEN + Style.BRIGHT + " validation samples")
         return train_loader, val_loader, X.shape[1], len(class_counts)
         
     except Exception as e:
@@ -2960,7 +2960,7 @@ def visualize_data_distribution(
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         plt.close()
         
-        logger.info(Fore.GREEN + Style.BRIGHT + "Saved PCA visualization of data distribution " + Fore.CYAN +Style.BRIGHT + f"{plot_path}")
+        logger.info(Fore.GREEN + Style.BRIGHT + "Saved PCA visualization of data distribution " + Fore.MAGENTA +Style.BRIGHT + f"{plot_path}")
         return plot_path
         
     except Exception as e:
@@ -3648,7 +3648,7 @@ def train_model(
                     logger.info("Preprocessing completed successfully")
                 
                 df, artifacts = load_and_validate_data()
-                logger.info(Fore.GREEN + Style.BRIGHT + "Loaded" + Fore.YELLOW + Style.BRIGHT + f"{len(df)}" + Fore.GREEN + Style.BRIGHT + "validated samples")
+                logger.info(Fore.GREEN + Style.BRIGHT + "Loaded " + Fore.YELLOW + Style.BRIGHT + f"{len(df)}" + Fore.GREEN + Style.BRIGHT + " validated samples")
                 training_meta['data_source'] = 'real'
                 training_meta['original_samples'] = len(df)
 
@@ -3673,7 +3673,7 @@ def train_model(
                 'train_batches': len(train_loader),
                 'val_batches': len(val_loader)
             })
-            logger.info(Fore.GREEN + Style.BRIGHT + "Data prepared - Input size: " + Fore.YELLOW + Style.BRIGHT + f"{input_size}" + Fore.GREEN + Style.BRIGHT + ", Classes: " + Fore.YELLOW + Style.BRIGHT + f"{num_classes}")
+            logger.info(Fore.GREEN + Style.BRIGHT + "Data prepared - Input size: " + Fore.MAGENTA + Style.BRIGHT + f"{input_size}" + Fore.GREEN + Style.BRIGHT + ", Classes: " + Fore.MAGENTA + Style.BRIGHT + f"{num_classes}")
 
         except Exception as e:
             raise DataPreparationError(f"Data preparation failed: {str(e)}") from e
@@ -3686,7 +3686,7 @@ def train_model(
             class_counts = torch.tensor(df['Label'].value_counts().sort_index().values, dtype=torch.float32)
             class_weights = (1. / class_counts) * (class_counts.sum() / num_classes)
             class_weights = class_weights / class_weights.sum()
-            logger.info(Fore.YELLOW + Style.BRIGHT + "Class weights: " + Fore.WHITE + Style.BRIGHT + f"{class_weights.tolist()}")
+            logger.info(Fore.GREEN + Style.BRIGHT + "Class weights: " + Fore.MAGENTA + Style.BRIGHT + f"{class_weights.tolist()}")
             training_meta['class_weights'] = class_weights.cpu().numpy().tolist()
             
             # Training components
