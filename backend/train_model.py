@@ -22,7 +22,6 @@ import zipfile
 import shutil
 import contextlib
 import psutil
-#from datetime import datetime
 
 # Third-party imports
 from colorama import Fore, Style, init
@@ -32,13 +31,14 @@ from rich import box
 from rich.text import Text
 from rich.panel import Panel
 from rich.columns import Columns
-from rich.progress import Progress, BarColumn
+from rich.progress import Progress, BarColumn, track
 from rich.prompt import Prompt
 from copy import deepcopy
 import numpy as np
 import pandas as pd
 import pkg_resources
 from pynput.keyboard import Key, Listener
+from mpl_toolkits.mplot3d import Axes3D
 
 # Machine learning and deep learning imports
 import torch
@@ -52,6 +52,7 @@ import torch._logging
 from torch.serialization import add_safe_globals
 import torch.utils.data
 import torch.utils.data.distributed
+import torch.nn.functional as F
 
 # Scikit-learn imports
 from sklearn.metrics import (
@@ -60,28 +61,46 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     f1_score,
+    fbeta_score,
     precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
     roc_curve,
+    silhouette_score,
+    davies_bouldin_score,
 )
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, IncrementalPCA
 from sklearn.datasets import make_classification
 from sklearn.exceptions import ConvergenceWarning
+from sklearn.neighbors import NearestNeighbors
+from sklearn.svm import SVC
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
+
+from scipy.stats import entropy, ttest_ind, ttest_ind_from_stats, ks_2samp
+from functools import partial
+from multiprocessing import Pool, cpu_count
+from statsmodels.stats.multitest import multipletests
+from plotly.subplots import make_subplots
+import plotly.express as px
+import plotly.graph_objects as go
+#from umap import UMAP
+import umap
 
 # Imbalanced learning imports
 import imblearn
-from imblearn.over_sampling import SMOTE, ADASYN, RandomOverSampler
+from imblearn.over_sampling import SMOTE, ADASYN, BorderlineSMOTE, RandomOverSampler
 from imblearn.under_sampling import (
     CondensedNearestNeighbour,
     NearMiss,
     RandomUnderSampler,
 )
-from imblearn.combine import SMOTEENN, SMOTETomek
+from imblearn.combine import SMOTETomek, SMOTEENN
 from imblearn.pipeline import Pipeline
+from imblearn.under_sampling import TomekLinks
 
 # Visualization
 import matplotlib
@@ -102,10 +121,32 @@ console = Console()
 
 # Declare the class names that will be defined later
 class IDSModel:
-    pass  # Forward declaration
+    # Forward declaration
+    pass
 
 class UnicodeStreamHandler:
-    pass  # Forward declaration
+    # Forward declaration
+    pass
+
+class SimpleIDSModel:
+    # Forward declaration
+    pass
+
+class StabilizedIDSModel:
+    # Forward declaration
+    pass
+
+class EnsembleIDSModel:
+    # Forward declaration
+    pass
+
+class WarmupScheduler:
+    # Foward declaration
+    pass
+
+class SecurityAwareLoss:
+    # Foward declaration
+    pass
 
 # Whitelist TorchVersion for safe loading
 add_safe_globals([
@@ -624,17 +665,47 @@ def configure_system() -> None:
     warnings.simplefilter('ignore', category=matplotlib.MatplotlibDeprecationWarning)
 
 # Visualization configuration
-def configure_visualization() -> None:
-    """Configure visualization settings."""
+VIZ_CONFIG = {
+    'interactive': False,
+    'max_samples': 5000,
+    'projections': ['pca', 'tsne', 'umap'],
+    'dpi': 150,
+    'style': 'seaborn-v0_8',
+    'backend': 'Agg' if os.environ.get('DISPLAY', '') == '' else None
+}
+
+def configure_visualization(
+    interactive: bool = False,
+    max_samples: int = 5000,
+    projections: List[str] = None,
+    dpi: int = 150,
+    style: str = 'seaborn-v0_8'
+) -> None:
+    """Centralized visualization configuration with matplotlib defaults."""
+    global VIZ_CONFIG
+    
+    # Handle projection methods
+    if projections:
+        valid_projections = ['pca', 'tsne', 'umap']
+        if not all(p in valid_projections for p in projections):
+            raise ValueError(f"Invalid projection method. Choose from {valid_projections}")
+        VIZ_CONFIG['projections'] = projections
+        
+    # Update configuration
+    VIZ_CONFIG.update({
+        'interactive': interactive,
+        'max_samples': max_samples,
+        'dpi': dpi,
+        'style': style
+    })
+    
+    # Configure matplotlib
     try:
-        plt.style.use('seaborn-v0_8')
-        # Set appropriate backend
-        if os.environ.get('DISPLAY', '') == '':
-            # For headless environments
-            matplotlib.use('Agg')
+        plt.style.use(style)
+        if VIZ_CONFIG['backend']:
+            matplotlib.use(VIZ_CONFIG['backend'])
     except:
-        # Fallback style
-        plt.style.use('ggplot')
+        plt.style.use('ggplot')  # Fallback style
     
     # Set global plot parameters
     rcParams['figure.figsize'] = (12, 8)
@@ -645,11 +716,10 @@ def configure_visualization() -> None:
     rcParams['ytick.labelsize'] = 10
     rcParams['legend.fontsize'] = 10
     rcParams['figure.titlesize'] = 16
-    rcParams['figure.dpi'] = 100
+    rcParams['figure.dpi'] = dpi
     rcParams['savefig.dpi'] = 300
     rcParams['savefig.bbox'] = 'tight'
     rcParams['savefig.transparent'] = False
-    # Better font compatibility
     rcParams['font.family'] = 'DejaVu Sans'
 
 # Reproducibility configuration
@@ -940,11 +1010,329 @@ MIXED_PRECISION = True
 
 # Model architecture constants
 HIDDEN_LAYER_SIZES = [512, 256, 128, 64]
-DROPOUT_RATES = [0.5, 0.4, 0.3, 0.2]
+#DROPOUT_RATES = [0.5, 0.4, 0.3, 0.2]
+DROPOUT_RATES = [0.3, 0.25, 0.2, 0.15]
 ACTIVATION = 'leaky_relu'
 ACTIVATION_PARAM = 0.1
 USE_BATCH_NORM = True
 USE_LAYER_NORM = False
+
+DEFAULT_ATTACK_THRESHOLD = 0.3
+FALSE_NEGATIVE_COST = 2.0
+SECURITY_METRICS = True
+
+# Configuration for testing different architectures
+STABILITY_CONFIG = {
+    # Start with simpler model
+    'model_type': 'simple',
+    'use_batch_norm': True,
+    # Less aggressive
+    'dropout_rates': [0.3, 0.25, 0.2, 0.15],
+    'gradient_clip': 1.0,
+    'warmup_epochs': 5,
+    'learning_rate': 1e-3,
+    'weight_decay': 1e-4,
+    # Security-focused
+    'fn_cost': 2.0
+}
+
+PERFORMANCE_CONFIG = {
+    # For best performance
+    'model_type': 'ensemble',
+    'num_ensemble_models': 3,
+    'use_batch_norm': True,
+    'dropout_rates': [0.2, 0.15, 0.1],
+    'gradient_clip': 0.5,
+    'warmup_epochs': 10,
+    'learning_rate': 5e-4,
+    'weight_decay': 1e-5
+}
+
+# Model architecture options
+MODEL_VARIANTS = {
+    'standard': IDSModel,
+    'simple': SimpleIDSModel,
+    'stabilized': StabilizedIDSModel,
+    'ensemble': EnsembleIDSModel
+}
+
+# Add configuration presets for easy testing
+PRESET_CONFIGS = {
+    'stability': {
+        'model_type': 'simple',
+        'use_batch_norm': True,
+        'dropout_rates': [0.3, 0.25, 0.2, 0.15],
+        'gradient_clip': 1.0,
+        'warmup_epochs': 5,
+        'learning_rate': 1e-3,
+        'weight_decay': 1e-4,
+        'fn_cost': 2.0,
+        'batch_size': 64,
+        'epochs': 50,
+        'early_stopping': 8
+    },
+    'performance': {
+        'model_type': 'ensemble',
+        'num_ensemble_models': 3,
+        'use_batch_norm': True,
+        'dropout_rates': [0.2, 0.15, 0.1],
+        'gradient_clip': 0.5,
+        'warmup_epochs': 10,
+        'learning_rate': 5e-4,
+        'weight_decay': 1e-5,
+        'fn_cost': 2.0,
+        'batch_size': 128,
+        'epochs': 100,
+        'early_stopping': 12
+    },
+    'baseline': {
+        'model_type': 'standard',
+        'use_batch_norm': True,
+        'dropout_rates': [0.3, 0.25, 0.2, 0.15],
+        'gradient_clip': 1.0,
+        'warmup_epochs': 3,
+        'learning_rate': 1e-3,
+        'weight_decay': 1e-4,
+        'fn_cost': 1.5,
+        'batch_size': 64,
+        'epochs': 75,
+        'early_stopping': 10
+    },
+    'debug': {
+        'model_type': 'simple',
+        'use_batch_norm': True,
+        'dropout_rates': [0.2, 0.1],
+        'gradient_clip': 0.5,
+        'warmup_epochs': 2,
+        'learning_rate': 1e-3,
+        'weight_decay': 1e-5,
+        'fn_cost': 1.0,
+        'batch_size': 32,
+        'epochs': 10,
+        'early_stopping': 5
+    }
+}
+
+def initialize_model_variants():
+    """Initialize MODEL_VARIANTS dictionary after all classes are defined"""
+    global MODEL_VARIANTS
+    MODEL_VARIANTS = {}
+    
+    # Check if each model class exists and add it
+    try:
+        if 'IDSModel' in globals():
+            MODEL_VARIANTS['standard'] = IDSModel
+    except NameError:
+        pass
+    
+    try:
+        if 'SimpleIDSModel' in globals():
+            MODEL_VARIANTS['simple'] = SimpleIDSModel
+    except NameError:
+        pass
+    
+    try:
+        if 'StabilizedIDSModel' in globals():
+            MODEL_VARIANTS['stabilized'] = StabilizedIDSModel
+    except NameError:
+        pass
+    
+    try:
+        if 'EnsembleIDSModel' in globals():
+            MODEL_VARIANTS['ensemble'] = EnsembleIDSModel
+    except NameError:
+        pass
+
+def compare_model_architectures() -> Dict[str, Dict[str, Any]]:
+    """Compare parameter counts and complexity of different model architectures"""
+    results = {}
+    
+    # Initialize model variants if empty
+    if not MODEL_VARIANTS:
+        initialize_model_variants()
+    
+    # Test input size (typical for network traffic features)
+    # Example feature count
+    test_input_size = 78
+    
+    # Binary classification
+    test_output_size = 2
+    
+    console.print(f"[dim]Testing with input size: {test_input_size}, output size: {test_output_size}[/]")
+    console.print(f"[dim]Available models: {list(MODEL_VARIANTS.keys())}[/]")
+    
+    for model_name, model_class in MODEL_VARIANTS.items():
+        try:
+            console.print(f"[dim]Creating {model_name} model...[/]")
+            
+            if model_name == 'standard':
+                model = model_class(
+                    input_size=test_input_size,
+                    output_size=test_output_size,
+                    use_batch_norm=True,
+                    # Ensure we don't exceed available rates
+                    dropout_rates=DROPOUT_RATES[:4]
+                )
+            elif model_name == 'simple':
+                model = model_class(
+                    input_size=test_input_size,
+                    output_size=test_output_size,
+                    dropout_rate=0.2
+                )
+            elif model_name == 'ensemble':
+                model = model_class(
+                    input_size=test_input_size,
+                    output_size=test_output_size,
+                    num_models=3
+                )
+            elif model_name == 'stabilized':
+                model = model_class(
+                    input_size=test_input_size,
+                    num_classes=test_output_size,
+                    dropout_rate=0.2
+                )
+            else:
+                continue
+                
+            # Calculate parameters
+            total_params = sum(p.numel() for p in model.parameters())
+            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            
+            # Estimate memory usage (rough approximation)
+            param_memory_mb = total_params * 4 / (1024 * 1024)  # 4 bytes per float32
+            
+            results[model_name] = {
+                'total_params': total_params,
+                'trainable_params': trainable_params,
+                'memory_mb': param_memory_mb,
+                'model_class': model_class.__name__
+            }
+            
+            console.print(f"[dim]✓ {model_name}: {total_params:,} parameters[/]")
+            
+        except Exception as e:
+            console.print(f"[dim]✗ {model_name} failed: {str(e)}[/]")
+            results[model_name] = {'error': str(e)}
+    
+    return results
+
+def display_model_comparison():
+    """Display model architecture comparison in a rich table"""
+    console.print("\n[bold cyan]Analyzing model architectures...[/]")
+    
+    # Check if models are available
+    available_models = []
+    model_check_results = []
+    
+    # Check each model class
+    models_to_check = [
+        ('standard', 'IDSModel'),
+        ('simple', 'SimpleIDSModel'), 
+        ('stabilized', 'StabilizedIDSModel'),
+        ('ensemble', 'EnsembleIDSModel')
+    ]
+    
+    for model_key, class_name in models_to_check:
+        if class_name in globals():
+            available_models.append(model_key)
+            model_check_results.append(f"✓ {class_name}")
+        else:
+            model_check_results.append(f"✗ {class_name} (not found)")
+    
+    # Show what models are available
+    console.print("\n[bold]Model Availability Check:[/]")
+    for result in model_check_results:
+        if "✓" in result:
+            console.print(f"[green]{result}[/]")
+        else:
+            console.print(f"[red]{result}[/]")
+    
+    if not available_models:
+        console.print(
+            Panel.fit(
+                Text("No model classes found! Please ensure all model classes are defined.", style="bold red"),
+                title="[bold red]Error[/]",
+                border_style="red"
+            )
+        )
+        return
+    
+    # Run comparison only on available models
+    comparison = compare_model_architectures()
+    
+    if not comparison:
+        console.print(
+            Panel.fit(
+                Text("Model comparison failed - no results generated", style="bold red"),
+                title="[bold red]Error[/]",
+                border_style="red"
+            )
+        )
+        return
+    
+    console.print()
+    comp_table = Table(
+        title="[bold cyan]Model Architecture Comparison[/]",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        border_style="blue",
+        show_header=True,
+        show_lines=True
+    )
+    
+    comp_table.add_column("Model", style="bold yellow", width=12)
+    comp_table.add_column("Parameters", style="bold white", justify="right")
+    comp_table.add_column("Memory (MB)", style="bold green", justify="right")
+    comp_table.add_column("Complexity", style="bold magenta", justify="center")
+    comp_table.add_column("Status", style="bold white", justify="center")
+    
+    for model_name, stats in comparison.items():
+        if 'error' in stats:
+            comp_table.add_row(
+                model_name,
+                "[red]Error[/]",
+                "[red]N/A[/]",
+                "[red]N/A[/]",
+                f"[red]{stats['error'][:30]}...[/]" if len(stats['error']) > 30 else f"[red]{stats['error']}[/]"
+            )
+        else:
+            # Determine complexity level
+            params = stats['total_params']
+            if params < 10000:
+                complexity = "[green]Low[/]"
+            elif params < 100000:
+                complexity = "[yellow]Medium[/]"
+            else:
+                complexity = "[red]High[/]"
+            
+            comp_table.add_row(
+                model_name,
+                f"{stats['total_params']:,}",
+                f"{stats['memory_mb']:.1f}",
+                complexity,
+                "[green]✓ Working[/]"
+            )
+    
+    console.print(comp_table)
+    
+    # Show recommendations
+    console.print()
+    recommendations = Table(
+        title="[bold]Recommendations[/]",
+        box=box.SIMPLE,
+        header_style="bold yellow",
+        border_style="yellow"
+    )
+    recommendations.add_column("Use Case", style="bold cyan")
+    recommendations.add_column("Recommended Model", style="bold green")
+    recommendations.add_column("Reason", style="bold white")
+    
+    recommendations.add_row("Quick Testing", "simple", "Fastest training, good for debugging")
+    recommendations.add_row("Stable Training", "stabilized", "Balanced performance and stability")
+    recommendations.add_row("Best Performance", "ensemble", "Highest accuracy, longer training")
+    recommendations.add_row("Production", "standard", "Good balance of all factors")
+    
+    console.print(recommendations)
 
 def update_config(key_path: str, value: Any, config_path: Path, logger: logging.Logger) -> None:
     """Update a specific configuration value and track changes."""
@@ -1007,6 +1395,11 @@ def get_current_config() -> Dict[str, Any]:
         'system': {
             'seed': 42,
             'logging_level': 'INFO'
+        },
+        'security': {
+            'attack_threshold': DEFAULT_ATTACK_THRESHOLD,
+            'false_negative_cost': FALSE_NEGATIVE_COST,
+            'enable_security_metrics': SECURITY_METRICS
         }
     }
 
@@ -1401,23 +1794,34 @@ def initialize_system():
     config = initialize_config(logger)
     update_global_config(config)
     
+    # Initialize model variants after all classes are loaded
+    initialize_model_variants()
+    
     return logger, device, directories, config
 
 # Model architecture
 class IDSModel(nn.Module):
-    def __init__(self, input_size: int, output_size: int):
+    def __init__(self, input_size: int, output_size: int, use_batch_norm: bool = True, dropout_rates: List[float] = None):
         """Enhanced IDS model with flexible architecture and normalization options."""
         super().__init__()
+        
+        # Default dropout rates (less aggressive for stability)
+        if dropout_rates is None:
+            dropout_rates = [0.3, 0.25, 0.2, 0.15]
+        
+        # Ensure we have enough dropout rates
+        while len(dropout_rates) < len(HIDDEN_LAYER_SIZES):
+            dropout_rates.append(dropout_rates[-1])
         
         layers = []
         prev_size = input_size
         
         # Create hidden layers
-        for i, (size, dropout) in enumerate(zip(HIDDEN_LAYER_SIZES, DROPOUT_RATES)):
+        for i, (size, dropout) in enumerate(zip(HIDDEN_LAYER_SIZES, dropout_rates)):
             layers.append(nn.Linear(prev_size, size))
             
-            # Add normalization
-            if USE_BATCH_NORM:
+            # Add normalization (configurable)
+            if use_batch_norm or USE_BATCH_NORM:
                 layers.append(nn.BatchNorm1d(size))
             elif USE_LAYER_NORM:
                 layers.append(nn.LayerNorm(size))
@@ -1452,9 +1856,137 @@ class IDSModel(nn.Module):
             elif isinstance(m, nn.BatchNorm1d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.LayerNorm):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+class SimpleIDSModel(nn.Module):
+    """Simplified IDS model for testing - less parameters to reduce overfitting"""
+    def __init__(self, input_size: int, output_size: int, dropout_rate: float = 0.2):
+        super().__init__()
+        
+        # Smaller architecture
+        self.net = nn.Sequential(
+            nn.Linear(input_size, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            
+            nn.Linear(32, output_size)
+        )
+        
+        self._initialize_weights()
+        
+    def _initialize_weights(self):
+        """Initialize weights with Xavier normal for smaller network."""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+class EnsembleIDSModel(nn.Module):
+    """Ensemble of multiple models for improved performance"""
+    def __init__(self, input_size: int, output_size: int, num_models: int = 3):
+        super().__init__()
+        
+        self.models = nn.ModuleList([
+            SimpleIDSModel(input_size, output_size, dropout_rate=0.1 + i*0.1)
+            for i in range(num_models)
+        ])
+        
+        # Optional: Add a combiner layer
+        self.combiner = nn.Linear(output_size * num_models, output_size)
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Get outputs from all models
+        outputs = [model(x) for model in self.models]
+        
+        # Simple averaging
+        ensemble_output = torch.stack(outputs).mean(dim=0)
+        
+        # Optional: Use learnable combination
+        # combined = torch.cat(outputs, dim=1)
+        # ensemble_output = self.combiner(combined)
+        
+        return ensemble_output
+
+class StabilizedIDSModel(nn.Module):
+    """IDS model with batch normalization and dropout for stability"""
+    def __init__(self, input_size: int, num_classes: int, dropout_rate: float = 0.2):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(input_size, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            
+            nn.Linear(128, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            
+            nn.Linear(64, 32),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            
+            nn.Linear(32, num_classes)
+        )
+        
+    def forward(self, x):
+        return self.layers(x)
+
+class WarmupScheduler:
+    """Learning rate warmup scheduler"""
+    def __init__(self, optimizer, warmup_epochs: int, base_lr: float):
+        self.optimizer = optimizer
+        self.warmup_epochs = warmup_epochs
+        self.base_lr = base_lr
+        self.current_step = 0
+        
+    def step(self):
+        self.current_step += 1
+        if self.current_step <= self.warmup_epochs:
+            lr_scale = self.current_step / self.warmup_epochs
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr_scale * self.base_lr
+
+# Fix SecurityAwareLoss class if missing
+class SecurityAwareLoss(nn.Module):
+    """Custom loss function that penalizes false negatives more heavily"""
+    def __init__(self, class_weights: torch.Tensor = None, false_negative_cost: float = 2.0):
+        super().__init__()
+        self.class_weights = class_weights
+        self.false_negative_cost = false_negative_cost
+        self.base_criterion = nn.CrossEntropyLoss(weight=class_weights)
+        
+    def forward(self, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        base_loss = self.base_criterion(outputs, targets)
+        
+        # Additional penalty for false negatives (missed attacks)
+        probs = torch.softmax(outputs, dim=1)
+        attack_class = 1  # Assuming attack is class 1
+        
+        # Penalty when model predicts normal (low attack prob) but target is attack
+        fn_mask = (targets == attack_class) & (probs[:, attack_class] < 0.5)
+        fn_penalty = fn_mask.float().mean() * self.false_negative_cost
+        
+        return base_loss + fn_penalty
 
 # Data preprocessing and validation
 def check_preprocessing_outputs(
@@ -2303,16 +2835,150 @@ def load_and_clean_data(
     display_data_validation_summary(stats)
     return df
 
+def auto_select_oversampler(
+    results: Dict[str, Dict],
+    metric_weights: Optional[Dict[str, float]] = None,
+    min_validation_acc: float = 0.7,
+    verbose: bool = False
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Automatically select the best oversampling method based on comprehensive evaluation metrics.
+    
+    Args:
+        results: Dictionary containing evaluation results for each oversampling method
+                Format: {method_name: {metric1: value, metric2: value, ...}}
+        metric_weights: Optional dictionary to customize metric weighting
+                      Default: {'val_acc': 0.5, 'boundary_violation_rate': 0.3, 'silhouette_score': 0.2}
+        min_validation_acc: Minimum validation accuracy threshold (methods below this are filtered out)
+        verbose: Whether to print scoring details
+        
+    Returns:
+        Tuple of (best_method_name, scoring_details) where scoring_details contains:
+        - method_scores: Individual scores for each method
+        - metric_weights: Actual weights used
+        - filtered_methods: Methods removed due to failing min_validation_acc
+        
+    Raises:
+        ValueError: If no valid methods are available after filtering
+        
+    Selection Criteria (prioritized):
+    1. Must meet minimum validation accuracy threshold
+    2. Weighted combination of:
+       - Validation accuracy (higher better)
+       - Boundary violation rate (lower better) 
+       - Silhouette score (higher better)
+       - Feature correlation difference (lower better)
+    """
+    # Default metric weights if not provided
+    default_weights = {
+        'val_acc': 0.5,
+        'boundary_violation_rate': -0.3,  # Negative because lower is better
+        'silhouette_score': 0.15,
+        'feature_correlation_diff': -0.05  # Negative because lower is better
+    }
+    weights = metric_weights or default_weights
+    
+    # Filter methods that meet minimum accuracy threshold
+    valid_methods = {
+        method: metrics 
+        for method, metrics in results.items() 
+        if not metrics.get('error') and metrics.get('val_acc', 0) >= min_validation_acc
+    }
+    
+    if not valid_methods:
+        raise ValueError(f"No methods met minimum validation accuracy of {min_validation_acc}")
+    
+    # Normalize metrics and calculate scores
+    method_scores = {}
+    metric_stats = {}
+    
+    # First pass to collect stats for normalization
+    for metric in weights.keys():
+        values = [m.get(metric, np.nan) for m in valid_methods.values()]
+        metric_stats[metric] = {
+            'min': np.nanmin(values),
+            'max': np.nanmax(values),
+            'mean': np.nanmean(values)
+        }
+    
+    # Score calculation
+    for method, metrics in valid_methods.items():
+        score = 0
+        details = {}
+        
+        for metric, weight in weights.items():
+            raw_value = metrics.get(metric, metric_stats[metric]['mean'])
+            
+            # Handle NaN values by using metric average
+            if np.isnan(raw_value):
+                raw_value = metric_stats[metric]['mean']
+                if verbose:
+                    logger.warning(f"Using mean value for {metric} in {method} due to NaN")
+            
+            # Normalize value between 0-1 (except for negative weights)
+            if weight > 0:  # Higher is better
+                norm_value = ((raw_value - metric_stats[metric]['min']) / 
+                             (metric_stats[metric]['max'] - metric_stats[metric]['min'] + 1e-10))
+            else:  # Lower is better (negative weight)
+                norm_value = 1 - ((raw_value - metric_stats[metric]['min']) / 
+                                 (metric_stats[metric]['max'] - metric_stats[metric]['min'] + 1e-10))
+            
+            # Accumulate weighted score
+            contribution = norm_value * abs(weight)
+            score += contribution
+            details[metric] = {
+                'raw': raw_value,
+                'normalized': norm_value,
+                'weight': abs(weight),
+                'contribution': contribution
+            }
+        
+        method_scores[method] = {
+            'total_score': score,
+            'details': details
+        }
+    
+    # Select method with highest score
+    best_method = max(method_scores.items(), key=lambda x: x[1]['total_score'])[0]
+    
+    if verbose:
+        # Print scoring breakdown
+        console.print("\n[bold]Oversampler Selection Report[/bold]")
+        table = Table(title="Method Scoring", box=box.ROUNDED)
+        table.add_column("Method", style="cyan")
+        table.add_column("Total Score", style="magenta")
+        for metric in weights:
+            table.add_column(metric, justify="right")
+        
+        for method, scores in method_scores.items():
+            row = [method, f"{scores['total_score']:.3f}"]
+            for metric in weights:
+                row.append(f"{scores['details'][metric]['raw']:.3f}")
+            table.add_row(*row)
+        
+        console.print(table)
+        console.print(f"[bold green]Selected method: {best_method}[/bold green]")
+    
+    return best_method, {
+        'method_scores': method_scores,
+        'metric_weights': weights,
+        'filtered_methods': set(results.keys()) - set(valid_methods.keys())
+    }
+
 def handle_class_imbalance(
     df: pd.DataFrame,
     artifacts: Dict,
     *,
+    oversampler: str = "SMOTE",
     apply_smote: bool = True,
     imbalance_threshold: float = 10.0,
     label_col: str = "Label",
-    sampling_strategy: str = "auto",
+    sampling_strategy: Union[str, dict] = "auto",
     random_state: int = 42,
-    use_color: bool = True,
+    n_jobs: int = -1,
+    evaluate_quality: bool = True,
+    visualize: bool = True,
+    sample_metrics: Optional[int] = None,
     debug: bool = False
 ) -> pd.DataFrame:
     """Enhanced class imbalance handler with flexible controls.
@@ -2320,119 +2986,1226 @@ def handle_class_imbalance(
     Args:
         df: Input DataFrame
         artifacts: Preprocessing artifacts dict
-        apply_smote: Whether to apply SMOTE (default: True)
-        imbalance_threshold: Ratio to consider imbalance (default: 10.0)
-        label_col: Name of label column (default: "Label")
-        sampling_strategy: SMOTE sampling strategy
-        random_state: Random seed for reproducibility
-        use_color: Enable colored output
+        oversampler: Type of oversampler (see available_samplers)
+        apply_smote: Whether to apply oversampling
+        imbalance_threshold: Ratio to consider imbalance
+        label_col: Name of label column
+        sampling_strategy: Oversampling strategy
+        random_state: Random seed (None uses class default)
+        evaluate_quality: Whether to calculate quality metrics
+        visualize: Whether to generate visualizations
+        sample_metrics: Number of samples to use for metrics (None for all)
         debug: Enable verbose debugging
         
     Returns:
-        Balanced DataFrame if SMOTE applied, else original
+        Balanced DataFrame if oversampling applied, else original
         
     Raises:
         ValueError: For invalid inputs or single-class data
         RuntimeError: For SMOTE application failures
     """
-    # Setup styling
-    red = Fore.RED if use_color else ""
-    yellow = Fore.YELLOW if use_color else ""
-    green = Fore.GREEN if use_color else ""
-    reset = Style.RESET_ALL if use_color else ""
-    
-    console.print("\n")
-    console.print(Panel.fit(
-        "[bold green]Class Imbalance Analysis[/bold green]",
-        border_style="blue"
-    ))
-    
     # Validate inputs
-    if label_col not in df.columns:
-        raise ValueError(f"Label column '{label_col}' not found")
-        
-    if not isinstance(artifacts, dict) or 'feature_names' not in artifacts:
-        raise ValueError("Invalid artifacts - must contain feature_names")
+    _validate_inputs(df, artifacts, label_col)
     
     # Get class distribution
     class_counts = df[label_col].value_counts()
-    n_classes = len(class_counts)
-    
-    if n_classes < 2:
-        raise ValueError("Dataset must contain at least 2 classes")
-    
-    # Display class distribution
-    display_class_distribution(class_counts)
-    
-    # Calculate imbalance
     min_samples = class_counts.min()
-    max_samples = class_counts.max()
-    imbalance_ratio = max_samples / min_samples
     
-    display_imbalance_analysis(imbalance_ratio, imbalance_threshold)
-    console.print("\n")
+    # Display initial analysis
+    _display_initial_analysis(class_counts, imbalance_threshold)
     
-    # Handle imbalance if exceeds threshold
-    if imbalance_ratio > imbalance_threshold:
-        logger.warning(
-            f"{yellow}Significant imbalance detected ({imbalance_ratio:.1f}:1) "
-            f"(threshold: {imbalance_threshold}:1){reset}"
+    # Check if imbalance exceeds threshold
+    if (class_counts.max() / min_samples) <= imbalance_threshold:
+        console.print("[bold green]Class distribution within acceptable limits[/bold green]")
+        return df
+        
+    if not apply_smote:
+        console.print("[bold yellow]Oversampling not applied (apply_smote=False)[/bold yellow]")
+        return df
+        
+    # Apply oversampling
+    try:
+        start_time = time.time()
+        balanced_df, metrics = _apply_oversampling(
+            df=df,
+            artifacts=artifacts,
+            oversampler=oversampler,
+            label_col=label_col,
+            sampling_strategy=sampling_strategy,
+            random_state=random_state,
+            evaluate_quality=evaluate_quality,
+            visualize=visualize,
+            sample_metrics=sample_metrics,
+            min_samples=min_samples,
+            n_jobs=n_jobs
         )
         
-        if not apply_smote:
-            console.print("[bold yellow]SMOTE not applied (apply_smote=False)[/bold yellow]")
-            return df
-            
+        # Report performance
+        elapsed = time.time() - start_time
+        _report_results(
+            original_counts=class_counts,
+            new_counts=balanced_df[label_col].value_counts(),
+            metrics=metrics,
+            elapsed_time=elapsed,
+            sampler_name=oversampler
+        )
+        
+        return balanced_df
+        
+    except Exception as e:
+        logger.error(f"{oversampler} failed: {str(e)}")
+        if debug:
+            logger.exception("Oversampling error details:")
+        raise RuntimeError("Class balancing failed") from e
+
+def _validate_inputs(
+    df: pd.DataFrame,
+    artifacts: Dict,
+    label_col: str
+):
+    """Validate input parameters."""
+    if label_col not in df.columns:
+        raise ValueError(f"Label column '{label_col}' not found in DataFrame")
+        
+    if not isinstance(artifacts, dict) or 'feature_names' not in artifacts:
+        raise ValueError("Artifacts must be a dict containing 'feature_names'")
+        
+    missing_features = [f for f in artifacts['feature_names'] if f not in df.columns]
+    if missing_features:
+        raise ValueError(f"Missing features: {missing_features[:5]}{'...' if len(missing_features) > 5 else ''}")
+
+def _display_initial_analysis(
+    class_counts: pd.Series,
+    threshold: float
+):
+    """Display initial class distribution analysis."""
+    table = Table(title="Class Distribution Analysis")
+    table.add_column("Class")
+    table.add_column("Count")
+    table.add_column("Percentage")
+    
+    total = class_counts.sum()
+    for cls, count in class_counts.items():
+        table.add_row(
+            str(cls),
+            str(count),
+            f"{count/total:.1%}"
+        )
+        
+    console.print(table)
+    
+    imbalance_ratio = class_counts.max() / class_counts.min()
+    if imbalance_ratio > threshold:
+        console.print(
+            f"[bold yellow]Imbalance detected: {imbalance_ratio:.1f}:1 "
+            f"(threshold: {threshold}:1)[/bold yellow]"
+        )
+
+def _apply_oversampling(
+    df: pd.DataFrame,
+    artifacts: Dict,
+    oversampler: str,
+    label_col: str,
+    sampling_strategy: Union[str, dict],
+    random_state: int,
+    evaluate_quality: bool,
+    visualize: bool,
+    sample_metrics: Optional[int],
+    min_samples: int,
+    n_jobs: int = -1
+) -> tuple[pd.DataFrame, Optional[Dict]]:
+    """Apply oversampling and evaluate results."""
+    # Get sampler with safe configuration
+    sampler = _get_oversampler(
+        X=df[artifacts['feature_names']].values,  # Add X parameter
+        y=df[label_col].values,                   # Add y parameter
+        method=oversampler,
+        min_samples=min_samples,
+        sampling_strategy=sampling_strategy,
+        random_state=random_state
+    )
+    
+    # Apply oversampling
+    X_res, y_res = sampler.fit_resample(
+        df[artifacts['feature_names']],
+        df[label_col]
+    )
+    
+    # Create balanced DataFrame
+    balanced_df = pd.DataFrame(X_res, columns=artifacts['feature_names'])
+    balanced_df[label_col] = y_res
+    
+    # Evaluate quality if enabled
+    metrics = None
+    if evaluate_quality:
+        metrics = _evaluate_oversamplers(
+            original=df[artifacts['feature_names']],
+            resampled=X_res,
+            labels=y_res,
+            sample_size=sample_metrics,
+            n_jobs=n_jobs,
+            random_state=random_state
+        )
+        
+        if visualize:
+            _visualize_resampling(
+                original=df[artifacts['feature_names']],
+                resampled=X_res,
+                labels=y_res,
+                sampler_name=oversampler,
+                show_plot=VIZ_CONFIG['interactive'],
+                save_plot=True,
+                progress_bar=True,
+                max_samples=VIZ_CONFIG['max_samples'],
+                dpi=VIZ_CONFIG['dpi'],
+                projections=VIZ_CONFIG['projections']
+            )
+    
+    return balanced_df, metrics
+
+def _optimize_k_neighbors(
+    X: np.ndarray,
+    y: np.ndarray,
+    max_k: int = 10,
+    min_samples: int = 5,
+    n_splits: int = 3,
+    metric: str = 'silhouette',
+    random_state: Optional[int] = None,
+    n_jobs: int = -1,
+    verbose: bool = False
+) -> Tuple[int, Dict[str, Any]]:
+    """
+    Dynamically optimize the k_neighbors parameter for SMOTE using cross-validated evaluation.
+    
+    Args:
+        X: Feature matrix (n_samples, n_features)
+        y: Target labels (n_samples,)
+        max_k: Maximum k value to test (default: 10)
+        min_samples: Minimum samples required in minority class (default: 5)
+        n_splits: Number of cross-validation splits (default: 3)
+        metric: Optimization metric ('silhouette', 'davies_bouldin', or 'both')
+        random_state: Random seed for reproducibility
+        n_jobs: Number of parallel jobs
+        verbose: Whether to print progress information
+        
+    Returns:
+        Tuple of (optimal_k, results_dict) where results_dict contains:
+        - all_scores: Dictionary of scores for each k
+        - best_score: Best score achieved
+        - best_params: Parameters giving best score
+        - cv_results: Full cross-validation results
+        
+    Raises:
+        ValueError: If input data is invalid or metric is unknown
+    """
+    # Input validation
+    if len(X) != len(y):
+        raise ValueError("X and y must have same length")
+    if max_k < 3:
+        raise ValueError("max_k must be at least 3")
+    if min_samples < 2:
+        raise ValueError("min_samples must be at least 2")
+    if metric not in ['silhouette', 'davies_bouldin', 'both']:
+        raise ValueError("metric must be 'silhouette', 'davies_bouldin', or 'both'")
+    
+    # Get class distribution
+    unique, counts = np.unique(y, return_counts=True)
+    minority_class = unique[np.argmin(counts)]
+    minority_count = counts.min()
+    
+    # Determine maximum possible k
+    actual_max_k = min(max_k, minority_count - 1)
+    if actual_max_k < 3:
+        if verbose:
+            logger.warning(f"Minority class has only {minority_count} samples, using k={actual_max_k}")
+        return actual_max_k, {'warning': 'minority class too small for optimization'}
+    
+    # Initialize results storage
+    k_values = range(3, actual_max_k + 1)
+    results = {
+        'silhouette': {k: [] for k in k_values},
+        'davies_bouldin': {k: [] for k in k_values},
+        'failed_runs': 0
+    }
+    
+    # Cross-validated evaluation
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    
+    for train_idx, val_idx in skf.split(X, y):
+        X_train, X_val = X[train_idx], X[val_idx]
+        y_train, y_val = y[train_idx], y[val_idx]
+        
+        for k in k_values:
+            try:
+                # Apply SMOTE only to training fold
+                smote = SMOTE(
+                    k_neighbors=min(k, len(X_train) - 1),
+                    random_state=random_state
+                )
+                X_res, y_res = smote.fit_resample(X_train, y_train)
+                
+                # Calculate metrics
+                if metric in ['silhouette', 'both']:
+                    sil_score = silhouette_score(X_res, y_res)
+                    results['silhouette'][k].append(sil_score)
+                
+                if metric in ['davies_bouldin', 'both']:
+                    db_score = davies_bouldin_score(X_res, y_res)
+                    results['davies_bouldin'][k].append(db_score)
+                
+            except Exception as e:
+                results['failed_runs'] += 1
+                if verbose:
+                    logger.warning(f"Failed evaluation for k={k}: {str(e)}")
+    
+    # Calculate mean scores
+    mean_scores = {}
+    if metric in ['silhouette', 'both']:
+        mean_scores['silhouette'] = {
+            k: np.mean(scores) if scores else -1
+            for k, scores in results['silhouette'].items()
+        }
+    
+    if metric in ['davies_bouldin', 'both']:
+        mean_scores['davies_bouldin'] = {
+            k: np.mean(scores) if scores else float('inf')
+            for k, scores in results['davies_bouldin'].items()
+        }
+    
+    # Determine best k based on selected metric(s)
+    if metric == 'silhouette':
+        best_k = max(mean_scores['silhouette'].items(), key=lambda x: x[1])[0]
+        best_score = mean_scores['silhouette'][best_k]
+    elif metric == 'davies_bouldin':
+        best_k = min(mean_scores['davies_bouldin'].items(), key=lambda x: x[1])[0]
+        best_score = mean_scores['davies_bouldin'][best_k]
+    else:
+        # 'both' - combined score
+        # Normalize scores to [0,1] range
+        sil_scores = np.array(list(mean_scores['silhouette'].values()))
+        db_scores = np.array(list(mean_scores['davies_bouldin'].values()))
+        
+        norm_sil = (sil_scores - sil_scores.min()) / (sil_scores.max() - sil_scores.min())
+        norm_db = 1 - ((db_scores - db_scores.min()) / (db_scores.max() - db_scores.min()))
+        
+        combined_scores = {
+            # Weighted combination
+            k: 0.6 * norm_sil[i] + 0.4 * norm_db[i]
+            for i, k in enumerate(k_values)
+        }
+        
+        best_k = max(combined_scores.items(), key=lambda x: x[1])[0]
+        best_score = combined_scores[best_k]
+    
+    # Prepare return dictionary
+    result_details = {
+        'all_scores': mean_scores,
+        'best_score': best_score,
+        'best_params': {'k_neighbors': best_k},
+        'cv_results': results,
+        'metric_used': metric,
+        'n_splits': n_splits,
+        'minority_class_size': minority_count,
+        'actual_max_k_tested': actual_max_k
+    }
+    
+    if verbose:
+        logger.info(f"Optimal k_neighbors: {best_k} with score: {best_score:.3f}")
+        logger.info(f"Tested k values: {list(k_values)}")
+        if metric == 'both':
+            logger.info("Used combined silhouette and Davies-Bouldin score")
+    
+    return best_k, result_details
+
+def _get_oversampler(
+    X: np.ndarray,
+    y: np.ndarray,
+    method: str,
+    min_samples: int,
+    sampling_strategy: str,
+    random_state: int,
+    auto_optimize: bool = False,
+    optimize_params: Optional[Dict[str, Any]] = None
+) -> Union[SMOTE, ADASYN, SMOTETomek, BorderlineSMOTE]:
+    """
+    Factory method for oversamplers with safe configurations and optional k_neighbors optimization.
+    
+    Args:
+        X: Feature matrix (n_samples, n_features)
+        y: Target labels (n_samples,)
+        method: Oversampling method ('SMOTE', 'ADASYN', 'SMOTE+TOMEK', 'Borderline-SMOTE')
+        min_samples: Minimum samples required in minority class
+        sampling_strategy: Sampling strategy for oversampling
+        random_state: Random seed for reproducibility
+        auto_optimize: Whether to automatically optimize k_neighbors (default: False)
+        optimize_params: Parameters for k_neighbors optimization (only used if auto_optimize=True)
+        
+    Returns:
+        Configured oversampler instance
+        
+    Raises:
+        ValueError: If invalid parameters or insufficient samples
+    """
+    # Set default optimization parameters if not provided
+    if optimize_params is None:
+        optimize_params = {}
+    
+    # Determine k_neighbors
+    if auto_optimize:
         try:
-            # Validate features
-            missing_features = [
-                f for f in artifacts['feature_names'] 
-                if f not in df.columns
-            ]
-            if missing_features:
-                raise ValueError(
-                    f"Missing features for SMOTE: {missing_features[:3]}..."
-                )
-            
-            # Safe SMOTE configuration
-            k_neighbors = min(5, min_samples - 1)
-            if k_neighbors < 1:
-                raise ValueError(
-                    f"Cannot apply SMOTE - minority class has only {min_samples} samples"
-                )
-            
-            console.print(f"[bold green]Applying SMOTE (k_neighbors={k_neighbors})...[/bold green]")
-            
-            smote = SMOTE(
+            optimal_k, _ = _optimize_k_neighbors(
+                X=X,
+                y=y,
+                min_samples=min_samples,
+                random_state=random_state,
+                **optimize_params
+            )
+            k_neighbors = optimal_k
+        except Exception as e:
+            if optimize_params.get('verbose', False):
+                logger.warning(f"k_neighbors optimization failed, using fallback: {str(e)}")
+            k_neighbors = min(3, min_samples - 1)
+    else:
+        k_neighbors = min(3, min_samples - 1)
+    
+    # Safety check
+    if k_neighbors < 1:
+        raise ValueError(
+            f"Cannot apply oversampling - minority class has only {min_samples} samples"
+        )
+    
+    # Configure samplers
+    samplers = {
+        "SMOTE": SMOTE(
+            sampling_strategy=sampling_strategy,
+            k_neighbors=k_neighbors,
+            random_state=random_state
+        ),
+        "ADASYN": ADASYN(
+            sampling_strategy=sampling_strategy,
+            n_neighbors=k_neighbors,
+            random_state=random_state
+        ),
+        "SMOTE+TOMEK": SMOTETomek(
+            smote=SMOTE(
                 sampling_strategy=sampling_strategy,
                 k_neighbors=k_neighbors,
                 random_state=random_state
+            ),
+            tomek=TomekLinks(),
+            random_state=random_state
+        ),
+        "Borderline-SMOTE": BorderlineSMOTE(
+            sampling_strategy=sampling_strategy,
+            k_neighbors=k_neighbors,
+            random_state=random_state,
+            kind='borderline-1'
+        )
+    }
+    
+    if method not in samplers:
+        raise ValueError(
+            f"Unknown oversampler: {method}. "
+            f"Choose from {list(samplers.keys())}"
+        )
+    
+    return samplers[method]
+
+def _calculate_feature_correlation_diff(
+    original: pd.DataFrame, 
+    synthetic: np.ndarray
+) -> float:
+    """
+    Calculate mean absolute difference in feature correlation matrices between original and synthetic data.
+    
+    Args:
+        original: DataFrame containing original features
+        synthetic: Numpy array containing synthetic features
+        
+    Returns:
+        Mean absolute difference between correlation matrices (lower is better)
+        
+    Notes:
+        - Handles NaN values gracefully using np.nanmean
+        - Transposes input matrices for correct correlation calculation
+        - Returns float between 0 (perfect match) and 2 (complete mismatch)
+    """
+    # Calculate correlation matrices
+    orig_corr = np.corrcoef(original.T)
+    synth_corr = np.corrcoef(synthetic.T)
+    
+    # Calculate absolute differences and take mean, ignoring NaNs
+    correlation_diff = np.nanmean(np.abs(orig_corr - synth_corr))
+    
+    return correlation_diff
+
+def _evaluate_oversamplers(
+    original: pd.DataFrame,
+    resampled: np.ndarray,
+    labels: np.ndarray,
+    random_state: int = 42,
+    n_jobs: int = -1,
+    sample_size: Optional[int] = None
+) -> Dict[str, float]:
+    """
+    Calculate comprehensive quality metrics for oversampled data.
+    
+    Args:
+        original: Original feature DataFrame
+        resampled: Oversampled feature matrix
+        labels: Corresponding labels
+        random_state: Random seed for reproducibility
+        n_jobs: Number of parallel jobs
+        sample_size: Optional size for subsampling large datasets
+        
+    Returns:
+        Dictionary of quality metrics including:
+        - neighbor_distance: Average distance to nearest neighbor
+        - boundary_violation_rate: Fraction of samples near decision boundary  
+        - distribution_divergence: KL divergence between distributions
+        - silhouette_score: Cluster quality metric
+        - imbalance_ratio: Ratio between majority/minority classes
+        - feature_correlation_diff: New metric for correlation preservation
+    """
+    metrics = {}
+    
+    # Subsample if requested for large datasets
+    if sample_size and len(resampled) > sample_size:
+        rng = np.random.RandomState(random_state)
+        idx = rng.choice(len(resampled), sample_size, replace=False)
+        resampled = resampled[idx]
+        labels = labels[idx]
+    
+    # 1. Nearest Neighbor Analysis
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        nbrs = NearestNeighbors(n_neighbors=2, n_jobs=n_jobs).fit(resampled)
+        distances, _ = nbrs.kneighbors(resampled)
+        metrics['avg_neighbor_distance'] = np.mean(distances[:, 1])
+        metrics['neighbor_std'] = np.std(distances[:, 1])
+    
+    # 2. Boundary Analysis
+    try:
+        clf = SVC(kernel='linear', random_state=random_state).fit(resampled, labels)
+        metrics['boundary_violations'] = sum(clf.predict(resampled) != labels)
+        metrics['boundary_violation_rate'] = metrics['boundary_violations'] / len(resampled)
+    except Exception as e:
+        logger.warning(f"Boundary analysis failed: {str(e)}")
+        metrics['boundary_violations'] = float('nan')
+        metrics['boundary_violation_rate'] = float('nan')
+    
+    # 3. Distribution Analysis
+    bins = np.histogram_bin_edges(original.values.ravel(), bins='auto')
+    p = np.histogram(original.values, bins=bins)[0] + 1e-10
+    q = np.histogram(resampled, bins=bins)[0] + 1e-10
+    metrics['distribution_divergence'] = entropy(p, q)
+    
+    # 4. Cluster Quality
+    try:
+        metrics['silhouette_score'] = silhouette_score(resampled, labels)
+    except:
+        metrics['silhouette_score'] = float('nan')
+    
+    # 5. Class Balance
+    new_counts = np.bincount(labels)
+    metrics['new_imbalance_ratio'] = new_counts.max() / new_counts.min()
+    
+    # 6. Feature Correlation Preservation (New Metric)
+    metrics['feature_correlation_diff'] = _calculate_feature_correlation_diff(
+        original,
+        resampled
+    )
+    
+    return metrics
+
+def _visualize_resampling(
+    original: pd.DataFrame,
+    resampled: np.ndarray,
+    labels: np.ndarray,
+    sampler_name: str,
+    random_state: int = 42,
+    figsize: tuple = (18, 6),
+    max_samples: int = 5000,
+    dpi: int = 150,
+    show_plot: bool = False,
+    save_plot: bool = True,
+    progress_bar: bool = True,
+    projections: List[str] = ['pca', 'tsne'],
+    interactive_backend: str = 'matplotlib',
+    dimensions: int = 2
+) -> Optional[Union[plt.Figure, 'plotly.graph_objs.Figure']]:
+    """Generate comparative visualizations of resampling results with enhanced controls.
+    
+    Args:
+        original: Original feature DataFrame
+        resampled: Oversampled feature matrix
+        labels: Corresponding labels
+        sampler_name: Name of oversampling method used
+        random_state: Random seed for reproducibility
+        figsize: Figure dimensions (width, height) in inches
+        max_samples: Maximum samples to use for visualization
+        dpi: Image resolution for saved figure
+        show_plot: Whether to display the plot interactively
+        save_plot: Whether to save the plot to file
+        progress_bar: Whether to show progress during sampling
+        projections: List of projection methods to use ('pca', 'tsne', 'umap')
+        interactive_backend: Visualization library to use ('matplotlib' or 'plotly')
+        dimensions: Number of dimensions for visualization (2 or 3)
+        
+    Returns:
+        Figure object if show_plot=True, None otherwise
+        
+    Raises:
+        ValueError: If invalid input parameters are provided
+        ImportError: If plotly is requested but not installed
+    """
+    # Validate dimensions parameter
+    if dimensions not in (2, 3):
+        raise ValueError("Dimensions must be 2 or 3")
+    
+    try:
+        # Validate inputs
+        if not isinstance(original, pd.DataFrame):
+            raise ValueError("original must be a pandas DataFrame")
+        if not isinstance(resampled, np.ndarray):
+            raise ValueError("resampled must be a numpy array")
+        if len(original) == 0 or len(resampled) == 0:
+            raise ValueError("Input data cannot be empty")
+            
+        # Handle interactive backend
+        if interactive_backend.lower() == 'plotly':
+            try:
+                import plotly.express as px
+                import plotly.graph_objects as go
+                from plotly.subplots import make_subplots
+            except ImportError:
+                logger.warning("Plotly not available, falling back to matplotlib")
+                interactive_backend = 'matplotlib'
+
+        # Sampling progress tracking
+        if progress_bar:
+            with Progress() as progress:
+                task = progress.add_task("Preparing visualization...", total=2)
+                
+                # Sample original data if too large
+                if len(original) > max_samples:
+                    progress.update(task, description="Sampling original data")
+                    rng = np.random.RandomState(random_state)
+                    orig_idx = rng.choice(len(original), min(max_samples, len(original)), replace=False)
+                    original = original.iloc[orig_idx]
+                    progress.update(task, advance=1)
+                
+                # Sample resampled data if too large
+                    progress.update(task, description="Sampling resampled data")
+                    rng = np.random.RandomState(random_state)
+                    res_idx = rng.choice(len(resampled), min(max_samples, len(resampled)), replace=False)
+                    resampled = resampled[res_idx]
+                    labels = labels[res_idx]
+                    progress.update(task, advance=1)
+        else:
+            # Without progress bar
+            if len(original) > max_samples:
+                rng = np.random.RandomState(random_state)
+                orig_idx = rng.choice(len(original), min(max_samples, len(original)), replace=False)
+                original = original.iloc[orig_idx]
+            
+            if len(resampled) > max_samples:
+                rng = np.random.RandomState(random_state)
+                res_idx = rng.choice(len(resampled), min(max_samples, len(resampled)), replace=False)
+                resampled = resampled[res_idx]
+                labels = labels[res_idx]
+
+        # Create visualizations based on backend
+        if interactive_backend.lower() == 'plotly':
+            return _plotly_visualization(
+                original, resampled, labels, sampler_name,
+                projections, show_plot, save_plot, dpi, dimensions
+            )
+        else:
+            return _matplotlib_visualization(
+                original, resampled, labels, sampler_name,
+                figsize, dpi, show_plot, save_plot, projections,
+                random_state, dimensions
             )
             
-            X_res, y_res = smote.fit_resample(
-                df[artifacts['feature_names']],
-                df[label_col]
+    except Exception as e:
+        logger.error(f"Visualization failed: {str(e)}")
+        raise
+
+def _matplotlib_visualization(
+    original: pd.DataFrame,
+    resampled: np.ndarray,
+    labels: np.ndarray,
+    sampler_name: str,
+    figsize: tuple,
+    dpi: int,
+    show_plot: bool,
+    save_plot: bool,
+    projections: List[str],
+    random_state: int,
+    dimensions: int = 2
+) -> Optional[plt.Figure]:
+    """Generate matplotlib visualizations with 2D or 3D support."""
+    try:
+        if dimensions == 3:
+            # Create figure with 2 columns (original and resampled)
+            fig = plt.figure(figsize=(figsize[0] * 2, figsize[1]), dpi=dpi)
+            
+            # Project data to 3D using PCA
+            pca = PCA(n_components=3, random_state=random_state)
+            orig_proj = pca.fit_transform(original.values)
+            res_proj = pca.transform(resampled)
+            
+            # Original data plot
+            ax1 = fig.add_subplot(121, projection='3d')
+            sc1 = ax1.scatter(
+                orig_proj[:, 0], orig_proj[:, 1], orig_proj[:, 2],
+                alpha=0.5, label='Original'
+            )
+            ax1.set_title("Original Data (3D PCA)")
+            ax1.set_xlabel("PC1")
+            ax1.set_ylabel("PC2")
+            ax1.set_zlabel("PC3")
+            
+            # Resampled data plot
+            ax2 = fig.add_subplot(122, projection='3d')
+            unique_labels = np.unique(labels)
+            colors = plt.cm.get_cmap('tab10', len(unique_labels))
+            
+            for i, label in enumerate(unique_labels):
+                mask = labels == label
+                ax2.scatter(
+                    res_proj[mask, 0], res_proj[mask, 1], res_proj[mask, 2],
+                    color=colors(i),
+                    label=str(label),
+                    alpha=0.5
+                )
+            
+            ax2.set_title(f"Resampled Data (3D PCA)\n{sampler_name}")
+            ax2.set_xlabel("PC1")
+            ax2.set_ylabel("PC2")
+            ax2.set_zlabel("PC3")
+            ax2.legend()
+            
+        else:
+            # 2D visualization (original implementation)
+            n_plots = len(projections) + 1
+            fig = plt.figure(figsize=(figsize[0] * n_plots/3, figsize[1]), dpi=dpi)
+            
+            # Original data plot (always PCA)
+            plt.subplot(1, n_plots, 1)
+            _plot_projection(
+                original.values, 
+                labels=None,
+                title="Original Data (PCA)",
+                method='pca',
+                random_state=random_state
             )
             
-            # Create balanced DataFrame
-            balanced_df = pd.DataFrame(X_res, columns=artifacts['feature_names'])
-            balanced_df[label_col] = y_res
+            # Resampled data plots
+            for i, method in enumerate(projections, 2):
+                plt.subplot(1, n_plots, i)
+                _plot_projection(
+                    resampled,
+                    labels,
+                    title=f"Resampled Data ({method.upper()})\n{sampler_name}",
+                    method=method,
+                    random_state=random_state
+                )
+        
+        plt.tight_layout()
+        
+        if save_plot:
+            dim_suffix = "3d" if dimensions == 3 else "2d"
+            filename = f"oversampling_{sampler_name.lower().replace('+', '_')}_{dim_suffix}.png"
+            plt.savefig(filename, bbox_inches='tight', dpi=dpi)
+            logger.info(f"Saved visualization to {filename}")
+        
+        if show_plot:
+            plt.show()
+            return fig
+        else:
+            plt.close(fig)
+            return None
             
-            # Report results
-            new_counts = balanced_df[label_col].value_counts()
-            display_smote_results(class_counts, new_counts)
+    except Exception as e:
+        logger.error(f"Matplotlib visualization failed: {str(e)}")
+        if 'fig' in locals():
+            plt.close(fig)
+        raise
+
+def _plotly_visualization(
+    original: pd.DataFrame,
+    resampled: np.ndarray,
+    labels: np.ndarray,
+    sampler_name: str,
+    projections: List[str],
+    show_plot: bool,
+    save_plot: bool,
+    dpi: int,
+    dimensions: int = 2
+) -> Optional['plotly.graph_objs.Figure']:
+    """Generate interactive Plotly visualizations with 2D or 3D support."""
+    try:
+        if dimensions == 3:
+            # 3D visualization with Plotly
+            fig = make_subplots(
+                rows=1, cols=2,
+                specs=[[{'type': 'scatter3d'}, {'type': 'scatter3d'}]],
+                subplot_titles=["Original Data (3D PCA)", f"Resampled Data (3D PCA) - {sampler_name}"]
+            )
             
-            return balanced_df
+            # Project data to 3D using PCA
+            pca = PCA(n_components=3)
+            orig_proj = pca.fit_transform(original.values)
+            res_proj = pca.transform(resampled)
+            
+            # Original data trace
+            fig.add_trace(
+                go.Scatter3d(
+                    x=orig_proj[:, 0],
+                    y=orig_proj[:, 1],
+                    z=orig_proj[:, 2],
+                    mode='markers',
+                    name='Original',
+                    marker=dict(
+                        size=3,
+                        color='blue',
+                        opacity=0.5
+                    )
+                ),
+                row=1, col=1
+            )
+            
+            # Resampled data traces by class
+            unique_labels = np.unique(labels)
+            colors = px.colors.qualitative.Plotly
+            
+            for i, label in enumerate(unique_labels):
+                mask = labels == label
+                fig.add_trace(
+                    go.Scatter3d(
+                        x=res_proj[mask, 0],
+                        y=res_proj[mask, 1],
+                        z=res_proj[mask, 2],
+                        mode='markers',
+                        name=str(label),
+                        marker=dict(
+                            size=3,
+                            color=colors[i % len(colors)],
+                            opacity=0.5
+                        ),
+                        showlegend=True
+                    ),
+                    row=1, col=2
+                )
+            
+            fig.update_layout(
+                title_text=f"Oversampling Comparison: {sampler_name}",
+                width=1200,
+                height=600
+            )
+            
+        else:
+            # Original 2D implementation
+            n_cols = len(projections) + 1
+            fig = make_subplots(
+                rows=1, cols=n_cols,
+                subplot_titles=["Original Data (PCA)"] + 
+                [f"Resampled Data ({m.upper()})" for m in projections]
+            )
+            
+            # Original data (PCA)
+            pca = PCA(n_components=2).fit_transform(original.values)
+            fig.add_trace(
+                go.Scatter(
+                    x=pca[:, 0], y=pca[:, 1],
+                    mode='markers',
+                    name='Original',
+                    marker=dict(color='blue', opacity=0.5)
+                ),
+                row=1, col=1
+            )
+            
+            # Resampled data projections
+            for i, method in enumerate(projections, 2):
+                if method == 'pca':
+                    proj = PCA(n_components=2).fit_transform(resampled)
+                elif method == 'tsne':
+                    proj = TSNE(n_components=2).fit_transform(resampled)
+                elif method == 'umap':
+                    proj = UMAP(n_components=2).fit_transform(resampled)
+                
+                unique_labels = np.unique(labels)
+                for label in unique_labels:
+                    mask = labels == label
+                    fig.add_trace(
+                        go.Scatter(
+                            x=proj[mask, 0], y=proj[mask, 1],
+                            mode='markers',
+                            name=str(label),
+                            marker=dict(opacity=0.5),
+                            showlegend=(i == 2)
+                        ),
+                        row=1, col=i
+                    )
+            
+            fig.update_layout(
+                title_text=f"Oversampling Comparison: {sampler_name}",
+                width=300 * n_cols,
+                height=400
+            )
+        
+        if save_plot:
+            dim_suffix = "3d" if dimensions == 3 else "2d"
+            filename = f"oversampling_{sampler_name.lower().replace('+', '_')}_{dim_suffix}.html"
+            fig.write_html(filename)
+            logger.info(f"Saved interactive visualization to {filename}")
+        
+        if show_plot:
+            fig.show()
+            return fig
+        return None
+        
+    except Exception as e:
+        logger.error(f"Plotly visualization failed: {str(e)}")
+        raise
+
+def _plot_projection(
+    data: np.ndarray,
+    labels: Optional[np.ndarray],
+    title: str,
+    method: str = 'pca',
+    random_state: int = 42,
+    alpha: float = 0.5,
+    legend: bool = True
+) -> None:
+    """Project high-dim data to 2D for visualization with enhanced controls.
+    
+    Args:
+        data: Input feature matrix
+        labels: Target labels (None for unlabeled data)
+        title: Plot title
+        method: Projection method ('pca' or 'tsne')
+        random_state: Random seed
+        alpha: Point transparency
+        legend: Whether to show legend
+    """
+    # Validate method
+    if method not in ['pca', 'tsne']:
+        raise ValueError(f"Invalid projection method: {method}. Choose 'pca' or 'tsne'")
+    
+    # Perform projection
+    if method == 'pca':
+        proj = PCA(n_components=2, random_state=random_state).fit_transform(data)
+    else:
+        # t-SNE
+        proj = TSNE(n_components=2, random_state=random_state).fit_transform(data)
+    
+    # Create plot
+    if labels is None:
+        plt.scatter(proj[:, 0], proj[:, 1], alpha=alpha)
+    else:
+        unique_labels = np.unique(labels)
+        colors = sns.color_palette("husl", len(unique_labels))
+        
+        for i, label in enumerate(unique_labels):
+            mask = labels == label
+            plt.scatter(
+                proj[mask, 0], proj[mask, 1],
+                color=colors[i],
+                label=str(label),
+                alpha=alpha
+            )
+        # Only show legend for reasonable numbers
+        if legend and len(unique_labels) <= 20:
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.title(title)
+    plt.xlabel(f"{method.upper()} 1")
+    plt.ylabel(f"{method.upper()} 2")
+
+def _report_results(
+    original_counts: pd.Series,
+    new_counts: pd.Series,
+    metrics: Dict[str, float],
+    elapsed_time: float,
+    sampler_name: str
+):
+    """Display comprehensive results report."""
+    # Class distribution comparison
+    table = Table(title=f"Oversampling Results ({sampler_name})")
+    table.add_column("Class")
+    table.add_column("Original Count")
+    table.add_column("New Count")
+    table.add_column("Change")
+    
+    for cls in original_counts.index:
+        orig = original_counts[cls]
+        new = new_counts.get(cls, 0)
+        change = f"{(new-orig)/orig:+.1%}" if orig != 0 else "N/A"
+        table.add_row(str(cls), str(orig), str(new), change)
+    
+    console.print(table)
+    console.print(f"[italic]Processing time: {elapsed_time:.2f}s[/italic]")
+    
+    # Quality metrics if available
+    if metrics:
+        metric_table = Table(title="Quality Metrics")
+        metric_table.add_column("Metric")
+        metric_table.add_column("Value")
+        
+        for name, value in metrics.items():
+            if isinstance(value, float):
+                metric_table.add_row(name, f"{value:.4f}")
+            else:
+                metric_table.add_row(name, str(value))
+        
+        console.print(metric_table)
+
+def compare_oversamplers(
+    df: pd.DataFrame,
+    artifacts: Dict,
+    methods: list = None,
+    n_splits: int = 5,
+    label_col: str = "Label",
+    sampling_strategy: str = "auto",
+    imbalance_threshold: float = 10.0,
+    visualize: bool = True,
+    random_state: int = 42,
+    sample_metrics: int = None
+) -> Dict[str, Dict]:
+    """Comparative evaluation of multiple oversampling methods.
+    
+    Args:
+        df: Input DataFrame
+        artifacts: Preprocessing artifacts
+        methods: List of oversamplers to compare (None for all)
+        n_splits: Number of cross-validation splits
+        label_col: Name of label column
+        sampling_strategy: Oversampling strategy
+        imbalance_threshold: Ratio to consider imbalance
+        visualize: Whether to generate visualizations
+        sample_metrics: Sample size for metrics calculation
+        
+    Returns:
+        Dictionary of evaluation results for each method
+    """
+    available_samplers = ["SMOTE", "ADASYN", "SMOTE+TOMEK", "Borderline-SMOTE"]
+    methods = methods or available_samplers
+    results = defaultdict(dict)
+    
+    # Validate data first
+    _validate_inputs(df, artifacts, label_col)
+    
+    # Check if imbalance exceeds threshold
+    class_counts = df[label_col].value_counts()
+    if (class_counts.max() / class_counts.min()) <= imbalance_threshold:
+        console.print("[bold yellow]Data is balanced - skipping oversampling comparison[/bold yellow]")
+        return dict(results)
+    
+    # Evaluate each method
+    for method in track(methods, description="Evaluating oversamplers..."):
+        try:
+            fold_metrics = []
+            fold_times = []
+            
+            # Cross-validation
+            for fold in range(n_splits):
+                start_time = time.time()
+                
+                # Apply oversampling with different random state for each fold
+                balanced_df, metrics = _apply_oversampling(
+                    df=df,
+                    artifacts=artifacts,
+                    oversampler=method,
+                    label_col=label_col,
+                    sampling_strategy=sampling_strategy,
+                    random_state=random_state + fold,
+                    evaluate_quality=True,
+                    # Only visualize first fold
+                    visualize=visualize and (fold == 0),
+                    sample_metrics=sample_metrics,
+                    min_samples=class_counts.min()
+                )
+                
+                elapsed = time.time() - start_time
+                fold_times.append(elapsed)
+                if metrics:
+                    fold_metrics.append(metrics)
+            
+            # Aggregate results
+            if fold_metrics:
+                avg_metrics = {
+                    f"avg_{k}": np.nanmean([m.get(k, np.nan) for m in fold_metrics])
+                    for k in fold_metrics[0].keys()
+                }
+                std_metrics = {
+                    f"std_{k}": np.nanstd([m.get(k, np.nan) for m in fold_metrics])
+                    for k in fold_metrics[0].keys()
+                }
+                
+                results[method].update(avg_metrics)
+                results[method].update(std_metrics)
+                results[method]['avg_time'] = np.mean(fold_times)
+                results[method]['std_time'] = np.std(fold_times)
             
         except Exception as e:
-            console.print(f"[bold red]SMOTE failed: {str(e)}[/bold red]")
-            if debug:
-                console.print_exception()
-            raise RuntimeError("Class balancing failed") from e
+            logger.error(f"Evaluation failed for {method}: {str(e)}")
+            results[method]['error'] = str(e)
     
-    else:
-        console.print("[bold green]Class distribution within acceptable limits[/bold green]")
-        return df
+    # Add statistical significance testing
+    _add_statistical_tests(results, n_splits=n_splits)
+    
+    # Display comprehensive comparison
+    _display_comparison(results)
+    
+    return dict(results)
+
+def _add_statistical_tests(
+    results: Dict[str, Dict],
+    n_splits: int = 5,
+    alpha: float = 0.05,
+    correction_method: str = 'fdr_bh'
+) -> None:
+    """Add statistical significance tests between methods with multiple comparison correction.
+    
+    Args:
+        results: Dictionary containing evaluation results for each method
+        n_splits: Number of cross-validation splits used
+        alpha: Significance level
+        correction_method: Multiple testing correction method (see statsmodels.stats.multitest)
+        
+    Modifies:
+        The input results dictionary by adding:
+        - p-values for each comparison
+        - adjusted p-values
+        - significance indicators
+    """
+    # Get all metrics that should be tested (average metrics excluding timing)
+    metrics_to_test = [
+        k for k in next(iter(results.values())).keys() 
+        if k.startswith('avg_') and not k.endswith('_time')
+    ]
+    
+    methods = list(results.keys())
+    if len(methods) < 2:
+        # Need at least 2 methods for comparison
+        return
+    
+    # For each metric, compare all methods against the first one (baseline)
+    for metric in metrics_to_test:
+        # Collect all valid values for this metric across methods
+        valid_methods = []
+        values = []
+        stds = []
+        
+        for method in methods:
+            val = results[method].get(metric)
+            if val is not None and not np.isnan(val):
+                valid_methods.append(method)
+                values.append(val)
+                stds.append(max(results[method].get(f'std_{metric[len("avg_"):]}', 0.1), 0.01))
+        
+        if len(valid_methods) < 2:
+            # Skip if not enough valid values
+            continue
+            
+        baseline_method = valid_methods[0]
+        baseline_value = values[0]
+        baseline_std = stds[0]
+        
+        # Store all p-values for correction
+        p_values = []
+        comparisons = []
+        
+        # Compare each method to baseline
+        for i, (method, value, std) in enumerate(zip(valid_methods, values, stds)):
+            if i == 0:
+                # Skip baseline
+                # Don't compare baseline to itself
+                continue
+                
+            # Perform t-test
+            _, p = ttest_ind_from_stats(
+                mean1=baseline_value,
+                std1=baseline_std,
+                nobs1=n_splits,
+                mean2=value,
+                std2=std,
+                nobs2=n_splits
+            )
+            
+            p_values.append(p)
+            comparisons.append((method, baseline_method))
+        
+        # Apply multiple testing correction
+        if p_values:
+            reject, adj_pvals, _, _ = multipletests(p_values, alpha=alpha, method=correction_method)
+            
+            # Store results
+            for (method, base), p, adj_p, is_sig in zip(comparisons, p_values, adj_pvals, reject):
+                results[method][f"{metric}_p_value"] = p
+                results[method][f"{metric}_adj_p_value"] = adj_p
+                results[method][f"{metric}_significant"] = is_sig
+                results[method][f"{metric}_baseline"] = base
+                results[method]['p_value_correction'] = correction_method
+
+def _display_comparison(
+    results: Dict[str, Dict]
+):
+    """Display comprehensive comparison table."""
+    if not results:
+        console.print("[bold yellow]No valid results to display[/bold yellow]")
+        return
+        
+    # Get all unique metrics
+    all_metrics = set()
+    for method_metrics in results.values():
+        all_metrics.update(metric for metric in method_metrics if not metric.startswith('std_'))
+    
+    # Create table
+    table = Table(title="Oversampler Performance Comparison")
+    table.add_column("Method")
+    
+    # Add columns for each metric
+    metrics_to_show = sorted(
+        m for m in all_metrics 
+        if not any(x in m for x in ['std_', 'p_value', 'error'])
+    )
+    
+    for metric in metrics_to_show:
+        table.add_column(metric.replace('avg_', ''), justify="right")
+    
+    # Add rows for each method
+    for method, metrics in results.items():
+        row = [method]
+        for metric in metrics_to_show:
+            value = metrics.get(metric)
+            if value is None:
+                row.append("N/A")
+            elif isinstance(value, float):
+                # Highlight statistically significant differences
+                p_key = f"{metric}_p_value"
+                p_value = metrics.get(p_key, 1)
+                
+                if p_value < 0.05:
+                    style = "bold green" if "violation" not in metric else "bold red"
+                    row.append(f"[{style}]{value:.4f}[/{style}]")
+                else:
+                    row.append(f"{value:.4f}")
+            else:
+                row.append(str(value))
+        
+        table.add_row(*row)
+    
+    console.print(table)
+    
+    # Add footnote about statistical significance
+    console.print(
+        "[italic]Note: Bold values indicate statistically significant differences (p < 0.05) "
+        "compared to the first method[/italic]"
+    )
 
 def load_and_validate_data(
     enhanced: bool = True,
@@ -2563,8 +4336,11 @@ def create_synthetic_data() -> Tuple[pd.DataFrame, Dict]:
         y = np.array([0]*(num_samples//2) + [1]*(num_samples//2))
         
         # Add realistic noise and artifacts
-        X += np.random.normal(0, 0.05, X.shape)  # Add noise
-        X = np.clip(X, 0, 1)  # Clip to [0,1] range
+        # Add noise
+        X += np.random.normal(0, 0.05, X.shape)
+        
+        # Clip to [0,1] range
+        X = np.clip(X, 0, 1)
         
         # Create feature names
         feature_names = [f"feature_{i}" for i in range(num_features)]
@@ -2575,8 +4351,10 @@ def create_synthetic_data() -> Tuple[pd.DataFrame, Dict]:
             {
                 "feature_names": feature_names,
                 "scaler": None,
-                "chunksize": 100000,  # Default chunk size for compatibility
-                "synthetic": True  # Flag indicating synthetic data
+                # Default chunk size for compatibility
+                "chunksize": 100000,
+                # Flag indicating synthetic data
+                "synthetic": True
             }
         )
     except Exception as e:
@@ -2643,7 +4421,8 @@ def prepare_dataloaders(
         class_counts = torch.bincount(y_tensor[train_idx])
         logger.info(Fore.GREEN + Style.BRIGHT + "Initial class distribution:" + Fore.MAGENTA + Style.BRIGHT + f"{class_counts.tolist()}")
         
-        if torch.min(class_counts) < 1000:  # Threshold for extreme imbalance
+        # Threshold for extreme imbalance
+        if torch.min(class_counts) < 1000:
             logger.warning("Extreme class imbalance detected, applying SMOTE...")
             try:
                 smote = SMOTE(
@@ -2715,6 +4494,40 @@ def prepare_dataloaders(
         raise RuntimeError("DataLoader preparation failed") from e
 
 # Training and validation functions
+class SecurityAwareLoss(nn.Module):
+    """Loss function that penalizes false negatives more heavily for security applications"""
+    def __init__(self, class_weights: torch.Tensor, false_negative_cost: float = 2.0):
+        super().__init__()
+        self.class_weights = class_weights
+        self.fn_cost = false_negative_cost
+        
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none', weight=self.class_weights)
+        
+        # Apply extra penalty for false negatives (missed attacks)
+        if self.fn_cost != 1.0:
+            preds = torch.argmax(inputs, dim=1)
+            # Actual attack but predicted normal
+            fn_mask = (targets == 1) & (preds == 0)
+            ce_loss[fn_mask] *= self.fn_cost
+            
+        return ce_loss.mean()
+
+class WarmupScheduler:
+    """Learning rate warmup scheduler"""
+    def __init__(self, optimizer: optim.Optimizer, warmup_epochs: int, base_lr: float):
+        self.optimizer = optimizer
+        self.warmup_epochs = warmup_epochs
+        self.base_lr = base_lr
+        self.current_epoch = 0
+        
+    def step(self):
+        if self.current_epoch < self.warmup_epochs:
+            lr = self.base_lr * (self.current_epoch + 1) / self.warmup_epochs
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
+        self.current_epoch += 1
+
 def train_epoch(
     model: nn.Module,
     loader: DataLoader,
@@ -2723,7 +4536,8 @@ def train_epoch(
     device: torch.device,
     grad_clip: float = 1.0,
     grad_accum_steps: int = 4,
-    scaler: Optional[GradScaler] = None
+    scaler: Optional[GradScaler] = None,
+    warmup_scheduler: Optional[WarmupScheduler] = None
 ) -> Tuple[float, float]:
     """
     Train model for one epoch with gradient handling and optional mixed precision.
@@ -2755,12 +4569,7 @@ def train_epoch(
         for batch_idx, (X_batch, y_batch) in enumerate(loader):
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
             
-            # Mixed precision context
-            # with autocast(enabled=scaler is not None):
-            #     outputs = model(X_batch)
-            #     loss = criterion(outputs, y_batch) / grad_accum_steps
-            
-            # Mixed precision context
+            # Forward pass (mixed precision disabled for stability)
             with autocast(enabled=False):
                 outputs = model(X_batch)
                 loss = criterion(outputs, y_batch) / grad_accum_steps
@@ -2771,16 +4580,23 @@ def train_epoch(
             else:
                 loss.backward()
             
-            # Gradient accumulation
+            # Gradient accumulation and clipping
             if (batch_idx + 1) % grad_accum_steps == 0:
                 if scaler:
                     scaler.unscale_(optimizer)
+                    # Enhanced gradient clipping
                     torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
+                    # Enhanced gradient clipping
                     torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
                     optimizer.step()
+                
+                # Apply warmup if provided
+                if warmup_scheduler:
+                    warmup_scheduler.step()
+                    
                 optimizer.zero_grad()
             
             # Metrics
@@ -2789,7 +4605,7 @@ def train_epoch(
             total += y_batch.size(0)
             correct += (predicted == y_batch).sum().item()
             
-            # Clean up
+            # Memory cleanup
             torch.cuda.empty_cache()
         
         avg_loss = total_loss / len(loader)
@@ -2800,43 +4616,79 @@ def train_epoch(
         logger.error(f"Training failed at batch {batch_idx}: {str(e)}")
         raise RuntimeError("Training epoch failed") from e
 
+def find_optimal_threshold(
+    y_true: np.ndarray,
+    y_probs: np.ndarray,
+    metric: str = 'f2'
+) -> Tuple[float, float]:
+    """
+    Find optimal decision threshold for security-focused metrics.
+    
+    Args:
+        y_true: True labels
+        y_probs: Predicted probabilities for positive class
+        metric: Metric to optimize ('f2', 'recall', 'precision')
+        
+    Returns:
+        Tuple of (optimal_threshold, best_score)
+    """
+    thresholds = np.arange(0.1, 0.9, 0.05)
+    best_score = 0
+    best_threshold = 0.5
+    
+    for threshold in thresholds:
+        y_pred = (y_probs >= threshold).astype(int)
+        
+        if metric == 'f2':
+            score = fbeta_score(y_true, y_pred, beta=2, zero_division=0)
+        elif metric == 'recall':
+            score = recall_score(y_true, y_pred, zero_division=0)
+        elif metric == 'precision':
+            score = precision_score(y_true, y_pred, zero_division=0)
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
+            
+        if score > best_score:
+            best_score = score
+            best_threshold = threshold
+    
+    return best_threshold, best_score
+
 def validate(
     model: nn.Module,
     loader: DataLoader,
     criterion: nn.Module,
     device: torch.device,
-    class_names: Optional[List[str]] = None
+    class_names: Optional[List[str]] = None,
+    attack_threshold: float = 0.5,
+    security_metrics: bool = True
 ) -> Dict[str, Any]:
     """
-    Validate model performance with comprehensive metrics.
+    Enhanced validation with security-focused metrics and threshold tuning.
     
     Args:
         model: Model to evaluate
         loader: DataLoader for validation data
         criterion: Loss function
         device: Target device (cuda/cpu)
-        class_names: Optional list of class names for reporting
+        class_names: Optional list of class names
+        attack_threshold: Decision threshold for attack class (0-1)
+        security_metrics: Whether to compute additional security metrics
         
     Returns:
         Dictionary containing:
-        - val_loss: Average loss
-        - val_acc: Accuracy
-        - val_auc: ROC AUC score
-        - val_ap: Average precision
-        - preds: Array of predictions
-        - labels: Array of true labels
-        - probs: Array of predicted probabilities
-        - report: Classification report (if class_names provided)
-        
-    Raises:
-        RuntimeError: If validation fails
+        - Standard metrics (loss, accuracy, AUC)
+        - Security metrics (recall, F2-score, confusion stats)
+        - Threshold-adjusted predictions
+        - Full probability distributions
     """
     model.eval()
     total_loss = 0.0
     all_preds = []
     all_labels = []
     all_probs = []
-    
+    all_logits = []
+
     try:
         with torch.no_grad():
             for X_batch, y_batch in loader:
@@ -2846,50 +4698,71 @@ def validate(
                 loss = criterion(outputs, y_batch)
                 
                 total_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
                 
-                all_preds.extend(predicted.cpu().numpy())
-                all_labels.extend(y_batch.cpu().numpy())
+                # Store all raw outputs
+                all_logits.extend(outputs.cpu().numpy())
                 all_probs.extend(probs.cpu().numpy())
-        
+                all_labels.extend(y_batch.cpu().numpy())
+
         # Convert to numpy arrays
-        all_preds = np.array(all_preds)
         all_labels = np.array(all_labels)
         all_probs = np.array(all_probs)
         
-        # Calculate metrics
+        # Threshold-adjusted predictions
+        if attack_threshold != 0.5 and all_probs.shape[1] == 2:  # Binary case
+            all_preds = (all_probs[:, 1] >= attack_threshold).astype(int)
+        else:
+            all_preds = np.argmax(all_probs, axis=1)
+
+        # Base metrics
         val_loss = total_loss / len(loader)
-        val_acc = accuracy_score(all_labels, all_preds)
-        
-        # Handle binary and multiclass cases
-        if len(np.unique(all_labels)) == 2:  # Binary classification
-            val_auc = roc_auc_score(all_labels, all_probs[:, 1])
-            val_ap = average_precision_score(all_labels, all_probs[:, 1])
-        else:  # Multiclass
-            val_auc = roc_auc_score(all_labels, all_probs, multi_class='ovr')
-            val_ap = average_precision_score(all_labels, all_probs)
-        
-        results = {
+        metrics = {
             'val_loss': val_loss,
-            'val_acc': val_acc,
-            'val_auc': val_auc,
-            'val_ap': val_ap,
+            'val_acc': accuracy_score(all_labels, all_preds),
             'preds': all_preds,
             'labels': all_labels,
-            'probs': all_probs
+            'probs': all_probs,
+            'logits': np.array(all_logits),
+            'attack_threshold': attack_threshold
         }
-        
-        # Add classification report if class names provided
+
+        # Handle binary vs multiclass
+        if len(np.unique(all_labels)) == 2:  # Binary classification
+            metrics.update({
+                'val_auc': roc_auc_score(all_labels, all_probs[:, 1]),
+                'val_ap': average_precision_score(all_labels, all_probs[:, 1])
+            })
+            
+            if security_metrics:
+                tn, fp, fn, tp = confusion_matrix(all_labels, all_preds).ravel()
+                metrics.update({
+                    'recall': recall_score(all_labels, all_preds),
+                    'precision': precision_score(all_labels, all_preds),
+                    'f2_score': fbeta_score(all_labels, all_preds, beta=2),
+                    'false_negatives': fn,
+                    'false_positives': fp,
+                    'true_positives': tp,
+                    'true_negatives': tn,
+                    'attack_detection_rate': tp / (tp + fn),
+                    'false_alarm_rate': fp / (fp + tn)
+                })
+        else:  # Multiclass
+            metrics.update({
+                'val_auc': roc_auc_score(all_labels, all_probs, multi_class='ovr'),
+                'val_ap': average_precision_score(all_labels, all_probs)
+            })
+
+        # Classification report
         if class_names:
-            results['report'] = classification_report(
+            metrics['report'] = classification_report(
                 all_labels, all_preds,
                 target_names=class_names,
                 digits=4,
                 output_dict=True
             )
-        
-        return results
-        
+
+        return metrics
+
     except Exception as e:
         logger.error(f"Validation failed: {str(e)}")
         raise RuntimeError("Validation failed") from e
@@ -2978,7 +4851,7 @@ def save_checkpoint(
     safe_mode: bool = True
 ) -> bool:
     """
-    Save training checkpoint with verification.
+    Save training checkpoint with verification and SMOTE metrics.
     
     Args:
         model: Model to save
@@ -3007,6 +4880,15 @@ def save_checkpoint(
                 'python_version': platform.python_version(),
                 'device': str(device),
                 'timestamp': datetime.datetime.now().isoformat()
+            },
+            # Add SMOTE metrics
+            'smote_metrics': {
+                'oversampler': config.get('oversampler', 'SMOTE'),
+                'k_neighbors': config.get('k_neighbors', 3),
+                'feature_correlation_diff': metrics.get('feature_correlation_diff'),
+                'neighbor_ratio': metrics.get('avg_neighbor_distance'),
+                'minority_class_size': metrics.get('minority_class_size'),
+                'synthetic_samples_generated': metrics.get('synthetic_samples_generated')
             }
         }
         
@@ -3139,11 +5021,11 @@ def save_training_artifacts(
     config: Dict[str, Any],
     class_names: Optional[List[str]] = None,
     feature_names: Optional[List[str]] = None,
-    #run_figure_dir: Path = FIGURE_DIR
     output_dir: Optional[Path] = None
 ) -> Dict[str, Path]:
     """
-    Save all training artifacts including model, metrics, configuration, and visualizations.
+    Save all training artifacts including model, metrics, configuration, visualizations,
+    and SMOTE evaluation metrics.
     
     Args:
         model: Trained model
@@ -3151,7 +5033,7 @@ def save_training_artifacts(
         config: Training configuration
         class_names: Optional list of class names
         feature_names: Optional list of feature names
-        run_figure_dir: Directory to save figures
+        output_dir: Optional custom output directory
         
     Returns:
         Dictionary of saved artifact paths, or empty dict if failed
@@ -3159,18 +5041,26 @@ def save_training_artifacts(
     saved_artifacts = {}
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     
+    # Use custom output directory if provided
+    artifact_dir = output_dir if output_dir is not None else ARTIFACTS_DIR
+    model_dir = output_dir if output_dir is not None else MODEL_DIR
+    metrics_dir = output_dir if output_dir is not None else METRICS_DIR
+    config_dir = output_dir if output_dir is not None else CONFIG_DIR
+    info_dir = output_dir if output_dir is not None else INFO_DIR
+    figure_dir = output_dir if output_dir is not None else FIGURE_DIR
+    
     try:
         # 1. Ensure directories exist
-        for dir_path in [MODEL_DIR, METRICS_DIR, CONFIG_DIR, INFO_DIR, ARTIFACTS_DIR, FIGURE_DIR]:
+        for dir_path in [model_dir, metrics_dir, config_dir, info_dir, artifact_dir, figure_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # 2. Save model state dict
-        model_path = MODEL_DIR / f"ids_model_{timestamp}.pth"
+        model_path = model_dir / f"ids_model_{timestamp}.pth"
         torch.save(model.state_dict(), model_path)
         saved_artifacts['model'] = model_path
 
         # 3. Save metrics (convert numpy arrays to lists)
-        metrics_path = METRICS_DIR / f"ids_model_metrics_{timestamp}.json"
+        metrics_path = metrics_dir / f"ids_model_metrics_{timestamp}.json"
         with open(metrics_path, 'w') as f:
             json.dump({
                 k: v.tolist() if isinstance(v, np.ndarray) else v
@@ -3178,13 +5068,29 @@ def save_training_artifacts(
             }, f, indent=2)
         saved_artifacts['metrics'] = metrics_path
 
-        # 4. Save configuration
-        config_path = CONFIG_DIR / f"ids_model_config_{timestamp}.json"
+        # 4. Save SMOTE metrics separately if they exist
+        if 'smote_metrics' in metrics or any(k in metrics for k in ['feature_correlation_diff', 'avg_neighbor_distance']):
+            smote_metrics = {
+                'oversampler': config.get('oversampler', 'SMOTE'),
+                'k_neighbors': config.get('k_neighbors', 3),
+                'feature_correlation_diff': metrics.get('feature_correlation_diff'),
+                'neighbor_ratio': metrics.get('avg_neighbor_distance'),
+                'minority_class_size': metrics.get('minority_class_size'),
+                'synthetic_samples_generated': metrics.get('synthetic_samples_generated'),
+                'timestamp': timestamp
+            }
+            smote_metrics_path = metrics_dir / f"smote_evaluation_{timestamp}.json"
+            with open(smote_metrics_path, 'w') as f:
+                json.dump(smote_metrics, f, indent=2)
+            saved_artifacts['smote_metrics'] = smote_metrics_path
+
+        # 5. Save configuration
+        config_path = config_dir / f"ids_model_config_{timestamp}.json"
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
         saved_artifacts['config'] = config_path
 
-        # 5. Save additional info
+        # 6. Save additional info
         info = {
             'timestamp': timestamp,
             'class_names': class_names,
@@ -3193,20 +5099,24 @@ def save_training_artifacts(
                 'pytorch_version': torch.__version__,
                 'python_version': platform.python_version(),
                 'host': platform.node()
+            },
+            'smote_config': {
+                'method': config.get('oversampler'),
+                'k_neighbors': config.get('k_neighbors'),
+                'sampling_strategy': config.get('sampling_strategy')
             }
         }
-        info_path = INFO_DIR / f"ids_model_info_{timestamp}.json"
+        info_path = info_dir / f"ids_model_info_{timestamp}.json"
         with open(info_path, 'w') as f:
             json.dump(info, f, indent=2)
         saved_artifacts['info'] = info_path
 
-        # 6. Save confusion matrix if labels and predictions exist
+        # 7. Save confusion matrix if labels and predictions exist
         if 'labels' in metrics and 'preds' in metrics:
             try:
                 cm = confusion_matrix(metrics['labels'], metrics['preds'])
                 plt.figure(figsize=(10, 8))
                 
-                # Use class names if available
                 if class_names:
                     tick_labels = class_names
                 else:
@@ -3224,27 +5134,24 @@ def save_training_artifacts(
                 plt.xlabel("Predicted")
                 plt.ylabel("True")
                 
-                cm_path = FIGURE_DIR / f"confusion_matrix_{timestamp}.png"
+                cm_path = figure_dir / f"confusion_matrix_{timestamp}.png"
                 plt.savefig(cm_path, bbox_inches='tight', dpi=300)
                 plt.close()
                 saved_artifacts['confusion_matrix'] = cm_path
             except Exception as cm_error:
                 logger.warning(f"Failed to save confusion matrix: {str(cm_error)}")
 
-        # 7. Create archive of all artifacts
-        archive_path = ARTIFACTS_DIR / f"ids_model_artifacts_{timestamp}.tar.gz"
+        # 8. Create archive of all artifacts
+        archive_path = artifact_dir / f"ids_model_artifacts_{timestamp}.tar.gz"
         with tarfile.open(archive_path, "w:gz") as tar:
-            for file in [model_path, metrics_path, config_path, info_path]:
-                if file.exists():
+            for file in saved_artifacts.values():
+                if isinstance(file, Path) and file.exists():
                     tar.add(file, arcname=file.name)
-            if 'confusion_matrix' in saved_artifacts:
-                tar.add(saved_artifacts['confusion_matrix'], arcname=saved_artifacts['confusion_matrix'].name)
         
         saved_artifacts['archive'] = archive_path
 
         # Log success
         if saved_artifacts:
-            # Create the artifacts table
             artifacts_table = Table(
                 title="[bold green]Training Artifacts Saved Successfully[/bold green]",
                 box=box.ROUNDED,
@@ -3257,13 +5164,9 @@ def save_training_artifacts(
             artifacts_table.add_column("Artifact Type", style="bold cyan", width=20)
             artifacts_table.add_column("File Path", style="bold magenta")
             
-            # Add rows for each artifact
             for artifact_type, path in saved_artifacts.items():
-                # Format the path for better display
-                # Normalize path
                 display_path = str(path).replace("\\", "/")
                 if "C:/Users" in display_path:
-                    # Shorten path
                     display_path = display_path.split("backend/")[-1]
                 
                 artifacts_table.add_row(
@@ -3271,11 +5174,9 @@ def save_training_artifacts(
                     display_path
                 )
             
-            # Print the table
             console.print()
             console.print(artifacts_table)
             
-            # Additional success message
             success_panel = Panel(
                 Text(f"All artifacts archived at: {saved_artifacts['archive']}", style="bold green"),
                 border_style="green",
@@ -3286,7 +5187,6 @@ def save_training_artifacts(
         return saved_artifacts
 
     except Exception as e:
-        # Create error table
         error_table = Table(
             title="[bold red]Artifact Saving Failed[/bold red]",
             box=box.ROUNDED,
@@ -3301,10 +5201,9 @@ def save_training_artifacts(
         console.print()
         console.print(error_table)
         
-        # Clean up any partial saves
         for path in saved_artifacts.values():
             try:
-                if path.exists():
+                if isinstance(path, Path) and path.exists():
                     path.unlink()
             except:
                 pass
@@ -3340,21 +5239,298 @@ def banner() -> None:
     print(Fore.MAGENTA + Style.BRIGHT + "  - Interactive Mode -  ".center(40))
     print(Fore.CYAN + Style.BRIGHT + "=" * 40 + Style.RESET_ALL)
 
+def select_config_preset() -> Optional[Dict[str, Any]]:
+    """Interactive preset selection with rich formatting"""
+    console.print()
+    preset_table = Table(
+        title="[bold cyan]Available Configuration Presets[/]",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+        border_style="blue",
+        show_header=True,
+        show_lines=True
+    )
+    
+    preset_table.add_column("Option", style="bold yellow", width=8)
+    preset_table.add_column("Preset", style="bold white", width=12)
+    preset_table.add_column("Model", style="bold green", width=10)
+    preset_table.add_column("Description", style="bold dim", width=40)
+    
+    preset_table.add_row("1", "stability", "simple", "Conservative settings for stable training")
+    preset_table.add_row("2", "performance", "ensemble", "Optimized for best performance")
+    preset_table.add_row("3", "baseline", "standard", "Standard configuration baseline")
+    preset_table.add_row("4", "debug", "simple", "Fast training for debugging")
+    preset_table.add_row("5", "custom", "varies", "Use current configuration")
+    
+    console.print(preset_table)
+    
+    try:
+        choice = console.input("\n[bold cyan]Select preset (1-5): [/]")
+        
+        if choice == '1':
+            return PRESET_CONFIGS['stability']
+        elif choice == '2':
+            return PRESET_CONFIGS['performance']
+        elif choice == '3':
+            return PRESET_CONFIGS['baseline']
+        elif choice == '4':
+            return PRESET_CONFIGS['debug']
+        elif choice == '5':
+            return None  # Use current config
+        else:
+            console.print(
+                Panel.fit(
+                    Text("Invalid selection. Using current configuration.", style="bold yellow"),
+                    border_style="yellow"
+                )
+            )
+            return None
+            
+    except KeyboardInterrupt:
+        console.print("\n[bold red]Selection cancelled.[/]")
+        return None
+
+def run_stability_test(logger: logging.Logger, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Run a quick stability test with a simple model"""
+    console.print()
+    console.print(
+        Panel.fit(
+            Text("Running Stability Test", justify="center", style="bold cyan"),
+            title="[bold yellow]Phase 1: Stability Check[/]",
+            border_style="cyan",
+            padding=(1, 2)
+        )
+    )
+    
+    # Use stability config if no config provided
+    if config is None:
+        config = PRESET_CONFIGS['stability']
+    
+    # Override some settings for quick test
+    test_config = config.copy()
+    test_config.update({
+        'epochs': 10,
+        'early_stopping': 5,
+        'model_type': 'simple'
+    })
+    
+    try:
+        # Run training with test config
+        results = train_model(logger, use_mock=True, config=test_config)
+        
+        # Analyze stability
+        stability_metrics = {
+            'completed': results.get('completed', False),
+            'final_epoch': results.get('best_metrics', {}).get('epoch', -1),
+            'best_val_loss': results.get('best_metrics', {}).get('val_loss', float('inf')),
+            'training_stable': results.get('best_metrics', {}).get('val_loss', float('inf')) < 2.0,
+            'config_used': test_config
+        }
+        
+        # Display results
+        if stability_metrics['training_stable']:
+            console.print(
+                Panel.fit(
+                    Text("✓ Stability test PASSED", style="bold green"),
+                    title="[bold green]Test Result[/]",
+                    border_style="green"
+                )
+            )
+        else:
+            console.print(
+                Panel.fit(
+                    Text("✗ Stability test FAILED", style="bold red"),
+                    title="[bold red]Test Result[/]",
+                    border_style="red"
+                )
+            )
+        
+        return stability_metrics
+        
+    except Exception as e:
+        logger.error(f"Stability test failed: {str(e)}")
+        return {
+            'completed': False,
+            'error': str(e),
+            'training_stable': False
+        }
+
+def progressive_training_pipeline(logger: logging.Logger) -> Dict[str, Any]:
+    """Run progressive training: stability → baseline → performance"""
+    console.print()
+    console.print(
+        Panel.fit(
+            Text("Progressive Training Pipeline", justify="center", style="bold yellow"),
+            subtitle="Phase 1: Stability → Phase 2: Baseline → Phase 3: Performance",
+            border_style="yellow",
+            padding=(1, 2)
+        )
+    )
+    
+    results = {}
+    
+    # Phase 1: Stability Test
+    console.print("\n[bold cyan]Phase 1: Stability Test[/]")
+    stability_result = run_stability_test(logger, PRESET_CONFIGS['stability'])
+    results['stability'] = stability_result
+    
+    if not stability_result.get('training_stable', False):
+        console.print(
+            Panel.fit(
+                Text("Stability test failed. Stopping pipeline.", style="bold red"),
+                border_style="red"
+            )
+        )
+        return results
+    
+    # Phase 2: Baseline Training
+    console.print("\n[bold cyan]Phase 2: Baseline Training[/]")
+    try:
+        baseline_result = train_model(logger, use_mock=False, config=PRESET_CONFIGS['baseline'])
+        results['baseline'] = baseline_result
+        
+        baseline_f2 = baseline_result.get('best_metrics', {}).get('val_f2', 0)
+        if baseline_f2 < 0.7:  # Threshold for proceeding
+            console.print(
+                Panel.fit(
+                    Text(f"Baseline F2-score too low ({baseline_f2:.3f}). Consider tuning.", style="bold yellow"),
+                    border_style="yellow"
+                )
+            )
+    except Exception as e:
+        logger.error(f"Baseline training failed: {str(e)}")
+        results['baseline'] = {'error': str(e)}
+        return results
+    
+    # Phase 3: Performance Training (if baseline was good)
+    if results['baseline'].get('best_metrics', {}).get('val_f2', 0) >= 0.7:
+        console.print("\n[bold cyan]Phase 3: Performance Training[/]")
+        try:
+            performance_result = train_model(logger, use_mock=False, config=PRESET_CONFIGS['performance'])
+            results['performance'] = performance_result
+        except Exception as e:
+            logger.error(f"Performance training failed: {str(e)}")
+            results['performance'] = {'error': str(e)}
+    
+    return results
+
+def sanitize_input(input_str: str) -> str:
+    """Sanitize user input to prevent command injection"""
+    return re.sub(r'[;&|$]', '', input_str).strip()
+
 def print_menu() -> None:
-    """Print menu options"""
+    """Print enhanced menu options with new configuration and testing features"""
     print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Options:")
     print(Fore.WHITE + Style.BRIGHT + "1. Configure System Settings")
     print(Fore.WHITE + Style.BRIGHT + "2. Setup Directories")
     print(Fore.WHITE + Style.BRIGHT + "3. Check Package Versions")
     print(Fore.WHITE + Style.BRIGHT + "4. Setup GPU/CPU")
-    print(Fore.WHITE + Style.BRIGHT + "5. Run Training Pipeline")
-    print(Fore.WHITE + Style.BRIGHT + "6. Run Training with Synthetic Data")
-    print(Fore.WHITE + Style.BRIGHT + "7. Show Current Configuration")
-    print(Fore.RED + Style.BRIGHT + "8. Exit")
+    print(Fore.WHITE + Style.BRIGHT + "5. Enhanced Configuration Menu")
+    print(Fore.WHITE + Style.BRIGHT + "6. Run Training Pipeline")
+    print(Fore.WHITE + Style.BRIGHT + "7. Run Training with Synthetic Data")
+    print(Fore.WHITE + Style.BRIGHT + "8. Progressive Training Pipeline")
+    print(Fore.WHITE + Style.BRIGHT + "9. Quick Stability Test")
+    print(Fore.WHITE + Style.BRIGHT + "10. Show Current Configuration")
+    print(Fore.WHITE + Style.BRIGHT + "11. Compare Model Architectures")
+    print(Fore.RED + Style.BRIGHT + "12. Exit")
 
-def sanitize_input(input_str: str) -> str:
-    """Sanitize user input to prevent command injection"""
-    return re.sub(r'[;&|$]', '', input_str).strip()
+def verify_model_classes():
+    """Verify that all model classes are properly defined"""
+    required_classes = ['IDSModel', 'SimpleIDSModel', 'StabilizedIDSModel', 'EnsembleIDSModel']
+    missing_classes = []
+    
+    for class_name in required_classes:
+        if class_name not in globals():
+            missing_classes.append(class_name)
+    
+    if missing_classes:
+        console.print(
+            Panel.fit(
+                Text(f"Missing model classes: {', '.join(missing_classes)}", style="bold red"),
+                title="[bold red]Model Class Error[/]",
+                border_style="red"
+            )
+        )
+        return False
+    
+    return True
+
+def enhanced_config_menu(logger: logging.Logger) -> None:
+    """Enhanced configuration menu with presets and testing options"""
+    while True:
+        console.print()
+        menu_table = Table(
+            title="[bold cyan]Enhanced Configuration Menu[/]",
+            box=box.ROUNDED,
+            header_style="bold cyan",
+            border_style="blue"
+        )
+        
+        menu_table.add_column("Option", style="bold yellow", width=8)
+        menu_table.add_column("Action", style="bold white", width=25)
+        menu_table.add_column("Description", style="bold dim")
+        
+        menu_table.add_row("1", "Show Current Config", "Display current settings")
+        menu_table.add_row("2", "Configure Training", "Set training parameters")
+        menu_table.add_row("3", "Configure Model", "Set model architecture")
+        menu_table.add_row("4", "Select Preset", "Choose from predefined configs")
+        menu_table.add_row("5", "Compare Models", "View model complexity comparison")
+        menu_table.add_row("6", "Stability Test", "Quick stability check")
+        menu_table.add_row("7", "Progressive Pipeline", "Run full training pipeline")
+        menu_table.add_row("8", "Verify Models", "Check model class availability")  # NEW
+        menu_table.add_row("0", "Return to Main Menu", "Go back")
+        
+        console.print(menu_table)
+        
+        choice = console.input("\n[bold cyan]Select option: [/]")
+        
+        if choice == '1':
+            show_config()
+        elif choice == '2':
+            configure_training()
+        elif choice == '3':
+            configure_model()
+        elif choice == '4':
+            preset = select_config_preset()
+            if preset:
+                # Update global config with preset
+                config = get_current_config()
+                config = deep_update(config, {'training': preset, 'model': {'type': preset.get('model_type')}})
+                save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+                update_global_config(config)
+                console.print(
+                    Panel.fit(
+                        Text("Configuration updated with preset", style="bold green"),
+                        border_style="green"
+                    )
+                )
+        elif choice == '5':
+            if verify_model_classes():
+                display_model_comparison()
+            else:
+                console.print(
+                    Panel.fit(
+                        Text("Please ensure all model classes are defined before comparison", style="bold yellow"),
+                        border_style="yellow"
+                    )
+                )
+        elif choice == '6':
+            run_stability_test(logger)
+        elif choice == '7':
+            progressive_training_pipeline(logger)
+        elif choice == '8':
+            verify_model_classes()
+            initialize_model_variants()
+            console.print(f"[green]Model verification complete. Available models: {list(MODEL_VARIANTS.keys())}[/]")
+        elif choice == '0':
+            break
+        else:
+            console.print(
+                Panel.fit(
+                    Text("Invalid option. Please try again.", style="bold red"),
+                    border_style="red"
+                )
+            )
 
 def interactive_main(
     logger: logging.Logger,
@@ -3362,17 +5538,18 @@ def interactive_main(
     config: Dict[str, Any],
     directories: Dict[str, Path]
 ) -> None:
-    """Interactive main function"""
+    """Enhanced interactive main function with new options"""
     # Use the initialized objects passed from main
     while True:
         banner()
         print_menu()
-        choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect an option " + Fore.WHITE + Style.BRIGHT + "(1-8): ").strip()
+        choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect an option " + Fore.WHITE + Style.BRIGHT + "(1-12): ").strip()
         
         if choice == "1":
             print("\033c", end="")
             configure_system()
             print(Fore.GREEN + Style.BRIGHT + "System configuration applied")
+            
         elif choice == "2":
             try:
                 print("\033c", end="")
@@ -3380,35 +5557,247 @@ def interactive_main(
                 print(Fore.GREEN + Style.BRIGHT + "Directories set up successfully")
             except Exception as e:
                 print(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
+                
         elif choice == "3":
             print("\033c", end="")
             check_versions(logger)
+            
         elif choice == "4":
             print("\033c", end="")
             setup_gpu(logger)
+            
         elif choice == "5":
             print("\033c", end="")
-            print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline...")
-            # Skip re-initializing logging if already set up
-            if not logger.handlers:
-                logger = setup_logging(LOG_DIR)
-            train_model(logger, use_mock=False)
+            enhanced_config_menu(logger)
+            
         elif choice == "6":
             print("\033c", end="")
-            print(Fore.YELLOW + Style.BRIGHT + "\nStarting training with synthetic data...")
+            
+            # Offer preset selection before training
+            console.print(
+                Panel.fit(
+                    Text("Select training configuration", justify="center", style="bold cyan"),
+                    title="[bold yellow]Training Pipeline[/]",
+                    border_style="cyan"
+                )
+            )
+            
+            preset = select_config_preset()
+            if preset:
+                print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline with selected preset...")
+                train_config = preset
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline with current configuration...")
+                train_config = None
+                
             # Skip re-initializing logging if already set up
             if not logger.handlers:
                 logger = setup_logging(LOG_DIR)
-            train_model(logger, use_mock=True)
+            try:
+                train_model(logger, use_mock=False, config=train_config)
+            except Exception as e:
+                console.print(
+                    Panel.fit(
+                        Text(f"Training failed: {str(e)}", style="bold red"),
+                        title="[bold red]Training Error[/]",
+                        border_style="red"
+                    )
+                )
+            
         elif choice == "7":
             print("\033c", end="")
-            show_config()
+            
+            # Offer preset selection for synthetic training
+            console.print(
+                Panel.fit(
+                    Text("Select configuration for synthetic data training", justify="center", style="bold cyan"),
+                    title="[bold yellow]Synthetic Data Training[/]",
+                    border_style="cyan"
+                )
+            )
+            
+            preset = select_config_preset()
+            if preset:
+                print(Fore.YELLOW + Style.BRIGHT + "\nStarting synthetic training with selected preset...")
+                train_config = preset
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "\nStarting synthetic training with current configuration...")
+                train_config = None
+                
+            # Skip re-initializing logging if already set up
+            if not logger.handlers:
+                logger = setup_logging(LOG_DIR)
+            try:
+                train_model(logger, use_mock=True, config=train_config)
+            except Exception as e:
+                console.print(
+                    Panel.fit(
+                        Text(f"Synthetic training failed: {str(e)}", style="bold red"),
+                        title="[bold red]Training Error[/]",
+                        border_style="red"
+                    )
+                )
+            
         elif choice == "8":
+            print("\033c", end="")
+            console.print(
+                Panel.fit(
+                    Text("Starting Progressive Training Pipeline", justify="center", style="bold yellow"),
+                    subtitle="This will run: Stability Test → Baseline → Performance",
+                    border_style="yellow",
+                    padding=(1, 2)
+                )
+            )
+            
+            # Confirm before starting long process
+            proceed = console.input("\n[bold cyan]This may take a while. Continue? (y/n): [/]").lower()
+            if proceed == 'y':
+                if not logger.handlers:
+                    logger = setup_logging(LOG_DIR)
+                try:
+                    results = progressive_training_pipeline(logger)
+                    
+                    # Display summary of results
+                    console.print()
+                    summary_table = Table(
+                        title="[bold]Progressive Training Results[/]",
+                        box=box.ROUNDED,
+                        header_style="bold cyan"
+                    )
+                    summary_table.add_column("Phase", style="bold yellow")
+                    summary_table.add_column("Status", style="bold white")
+                    summary_table.add_column("Best F2", style="bold green")
+                    
+                    for phase, result in results.items():
+                        if 'error' in result:
+                            summary_table.add_row(phase.title(), "[red]Failed[/]", "[red]N/A[/]")
+                        else:
+                            f2_score = result.get('best_metrics', {}).get('val_f2', 0)
+                            status = "[green]Completed[/]" if result.get('completed', False) else "[yellow]Partial[/]"
+                            summary_table.add_row(phase.title(), status, f"{f2_score:.3f}")
+                    
+                    console.print(summary_table)
+                except Exception as e:
+                    console.print(
+                        Panel.fit(
+                            Text(f"Progressive training failed: {str(e)}", style="bold red"),
+                            title="[bold red]Pipeline Error[/]",
+                            border_style="red"
+                        )
+                    )
+            else:
+                console.print(
+                    Panel.fit(
+                        Text("Progressive training cancelled", style="bold yellow"),
+                        border_style="yellow"
+                    )
+                )
+                
+        elif choice == "9":
+            print("\033c", end="")
+            console.print(
+                Panel.fit(
+                    Text("Running Quick Stability Test", justify="center", style="bold cyan"),
+                    subtitle="10 epochs with simple model on synthetic data",
+                    border_style="cyan"
+                )
+            )
+            
+            if not logger.handlers:
+                logger = setup_logging(LOG_DIR)
+            
+            try:
+                stability_result = run_stability_test(logger)
+                
+                # Show detailed results
+                if stability_result.get('training_stable', False):
+                    console.print(
+                        Panel.fit(
+                            Text(f"✓ Training completed successfully!\nFinal epoch: {stability_result['final_epoch']}\nBest validation loss: {stability_result['best_val_loss']:.4f}", 
+                                 style="bold green"),
+                            title="[bold green]Stability Test Results[/]",
+                            border_style="green"
+                        )
+                    )
+                else:
+                    error_msg = stability_result.get('error', 'Training was unstable')
+                    console.print(
+                        Panel.fit(
+                            Text(f"✗ Test failed: {error_msg}", style="bold red"),
+                            title="[bold red]Stability Test Results[/]",
+                            border_style="red"
+                        )
+                    )
+            except Exception as e:
+                console.print(
+                    Panel.fit(
+                        Text(f"Stability test failed: {str(e)}", style="bold red"),
+                        title="[bold red]Test Error[/]",
+                        border_style="red"
+                    )
+                )
+                
+        elif choice == "10":
+            print("\033c", end="")
+            try:
+                show_config()
+            except Exception as e:
+                console.print(
+                    Panel.fit(
+                        Text(f"Failed to show config: {str(e)}", style="bold red"),
+                        title="[bold red]Config Error[/]",
+                        border_style="red"
+                    )
+                )
+            
+        elif choice == "11":
+            print("\033c", end="")
+            try:
+                display_model_comparison()
+                
+                # Optionally offer to switch to a different model
+                console.print()
+                switch = console.input("[bold cyan]Switch to a different model architecture? (y/n): [/]").lower()
+                if switch == 'y':
+                    model_choice = console.input("[bold cyan]Enter model type (simple/standard/ensemble/stabilized): [/]").lower()
+                    if model_choice in MODEL_VARIANTS:
+                        # Update config
+                        config = get_current_config()
+                        config['model']['type'] = model_choice
+                        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+                        console.print(
+                            Panel.fit(
+                                Text(f"Model architecture changed to: {model_choice}", style="bold green"),
+                                border_style="green"
+                            )
+                        )
+                    else:
+                        console.print(
+                            Panel.fit(
+                                Text("Invalid model type", style="bold red"),
+                                border_style="red"
+                            )
+                        )
+            except Exception as e:
+                console.print(
+                    Panel.fit(
+                        Text(f"Model comparison failed: {str(e)}", style="bold red"),
+                        title="[bold red]Comparison Error[/]",
+                        border_style="red"
+                    )
+                )
+                    
+        elif choice == "12":
             print(Fore.RED + Style.BRIGHT + "\nExiting...")
             print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
             break
+            
         else:
-            print(Fore.RED + Style.BRIGHT + "Invalid selection. Choose 1-8.")
+            print(Fore.RED + Style.BRIGHT + "Invalid selection. Choose 1-12.")
+            
+        # Add pause before returning to menu (fixed colorama usage)
+        if choice not in ["8", "12"]:  # Don't pause for long operations or exit
+            input(Style.DIM + "\nPress Enter to continue..." + Style.RESET_ALL)
 
 class TrainingError(Exception):
     """Base class for training-related exceptions"""
@@ -3575,6 +5964,35 @@ def log_epoch_progress(
     except Exception as e:
         logger.error(f"Error formatting epoch progress: {str(e)}")
 
+def log_epoch_progress_enhanced(
+    epoch: int,
+    total_epochs: int,
+    epoch_time: float,
+    train_loss: float,
+    train_acc: float,
+    val_metrics: Dict[str, Any],
+    current_lr: float,
+    patience_counter: int,
+    early_stop_patience: int,
+    warmup_phase: bool = False
+):
+    """Enhanced logging with security metrics"""
+    phase_indicator = "[WARMUP]" if warmup_phase else "[TRAIN]"
+    
+    logger.info(
+        f"{phase_indicator} Epoch {epoch+1:3d}/{total_epochs} "
+        f"({epoch_time:.1f}s) - "
+        f"Loss: {train_loss:.4f} -> {val_metrics['val_loss']:.4f} | "
+        f"Acc: {train_acc:.3f} -> {val_metrics['val_acc']:.3f} | "
+        f"Recall: {val_metrics.get('val_recall', 0):.3f} | "
+        f"F2: {val_metrics.get('val_f2', 0):.3f} | "
+        f"LR: {current_lr:.2e} | "
+        f"Patience: {patience_counter}/{early_stop_patience}"
+    )
+    
+    if val_metrics.get('optimal_threshold'):
+        logger.info(f"    Optimal attack threshold: {val_metrics['optimal_threshold']:.3f}")
+
 def train_model(
     logger: logging.Logger,
     use_mock: bool = False,
@@ -3680,32 +6098,95 @@ def train_model(
 
         # Model configuration
         try:
-            model = IDSModel(input_size, num_classes).to(device)
+            model_type = config.get('model_type', 'standard') if config else 'standard'
             
-            # Class weighting
+            # Initialize MODEL_VARIANTS if it's empty or missing
+            if not MODEL_VARIANTS:
+                initialize_model_variants()
+            
+            model_class = MODEL_VARIANTS.get(model_type, MODEL_VARIANTS.get('simple', SimpleIDSModel))
+            
+            # Create model with enhanced configuration
+            if model_type == 'standard':
+                model = model_class(
+                    input_size=input_size, 
+                    output_size=num_classes,
+                    use_batch_norm=config.get('use_batch_norm', True) if config else True,
+                    dropout_rates=config.get('dropout_rates', DROPOUT_RATES) if config else DROPOUT_RATES
+                ).to(device)
+            elif model_type == 'simple':
+                model = model_class(
+                    input_size=input_size, 
+                    output_size=num_classes,
+                    dropout_rate=config.get('dropout_rate', 0.2) if config else 0.2
+                ).to(device)
+            elif model_type == 'ensemble':
+                model = model_class(
+                    input_size=input_size, 
+                    output_size=num_classes,
+                    num_models=config.get('num_ensemble_models', 3) if config else 3
+                ).to(device)
+            else:
+                model = model_class(input_size, num_classes).to(device)
+            
+            logger.info(f"Using {model_type} model architecture")
+            logger.info(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+            
+            # Class weighting for security applications
             class_counts = torch.tensor(df['Label'].value_counts().sort_index().values, dtype=torch.float32)
             class_weights = (1. / class_counts) * (class_counts.sum() / num_classes)
             class_weights = class_weights / class_weights.sum()
             logger.info(Fore.GREEN + Style.BRIGHT + "Class weights: " + Fore.MAGENTA + Style.BRIGHT + f"{class_weights.tolist()}")
             training_meta['class_weights'] = class_weights.cpu().numpy().tolist()
             
-            # Training components
-            criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
+            # Security-aware loss function
+            criterion = SecurityAwareLoss(
+                class_weights=class_weights.to(device),
+                false_negative_cost=config.get('fn_cost', 2.0) if config else 2.0
+            )
+            
+            # Optimizer with improved settings
             optimizer = optim.AdamW(
                 model.parameters(),
                 lr=config.get('learning_rate', LEARNING_RATE) if config else LEARNING_RATE,
-                weight_decay=config.get('weight_decay', WEIGHT_DECAY) if config else WEIGHT_DECAY
+                weight_decay=config.get('weight_decay', WEIGHT_DECAY) if config else WEIGHT_DECAY,
+                eps=1e-8,  # Better numerical stability
+                betas=(0.9, 0.999)
             )
             
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode='max',
-                patience=config.get('lr_patience', 3) if config else 3,
-                factor=0.5
-            )
+            # Learning rate warmup scheduler
+            warmup_epochs = config.get('warmup_epochs', 5) if config else 5
+            base_lr = config.get('learning_rate', LEARNING_RATE) if config else LEARNING_RATE
+            warmup_scheduler = WarmupScheduler(optimizer, warmup_epochs, base_lr)
             
-            # Disable for CPU-only
-            scaler = GradScaler(enabled=False)
+            # Main scheduler - Fix for PyTorch version compatibility
+            try:
+                # Try with verbose parameter first (older PyTorch versions)
+                scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer,
+                    mode='max',
+                    patience=config.get('lr_patience', 3) if config else 3,
+                    factor=0.5,
+                    verbose=True
+                )
+            except TypeError:
+                # Fallback without verbose parameter (newer PyTorch versions)
+                scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+                    optimizer,
+                    mode='max',
+                    patience=config.get('lr_patience', 3) if config else 3,
+                    factor=0.5
+                )
+                logger.info("Using ReduceLROnPlateau scheduler without verbose parameter (newer PyTorch)")
+            
+            # Disable mixed precision for CPU or if not available
+            use_amp = torch.cuda.is_available() and config.get('mixed_precision', False) if config else False
+            scaler = GradScaler(enabled=use_amp)
+            
+            if use_amp:
+                logger.info("Using Automatic Mixed Precision (AMP)")
+            else:
+                logger.info("AMP disabled (CPU mode or not requested)")
 
         except Exception as e:
             raise ModelConfigurationError(f"Model setup failed: {str(e)}") from e
@@ -3716,55 +6197,123 @@ def train_model(
             'val_loss': float('inf'),
             'val_acc': 0.0,
             'val_auc': 0.0,
+            'val_recall': 0.0,  # Security-focused metric
+            'val_f2': 0.0,     # Security-focused metric
             'train_loss': float('inf'),
             'train_acc': 0.0,
-            'learning_rate': 0.0
+            'learning_rate': 0.0,
+            'optimal_threshold': 0.5
         }
+        
         early_stop_patience = config.get('early_stopping', EARLY_STOPPING_PATIENCE) if config else EARLY_STOPPING_PATIENCE
         patience_counter = 0
         
-        logger.info(Fore.YELLOW + Style.BRIGHT + "\n=== Starting Training ===")
+        logger.info(Fore.YELLOW + Style.BRIGHT + "\n=== Starting Training with Security Enhancements ===")
         start_time = time.time()
         
         try:
             for epoch in range(config.get('epochs', DEFAULT_EPOCHS) if config else DEFAULT_EPOCHS):
                 epoch_start = time.time()
                 
-                # Train epoch
+                # Learning Rate Warmup Implementation
+                if epoch < warmup_epochs:
+                    # Gradual LR increase during warmup
+                    lr_scale = (epoch + 1) / warmup_epochs
+                    current_lr = lr_scale * base_lr
+                    for param_group in optimizer.param_groups:
+                        param_group['lr'] = current_lr
+                    
+                    logger.info(f"[WARMUP] Epoch {epoch+1}/{warmup_epochs} | LR: {current_lr:.2e} (scale: {lr_scale:.3f})")
+                else:
+                    current_lr = optimizer.param_groups[0]['lr']
+                
+                # Train epoch with enhanced stability
                 train_loss, train_acc = train_epoch(
                     model=model,
                     loader=train_loader,
                     criterion=criterion,
                     optimizer=optimizer,
                     device=device,
-                    grad_clip=config.get('gradient_clip', GRADIENT_CLIP) if config else GRADIENT_CLIP,
+                    grad_clip=config.get('gradient_clip', 1.0) if config else 1.0,
                     grad_accum_steps=config.get('grad_accum_steps', 1) if config else 1,
-                    scaler=scaler
+                    scaler=scaler,
+                    warmup_scheduler=warmup_scheduler if epoch < warmup_epochs else None
                 )
                 
-                # Validate
+                # Check for training stability
+                if not np.isfinite(train_loss):
+                    logger.error(f"Training became unstable at epoch {epoch+1}: loss = {train_loss}")
+                    break
+                
+                # Validate with security metrics
                 val_metrics = validate(
                     model=model,
                     loader=val_loader,
                     criterion=criterion,
                     device=device,
-                    class_names=['Normal', 'Attack']
+                    class_names=['Normal', 'Attack'],
+                    attack_threshold=0.5,
+                    security_metrics=True
                 )
                 
-                # Learning rate adjustment
-                current_lr = optimizer.param_groups[0]['lr']
-                scheduler.step(val_metrics['val_acc'])
+                # Find optimal threshold for attack detection
+                if 'probs' in val_metrics and 'labels' in val_metrics:
+                    # Convert to numpy if needed
+                    labels_np = val_metrics['labels']
+                    probs_np = val_metrics['probs']
+                    
+                    if hasattr(labels_np, 'cpu'):
+                        labels_np = labels_np.cpu().numpy()
+                    if hasattr(probs_np, 'cpu'):
+                        probs_np = probs_np.cpu().numpy()
+                    
+                    # For binary classification, use attack class probabilities
+                    if len(probs_np.shape) > 1 and probs_np.shape[1] == 2:
+                        attack_probs = probs_np[:, 1]  # Attack class probabilities
+                    else:
+                        attack_probs = probs_np
+                    
+                    optimal_threshold, f2_score = find_optimal_threshold(
+                        labels_np, attack_probs, metric='f2'
+                    )
+                    val_metrics['optimal_threshold'] = optimal_threshold
+                    val_metrics['val_f2'] = f2_score
                 
-                # Update best metrics
-                if val_metrics['val_loss'] < best_metrics['val_loss']:
+                # Learning rate adjustment after warmup
+                current_lr = optimizer.param_groups[0]['lr']
+                if epoch >= warmup_epochs:
+                    # Use F2 score for security-focused applications
+                    metric_for_scheduler = val_metrics.get('val_f2', val_metrics['val_acc'])
+                    scheduler.step(metric_for_scheduler)
+                    
+                    # Log LR changes
+                    new_lr = optimizer.param_groups[0]['lr']
+                    if new_lr != current_lr:
+                        logger.info(f"Learning rate reduced: {current_lr:.2e} → {new_lr:.2e}")
+                
+                # Update best metrics (prioritize security metrics)
+                is_best = False
+                if epoch < warmup_epochs:
+                    # During warmup, use loss
+                    if val_metrics['val_loss'] < best_metrics['val_loss']:
+                        is_best = True
+                else:
+                    # After warmup, prioritize F2 score for security
+                    if val_metrics.get('val_f2', 0) > best_metrics.get('val_f2', 0):
+                        is_best = True
+                
+                if is_best:
                     best_metrics.update({
                         'epoch': epoch,
                         'val_loss': val_metrics['val_loss'],
                         'val_acc': val_metrics['val_acc'],
-                        'val_auc': val_metrics['val_auc'],
+                        'val_auc': val_metrics.get('val_auc', 0.0),
+                        'val_recall': val_metrics.get('val_recall', 0.0),
+                        'val_f2': val_metrics.get('val_f2', 0.0),
                         'train_loss': train_loss,
                         'train_acc': train_acc,
                         'learning_rate': current_lr,
+                        'optimal_threshold': val_metrics.get('optimal_threshold', 0.5),
                         'preds': val_metrics['preds'],
                         'labels': val_metrics['labels'],
                         'probs': val_metrics['probs']
@@ -3784,10 +6333,10 @@ def train_model(
                 else:
                     patience_counter += 1
                 
-                # Logging
+                # Enhanced logging with security metrics
                 epoch_time = time.time() - epoch_start
                 
-                log_epoch_progress(
+                log_epoch_progress_enhanced(
                     epoch=epoch,
                     total_epochs=config.get('epochs', DEFAULT_EPOCHS) if config else DEFAULT_EPOCHS,
                     epoch_time=epoch_time,
@@ -3796,7 +6345,8 @@ def train_model(
                     val_metrics=val_metrics,
                     current_lr=current_lr,
                     patience_counter=patience_counter,
-                    early_stop_patience=early_stop_patience
+                    early_stop_patience=early_stop_patience,
+                    warmup_phase=epoch < warmup_epochs
                 )
                 
                 # Early stopping
@@ -3828,15 +6378,18 @@ def train_model(
         
         # Load best model for final evaluation
         try:
-            model_state, optim_state, scheduler_state, metrics, training_meta = load_checkpoint(
+            checkpoint_result = load_checkpoint(
                 filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
                 model=model,
                 device=device
             )
             
-            if model_state is None:
+            if checkpoint_result[0] is None:
                 logger.warning("Could not load best model state")
             else:
+                # Unpack the checkpoint result properly
+                model_state, optim_state, scheduler_state, metrics, meta = checkpoint_result
+                
                 # Load the model state
                 model.load_state_dict(model_state)
                 
@@ -3881,7 +6434,6 @@ def train_model(
                 model=model,
                 metrics=best_metrics,
                 config=training_meta,
-                #output_dir=run_artifact_dir,
                 class_names=['Normal', 'Attack'],
                 feature_names=artifacts.get('feature_names')
             )
@@ -3894,23 +6446,24 @@ def train_model(
 
         writer.close()
         return {
-            'metrics': best_metrics,
+            'completed': True,
+            'best_metrics': best_metrics,
             'meta': training_meta,
             'artifacts_dir': str(run_artifact_dir)
         }
 
     except DataPreparationError as e:
         logger.error(f"Data preparation failed: {str(e)}")
-        raise
+        return {'completed': False, 'error': str(e)}
     except TrainingError as e:
         logger.error(f"Training failed: {str(e)}")
-        raise
+        return {'completed': False, 'error': str(e)}
     except ModelSavingError as e:
         logger.error(f"Model saving failed: {str(e)}")
-        raise
+        return {'completed': False, 'error': str(e)}
     except Exception as e:
         logger.error(f"Unexpected error during training: {str(e)}")
-        raise TrainingError(f"Unexpected training error: {str(e)}") from e
+        return {'completed': False, 'error': str(e)}
 
 # Main entry point
 if __name__ == "__main__":
@@ -3923,6 +6476,7 @@ if __name__ == "__main__":
         description="Enhanced IDS Model Trainer",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
+    # Existing arguments
     parser.add_argument(
         "--use-mock",
         action="store_true",
@@ -3968,12 +6522,62 @@ if __name__ == "__main__":
         default=".",
         help="Base directory for output files"
     )
+    
+    # New SMOTE-related arguments
+    parser.add_argument(
+        "--compare-oversamplers",
+        action="store_true",
+        help="Run comparative evaluation of all oversampling methods"
+    )
+    parser.add_argument(
+        "--oversampler",
+        type=str,
+        choices=["SMOTE", "ADASYN", "SMOTE+TOMEK", "Borderline-SMOTE"],
+        default="SMOTE",
+        help="Specify which oversampling method to use"
+    )
+    parser.add_argument(
+        "--auto-optimize-k",
+        action="store_true",
+        help="Automatically find optimal k_neighbors value"
+    )
+    parser.add_argument(
+        "--max-k-neighbors",
+        type=int,
+        default=5,
+        help="Maximum k_neighbors value to test when auto-optimizing"
+    )
+    parser.add_argument(
+        "--visualize-3d",
+        action="store_true",
+        help="Generate 3D visualizations of resampling results"
+    )
+
     args = parser.parse_args()
 
     try:
         # Initial system configuration
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         logger, device, directories, config = initialize_system()
+
+        # Handle SMOTE comparison mode
+        if args.compare_oversamplers:
+            try:
+                logger.info(Fore.CYAN + Style.BRIGHT + "\n=== Oversampler Comparison Mode ===")
+                df, artifacts = load_and_validate_data()
+                results = compare_oversamplers(
+                    df=df,
+                    artifacts=artifacts,
+                    methods=["SMOTE", "ADASYN", "SMOTE+TOMEK", "Borderline-SMOTE"],
+                    visualize=not args.debug,  # Disable visualization in debug mode
+                    random_state=config.get('random_state', 42)
+                )
+                best_method = auto_select_oversampler(results)
+                logger.info(Fore.GREEN + Style.BRIGHT + f"\nRecommended oversampler: {best_method}")
+                sys.exit(0)
+            except Exception as e:
+                logger.error(Fore.RED + Style.BRIGHT + f"Oversampler comparison failed: {str(e)}")
+                sys.exit(1)
 
         if args.interactive:
             # Interactive mode
@@ -3992,21 +6596,31 @@ if __name__ == "__main__":
             # Command-line mode execution
             logger.info(Fore.CYAN + Style.BRIGHT + "\n=== Enhanced Network Intrusion Detection Model Trainer ===")
             logger.info(Fore.GREEN + Style.BRIGHT + f"Starting training at {timestamp}")
+            
+            # Enhanced configuration logging
             logger.info(Fore.MAGENTA + Style.BRIGHT + "Configuration:")
             logger.info(Fore.WHITE + Style.BRIGHT + f"  Batch size: {args.batch_size}")
             logger.info(Fore.WHITE + Style.BRIGHT + f"  Epochs: {args.epochs}")
             logger.info(Fore.WHITE + Style.BRIGHT + f"  Learning rate: {args.learning_rate}")
             logger.info(Fore.WHITE + Style.BRIGHT + f"  Early stopping patience: {args.early_stopping}")
+            logger.info(Fore.WHITE + Style.BRIGHT + f"  Oversampler: {args.oversampler}")
+            if args.auto_optimize_k:
+                logger.info(Fore.WHITE + Style.BRIGHT + 
+                          f"  Auto k_neighbors optimization (max: {args.max_k_neighbors})")
             logger.info(Fore.WHITE + Style.BRIGHT + f"  Using {'synthetic' if args.use_mock else 'real'} data")
             
-            # Prepare training configuration
+            # Prepare training configuration with SMOTE settings
             training_config = {
                 'batch_size': args.batch_size,
                 'epochs': args.epochs,
                 'learning_rate': args.learning_rate,
                 'early_stopping': args.early_stopping,
                 'gradient_clip': GRADIENT_CLIP,
-                'mixed_precision': MIXED_PRECISION
+                'mixed_precision': MIXED_PRECISION,
+                'oversampler': args.oversampler,
+                'auto_optimize_k': args.auto_optimize_k,
+                'max_k_neighbors': args.max_k_neighbors,
+                'visualize_3d': args.visualize_3d
             }
             
             try:
@@ -4016,18 +6630,19 @@ if __name__ == "__main__":
                     config=training_config
                 )
                 
-                # Final report
+                # Enhanced final report
                 logger.info(Fore.GREEN + Style.BRIGHT + "\n=== Training Completed Successfully ===")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Best validation accuracy: {results['metrics']['val_acc']:.2%}")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Best validation AUC: {results['metrics']['val_auc']:.4f}")
+                if 'smote_metrics' in results['metrics']:
+                    logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + 
+                              f"SMOTE quality score: {results['metrics']['smote_metrics'].get('quality_score', 'N/A')}")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Artifacts saved to: {results['artifacts_dir']}")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Training time: {results['meta']['training_time']:.2f} seconds")
                 
             except DataPreparationError as e:
                 logger.error(Fore.RED + Style.BRIGHT + "\nData Preparation Failed:")
                 logger.error(Fore.RED + Style.BRIGHT + f"Error: {str(e)}")
-                if e.original_exception:
-                    logger.debug(f"Original exception: {str(e.original_exception)}")
                 sys.exit(1)
                 
             except ModelConfigurationError as e:
