@@ -763,20 +763,24 @@ CONFIG_DIR = RESULTS_DIR = METRICS_DIR = REPORTS_DIR = LATEST_DIR = None
 INFO_DIR = ARTIFACTS_DIR = DOCS_DIR = None
 
 def setup_logging(log_dir: Path) -> logging.Logger:
-    """Configure logging with handler deduplication"""
+    """Configure logging with a single log file and proper handler management."""
     logger = logging.getLogger(__name__)
     
     # Clear existing handlers if any
-    if logger.hasHandlers():
-        logger.handlers.clear()
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        handler.close()
     
     # Rest of the logging setup
     logger.setLevel(logging.DEBUG)
     
+    # Use a fixed log filename (instead of timestamp-based)
+    log_file = log_dir / "training_model.log"
+    
     # Add handlers ONLY if they don't exist
     if not any(isinstance(h, logging.FileHandler) for h in logger.handlers):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_handler = logging.FileHandler(log_dir / f"train_{timestamp}.log", encoding='utf-8')
+        # Append mode
+        file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
         file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
         logger.addHandler(file_handler)
     
@@ -1763,16 +1767,16 @@ def configure_model() -> None:
 
 # Main configuration and setup function
 def initialize_system():
-    """Centralized system initialization"""
+    """Centralized system initialization with single logging setup"""
     # Basic configuration
     configure_system()
     configure_visualization()
     set_seed(42)
     
     # Early logging setup
-    early_log_dir = Path("logs")
-    early_log_dir.mkdir(parents=True, exist_ok=True)
-    logger = setup_logging(early_log_dir)
+    log_dir = Path("logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logger = setup_logging(log_dir)
     
     # Run loading screen with checks
     if not loading_screen(logger):
@@ -5591,8 +5595,6 @@ def interactive_main(
                 train_config = None
                 
             # Skip re-initializing logging if already set up
-            if not logger.handlers:
-                logger = setup_logging(LOG_DIR)
             try:
                 train_model(logger, use_mock=False, config=train_config)
             except Exception as e:
@@ -5625,8 +5627,6 @@ def interactive_main(
                 train_config = None
                 
             # Skip re-initializing logging if already set up
-            if not logger.handlers:
-                logger = setup_logging(LOG_DIR)
             try:
                 train_model(logger, use_mock=True, config=train_config)
             except Exception as e:
@@ -5702,9 +5702,6 @@ def interactive_main(
                     border_style="cyan"
                 )
             )
-            
-            if not logger.handlers:
-                logger = setup_logging(LOG_DIR)
             
             try:
                 stability_result = run_stability_test(logger)
@@ -6048,9 +6045,10 @@ def train_model(
 
     try:
         # Setup logging
-        log_file = run_log_dir / f"training_{timestamp}.log"
-        logger = setup_logging(run_log_dir)
-        writer = SummaryWriter(log_dir=run_tb_dir)
+        #log_file = run_log_dir / f"training_{timestamp}.log"
+        #logger = setup_logging(run_log_dir)
+        #writer = SummaryWriter(log_dir=run_tb_dir)
+        writer = SummaryWriter(log_dir=run_tb_dir, filename_suffix=f"_{run_id}")
 
         # Data preparation
         try:
