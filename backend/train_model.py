@@ -1994,6 +1994,7 @@ class SecurityAwareLoss(nn.Module):
 
 # Data preprocessing and validation
 def check_preprocessing_outputs(
+    logger: logging.Logger,
     strict: bool = False,
     use_color: bool = True,
     min_csv_size: int = 1024,
@@ -2004,6 +2005,7 @@ def check_preprocessing_outputs(
     """Verify preprocessing outputs with optional validation.
     
     Args:
+        logger: Configured logger instance for logging messages
         strict: Enable content validation (default: False)
         use_color: Enable colored output (default: True)
         min_csv_size: Minimum CSV file size in bytes
@@ -2025,30 +2027,44 @@ def check_preprocessing_outputs(
     required_files = {
         "models/preprocessed_dataset.csv": {
             "min_size": min_csv_size,
-            "checks": ["header", "delimiter"] if validate_csv else []
+            "checks": ["header", "delimiter"] if validate_csv else [],
+            "description": "Preprocessed dataset CSV"
         },
         "models/preprocessing_artifacts.pkl": {
             "min_size": min_pkl_size,
-            "required_keys": ["feature_names", "scaler"] if validate_pickle else []
+            "required_keys": ["feature_names", "scaler"] if validate_pickle else [],
+            "description": "Preprocessing artifacts pickle"
         }
     }
     
+    all_valid = True
+    
+    logger.info("Starting preprocessing outputs validation...")
+    logger.debug(f"Validation mode: {'STRICT' if strict else 'BASIC'}")
+    
     for filepath, requirements in required_files.items():
         path = Path(filepath)
+        logger.debug(f"Checking {requirements['description']} at {path}")
         
         # File existence check (always performed)
         if not path.exists():
             logger.error(f"{red}Missing required file: {filepath}{reset}")
-            return False
-            
-        # Skip validation in non-strict mode
-        if not strict:
+            all_valid = False
             continue
             
         # File size validation
         file_size = path.stat().st_size
         if file_size < requirements["min_size"]:
-            logger.warning(f"{yellow}File appears small ({file_size} bytes): {filepath}{reset}")
+            msg = f"File appears small ({file_size} bytes): {filepath}"
+            if strict:
+                logger.error(f"{red}{msg}{reset}")
+                all_valid = False
+            else:
+                logger.warning(f"{yellow}{msg}{reset}")
+        
+        # Skip content validation in non-strict mode
+        if not strict:
+            continue
             
         # CSV validation
         if filepath.endswith('.csv') and validate_csv:
@@ -2057,18 +2073,30 @@ def check_preprocessing_outputs(
                     header = f.readline()
                     if not header.strip():
                         logger.error(f"{red}Empty CSV file: {filepath}{reset}")
-                        return False
+                        all_valid = False
+                        continue
                         
                     if "delimiter" in requirements["checks"]:
                         if len(header.split(',')) < 2:
                             logger.error(f"{red}Invalid CSV format in: {filepath}{reset}")
-                            return False
+                            all_valid = False
+                            
+                # Additional validation - check sample rows
+                try:
+                    sample_df = pd.read_csv(path, nrows=10)
+                    if sample_df.empty:
+                        logger.error(f"{red}CSV contains no data: {filepath}{reset}")
+                        all_valid = False
+                except Exception as e:
+                    logger.error(f"{red}CSV sample read failed: {filepath} - {str(e)}{reset}")
+                    all_valid = False
+                    
             except UnicodeDecodeError:
                 logger.error(f"{red}Invalid CSV encoding: {filepath}{reset}")
-                return False
+                all_valid = False
             except Exception as e:
                 logger.error(f"{red}CSV validation failed: {filepath} - {str(e)}{reset}")
-                return False
+                all_valid = False
                 
         # Pickle validation
         elif filepath.endswith('.pkl') and validate_pickle:
@@ -2078,14 +2106,31 @@ def check_preprocessing_outputs(
                     for key in requirements["required_keys"]:
                         if key not in data:
                             logger.error(f"{red}Missing key '{key}' in: {filepath}{reset}")
-                            return False
+                            all_valid = False
+                            
+                    # Additional validation for specific artifacts
+                    if "feature_names" in data:
+                        if not isinstance(data["feature_names"], list) or len(data["feature_names"]) == 0:
+                            logger.error(f"{red}Invalid feature_names in: {filepath}{reset}")
+                            all_valid = False
+                    if "scaler" in data and data["scaler"] is not None:
+                        if not hasattr(data["scaler"], "transform"):
+                            logger.error(f"{red}Invalid scaler object in: {filepath}{reset}")
+                            all_valid = False
+                            
             except Exception as e:
                 logger.error(f"{red}Pickle load failed: {filepath} - {str(e)}{reset}")
-                return False
+                all_valid = False
     
-    return True
+    if all_valid:
+        logger.info("All preprocessing outputs validated successfully")
+    else:
+        logger.error("Preprocessing outputs validation failed")
+        
+    return all_valid
 
 def run_preprocessing(
+    logger: logging.Logger,
     timeout_minutes: float = 30.0,
     cleanup: bool = True,
     use_color: bool = True,
@@ -2096,6 +2141,7 @@ def run_preprocessing(
     """Execute preprocessing with enhanced controls.
     
     Args:
+        logger: Configured logger instance for logging messages
         timeout_minutes: Maximum runtime in minutes
         cleanup: Remove existing output files
         use_color: Enable colored output
@@ -2116,33 +2162,41 @@ def run_preprocessing(
     green = Fore.GREEN if use_color else ""
     reset = Style.RESET_ALL if use_color else ""
 
-    logger.info(f"{yellow}=== Preprocessing Pipeline ==={reset}")
-    
+    logger.info(f"{yellow}=== Starting Preprocessing Pipeline ==={reset}")
+    logger.debug(f"Parameters: timeout={timeout_minutes}min, cleanup={cleanup}, strict={strict_output_check}, reproducible={reproducible}")
+
     # Validate script existence
-    if not Path("preprocessing.py").exists():
-        logger.error(f"{red}Preprocessing script not found{reset}")
-        raise FileNotFoundError("preprocessing.py not found")
+    script_path = Path("preprocessing.py")
+    if not script_path.exists():
+        logger.error(f"{red}Preprocessing script not found at {script_path.absolute()}{reset}")
+        raise FileNotFoundError(f"preprocessing.py not found at {script_path.absolute()}")
 
     try:
         # Cleanup previous outputs
         output_files = [
-            "models/preprocessed_dataset.csv",
-            "models/preprocessing_artifacts.pkl"
+            Path("models/preprocessed_dataset.csv"),
+            Path("models/preprocessing_artifacts.pkl")
         ]
         
         if cleanup:
+            logger.info(f"{yellow}Cleaning up previous outputs...{reset}")
             for fpath in output_files:
-                if Path(fpath).exists():
-                    logger.info(f"{yellow}Cleaning up: {fpath}{reset}")
-                    Path(fpath).unlink(missing_ok=True)
+                if fpath.exists():
+                    logger.debug(f"Removing existing file: {fpath}")
+                    fpath.unlink(missing_ok=True)
+                    logger.info(f"Removed: {fpath}")
 
         # Prepare environment
         env = os.environ.copy()
         if reproducible:
             env["PYTHONHASHSEED"] = "42"
+            logger.debug("Set PYTHONHASHSEED=42 for reproducibility")
 
         # Execute with timeout
         timeout_seconds = int(timeout_minutes * 60)
+        logger.info(f"Running preprocessing with timeout of {timeout_minutes} minutes...")
+        
+        start_time = time.time()
         result = subprocess.run(
             [sys.executable, "preprocessing.py"],
             check=True,
@@ -2151,75 +2205,101 @@ def run_preprocessing(
             timeout=timeout_seconds,
             env=env
         )
+        elapsed_time = time.time() - start_time
 
-        # Stream output
+        # Stream output with proper logging levels
+        logger.debug(f"Preprocessing completed in {elapsed_time:.2f} seconds")
         for line in result.stdout.splitlines():
-            logger.info(f"{green}{line[:500]}{reset}")
-            if debug:
-                logger.debug(f"STDOUT: {line[:200]}")
+            if line.startswith("ERROR"):
+                logger.error(f"{red}{line}{reset}")
+            elif line.startswith("WARNING"):
+                logger.warning(f"{yellow}{line}{reset}")
+            else:
+                # Truncate very long lines
+                logger.info(f"{green}{line[:500]}{reset}")
+            
+            if debug and len(line) > 500:
+                logger.debug(f"Full output line: {line}")
 
         # Validate outputs
-        if not check_preprocessing_outputs(strict=strict_output_check):
+        logger.info("Validating preprocessing outputs...")
+        if not check_preprocessing_outputs(
+            logger=logger,
+            strict=strict_output_check,
+            use_color=use_color
+        ):
             logger.error(f"{red}Output validation failed{reset}")
-            log_troubleshooting("validation")
+            log_troubleshooting(logger, "validation")
             return False
 
-        logger.info(f"{green}Preprocessing completed successfully{reset}")
+        logger.info(f"{green}✓ Preprocessing completed successfully{reset}")
         return True
 
     except subprocess.TimeoutExpired:
         logger.error(f"{red}Timeout after {timeout_minutes} minutes{reset}")
-        log_troubleshooting("timeout")
+        log_troubleshooting(logger, "timeout")
         return False
 
     except subprocess.CalledProcessError as e:
-        logger.error(f"{red}Process failed (code {e.returncode}){reset}")
-        log_error_output(e.stderr, use_color)
-        log_troubleshooting("execution")
+        logger.error(f"{red}Process failed with exit code {e.returncode}{reset}")
+        logger.error(f"{red}Error output:{reset}")
+        log_error_output(logger, e.stderr, use_color)
+        log_troubleshooting(logger, "execution")
         return False
 
     except Exception as e:
         logger.error(f"{red}Unexpected error: {type(e).__name__}{reset}")
+        logger.error(f"{red}Error details: {str(e)}{reset}")
         if debug:
-            logger.error(f"{red}{traceback.format_exc()}{reset}")
-        log_troubleshooting("unexpected")
+            logger.error(f"{red}Stack trace:{reset}")
+            logger.error(traceback.format_exc())
+        log_troubleshooting(logger, "unexpected")
         raise RuntimeError("Preprocessing failed") from e
 
-def log_troubleshooting(error_type: str):
-    """Centralized troubleshooting guides."""
+def log_troubleshooting(logger: logging.Logger, error_type: str) -> None:
+    """Centralized troubleshooting guides with logging integration."""
     guides = {
         "validation": [
             "1. Verify preprocessing script generates correct outputs",
             "2. Check file permissions in models/ directory",
-            "3. Validate disk space is available"
+            "3. Validate disk space is available",
+            "4. Review preprocessing requirements documentation"
         ],
         "timeout": [
             "1. Optimize preprocessing steps",
             "2. Increase timeout_minutes parameter",
-            "3. Check for infinite loops"
+            "3. Check for infinite loops",
+            "4. Profile script performance"
         ],
         "execution": [
             "1. Run preprocessing.py manually to debug",
-            "2. Check dependency versions",
-            "3. Validate input data quality"
+            "2. Check dependency versions match requirements",
+            "3. Validate input data quality",
+            "4. Verify sufficient system resources"
         ],
         "unexpected": [
             "1. Check system resource limits",
             "2. Verify Python environment consistency",
-            "3. Enable debug mode for details"
+            "3. Enable debug mode for details",
+            "4. Contact support with full logs"
         ]
     }
     logger.warning("Troubleshooting steps:")
     for step in guides.get(error_type, guides["unexpected"]):
         logger.warning(f"  {step}")
 
-def log_error_output(stderr: str, use_color: bool):
-    """Log last 20 lines of error output."""
+def log_error_output(logger: logging.Logger, stderr: str, use_color: bool) -> None:
+    """Log error output with proper formatting and truncation."""
     red = Fore.RED if use_color else ""
     reset = Style.RESET_ALL if use_color else ""
-    logger.error(f"{red}Last error lines:{reset}")
+    logger.error(f"{red}=== Error Output ==={reset}")
+    # Show last 20 lines
     for line in stderr.splitlines()[-20:]:
-        logger.error(f"{red}{line[:200]}{reset}")
+        # Truncate very long lines
+        if len(line) > 200:
+            logger.error(f"{red}{line[:200]}...{reset}")
+        else:
+            logger.error(f"{red}{line}{reset}")
 
 def display_data_loading_header(filepath: str) -> None:
     """Display data loading header with rich formatting."""
@@ -4325,8 +4405,21 @@ def load_and_validate_data(
         
         raise RuntimeError("Data loading failed") from e
 
-def create_synthetic_data() -> Tuple[pd.DataFrame, Dict]:
-    """Generate realistic synthetic data as fallback with logging."""
+def create_synthetic_data(logger: logging.Logger) -> Tuple[pd.DataFrame, Dict]:
+    """
+    Generate realistic synthetic data as fallback with logging.
+    
+    Args:
+        logger: Configured logger instance for logging messages
+        
+    Returns:
+        Tuple containing:
+        - DataFrame with synthetic features and labels
+        - Dictionary of artifacts including feature names and metadata
+        
+    Raises:
+        RuntimeError: If synthetic data generation fails
+    """
     logger.warning("Generating synthetic dataset as fallback")
     try:
         num_samples = 10000
@@ -4349,20 +4442,41 @@ def create_synthetic_data() -> Tuple[pd.DataFrame, Dict]:
         # Create feature names
         feature_names = [f"feature_{i}" for i in range(num_features)]
         
+        # Create DataFrame with proper typing
+        df = pd.DataFrame(X, columns=feature_names)
+        # Save memory with smaller dtype
+        df['Label'] = y.astype('int8')
+        
+        # Log dataset statistics
         logger.info(f"Generated synthetic dataset with {num_samples} samples")
+        logger.debug(f"Class distribution:\n{df['Label'].value_counts().to_string()}")
+        logger.debug(f"Feature statistics:\n{df.describe().to_string()}")
+        
         return (
-            pd.DataFrame(X, columns=feature_names).assign(Label=y),
+            df,
             {
                 "feature_names": feature_names,
                 "scaler": None,
+                # Random importances for compatibility
+                "feature_importances": np.random.rand(num_features),
                 # Default chunk size for compatibility
                 "chunksize": 100000,
                 # Flag indicating synthetic data
-                "synthetic": True
+                "synthetic": True,
+                # Default class names
+                "class_names": ["Normal", "Attack"],
+                # Track number of missing values (0 since we don't generate NaNs)
+                "missing_values": 0,
+                "data_quality": {
+                    'has_nans': False,
+                    'min_values': X.min(axis=0).tolist(),
+                    'max_values': X.max(axis=0).tolist()
+                }
             }
         )
     except Exception as e:
         logger.error(f"Failed to generate synthetic data: {str(e)}")
+        logger.debug(f"Error details: {traceback.format_exc()}")
         raise RuntimeError("Synthetic data generation failed") from e
 
 def prepare_dataloaders(
@@ -4832,7 +4946,8 @@ def visualize_data_distribution(
         plot_dir = Path("figures")
         plot_dir.parent.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        plot_file = f"data_pca_distribution_{timestamp}.png"
+        run_id = f"run_{timestamp}"
+        plot_file = f"data_pca_distribution_{run_id}.png"
         plot_path = plot_dir / plot_file
         plt.savefig(plot_path, bbox_inches='tight', dpi=300)
         plt.close()
@@ -5045,6 +5160,9 @@ def save_training_artifacts(
     saved_artifacts = {}
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     
+    # Initialize training
+    run_id = f"run_{timestamp}"
+    
     # Use custom output directory if provided
     artifact_dir = output_dir if output_dir is not None else ARTIFACTS_DIR
     model_dir = output_dir if output_dir is not None else MODEL_DIR
@@ -5059,12 +5177,14 @@ def save_training_artifacts(
             dir_path.mkdir(parents=True, exist_ok=True)
 
         # 2. Save model state dict
-        model_path = model_dir / f"ids_model_{timestamp}.pth"
+        #model_path = model_dir / f"ids_model_{timestamp}.pth"
+        model_path = model_dir / f"ids_model_{run_id}.pth"
         torch.save(model.state_dict(), model_path)
         saved_artifacts['model'] = model_path
 
         # 3. Save metrics (convert numpy arrays to lists)
-        metrics_path = metrics_dir / f"ids_model_metrics_{timestamp}.json"
+        #metrics_path = metrics_dir / f"ids_model_metrics_{timestamp}.json"
+        metrics_path = metrics_dir / f"ids_model_metrics_{run_id}.json"
         with open(metrics_path, 'w') as f:
             json.dump({
                 k: v.tolist() if isinstance(v, np.ndarray) else v
@@ -5083,13 +5203,15 @@ def save_training_artifacts(
                 'synthetic_samples_generated': metrics.get('synthetic_samples_generated'),
                 'timestamp': timestamp
             }
-            smote_metrics_path = metrics_dir / f"smote_evaluation_{timestamp}.json"
+            #smote_metrics_path = metrics_dir / f"smote_evaluation_{timestamp}.json"
+            smote_metrics_path = metrics_dir / f"smote_evaluation_{run_id}.json"
             with open(smote_metrics_path, 'w') as f:
                 json.dump(smote_metrics, f, indent=2)
             saved_artifacts['smote_metrics'] = smote_metrics_path
 
         # 5. Save configuration
-        config_path = config_dir / f"ids_model_config_{timestamp}.json"
+        #config_path = config_dir / f"ids_model_config_{timestamp}.json"
+        config_path = config_dir / f"ids_model_config_{run_id}.json"
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
         saved_artifacts['config'] = config_path
@@ -5110,7 +5232,8 @@ def save_training_artifacts(
                 'sampling_strategy': config.get('sampling_strategy')
             }
         }
-        info_path = info_dir / f"ids_model_info_{timestamp}.json"
+        #info_path = info_dir / f"ids_model_info_{timestamp}.json"
+        info_path = info_dir / f"ids_model_info_{run_id}.json"
         with open(info_path, 'w') as f:
             json.dump(info, f, indent=2)
         saved_artifacts['info'] = info_path
@@ -5138,7 +5261,8 @@ def save_training_artifacts(
                 plt.xlabel("Predicted")
                 plt.ylabel("True")
                 
-                cm_path = figure_dir / f"confusion_matrix_{timestamp}.png"
+                #cm_path = figure_dir / f"confusion_matrix_{timestamp}.png"
+                cm_path = figure_dir / f"confusion_matrix_{run_id}.png"
                 plt.savefig(cm_path, bbox_inches='tight', dpi=300)
                 plt.close()
                 saved_artifacts['confusion_matrix'] = cm_path
@@ -5146,7 +5270,8 @@ def save_training_artifacts(
                 logger.warning(f"Failed to save confusion matrix: {str(cm_error)}")
 
         # 8. Create archive of all artifacts
-        archive_path = artifact_dir / f"ids_model_artifacts_{timestamp}.tar.gz"
+        #archive_path = artifact_dir / f"ids_model_artifacts_{timestamp}.tar.gz"
+        archive_path = artifact_dir / f"ids_model_artifacts_{run_id}.tar.gz"
         with tarfile.open(archive_path, "w:gz") as tar:
             for file in saved_artifacts.values():
                 if isinstance(file, Path) and file.exists():
@@ -6054,12 +6179,12 @@ def train_model(
         try:
             if use_mock:
                 logger.info("Using synthetic data by request")
-                df, artifacts = create_synthetic_data()
+                df, artifacts = create_synthetic_data(logger)
                 training_meta['data_source'] = 'synthetic'
             else:
-                if not check_preprocessing_outputs():
+                if not check_preprocessing_outputs(logger):
                     logger.warning("Preprocessing outputs not found")
-                    if not run_preprocessing():
+                    if not run_preprocessing(logger):
                         raise DataPreparationError("Preprocessing failed")
                     logger.info("Preprocessing completed successfully")
                 
@@ -6073,7 +6198,8 @@ def train_model(
             training_meta['final_samples'] = len(df)
             
             # Visualize data
-            viz_path = visualize_data_distribution(df, filename=run_figure_dir / f"data_pca_distribution_{timestamp}.png")
+            #viz_path = visualize_data_distribution(df, filename=run_figure_dir / f"data_pca_distribution_{timestamp}.png")
+            viz_path = visualize_data_distribution(df, filename=run_figure_dir / f"data_pca_distribution_{run_id}.png")
             if viz_path:
                 training_meta['visualization'] = str(viz_path)
 
@@ -6148,7 +6274,8 @@ def train_model(
                 model.parameters(),
                 lr=config.get('learning_rate', LEARNING_RATE) if config else LEARNING_RATE,
                 weight_decay=config.get('weight_decay', WEIGHT_DECAY) if config else WEIGHT_DECAY,
-                eps=1e-8,  # Better numerical stability
+                # Better numerical stability
+                eps=1e-8,
                 betas=(0.9, 0.999)
             )
             
@@ -6195,8 +6322,10 @@ def train_model(
             'val_loss': float('inf'),
             'val_acc': 0.0,
             'val_auc': 0.0,
-            'val_recall': 0.0,  # Security-focused metric
-            'val_f2': 0.0,     # Security-focused metric
+            # Security-focused metric
+            'val_recall': 0.0,
+            # Security-focused metric
+            'val_f2': 0.0,
             'train_loss': float('inf'),
             'train_acc': 0.0,
             'learning_rate': 0.0,
@@ -6325,7 +6454,8 @@ def train_model(
                         scheduler=scheduler,
                         epoch=epoch,
                         metrics=best_metrics,
-                        filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
+                        #filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
+                        filename=run_checkpoint_dir / f"best_model_{run_id}.pth",
                         config=training_meta,
                     )
                 else:
@@ -6377,7 +6507,8 @@ def train_model(
         # Load best model for final evaluation
         try:
             checkpoint_result = load_checkpoint(
-                filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
+                #filename=run_checkpoint_dir / f"best_model_{timestamp}.pth",
+                filename=run_checkpoint_dir / f"best_model_{run_id}.pth",
                 model=model,
                 device=device
             )
@@ -6421,7 +6552,8 @@ def train_model(
             plt.title("Confusion Matrix")
             plt.xlabel("Predicted")
             plt.ylabel("True")
-            cm_path = run_figure_dir / f"confusion_matrix_{timestamp}.png"
+            #cm_path = run_figure_dir / f"confusion_matrix_{timestamp}.png"
+            cm_path = run_figure_dir / f"confusion_matrix_{run_id}.png"
             plt.savefig(cm_path, bbox_inches='tight')
             plt.close()
             training_meta['confusion_matrix'] = str(cm_path)
@@ -6567,7 +6699,8 @@ if __name__ == "__main__":
                     df=df,
                     artifacts=artifacts,
                     methods=["SMOTE", "ADASYN", "SMOTE+TOMEK", "Borderline-SMOTE"],
-                    visualize=not args.debug,  # Disable visualization in debug mode
+                    # Disable visualization in debug mode
+                    visualize=not args.debug,
                     random_state=config.get('random_state', 42)
                 )
                 best_method = auto_select_oversampler(results)
