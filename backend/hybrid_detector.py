@@ -5,10 +5,25 @@ import joblib
 from pathlib import Path
 from typing import Optional
 import logging
-from deep_learning import EnhancedAutoencoder
+import torch.nn as nn
+import sys
+import os
+
+# Setup logging
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE_NAME = "hybrid_detector.log"
+LOG_FILE = LOG_DIR / LOG_FILE_NAME
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
 
 class HybridDetector:
@@ -41,9 +56,15 @@ class HybridDetector:
         if not supervised_path.exists():
             raise FileNotFoundError(f"Supervised model not found at {supervised_path}")
             
+        # Suppress CUDA warnings
+        session_options = ort.SessionOptions()
+        session_options.log_severity_level = 3
+        
         self.supervised_model = ort.InferenceSession(
             supervised_path,
-            providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
+            session_options,
+            # Use CPU only to avoid warnings
+            providers=['CPUExecutionProvider']
         )
         
         # Validate supervised model input shape
@@ -54,17 +75,23 @@ class HybridDetector:
                 f"but data has {self.feature_size} features"
             )
         
-        # Load autoencoder
+        # Load autoencoder using the new loading function
         autoencoder_path = Path("models/autoencoder_ids.pth")
         if not autoencoder_path.exists():
             raise FileNotFoundError(f"Autoencoder not found at {autoencoder_path}")
-            
-        self.autoencoder = Autoencoder(
-            input_dim=self.feature_size,
-            encoding_dim=max(10, self.feature_size // 2)  # Dynamic encoding size
-        )
-        self.autoencoder.load_state_dict(torch.load(autoencoder_path))
-        self.autoencoder.eval()
+        
+        try:
+            # Import here to avoid circular imports
+            from deep_learning import load_autoencoder_model
+            self.autoencoder = load_autoencoder_model(
+                autoencoder_path, 
+                input_dim=self.feature_size
+            )
+            self.autoencoder.eval()
+        except ImportError:
+            # Fallback to manual loading if import fails
+            logger.warning("Could not import load_autoencoder_model, trying manual loading")
+            self.autoencoder = self._load_autoencoder_manual(autoencoder_path)
         
         # Load threshold
         threshold_path = Path("models/anomaly_threshold.pkl")
@@ -72,6 +99,44 @@ class HybridDetector:
             raise FileNotFoundError(f"Threshold file not found at {threshold_path}")
             
         self.threshold = joblib.load(threshold_path)
+
+    def _load_autoencoder_manual(self, model_path: Path):
+        """Manual autoencoder loading as fallback."""
+        
+        # Load state dict to inspect structure
+        state_dict = torch.load(model_path, map_location='cpu')
+        
+        # Check if legacy model
+        legacy_keys = ['encoder.0.weight', 'encoder.0.bias', 'decoder.0.weight', 'decoder.0.bias']
+        is_legacy = all(key in state_dict for key in legacy_keys)
+        
+        if is_legacy:
+            # Create simple autoencoder for legacy compatibility
+            encoder_weight_shape = state_dict['encoder.0.weight'].shape
+            encoding_dim = encoder_weight_shape[0]
+            input_dim = encoder_weight_shape[1]
+            
+            class SimpleAutoencoder(nn.Module):
+                def __init__(self, input_dim: int, encoding_dim: int):
+                    super().__init__()
+                    self.encoder = nn.Sequential(
+                        nn.Linear(input_dim, encoding_dim),
+                        nn.ReLU()
+                    )
+                    self.decoder = nn.Sequential(
+                        nn.Linear(encoding_dim, input_dim),
+                        nn.Sigmoid()
+                    )
+                
+                def forward(self, x):
+                    return self.decoder(self.encoder(x))
+            
+            model = SimpleAutoencoder(input_dim, encoding_dim)
+            model.load_state_dict(state_dict)
+            logger.info(f"Loaded legacy autoencoder: {input_dim} -> {encoding_dim} -> {input_dim}")
+            return model
+        else:
+            raise RuntimeError("Unknown autoencoder architecture")
 
     def validate_input(self, features: np.ndarray) -> None:
         """Validate input features before processing."""
@@ -122,7 +187,8 @@ class HybridDetector:
                     
                 prob_normal, prob_attack = outputs
                 
-                if prob_attack > 0.7:  # Configurable threshold
+                # Configurable threshold
+                if prob_attack > 0.7:
                     return "Known Attack"
                     
             except Exception as e:
@@ -140,7 +206,8 @@ class HybridDetector:
                         logger.warning("Autoencoder returned NaN MSE")
                         return "Error: Invalid autoencoder output"
                         
-                    if mse > self.threshold * 1.1:  # 10% buffer zone
+                    # 10% buffer zone
+                    if mse > self.threshold * 1.1:
                         return "Unknown Anomaly"
                     else:
                         return "Normal"

@@ -6,6 +6,8 @@ from datetime import datetime
 from pathlib import Path
 import json
 import os
+import platform
+import random
 import logging
 import shutil
 from filelock import FileLock
@@ -20,15 +22,32 @@ from alive_progress import alive_bar
 import tqdm
 from tqdm.asyncio import tqdm
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 from rich import box
 from rich.text import Text
+from rich.columns import Columns
+from rich.progress import Progress, BarColumn, track
+from rich.prompt import Prompt
 from tabulate import tabulate
+import textwrap
+from tqdm import tqdm
+import threading
+from contextlib import contextmanager
 
 # Get virtual environment's Python path
 VENV_PYTHON = Path(sys.executable)
 
 init(autoreset=True)
+
+# Create a global lock for console output
+console_lock = threading.Lock()
+
+@contextmanager
+def synchronized_console():
+    """Context manager for synchronized console output"""
+    with console_lock:
+        yield
 
 # Setup logging
 LOG_DIR = Path("logs")
@@ -486,10 +505,36 @@ def _read_history_from_md() -> List[Dict[str, Any]]:
     return history
 
 def banner() -> None:
-    """Print banner"""
-    print(Fore.CYAN + Style.BRIGHT + "\n" + "=" * 60)
-    print(Fore.LIGHTYELLOW_EX + Style.BRIGHT + "      IDS | VERIFICATION & TESTING SUITE".center(60))
-    print(Fore.CYAN + Style.BRIGHT + "=" * 60 + Style.RESET_ALL)
+    """Print banner with custom styling"""
+
+    # ASCII art banner
+    console = Console()
+    console.print("\n" , Panel.fit(
+        """
+                            
+⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⣠⣶⠚⠛⠿⠷⠶⣤⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⢀⣴⠟⠉⠀⠀⢠⡄⠀⠀⠀⠀⠀⠉⠙⠳⣄⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⢀⡴⠛⠁⠀⠀⠀⠀⠘⣷⣴⠏⠀⠀⣠⡄⠀⠀⢨⡇⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠺⣇⠀⠀⠀⠀⠀⠀⠀⠘⣿⠀⠀⠘⣻⣻⡆⠀⠀⠙⠦⣄⣀⠀⠀⠀⠀
+⠀⠀⠀⢰⡟⢷⡄⠀⠀⠀⠀⠀⠀⢸⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⢻⠶⢤⡀
+⠀⠀⠀⣾⣇⠀⠻⣄⠀⠀⠀⠀⠀⢸⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣀⣴⣿
+⠀⠀⢸⡟⠻⣆⠀⠈⠳⢄⡀⠀⠀⡼⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠶⠶⢤⣬⡿⠁
+⠀⢀⣿⠃⠀⠹⣆⠀⠀⠀⠙⠓⠿⢧⡀⠀⢠⡴⣶⣶⣒⣋⣀⣀⣤⣶⣶⠟⠁⠀
+⠀⣼⡏⠀⠀⠀⠙⠀⠀⠀⠀⠀⠀⠀⠙⠳⠶⠤⠵⣶⠒⠚⠻⠿⠋⠁⠀⠀⠀⠀
+⢰⣿⡇⠀⠀⠀⠀⠀⠀⠀⣆⠀⠀⠀⠀⠀⠀⠀⢠⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⢿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠘⣦⡀⠀⠀⠀⠀⠀⢸⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⣷⡄⠀⠀⠀⠀⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢷⡀⠀⠀⠀⢸⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⠇⠀⠀⠀⠀⠀⠀⠀
+
+    """,
+        style="bold cyan", 
+        title="[bold yellow]GreyChamp | IDS[/]", 
+        subtitle="[magenta]VERIFICATION & TESTING SUITE[/]",
+        border_style="bold blue",
+        box=box.DOUBLE,
+        padding=(1, 2)
+    ))
 
 def print_menu() -> None:
     """Print menu options"""
@@ -609,14 +654,27 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
         save_history(entry)
 
 async def run_step_async(label: str, command: List[str], config: Dict[str, Any]) -> bool:
-    """Run a step asynchronously with alive-progress indication"""
-    print(Fore.MAGENTA + Style.BRIGHT + f"\n>>> {label} started")
-    logger.info(Fore.YELLOW + Style.BRIGHT + f"Starting {label} (async)")
-    start = datetime.now()
+    """Run a step asynchronously with improved output formatting"""
+    console = Console()
+    start_time = datetime.now()
+    time_str = start_time.strftime("%H:%M:%S")
+    
+    # Header with consistent width
+    header_width = min(80, console.width - 4)
+    
+    with synchronized_console():
+        console.print(Panel.fit(
+            f"[bold yellow]▶ {label}[/] [dim white](started at {time_str})[/]",
+            width=header_width,
+            border_style="bright_blue",
+            padding=(0, 1)
+        ))
+    
+    logger.info(f"Starting {label} (async)")
 
     entry = {
         "label": label,
-        "timestamp": start.strftime("%Y-%m-%d %H:%M:%S:%f"),
+        "timestamp": start_time.strftime("%Y-%m-%d %H:%M:%S:%f"),
         "command": " ".join(command),
         "status": "FAILED",
         "duration": "0s"
@@ -628,99 +686,116 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
             if part.startswith("--") and part[2:] in config and not validate_path(config[part[2:]]):
                 raise ConfigError(f"Path does not exist: {config[part[2:]]}")
 
-        try:
-            # Create async progress bar
-            with tqdm(
-                total=100,
-                bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
-                desc=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
-                ncols=80
-            ) as pbar:
-                # Start the subprocess
-                proc = await asyncio.create_subprocess_exec(
-                    *command,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
+        # Run subprocess without progress bar to avoid output conflicts
+        proc = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        stdout, stderr = await proc.communicate()
+
+        duration = datetime.now() - start_time
+        duration_str = f"{duration.total_seconds():.2f}s"
+        entry["duration"] = duration_str
+
+        with synchronized_console():
+            if proc.returncode == 0:
+                entry.update({
+                    "status": "SUCCESS",
+                    "output": stdout.decode()
+                })
                 
-                # Simulate progress while process is running
-                while proc.returncode is None:
-                    # Don't go to 100% until done
-                    if pbar.n < 95:
-                        # Update progress in 5% increments
-                        pbar.update(5)
-                    # Update interval
-                    await asyncio.sleep(0.1)
+                # Success panel with consistent width
+                console.print(Panel.fit(
+                    f"[bold green]✓ {label} completed successfully[/]\n"
+                    f"[dim]Duration:[/] {duration_str} | "
+                    f"[dim]Return code:[/] {proc.returncode}",
+                    width=header_width,
+                    border_style="green",
+                    padding=(0, 1)
+                ))
+                logger.info(f"{label} completed successfully in {duration_str}")
                 
-                # Get final output
-                stdout, stderr = await proc.communicate()
-                # Complete to 100%
-                pbar.update(100 - pbar.n)
-
-            # with alive_bar(
-            #     manual=False,
-            #     title=f"{Fore.YELLOW}{Style.BRIGHT}[progress] {label}",
-            #     bar='smooth',
-            #     spinner='dots_waves',
-            #     stats=False,
-            #     monitor=False
-            # ) as bar:
-            #     proc = await asyncio.create_subprocess_exec(
-            #         *command,
-            #         stdout=asyncio.subprocess.PIPE,
-            #         stderr=asyncio.subprocess.PIPE
-            #     )
-
-            #     while await proc.wait() is None:
-            #         bar()
-            #         await asyncio.sleep(0.2)
-
-            #     stdout, stderr = await proc.communicate()
-
-        except ImportError:
-            print(Fore.CYAN + Style.BRIGHT + f"[progress] {label} running...", end='', flush=True)
-            proc = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await proc.communicate()
-
-        duration = datetime.now() - start
-        entry["duration"] = str(duration).split(":")[2]
-
-        if proc.returncode == 0:
-            entry.update({
-                "status": "SUCCESS",
-                "output": stdout.decode()
-            })
-            print(Fore.GREEN + Style.BRIGHT + f"\r[success] {label} completed in {entry['duration']}s")
-            logger.info(Fore.MAGENTA + Style.BRIGHT + f"{label} (async) completed successfully")
-            return True
-        else:
-            entry["error"] = stderr.decode()
-            print(Fore.RED + Style.BRIGHT + f"\r[error] {label} failed after {entry['duration']}s")
-            logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) failed: {entry['error']}")
-            return False
+                # Format output with proper line breaks and wrapping
+                output = stdout.decode().strip()
+                if output:
+                    output_lines = output.split('\n')
+                    wrapped_lines = []
+                    for line in output_lines:
+                        wrapped_lines.extend(textwrap.wrap(line, width=header_width-4))
+                    console.print(Panel(
+                        "\n".join(wrapped_lines),
+                        title="[dim]Output",
+                        border_style="dim",
+                        width=header_width,
+                        padding=(0, 1)
+                    ))
+                
+                return True
+            else:
+                error_output = stderr.decode().strip()
+                entry["error"] = error_output
+                
+                console.print(Panel.fit(
+                    f"[bold red]✗ {label} failed[/]\n"
+                    f"[dim]Duration:[/] {duration_str} | "
+                    f"[dim]Return code:[/] {proc.returncode}",
+                    width=header_width,
+                    border_style="red",
+                    padding=(0, 1)
+                ))
+                
+                if error_output:
+                    error_lines = error_output.split('\n')
+                    wrapped_errors = []
+                    for line in error_lines:
+                        wrapped_errors.extend(textwrap.wrap(line, width=header_width-4))
+                    console.print(Panel(
+                        "\n".join(wrapped_errors),
+                        title="[red]Error Details",
+                        border_style="red",
+                        width=header_width,
+                        padding=(0, 1)
+                    ))
+                
+                logger.error(f"{label} failed after {duration_str}: {error_output}")
+                return False
 
     except ConfigError as e:
-        duration = datetime.now() - start
+        duration = datetime.now() - start_time
+        duration_str = f"{duration.total_seconds():.2f}s"
         entry.update({
-            "duration": str(duration).split(":")[2],
+            "duration": duration_str,
             "error": str(e)
         })
-        print(Fore.RED + Style.BRIGHT + f"\r[error] {label} configuration error: {e}")
-        logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) configuration error: {e}")
+        
+        with synchronized_console():
+            console.print(Panel.fit(
+                f"[bold red]⚠ Configuration error in {label}[/]\n{str(e)}",
+                width=header_width,
+                border_style="red",
+                padding=(0, 1)
+            ))
+        logger.error(f"{label} configuration error: {str(e)}")
         return False
 
     except Exception as e:
-        duration = datetime.now() - start
+        duration = datetime.now() - start_time
+        duration_str = f"{duration.total_seconds():.2f}s"
         entry.update({
-            "duration": str(duration).split(":")[2],
+            "duration": duration_str,
             "error": str(e)
         })
-        print(Fore.RED + Style.BRIGHT + f"\r[error] {label} unexpected error: {e}")
-        logger.error(Fore.RED + Style.BRIGHT + f"{label} (async) unexpected error: {str(e)}")
+        
+        with synchronized_console():
+            console.print(Panel.fit(
+                f"[bold red]⚠ Unexpected error in {label}[/]\n{str(e)}",
+                width=header_width,
+                border_style="red",
+                padding=(0, 1)
+            ))
+        logger.error(f"{label} unexpected error: {str(e)}")
         traceback.print_exc()
         return False
 
@@ -728,14 +803,31 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
         save_history(entry)
 
 async def run_all_parallel(config: Dict[str, Any]) -> None:
-    """Run all steps in parallel"""
-    print(Fore.CYAN + Style.BRIGHT + "\n[INFO] Running all steps in parallel...\n")
-    print(Fore.YELLOW + Style.BRIGHT + "This may take a few minutes depending on your system and model size.\n")
+    """Run all steps in parallel with clean output formatting"""
+    console = Console()
+    
+    # System info header
+    with synchronized_console():
+        console.print(Panel.fit(
+            "[bold cyan]🚀 Running all verification steps in parallel[/]\n"
+            f"[dim]System:[/] {platform.system()} {platform.release()} | "
+            f"[dim]CPU Cores:[/] {os.cpu_count()} | "
+            f"[dim]Python:[/] {platform.python_version()}",
+            border_style="bright_blue",
+            padding=(1, 2)
+        ))
+        
+        console.print(
+            "[yellow]⏳ This may take several minutes depending on your system and model size...[/]\n"
+            "[dim]Press Ctrl+C to cancel (ongoing tasks will complete)[/]",
+            justify="left"
+        )
     
     config = load_config()
     config['model_path'] = config.get('model_path', DEFAULT_CONFIG['model_path'])
     config['dataset_path'] = config.get('dataset_path', DEFAULT_CONFIG['dataset_path'])
     
+    start_time = time.monotonic()
     tasks = []
     for step in STEPS:
         command = substitute_command(step["command"], config)
@@ -743,13 +835,41 @@ async def run_all_parallel(config: Dict[str, Any]) -> None:
     
     await asyncio.gather(*tasks)
     
-    try:
-        with open(HISTORY_PATH) as f:
-            history = json.load(f)
-        write_summary(history, OutputFormat.MARKDOWN)
-        write_summary(history, OutputFormat.HTML)
-    except Exception as e:
-        logger.error(f"Error generating summary: {str(e)}")
+    total_duration = time.monotonic() - start_time
+    mins, secs = divmod(total_duration, 60)
+    duration_str = f"{int(mins)}m {secs:.1f}s" if mins > 0 else f"{secs:.1f}s"
+    
+    with synchronized_console():
+        # Final summary
+        console.print(Panel.fit(
+            f"[bold green]✅ All tasks completed in {duration_str}[/]",
+            border_style="green",
+            padding=(1, 2)
+        ))
+        
+        try:
+            with open(HISTORY_PATH) as f:
+                history = json.load(f)
+            
+            console.print("\n[bold]📊 Generating summary reports...[/]")
+            md_report = write_summary(history, OutputFormat.MARKDOWN)
+            html_report = write_summary(history, OutputFormat.HTML)
+            
+            console.print(Panel.fit(
+                f"[dim]Reports generated:[/]\n"
+                f"- [bold]Markdown:[/] {md_report}\n"
+                f"- [bold]HTML:[/] {html_report}",
+                border_style="dim",
+                padding=(1, 1)
+            ))
+            
+        except Exception as e:
+            console.print(Panel.fit(
+                f"[bold red]⚠ Error generating summary reports[/]\n{str(e)}",
+                border_style="red",
+                padding=(0, 1)
+            ))
+            logger.error(f"Error generating summary: {str(e)}")
 
 def edit_config() -> None:
     """Edit configuration with interactive table and validation"""
@@ -796,7 +916,7 @@ def edit_config() -> None:
                 current_val = config[key]
                 
                 while True:
-                    new_val = input(f"\nNew value for {key} [{current_val}]: ").strip()
+                    new_val = input(f"\nNew value for {key} " + Fore.YELLOW + Style.BRIGHT + f"[{current_val}]: ").strip()
                     # User pressed enter without input
                     if not new_val:
                         break
@@ -1329,6 +1449,11 @@ def main() -> None:
             break
         else:
             print(Fore.RED + Style.BRIGHT + "Invalid selection. Choose 1 – 12.")
+
+        # Add pause before returning to menu (fixed colorama usage)
+        # Don't pause for long operations or exit
+        if choice not in ["0", "12"]:
+            input(Style.DIM + "\nPress Enter to continue..." + Style.RESET_ALL)
 
 if __name__ == "__main__":
     try:

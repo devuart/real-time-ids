@@ -24,66 +24,140 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 
+# Setup logging
+LOG_DIR = Path("logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE_NAME = "deep_learning.log"
+LOG_FILE = LOG_DIR / LOG_FILE_NAME
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('logs/deep_learning.log'),
-        logging.StreamHandler()
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler(sys.stdout)
     ]
 )
 logger = logging.getLogger(__name__)
 
 # Constants
 DEFAULT_MODEL_DIR = Path("models")
-LOG_DIR = Path("logs")
-MIN_FEATURES = 5  # Minimum number of features for model
 
-class EnhancedAutoencoder(nn.Module):
-    """Improved autoencoder with batch normalization and skip connections."""
+# Minimum number of features for training the model
+MIN_FEATURES = 5
+
+class SimpleAutoencoder(nn.Module):
+    """Simple autoencoder for backward compatibility."""
     def __init__(self, input_dim: int, encoding_dim: int = 10):
         super().__init__()
-        if input_dim < MIN_FEATURES:
-            raise ValueError(f"Input dimension must be at least {MIN_FEATURES}")
-            
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.BatchNorm1d(128),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.2),
-            
-            nn.Linear(128, 64),
-            nn.BatchNorm1d(64),
-            nn.LeakyReLU(0.2),
-            
-            nn.Linear(64, encoding_dim),
-            nn.BatchNorm1d(encoding_dim),
-            nn.Tanh()  # Constrain encoding space
+            nn.Linear(input_dim, encoding_dim),
+            nn.ReLU()
         )
-        
         self.decoder = nn.Sequential(
-            nn.Linear(encoding_dim, 64),
-            nn.BatchNorm1d(64),
-            nn.LeakyReLU(0.2),
-            
-            nn.Linear(64, 128),
-            nn.BatchNorm1d(128),
-            nn.LeakyReLU(0.2),
-            nn.Dropout(0.2),
-            
-            nn.Linear(128, input_dim)
+            nn.Linear(encoding_dim, input_dim),
+            nn.Sigmoid()
         )
-        
-        # Skip connection
-        self.skip = nn.Linear(input_dim, input_dim) if input_dim > 10 else None
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
-        if self.skip is not None:
+        return decoded
+
+class EnhancedAutoencoder(nn.Module):
+    """Enhanced autoencoder with backward compatibility for different architectures."""
+    def __init__(self, input_dim: int, encoding_dim: int = 10, legacy_mode: bool = False):
+        super().__init__()
+        if input_dim < MIN_FEATURES:
+            raise ValueError(f"Input dimension must be at least {MIN_FEATURES}")
+        
+        self.legacy_mode = legacy_mode
+        
+        if legacy_mode:
+            # Simple architecture for backward compatibility
+            self.encoder = nn.Sequential(
+                nn.Linear(input_dim, encoding_dim),
+                nn.ReLU()
+            )
+            self.decoder = nn.Sequential(
+                nn.Linear(encoding_dim, input_dim),
+                nn.Sigmoid()
+            )
+            self.skip = None
+        else:
+            # Enhanced architecture with batch normalization
+            self.encoder = nn.Sequential(
+                nn.Linear(input_dim, 128),
+                nn.BatchNorm1d(128),
+                nn.LeakyReLU(0.2),
+                nn.Dropout(0.2),
+                
+                nn.Linear(128, 64),
+                nn.BatchNorm1d(64),
+                nn.LeakyReLU(0.2),
+                
+                nn.Linear(64, encoding_dim),
+                nn.BatchNorm1d(encoding_dim),
+                # Constrain encoding space
+                nn.Tanh()
+            )
+            
+            self.decoder = nn.Sequential(
+                nn.Linear(encoding_dim, 64),
+                nn.BatchNorm1d(64),
+                nn.LeakyReLU(0.2),
+                
+                nn.Linear(64, 128),
+                nn.BatchNorm1d(128),
+                nn.LeakyReLU(0.2),
+                nn.Dropout(0.2),
+                
+                nn.Linear(128, input_dim)
+            )
+            
+            # Skip connection
+            self.skip = nn.Linear(input_dim, input_dim) if input_dim > 10 else None
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        encoded = self.encoder(x)
+        decoded = self.decoder(encoded)
+        if self.skip is not None and not self.legacy_mode:
             decoded = decoded + self.skip(x)
         return decoded
+
+def load_autoencoder_model(model_path: Path, input_dim: int, encoding_dim: int = 10) -> EnhancedAutoencoder:
+    """Load autoencoder with automatic architecture detection."""
+    if not model_path.exists():
+        raise FileNotFoundError(f"Model file not found: {model_path}")
+    
+    # Load the state dict to inspect its structure
+    state_dict = torch.load(model_path, map_location='cpu')
+    
+    # Check if this is a legacy model (simple architecture)
+    legacy_keys = ['encoder.0.weight', 'encoder.0.bias', 'decoder.0.weight', 'decoder.0.bias']
+    is_legacy = all(key in state_dict for key in legacy_keys)
+    
+    if is_legacy:
+        # Extract dimensions from the saved model
+        encoder_weight_shape = state_dict['encoder.0.weight'].shape
+        encoding_dim = encoder_weight_shape[0]
+        input_dim = encoder_weight_shape[1]
+        
+        logger.info(f"Loading legacy autoencoder: input_dim={input_dim}, encoding_dim={encoding_dim}")
+        model = EnhancedAutoencoder(input_dim=input_dim, encoding_dim=encoding_dim, legacy_mode=True)
+    else:
+        logger.info(f"Loading enhanced autoencoder: input_dim={input_dim}, encoding_dim={encoding_dim}")
+        model = EnhancedAutoencoder(input_dim=input_dim, encoding_dim=encoding_dim, legacy_mode=False)
+    
+    try:
+        model.load_state_dict(state_dict)
+        logger.info("Successfully loaded autoencoder model")
+    except RuntimeError as e:
+        logger.error(f"Failed to load model state dict: {str(e)}")
+        raise
+    
+    return model
 
 def check_hardware() -> Dict[str, Union[str, bool, int]]:
     """Check and report available hardware resources with validation."""
@@ -320,8 +394,9 @@ def train_model(args) -> Dict[str, float]:
     """Main training pipeline with comprehensive features."""
     # Setup logging and hardware
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = LOG_DIR / f"train_{timestamp}"
-    writer = SummaryWriter(log_dir=log_dir)
+    run_id = f"run_{timestamp}"
+    log_dir = LOG_DIR
+    writer = SummaryWriter(log_dir=log_dir, comment=run_id)
     
     hw = check_hardware()
     logger.info("\nHardware Configuration:")
@@ -378,8 +453,7 @@ def train_model(args) -> Dict[str, float]:
             optimizer,
             mode='min',
             patience=2,
-            factor=0.5,
-            verbose=True
+            factor=0.5
         )
         criterion = nn.MSELoss()
         

@@ -8,6 +8,8 @@ from train_model import IDSModel
 import joblib
 import subprocess
 import pandas as pd
+import pickle
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 def prompt_user(prompt: str, default: bool = True) -> bool:
     """Interactive user prompt with default handling."""
@@ -83,7 +85,7 @@ def get_model_io_dims() -> tuple:
     
     # Method 3: Try to infer from saved model if it exists
     try:
-        checkpoint = torch.load("models/ids_model.pth", map_location='cpu')
+        checkpoint = torch.load("models/ids_model.pth", map_location='cpu', weights_only=True)
         first_layer_weight = checkpoint['net.0.weight']
         input_size = first_layer_weight.shape[1]
         print(f"[INFO] Inferred input size from saved model: {input_size}")
@@ -118,7 +120,8 @@ def get_model_io_dims() -> tuple:
 def validate_model_dimensions(model_path: str, expected_input_size: int) -> bool:
     """Validate that the saved model matches expected dimensions."""
     try:
-        checkpoint = torch.load(model_path, map_location='cpu')
+        #checkpoint = torch.load(model_path, map_location='cpu', pickle_module=pickle, weights_only=True)
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=True)
         first_layer_weight = checkpoint['net.0.weight']
         actual_input_size = first_layer_weight.shape[1]
         
@@ -161,7 +164,7 @@ def inspect_preprocessing_artifacts():
         
         # Check model file
         try:
-            checkpoint = torch.load("models/ids_model.pth", map_location='cpu')
+            checkpoint = torch.load("models/ids_model.pth", map_location='cpu', weights_only=True)
             print(f"\nModel structure:")
             for key, tensor in checkpoint.items():
                 if hasattr(tensor, 'shape'):
