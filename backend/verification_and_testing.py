@@ -590,7 +590,11 @@ def run_step_sync(label: str, command: List[str], config: Dict[str, Any]) -> boo
                     command,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True
+                    text=True,
+                    # Force UTF-8 encoding
+                    encoding='utf-8',
+                    # Replace invalid characters
+                    errors='replace'
                 )
 
                 while proc.poll() is int | None:
@@ -772,7 +776,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
         
         with synchronized_console():
             console.print(Panel.fit(
-                f"[bold red]⚠ Configuration error in {label}[/]\n{str(e)}",
+                f"[bold red]Configuration error in {label}[/]\n{str(e)}",
                 width=header_width,
                 border_style="red",
                 padding=(0, 1)
@@ -790,7 +794,7 @@ async def run_step_async(label: str, command: List[str], config: Dict[str, Any])
         
         with synchronized_console():
             console.print(Panel.fit(
-                f"[bold red]⚠ Unexpected error in {label}[/]\n{str(e)}",
+                f"[bold red]Unexpected error in {label}[/]\n{str(e)}",
                 width=header_width,
                 border_style="red",
                 padding=(0, 1)
@@ -809,7 +813,7 @@ async def run_all_parallel(config: Dict[str, Any]) -> None:
     # System info header
     with synchronized_console():
         console.print(Panel.fit(
-            "[bold cyan]🚀 Running all verification steps in parallel[/]\n"
+            "[bold cyan]Running all verification steps in parallel[/]\n"
             f"[dim]System:[/] {platform.system()} {platform.release()} | "
             f"[dim]CPU Cores:[/] {os.cpu_count()} | "
             f"[dim]Python:[/] {platform.python_version()}",
@@ -818,7 +822,7 @@ async def run_all_parallel(config: Dict[str, Any]) -> None:
         ))
         
         console.print(
-            "[yellow]⏳ This may take several minutes depending on your system and model size...[/]\n"
+            "[yellow]This may take several minutes depending on your system and model size...[/]\n"
             "[dim]Press Ctrl+C to cancel (ongoing tasks will complete)[/]",
             justify="left"
         )
@@ -842,7 +846,7 @@ async def run_all_parallel(config: Dict[str, Any]) -> None:
     with synchronized_console():
         # Final summary
         console.print(Panel.fit(
-            f"[bold green]✅ All tasks completed in {duration_str}[/]",
+            f"[bold green]All tasks completed in {duration_str}[/]",
             border_style="green",
             padding=(1, 2)
         ))
@@ -851,7 +855,7 @@ async def run_all_parallel(config: Dict[str, Any]) -> None:
             with open(HISTORY_PATH) as f:
                 history = json.load(f)
             
-            console.print("\n[bold]📊 Generating summary reports...[/]")
+            console.print("\n[bold]Generating summary reports...[/]")
             md_report = write_summary(history, OutputFormat.MARKDOWN)
             html_report = write_summary(history, OutputFormat.HTML)
             
@@ -865,7 +869,7 @@ async def run_all_parallel(config: Dict[str, Any]) -> None:
             
         except Exception as e:
             console.print(Panel.fit(
-                f"[bold red]⚠ Error generating summary reports[/]\n{str(e)}",
+                f"[bold red]Error generating summary reports[/]\n{str(e)}",
                 border_style="red",
                 padding=(0, 1)
             ))

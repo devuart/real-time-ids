@@ -17,6 +17,7 @@ import torch
 # from deep_learning import EnhancedAutoencoder as Autoencoder
 # from hybrid_detector import hybrid_detect
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.exceptions import InconsistentVersionWarning
 import torch.nn as nn
 import logging
 import traceback
@@ -67,23 +68,7 @@ def load_real_test_data(num_samples: int = 100, include_labels: bool = False, sh
             raise FileNotFoundError(f"Dataset file not found: {data_path}")
         
         if show_progress:
-            try:
-                # First try using alive_bar if available and not nested
-                from alive_progress.core.progress import global_progress
-                if global_progress() is None:
-                    try:
-                        from alive_progress import alive_bar
-                        with alive_bar(6, title="Loading test data") as bar:
-                            return _load_data_with_alive_progress(data_path, num_samples, include_labels, bar)
-                    except ImportError:
-                        # Fallback to tqdm if alive_progress not available
-                        return _load_data_with_tqdm(data_path, num_samples, include_labels)
-                else:
-                    # If already in alive_bar context, use tqdm instead
-                    return _load_data_with_tqdm(data_path, num_samples, include_labels)
-            except ImportError:
-                # If alive_progress not available at all, use tqdm
-                return _load_data_with_tqdm(data_path, num_samples, include_labels)
+            return _load_data_with_tqdm(data_path, num_samples, include_labels)
         else:
             return _load_data_without_progress(data_path, num_samples, include_labels)
             
@@ -230,46 +215,47 @@ def create_adversarial_samples(base_samples: np.ndarray, noise_level: float = 0.
 def test_adversarial_robustness(model_path: str, num_samples: int = 50) -> Tuple[np.ndarray, np.ndarray]:
     """Test model against adversarial samples with progress tracking."""
     try:
-        with alive_bar(10, title="Adversarial Testing", spinner='dots_waves') as bar:
+        # Main progress bar for overall process
+        with tqdm(total=10, desc="Adversarial Testing", unit="step") as main_bar:
             # Validate model path
-            bar.text("Validating model path...")
+            main_bar.set_description("Validating model path")
             if not Path(model_path).exists():
                 raise FileNotFoundError(f"Model file not found: {model_path}")
-            bar()
+            main_bar.update(1)
             
             # Create session
-            bar.text("Creating optimized session...")
+            main_bar.set_description("Creating optimized session")
             session_options = ort.SessionOptions()
             session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
             session = ort.InferenceSession(model_path, session_options)
             input_name = session.get_inputs()[0].name
-            bar()
+            main_bar.update(1)
             
             # Load samples
-            bar.text("Loading clean samples...")
+            main_bar.set_description("Loading clean samples")
             clean_samples, _ = load_real_test_data(num_samples=num_samples)
             if clean_samples is None:
                 logger.warning("Using synthetic samples as fallback")
                 _, feature_size = get_model_input_shape(session)
                 clean_samples = create_sample_input(feature_size=feature_size, num_samples=num_samples)
-            bar()
+            main_bar.update(1)
             
             # Generate adversarial samples
-            bar.text("Creating adversarial samples...")
+            main_bar.set_description("Creating adversarial samples")
             adversarial_samples = create_adversarial_samples(clean_samples)
-            bar()
+            main_bar.update(1)
             
             # Run predictions
-            bar.text("Running clean predictions...")
+            main_bar.set_description("Running clean predictions")
             clean_preds = session.run(None, {input_name: clean_samples})[0]
-            bar()
+            main_bar.update(1)
             
-            bar.text("Running adversarial predictions...")
+            main_bar.set_description("Running adversarial predictions")
             adv_preds = session.run(None, {input_name: adversarial_samples})[0]
-            bar()
+            main_bar.update(1)
             
             # Calculate metrics
-            bar.text("Calculating metrics...")
+            main_bar.set_description("Calculating metrics")
             clean_probs = softmax(clean_preds)
             adv_probs = softmax(adv_preds)
             
@@ -279,16 +265,16 @@ def test_adversarial_robustness(model_path: str, num_samples: int = 50) -> Tuple
             clean_conf = np.max(clean_probs, axis=1)
             adv_conf = np.max(adv_probs, axis=1)
             conf_change = np.mean(adv_conf - clean_conf)
-            bar()
+            main_bar.update(1)
             
             # Display results
-            bar.text("Compiling results...")
+            main_bar.set_description("Compiling results")
             print("\n=== Adversarial Robustness Test ===")
             print(f"Clean samples attack rate: {clean_attack_rate:.2%}")
             print(f"Adversarial samples attack rate: {adv_attack_rate:.2%}")
             print(f"Detection rate change: {adv_attack_rate - clean_attack_rate:+.2%}")
             print(f"Average confidence change: {conf_change:+.4f}")
-            bar()
+            main_bar.update(1)
             
             return clean_preds, adv_preds
             
@@ -442,34 +428,36 @@ def benchmark_performance(model_path: str, num_runs: int = 1000) -> Dict[int, Di
     results = {}
     
     try:
-        with alive_bar(7, title="Performance Benchmark", spinner='classic') as bar:
+        # Main progress bar for overall process
+        with tqdm(total=7, desc="Performance Benchmark", unit="step") as main_bar:
             # Validate model path
-            bar.text("Validating model...")
+            main_bar.set_description("Validating model")
             if not Path(model_path).exists():
                 raise FileNotFoundError(f"Model file not found: {model_path}")
-            bar()
+            main_bar.update(1)
         
             # Create optimized inference session
-            bar.text("Creating optimized session...")
+            main_bar.set_description("Creating optimized session")
             session_options = ort.SessionOptions()
             session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
             session = ort.InferenceSession(model_path, session_options)
             input_name = session.get_inputs()[0].name
-            bar()
+            main_bar.update(1)
         
             # Get model input requirements
-            bar.text("Analyzing input requirements...")
+            main_bar.set_description("Analyzing input requirements")
             input_shape, feature_size = get_model_input_shape(session)
             logger.info(f"Benchmarking with input shape: {input_shape}")
-            bar()
+            main_bar.update(1)
             
             # Test with different batch sizes
             batch_sizes = [1, 8, 16, 32, 64]
-            bar.text(f"Testing batch sizes: {batch_sizes}")
+            main_bar.set_description(f"Testing batch sizes: {batch_sizes}")
         
             for bs in batch_sizes:
                 try:
-                    with alive_bar(num_runs, title=f"Batch Size {bs}", spinner='dots') as inner_bar:
+                    # Inner progress bar for batch size testing
+                    with tqdm(total=num_runs, desc=f"Batch Size {bs}", unit="run") as inner_bar:
                         # Create properly shaped test data
                         test_data = create_sample_input(num_samples=bs, feature_size=feature_size)
                         
@@ -483,7 +471,7 @@ def benchmark_performance(model_path: str, num_runs: int = 1000) -> Dict[int, Di
                             start = time.perf_counter_ns()
                             session.run(None, {input_name: test_data})
                             times.append((time.perf_counter_ns() - start) / 1e6)
-                            inner_bar()
+                            inner_bar.update(1)
                         
                         # Calculate comprehensive metrics
                         times_ms = np.array(times)
@@ -502,7 +490,9 @@ def benchmark_performance(model_path: str, num_runs: int = 1000) -> Dict[int, Di
                 except Exception as e:
                     logger.error(f"Error benchmarking batch size {bs}: {str(e)}")
                     results[bs] = {'error': str(e)}
-        
+            
+            main_bar.update(1)
+            
             # Print comprehensive results
             print("\n=== Performance Benchmark Results ===")
             print(f"Model: {Path(model_path).name}")
@@ -519,7 +509,8 @@ def benchmark_performance(model_path: str, num_runs: int = 1000) -> Dict[int, Di
                           f"{metrics['throughput']:>20.2f} | "
                           f"{metrics['time_per_sample']:>16.4f} | "
                           f"{metrics['p95_time']:>14.2f}")
-            bar()
+            
+            main_bar.update(1)
             
             return results
             
@@ -1062,7 +1053,6 @@ def inspect_feature_importance(test_data: np.ndarray, session: ort.InferenceSess
     for i, (feature_idx, impact) in enumerate(feature_impacts[:10]):
         print(f"   {feature_idx:>2d}   | {impact:>6.4f} | Feature_{feature_idx}")
 
-# Main validation function
 def test_model_with_validation(
     model_path: str,
     test_sample: Optional[np.ndarray] = None,
@@ -1071,24 +1061,24 @@ def test_model_with_validation(
 ) -> None:
     """Comprehensive model testing with enhanced diagnostics."""
     try:
-        with alive_bar(20, title="Model Validation", spinner='triangles') as bar:
-            bar.text("Initializing validation...")
+        # Main progress bar for overall process
+        with tqdm(total=20, desc="Model Validation", unit="step") as main_bar:
+            main_bar.set_description("Initializing validation")
             print("\n=== ONNX Model Testing with Validation ===")
-            bar()
+            main_bar.update(1)
             
             # Load model
-            bar.text("Creating optimized session...")
+            main_bar.set_description("Creating optimized session")
             session_options = ort.SessionOptions()
             session_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-            # Suppress warnings
-            session_options.log_severity_level = 3
+            session_options.log_severity_level = 3  # Suppress warnings
             session = ort.InferenceSession(model_path, session_options, providers=['CPUExecutionProvider'])
             input_info = session.get_inputs()[0]
             output_info = session.get_outputs()[0]
-            bar()
+            main_bar.update(1)
             
             # Print model info
-            bar.text("Gathering model details...")
+            main_bar.set_description("Gathering model details")
             print(f"[INFO] Model: {model_path}")
             print(f"1. Input name: {input_info.name}")
             print(f"2. Input shape (symbolic): {input_info.shape}")
@@ -1096,18 +1086,18 @@ def test_model_with_validation(
             print(f"4. Output name: {output_info.name}")
             print(f"5. Output shape (symbolic): {output_info.shape}")
             print(f"6. Output type: {output_info.type}")
-            bar()
+            main_bar.update(1)
             
             # Get input shape
-            bar.text("Resolving input dimensions...")
+            main_bar.set_description("Resolving input dimensions")
             actual_shape, feature_size = get_model_input_shape(session)
             print(f"Feature size: {feature_size}")
             print(f"[INFO] Model loaded successfully with ONNX Runtime version: {ort.__version__}")
             print(f"[INFO] Resolved input shape: {actual_shape}")
-            bar()
+            main_bar.update(1)
             
             # Prepare test data
-            bar.text("Preparing test samples...")
+            main_bar.set_description("Preparing test samples")
             if test_sample is None or ground_truth is None:
                 test_sample, ground_truth = load_real_test_data(
                     num_samples=num_test_samples, include_labels=True, show_progress=False
@@ -1123,33 +1113,33 @@ def test_model_with_validation(
                     test_sample = test_sample.reshape(1, -1)
                 test_sample = test_sample.astype(np.float32)
                 print(f"[INFO] Using provided test input: {test_sample.shape}")
-            bar()
+            main_bar.update(1)
             
             # Validate shape
-            bar.text("Validating input shape...")
+            main_bar.set_description("Validating input shape")
             expected_features = actual_shape[1] if len(actual_shape) > 1 else actual_shape[0]
             if test_sample.shape[1] != expected_features:
                 print(f"[ERROR] Input shape mismatch!")
                 print(f"  Expected: (batch_size, {expected_features})")
                 print(f"  Got: {test_sample.shape}")
                 return
-            bar()
+            main_bar.update(1)
             
             # Run diagnostics
-            bar.text("Running diagnostics...")
+            main_bar.set_description("Running diagnostics")
             diagnostics = diagnose_model_issues(session, test_sample)
-            bar()
+            main_bar.update(1)
             
             # Fix input data if needed
-            bar.text("Checking for data issues...")
+            main_bar.set_description("Checking for data issues")
             original_sample = test_sample.copy()
             if diagnostics.get('input_stats', {}).get('has_nan') or diagnostics.get('input_stats', {}).get('has_inf'):
                 print("[WARNING] Input data contains NaN or Inf values, attempting to fix...")
                 test_sample = fix_input_data(test_sample, method="clip")
-            bar()
+            main_bar.update(1)
             
             # Try different preprocessing approaches if NaN detected
-            bar.text("Testing preprocessing approaches...")
+            main_bar.set_description("Testing preprocessing approaches")
             best_sample = test_sample
             best_method = "original"
             
@@ -1161,14 +1151,12 @@ def test_model_with_validation(
             
             if Path("models/preprocessing_artifacts.pkl").exists():
                 try:
-                    # Load artifacts with warning suppression
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", category=UserWarning)
                         warnings.simplefilter("ignore", category=InconsistentVersionWarning)
                         artifacts = joblib.load("models/preprocessing_artifacts.pkl")
                     
                     if artifacts.get('scaler') and artifacts.get('feature_names'):
-                        # Convert to DataFrame with proper feature names
                         sample_df = pd.DataFrame(
                             original_sample,
                             columns=artifacts['feature_names'][:original_sample.shape[1]]
@@ -1193,10 +1181,10 @@ def test_model_with_validation(
             
             test_sample = best_sample
             print(f"[INFO] Using {best_method} preprocessing method")
-            bar()
+            main_bar.update(1)
             
             # Run inference
-            bar.text("Running inference...")
+            main_bar.set_description("Running inference")
             print(f"\n[INFO] Running inference on {test_sample.shape[0]} samples...")
             predictions = session.run([output_info.name], {input_info.name: test_sample})[0]
             
@@ -1208,18 +1196,18 @@ def test_model_with_validation(
                 probabilities = np.full_like(predictions, 0.5)  # Fallback
             else:
                 probabilities = softmax(predictions)
-            bar()
+            main_bar.update(1)
             
             # Show results
-            bar.text("Compiling results...")
+            main_bar.set_description("Compiling results")
             print(f"\n[SUCCESS] Inference completed successfully!")
             print(f"1. Input shape: {test_sample.shape}")
             print(f"2. Output shape: {predictions.shape}")
             print(f"3. Output range: [{np.min(predictions):.3f}, {np.max(predictions):.3f}]")
-            bar()
+            main_bar.update(1)
             
             # Sample predictions
-            bar.text("Analyzing sample predictions...")
+            main_bar.set_description("Analyzing sample predictions")
             print("\n=== Sample Predictions ===")
             num_samples_to_show = min(5, len(predictions))
             for i in range(num_samples_to_show):
@@ -1235,11 +1223,11 @@ def test_model_with_validation(
                 print(f"  Prediction: {'Normal' if predicted_class == 0 else 'Attack'} (confidence: {confidence:.4f})")
                 if ground_truth is not None:
                     print(f"  Ground Truth: {'Normal' if actual_class == 0 else 'Attack'}")
-            bar()
+            main_bar.update(1)
             
             # Continue with validation metrics if predictions are valid
             if ground_truth is not None and not np.isnan(predictions).any():
-                bar.text("Calculating metrics...")
+                main_bar.set_description("Calculating metrics")
                 metrics = evaluate_model_performance(predictions, ground_truth)
                 print_detailed_metrics(metrics)
                 analyze_prediction_confidence(predictions, probabilities)
@@ -1249,32 +1237,32 @@ def test_model_with_validation(
                 print(f"\n=== Sklearn Classification Report ===")
                 print(classification_report(ground_truth, predicted_classes, 
                                           target_names=class_names, digits=4))
-                bar()
+                main_bar.update(1)
                 
                 # Enhanced analysis for bias and performance issues
-                bar.text("Analyzing model bias...")
+                main_bar.set_description("Analyzing model bias")
                 analyze_model_bias(session, feature_size)
-                bar()
+                main_bar.update(1)
                 
-                bar.text("Testing decision thresholds...")
+                main_bar.set_description("Testing decision thresholds")
                 test_decision_threshold(session, test_sample, ground_truth)
-                bar()
+                main_bar.update(1)
                 
-                bar.text("Analyzing feature importance...")
+                main_bar.set_description("Analyzing feature importance")
                 inspect_feature_importance(test_sample, session)
-                bar()
+                main_bar.update(1)
                 
-                bar.text("Generating recommendations...")
+                main_bar.set_description("Generating recommendations")
                 suggest_model_fixes(metrics)
-                bar()
+                main_bar.update(1)
                 
             elif np.isnan(predictions).any():
                 print("\n[ERROR] Cannot calculate metrics due to NaN predictions")
-                bar()
+                main_bar.update(1)
             
             # Performance test (if predictions are valid)
             if not np.isnan(predictions).any():
-                bar.text("Testing performance...")
+                main_bar.set_description("Testing performance")
                 print(f"\n[INFO] Running performance test...")
                 
                 # Warm up
@@ -1282,10 +1270,10 @@ def test_model_with_validation(
                 for i in range(5):
                     session.run([output_info.name], {input_info.name: test_sample[:10]})
                 print("[INFO] Warm-up completed.")
-                bar()
+                main_bar.update(1)
                 
                 # Single sample timing
-                bar.text("Testing single sample...")
+                main_bar.set_description("Testing single sample")
                 single_sample = test_sample[:1]
                 times = []
                 for _ in range(100):
@@ -1296,11 +1284,11 @@ def test_model_with_validation(
                 avg_time = np.mean(times)
                 print(f"Average inference time: {avg_time:.4f} ms (over 100 runs)")
                 print(f"Throughput: {1000/avg_time:.2f} inferences/second")
-                bar()
+                main_bar.update(1)
                 
                 # Batch timing
                 if len(test_sample) > 1:
-                    bar.text("Testing batch performance...")
+                    main_bar.set_description("Testing batch performance")
                     batch_size = min(32, len(test_sample))
                     batch_data = test_sample[:batch_size]
                     
@@ -1316,9 +1304,9 @@ def test_model_with_validation(
                     print(f"Batch processing ({batch_size} samples): {avg_batch_time:.4f} ms total")
                     print(f"Per-sample in batch: {per_sample_batch:.4f} ms")
                     print(f"Batch throughput: {1000/per_sample_batch:.2f} samples/second")
-                    bar()
+                    main_bar.update(1)
             
-            bar.text("Validation complete!")
+            main_bar.set_description("Validation complete!")
             
     except Exception as e:
         logger.error(f"Model validation failed: {str(e)}")
@@ -1326,7 +1314,6 @@ def test_model_with_validation(
         traceback.print_exc()
         suggest_troubleshooting(model_path)
 
-# Troubleshooting function
 def suggest_troubleshooting(model_path: str) -> None:
     """Provide detailed troubleshooting suggestions for NaN issues."""
     print("\n=== Troubleshooting Guide ===")
@@ -1407,10 +1394,10 @@ if __name__ == "__main__":
     test_input = None
     if args.input:
         try:
-            with alive_bar(1, title="Loading input file") as bar:
+            with tqdm(total=1, desc="Loading input file", unit="file") as pbar:
                 test_input = np.load(args.input)
                 print(f"Loaded test input from {args.input}")
-                bar()
+                pbar.update(1)
         except Exception as e:
             print(f"Could not load input file: {str(e)}")
     
