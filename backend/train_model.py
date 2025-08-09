@@ -149,47 +149,79 @@ class SecurityAwareLoss:
     pass
 
 # Whitelist TorchVersion for safe loading
-add_safe_globals([
-    # PyTorch essentials
-    torch.Tensor,
-    torch.nn.Module,
-    torch.nn.parameter.Parameter,
-    torch.optim.Optimizer,
-    torch.optim.AdamW,
-    torch.optim.lr_scheduler.ReduceLROnPlateau,
-    torch.utils.data.Dataset,
-    torch.utils.data.DataLoader,
-    torch.utils.data.distributed.DistributedSampler,
+def setup_safe_globals():
+    """Setup safe globals for torch.load with version compatibility"""
+    safe_classes = [
+        # PyTorch essentials
+        torch.Tensor,
+        torch.nn.Module,
+        torch.nn.parameter.Parameter,
+        torch.optim.Optimizer,
+        torch.optim.AdamW,
+        torch.optim.lr_scheduler.ReduceLROnPlateau,
+        torch.utils.data.Dataset,
+        torch.utils.data.DataLoader,
+        torch.utils.data.distributed.DistributedSampler,
+        
+        # Version handling
+        torch.torch_version.TorchVersion,
+        
+        # Basic numpy types that are version-stable
+        np.ndarray,
+        np.float32,
+        np.float64,
+        np.int32,
+        np.int64,
+        np.dtype,
+        np.number,
+        
+        # Pandas types
+        pd.DataFrame,
+        pd.Series,
+        
+        # Custom classes (forward declared above)
+        IDSModel,
+        UnicodeStreamHandler,
+        
+        # Other necessary classes
+        TensorDataset,
+        WeightedRandomSampler,
+        MinMaxScaler,
+        StandardScaler
+    ]
     
-    # Version handling
-    torch.torch_version.TorchVersion,
+    # Add numpy-version-specific classes safely
+    try:
+        # For newer numpy versions
+        if hasattr(np, '_core') and hasattr(np._core, 'multiarray'):
+            safe_classes.extend([
+                np._core.multiarray._reconstruct,
+                np._core.multiarray.scalar,
+                np._core.multiarray.array,
+            ])
+        # For older numpy versions
+        elif hasattr(np, 'core') and hasattr(np.core, 'multiarray'):
+            safe_classes.extend([
+                np.core.multiarray._reconstruct,
+                np.core.multiarray.scalar,
+                np.core.multiarray.array,
+            ])
+    except AttributeError:
+        # Skip numpy multiarray classes if not available
+        pass
     
-    # Numpy types
-    np.ndarray,
-    np.float32,
-    np.int64,
-    np._core.multiarray._reconstruct,
-    np._core.multiarray.scalar,
-    np.dtype,
-    np.number,
-    np.float64,
-    np._core.multiarray.array,
-    np.dtypes.Float64DType,
+    # Add dtype classes safely
+    try:
+        if hasattr(np, 'dtypes'):
+            safe_classes.append(np.dtypes.Float64DType)
+    except AttributeError:
+        pass
     
-    # Pandas types
-    pd.DataFrame,
-    pd.Series,
-    
-    # Custom classes (forward declared above)
-    IDSModel,
-    UnicodeStreamHandler,
-    
-    # Other necessary classes
-    TensorDataset,
-    WeightedRandomSampler,
-    MinMaxScaler,
-    StandardScaler
-])
+    # Apply safe globals
+    add_safe_globals(safe_classes)
+
+# Setup safe globals
+setup_safe_globals()
 
 # Disable PyTorch's duplicate logging
 torch._logging.set_logs(all=logging.ERROR)
