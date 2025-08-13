@@ -6506,8 +6506,8 @@ def export_to_onnx(
                         export_params=True,
                         verbose=export_config.get('verbose', False),
                         training=torch.onnx.TrainingMode.EVAL,
-                        operator_export_type=torch.onnx.OperatorExportTypes.ONNX,
-                        use_external_data_format=input_dim > 2048  # For large models
+                        operator_export_type=torch.onnx.OperatorExportTypes.ONNX
+                        #use_external_data_format=input_dim > 2048  # For large models
                     )
                 finally:
                     del dummy_input
@@ -6530,7 +6530,7 @@ def export_to_onnx(
                 )
                 
                 save_metadata(metadata, model_dir / "onnx_export_metadata.json")
-                logger.success(f"Export completed: {onnx_path}")
+                logger.info(f"Export completed: {onnx_path}")
                 return onnx_path
 
             except Exception as e:
