@@ -6737,6 +6737,11 @@ if __name__ == "__main__":
         # Initial system configuration
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         logger, device, directories, config = initialize_system()
+        
+        # If no arguments provided, launch interactive mode
+        if len(sys.argv) == 1:
+            interactive_main(logger, device, directories, config)
+            sys.exit(0)
 
         # Handle SMOTE comparison mode
         if args.compare_oversamplers:
