@@ -814,7 +814,7 @@ def setup_logging(log_dir: Path) -> logging.Logger:
     # Rest of the logging setup
     logger.setLevel(logging.DEBUG)
     
-    # Use a fixed log filename (instead of timestamp-based)
+    # Log filename
     log_file = log_dir / "training_model.log"
     
     # Add handlers ONLY if they don't exist

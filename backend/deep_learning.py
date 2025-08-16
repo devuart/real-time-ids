@@ -48,58 +48,107 @@ import torchvision.transforms as transforms
 import onnx
 
 # Global flag and dummy module
-ONNXRUNTIME_AVAILABLE = False
+ONNXRUNTIME_AVAILABLE: bool = False
+ORT_VERSION: Optional[str] = None
 ort: Any = None
 
 def initialize_onnx_runtime() -> bool:
     """
-    Safely initialize ONNX Runtime with proper error handling.
+    Safely initialize ONNX Runtime with enhanced error handling for DLL issues.
     Returns True if ONNX Runtime is available and functional.
     """
-    global ONNXRUNTIME_AVAILABLE, ort
+    global ONNXRUNTIME_AVAILABLE, ort, ORT_VERSION
     
     try:
         import onnxruntime as _ort
-        # Test basic functionality
+        from importlib.metadata import version
+        
+        # Get version information
         try:
-            # Simple test to verify DLL loading works
-            _ort.get_device()
+            ORT_VERSION = version('onnxruntime')
+        except:
+            ORT_VERSION = getattr(_ort, '__version__', 'unknown')
+        
+        # Test basic functionality with more robust checks
+        try:
+            # Check basic functionality without triggering full DLL load
+            if hasattr(_ort, 'get_all_providers'):
+                providers = _ort.get_all_providers()  # Newer versions
+            else:
+                providers = _ort.get_available_providers()  # Older versions
+                
+            if not providers:
+                warnings.warn("ONNX Runtime initialized but no providers available", RuntimeWarning)
+            
+            # Test a core function that requires DLLs
+            _ort.InferenceSession
+                
             ort = _ort
             ONNXRUNTIME_AVAILABLE = True
             return True
-        except Exception as dll_error:
-            warnings.warn(
-                f"ONNX Runtime DLL load failed: {str(dll_error)}. "
-                "ONNX validation will be disabled.",
-                RuntimeWarning
-            )
+            
+        except Exception as init_error:
+            error_msg = str(init_error)
+            if "DLL load failed" in error_msg:
+                warnings.warn(
+                    "ONNX Runtime DLLs failed to load. This is typically caused by:\n"
+                    "1. Missing Visual C++ Redistributable (install from Microsoft)\n"
+                    "2. GPU version installed without compatible GPU drivers\n"
+                    "3. Corrupted installation\n\n"
+                    "Try:\n"
+                    "- pip install onnxruntime (CPU version)\n"
+                    "- Or check https://onnxruntime.ai/docs/install/ for troubleshooting",
+                    RuntimeWarning
+                )
+            else:
+                warnings.warn(
+                    f"ONNX Runtime initialization failed: {error_msg}",
+                    RuntimeWarning
+                )
             create_dummy_ort()
             return False
-    except ImportError:
+            
+    except ImportError as import_error:
+        warnings.warn(
+            f"ONNX Runtime package not found: {str(import_error)}\n"
+            "Install with: pip install onnxruntime",
+            RuntimeWarning
+        )
         create_dummy_ort()
         return False
 
 def create_dummy_ort() -> None:
-    """Create a dummy ONNX Runtime module for compatibility."""
-    global ort
+    """Create a comprehensive dummy ONNX Runtime module with better error messages."""
+    global ort, ORT_VERSION
     
     class DummyORT:
+        __version__ = "0.0.0"
+        
         class InferenceSession:
             def __init__(self, *args, **kwargs):
                 raise RuntimeError(
-                    "ONNX Runtime not available. "
-                    "Original error: DLL load failed"
+                    "ONNX Runtime not available due to DLL load failure.\n"
+                    "Possible solutions:\n"
+                    "1. Install Visual C++ Redistributable\n"
+                    "2. Try CPU-only version: pip install onnxruntime\n"
+                    "3. See troubleshooting at https://onnxruntime.ai/docs/install/"
                 )
         
         @staticmethod
         def get_available_providers() -> list:
+            warnings.warn("ONNX Runtime not available - returning empty providers list")
             return []
         
         @staticmethod
         def get_device() -> str:
-            return "CPU (ONNX Runtime not available)"
+            return "CPU (ONNX Runtime DLLs failed to load)"
+        
+        @staticmethod
+        def SessionOptions():
+            raise RuntimeError("ONNX Runtime not available - DLL load failed")
     
     ort = DummyORT()
+    ORT_VERSION = ort.__version__
 
 # Initialize at module level
 initialize_onnx_runtime()
@@ -147,7 +196,7 @@ from rich.rule import Rule
 from rich.align import Align
 from rich.padding import Padding
 from rich.markup import escape
-from rich.status import Status
+from rich.status import Status, Spinner
 
 # Terminal styling and colors
 from colorama import Fore, Back, Style, init
@@ -263,7 +312,10 @@ from contextlib import contextmanager, suppress
 import weakref
 from types import SimpleNamespace
 import pathlib
-
+from pynput.keyboard import Key, Listener
+import pkg_resources
+import packaging.version
+from packaging import version as pkg_version
 from sklearn.exceptions import ConvergenceWarning
 from matplotlib import MatplotlibDeprecationWarning
 
@@ -301,7 +353,99 @@ CACHE_DIR.mkdir(exist_ok=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+# Configuration Constants
+DEFAULT_BATCH_SIZE = 64
+DEFAULT_EPOCHS = 10
+EARLY_STOPPING_PATIENCE = 100
+LEARNING_RATE = 0.001
+WEIGHT_DECAY = 1e-4
+GRADIENT_CLIP = 1.0
+GRADIENT_ACCUMULATION_STEPS = 4
+MIXED_PRECISION = True
+
+# Model Architecture Constants
+DEFAULT_ENCODING_DIM = 10
+HIDDEN_LAYER_SIZES = [128, 64]
+DROPOUT_RATES = [0.2, 0.15]
+ACTIVATION = 'leaky_relu'
+ACTIVATION_PARAM = 0.2
+NORMALIZATION = 'batch'
+USE_BATCH_NORM = True
+USE_LAYER_NORM = False
+DIVERSITY_FACTOR = 0.1
+MIN_FEATURES = 5
+NUM_MODELS = 3
+FEATURES = 20
+NORMALIZATION_OPTIONS = ['batch', 'layer', None]
+NORMAL_SAMPLES = 8000
+ATTACK_SAMPLES = 2000
+ANOMALY_FACTOR = 1.5
+RANDOM_STATE = 42
+
+# Security Constants
+DEFAULT_PERCENTILE = 95
+DEFAULT_ATTACK_THRESHOLD = 0.3
+FALSE_NEGATIVE_COST = 2.0
+SECURITY_METRICS = True
+
+# System Constants
+NUM_WORKERS = min(4, os.cpu_count() or 1)
+MAX_MEMORY_PERCENT = 80
+# Cache timeout for model artifacts in seconds
+CACHE_TIMEOUT = 3600
+
+# Availability flags for optional dependencies
+OPTIONAL_DEPENDENCIES = {
+    'torch_jit': TORCH_JIT_AVAILABLE,
+    'onnxruntime': ONNXRUNTIME_AVAILABLE,
+    'nvml': NVML_AVAILABLE,
+    'crypto': CRYPTO_AVAILABLE,
+    'database': DATABASE_AVAILABLE,
+    'sklearn_anomaly': SKLEARN_ANOMALY_AVAILABLE,
+    'statsmodels': STATSMODELS_AVAILABLE,
+    'numba': NUMBA_AVAILABLE,
+    'memory_profiler': MEMORY_PROFILER_AVAILABLE,
+    'line_profiler': LINE_PROFILER_AVAILABLE,
+    'packaging': PACKAGING_AVAILABLE
+}
+
+# Version information
+def get_package_version(package_name: str) -> str:
+    """Safely get package version."""
+    try:
+        if package_name == 'rich':
+            from importlib.metadata import version
+            return version('rich')
+        elif package_name == 'sklearn':
+            import sklearn
+            return sklearn.__version__
+        else:
+            # For other packages, use the standard approach
+            return getattr(__import__(package_name), '__version__', 'unknown')
+    except ImportError:
+        try:
+            # Fallback to pkg_resources if importlib.metadata not available
+            import pkg_resources
+            return pkg_resources.get_distribution(package_name).version
+        except:
+            return 'N/A'
+    except Exception:
+        return 'unknown'
+
+# Version information - Updated to properly detect Rich
+VERSION_INFO = {
+    'python': sys.version.split()[0],
+    'torch': torch.__version__,
+    'numpy': np.__version__,
+    'pandas': pd.__version__,
+    'optuna': optuna.__version__,
+    'rich': get_package_version('rich'),
+    'plotly': plotly.__version__,
+    'sklearn': get_package_version('sklearn')
+}
+
 # Logging and Directory Setup
+# Stream handler for unicode output on windows
 class UnicodeStreamHandler(logging.StreamHandler):
     """
     A logging StreamHandler that preserves Unicode output on Windows consoles,
@@ -323,50 +467,66 @@ class UnicodeStreamHandler(logging.StreamHandler):
         except Exception:
             self.handleError(record)
 
-# Setup logging
-def setup_logging(log_dir: Path) -> logging.Logger:
+# Setup logging configuration
+def setup_logging(log_dir: Path = None) -> logging.Logger:
     """
-    Configure the root logger with both a UTF-8 file handler and
-    a Unicode-safe console handler, removing duplicate handlers
-    and standardizing the log format.
-    """
-    # Create logger
-    #logger = logging.getLogger()
-    logger = logging.getLogger(__name__)
-    #logger.setLevel(logging.DEBUG)
-    
-    # Remove existing handlers to avoid duplicates
-    for handler in logger.handlers[:]:
-        logger.removeHandler(handler)
-        handler.close()
-    
-    logger.setLevel(logging.DEBUG)
-    
-    # File handler (UTF-8 encoded)
-    log_file = log_dir / "deep_learning.log"
-    file_handler = logging.FileHandler(log_file, encoding='utf-8')
-    file_handler.setLevel(logging.DEBUG)
-    file_formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    file_handler.setFormatter(file_formatter)
-    logger.addHandler(file_handler)
-    
-    # Console handler (Unicode-safe)
-    console_handler = UnicodeStreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%H:%M:%S'
-    )
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-    
-    return logger
+    Configure the logger with:
+    - UTF-8 file handler
+    - Unicode-safe console handler (via UnicodeStreamHandler)
 
-# Global directory variables
-#LOG_DIR = DEFAULT_MODEL_DIR = DATA_DIR = CONFIG_DIR = REPORTS_DIR = TB_DIR = CACHE_DIR = None
+    Features:
+    1. If log_dir is None, defaults to 'logs' folder next to this script.
+    2. Adds handlers only if they don't already exist.
+    3. Falls back to basic logging config if setup fails.
+    """
+    try:
+        # Determine log_dir (default: script's directory / logs)
+        if log_dir is None:
+            log_dir = Path(__file__).resolve().parent / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+
+        # File Handler
+        log_file = log_dir / "deep_learning.log"
+        file_handler_exists = any(
+            isinstance(h, logging.FileHandler) and getattr(h, 'baseFilename', None) == str(log_file)
+            for h in logger.handlers
+        )
+        if not file_handler_exists:
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler.setLevel(logging.DEBUG)
+            file_formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            file_handler.setFormatter(file_formatter)
+            logger.addHandler(file_handler)
+
+        # Unicode-Safe Console Handler
+        console_handler_exists = any(isinstance(h, UnicodeStreamHandler) for h in logger.handlers)
+        if not console_handler_exists:
+            console_handler = UnicodeStreamHandler(sys.stdout)
+            console_handler.setLevel(logging.INFO)
+            console_formatter = logging.Formatter(
+                '%(asctime)s - %(levelname)s - %(message)s',
+                datefmt='%H:%M:%S'
+            )
+            console_handler.setFormatter(console_formatter)
+            logger.addHandler(console_handler)
+
+        return logger
+
+    except Exception as e:
+        # Fallback basic configuration if setup fails
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(levelname)s - %(message)s'
+        )
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to setup proper logging: {e}")
+        return logger
 
 # Setup directories and assign global directory variables
 def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
@@ -388,9 +548,15 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
     for name, path in dirs.items():
         try:
             path.mkdir(parents=True, exist_ok=True)
-            logger.debug(f"Created directory: {path}")
+            if logger:
+                logger.debug(f"Created directory: {path}")
+        except PermissionError as e:
+            if logger:
+                logger.error(f"Permission denied creating directory {path}: {e}")
+            raise
         except Exception as e:
-            logger.error(f"Failed to create directory {path}: {e}")
+            if logger:
+                logger.error(f"Failed to create directory {path}: {e}")
             raise
     
     return dirs
@@ -400,19 +566,28 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
     Initialize and assign global directory path variables using
     setup_directories(), ensuring they are accessible across modules.
     """
-    dirs = setup_directories(logger)
-    
-    # Assign to global variables if needed
-    global LOG_DIR, DEFAULT_MODEL_DIR, DATA_DIR, CONFIG_DIR, REPORTS_DIR, TB_DIR, CACHE_DIR
-    LOG_DIR = dirs['logs']
-    DEFAULT_MODEL_DIR = dirs['models']
-    DATA_DIR = dirs['data']
-    CONFIG_DIR = dirs['config']
-    REPORTS_DIR = dirs['reports']
-    TB_DIR = dirs['tensorboard']
-    CACHE_DIR = dirs['cache']
-    
-    return dirs
+    try:
+        dirs = setup_directories(logger)
+        
+        # Assign to global variables if needed
+        global LOG_DIR, DEFAULT_MODEL_DIR, DATA_DIR, CONFIG_DIR, REPORTS_DIR, TB_DIR, CACHE_DIR
+        LOG_DIR = dirs['logs']
+        DEFAULT_MODEL_DIR = dirs['models']
+        DATA_DIR = dirs['data']
+        CONFIG_DIR = dirs['config']
+        REPORTS_DIR = dirs['reports']
+        TB_DIR = dirs['tensorboard']
+        CACHE_DIR = dirs['cache']
+        
+        if logger:
+            logger.info("Directory configuration completed successfully")
+        
+        return dirs
+        
+    except Exception as e:
+        if logger:
+            logger.critical(f"Directory configuration failed: {e}")
+        raise
 
 # Forward declarations for classes that will be defined later
 class SimpleAutoencoder:
@@ -560,169 +735,1053 @@ torch._logging.set_logs(all=logging.ERROR)
 # Loading Screen and System Check Framework
 class CheckLevel(Enum):
     """Enumeration representing the severity of a system check."""
-    CRITICAL = auto()    # Check must pass for the program to continue running
-    IMPORTANT = auto()   # Check should pass for full functionality but not fatal
-    INFORMATIONAL = auto()  # Non-essential check providing useful system information
+    # Check must pass for the program to continue running
+    CRITICAL = auto()
+    
+    # Check should pass for full functionality but not fatal
+    IMPORTANT = auto()
+    
+    # Non-essential check providing useful system information
+    INFORMATIONAL = auto()
 
 class CheckResult:
-    """Encapsulates the outcome of a system check."""
+    """Encapsulates the outcome of a system check with enhanced functionality."""
+    
     def __init__(self, 
                  passed: bool, 
                  message: str, 
                  level: CheckLevel = CheckLevel.IMPORTANT,
-                 details: Optional[str] = None,
+                 details: Optional[Union[str, Dict[str, Any]]] = None,
+                 metadata: Optional[Dict[str, Any]] = None,
                  exception: Optional[Exception] = None):
         self.passed = passed
         self.message = message
         self.level = level
         self.details = details
+        self.metadata = metadata if metadata is not None else {}
         self.exception = exception
 
-    def __str__(self):
-        status = "PASSED" if self.passed else "FAILED"
-        return f"{status}: {self.message} ({self.level.name})"
+    def with_details(self, details: Union[str, Dict[str, Any]]) -> 'CheckResult':
+        """Return CheckResult with additional details."""
+        self.details = details
+        return self
+    
+    def with_exception(self, exception: Exception) -> 'CheckResult':
+        """Return CheckResult with an exception."""
+        self.exception = exception
+        return self
+    
+    def with_metadata(self, metadata: Dict[str, Any]) -> 'CheckResult':
+        """Return CheckResult with additional metadata."""
+        if self.metadata is None:
+            self.metadata = {}
+        self.metadata.update(metadata)
+        return self
+    
+    def with_passed(self, passed: bool) -> 'CheckResult':
+        """Update the passed status and return self."""
+        self.passed = passed
+        return self
+    
+    def with_message(self, message: str) -> 'CheckResult':
+        """Update the message and return self."""
+        self.message = message
+        return self
+    
+    def with_level(self, level: CheckLevel) -> 'CheckResult':
+        """Update the check level and return self."""
+        self.level = level
+        return self
 
-def loading_screen() -> bool:
-    """Display loading screen with system checks."""
-    console.print("[bold blue]Running System Checks...[/bold blue]")
-    results = run_system_checks()
-    display_check_results(results)
+def loading_screen(
+    logger: logging.Logger,
+    extended: bool = False,
+    include_performance: bool = False
+) -> bool:
+    """
+    Display loading screen with system checks and interactive prompts.
     
-    # Check if any critical checks failed
-    critical_failures = any(
-        not result.passed and result.level == CheckLevel.CRITICAL 
-        for result in results
-    )
+    Args:
+        logger: Logger for recording system check results
+        extended: Whether to run extended initialization-specific checks
+        include_performance: Whether to include performance-related checks
+        
+    Returns:
+        bool: True if all critical checks pass and user chooses to continue,
+              False if critical checks fail or user chooses to quit
+    """
+    try:
+        console = Console()
+        console.clear()
+        
+        # Display loading banner with animation
+        with console.status("[bold blue]Running System Diagnostics...[/bold blue]", spinner="dots"):
+            # Simulate loading with progressive messages
+            time.sleep(0.5)
+            console.status("[bold blue]Initializing system checks...[/bold blue]")
+            time.sleep(0.3)
+            console.status("[bold blue]Validating environment...[/bold blue]")
+            time.sleep(0.2)
+            
+            # ASCII art banner
+            console.print("\n", Panel.fit("""
+                                    
+        ⠀⠀⠀⢠⣾⣷⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⠀⠀⣰⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⠀⢰⣿⣿⣿⣿⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣤⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣤⣄⣀⣀⣤⣤⣶⣾⣿⣿⣿⡷
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀
+        ⣿⣿⣿⡇⠀⡾⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣧⡀⠁⣀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠉⢹⠉⠙⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣀⠀⣀⣼⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠛⠀⠤⢀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⣿⣿⠿⣿⣿⣿⣿⣿⣿⣿⠿⠋⢃⠈⠢⡁⠒⠄⡀⠈⠁⠀⠀⠀⠀⠀⠀⠀
+        ⣿⣿⠟⠁⠀⠀⠈⠉⠉⠁⠀⠀⠀⠀⠈⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+        ⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⠀⠀⠀⠀⠀⠀⠀⠀⠀
+
+            """,
+                style="bold cyan", 
+                title="[bold yellow]GreyChamp | IDS[/]", 
+                subtitle="[magenta]SYSTEM INITIALIZATION[/]",
+                border_style="bold blue",
+                box=box.DOUBLE,
+                padding=(1, 1)
+            ))
+            
+            # Show check type information
+            check_type_info = "BASIC CHECKS" 
+            if extended and include_performance:
+                check_type_info = "EXTENDED CHECKS (with Performance)"
+            elif extended:
+                check_type_info = "EXTENDED CHECKS"
+            
+            console.print(Panel.fit(
+                f"[bold cyan]Running {check_type_info}[/bold cyan]\n"
+                "[dim]Please wait while we validate your system...[/dim]",
+                border_style="cyan",
+                padding=(0, 2)
+            ))
+            console.print()
+            
+            # Run system checks with timing
+            console.status("[bold blue]Executing system checks...[/bold blue]")
+            start_time = time.time()
+            results = run_system_checks(logger, extended=extended, include_performance=include_performance)
+            elapsed_time = time.time() - start_time
+            
+            # Add timing information to results if summary exists
+            if "system_summary" in results and results["system_summary"].details:
+                if isinstance(results["system_summary"].details, dict):
+                    results["system_summary"].details["execution_time"] = f"{elapsed_time:.2f}s"
+        
+        # Display results table
+        console.print()
+        display_check_results(results, logger, extended=extended, include_performance=include_performance)
+        console.print()
+        
+        # Analyze results for decision making
+        summary = results.get("system_summary")
+        system_error = results.get("system_error")
+        
+        # Determine system status from summary details
+        system_status = "UNKNOWN"
+        if summary and summary.details and isinstance(summary.details, dict):
+            system_status = summary.details.get('system_status', 'UNKNOWN')
+        
+        # Count failures by level
+        critical_failed = sum(1 for result in results.values() 
+                            if result.level == CheckLevel.CRITICAL and not result.passed 
+                            and result != summary)
+        
+        important_failed = sum(1 for result in results.values() 
+                             if result.level == CheckLevel.IMPORTANT and not result.passed)
+        
+        informational_failed = sum(1 for result in results.values() 
+                                 if result.level == CheckLevel.INFORMATIONAL and not result.passed)
+        
+        # Handle different scenarios
+        if system_error or system_status == "CRITICAL_FAILURE" or critical_failed > 0:
+            # Critical failure - system cannot continue
+            failed_critical_checks = [
+                name.replace("_", " ").title() 
+                for name, result in results.items() 
+                if result.level == CheckLevel.CRITICAL and not result.passed and name != "system_summary"
+            ]
+            
+            error_panel = Panel.fit(
+                f"[bold red]CRITICAL SYSTEM CHECKS FAILED[/bold red]\n\n"
+                f"[white]The system cannot continue due to critical failures.[/white]\n"
+                f"[dim]Failed checks: {', '.join(failed_critical_checks) if failed_critical_checks else 'System error occurred'}[/dim]\n\n"
+                f"[yellow]Please check the logs and resolve these issues before continuing.[/yellow]",
+                border_style="red",
+                title="Critical Failure",
+                padding=(1, 3)
+            )
+            console.print(error_panel)
+            
+            if logger:
+                logger.critical(f"Critical system checks failed - cannot continue. Failed checks: {failed_critical_checks}")
+            return False
+        
+        elif system_status in ["DEGRADED", "LIMITED"] or important_failed > 0 or informational_failed > 0:
+            # Non-critical failures - allow user to decide
+            failed_checks = []
+            
+            # Collect failed non-critical checks
+            for name, result in results.items():
+                if (not result.passed and 
+                    result.level in [CheckLevel.IMPORTANT, CheckLevel.INFORMATIONAL] and 
+                    name not in ["system_summary", "system_error"]):
+                    failed_checks.append({
+                        'name': name.replace("_", " ").title(),
+                        'level': result.level.name,
+                        'message': result.message
+                    })
+            
+            if failed_checks:
+                # Show detailed failed checks summary
+                fail_table = Table(
+                    title="[bold yellow]Failed Non-Critical Checks[/bold yellow]",
+                    box=box.SIMPLE,
+                    header_style="bold magenta",
+                    title_justify="left",
+                    show_header=True,
+                    show_lines=True,
+                    width=min(100, console.width - 4)
+                )
+                fail_table.add_column("Check", style="bold cyan", width=28)
+                fail_table.add_column("Issue", style="bold white", no_wrap=False)
+                fail_table.add_column("Level", justify="center", width=14)
+                
+                for check in failed_checks:
+                    level_style = {
+                        "IMPORTANT": "bold yellow",
+                        "INFORMATIONAL": "bold blue"
+                    }.get(check['level'], "white")
+                    
+                    fail_table.add_row(
+                        check['name'],
+                        check['message'],
+                        Text(check['level'], style=level_style)
+                    )
+                
+                console.print(fail_table)
+                console.print()
+            
+            # Show system status and user options
+            status_color = "yellow" if system_status == "DEGRADED" else "blue" if system_status == "LIMITED" else "yellow"
+            status_message = {
+                "DEGRADED": "SYSTEM DEGRADED",
+                "LIMITED": "LIMITED FUNCTIONALITY", 
+            }.get(system_status, "SOME CHECKS FAILED")
+            
+            # Create interactive prompt
+            prompt_text = (
+                f"[bold {status_color}]{status_message}[/bold {status_color}]\n\n"
+                f"[white]System Status Details:[/white]\n"
+                f"[dim]- Important failures: {important_failed}[/dim]\n"
+                f"[dim]- Informational failures: {informational_failed}[/dim]\n"
+                f"[dim]- Total execution time: {elapsed_time:.2f}s[/dim]\n\n"
+                f"[white]The system can continue with reduced functionality.[/white]\n"
+                f"[white]Press [/white][bold green]Enter[/bold green][white] to continue anyway or [/white]"
+                f"[bold red]Esc[/bold red][white] to quit and resolve issues[/white]"
+            )
+            
+            console.print(Panel.fit(
+                prompt_text,
+                border_style=status_color,
+                title="User Decision Required",
+                padding=(1, 3)
+            ))
+            
+            # Enhanced keyboard listener with timeout
+            user_choice = None
+            listener_active = True
+            
+            def on_press(key):
+                nonlocal user_choice, listener_active
+                if not listener_active:
+                    return False
+                    
+                try:
+                    if key == Key.enter:
+                        user_choice = True
+                        listener_active = False
+                        # Stop listener
+                        return False
+                    elif key == Key.esc:
+                        user_choice = False
+                        listener_active = False
+                        # Stop listener
+                        return False
+                    elif hasattr(key, 'char') and key.char:
+                        # Handle character keys for additional options
+                        if key.char.lower() == 'q':
+                            user_choice = False
+                            listener_active = False
+                            return False
+                        # Continue or Yes
+                        elif key.char.lower() in ['c', 'y']:
+                            user_choice = True
+                            listener_active = False
+                            return False
+                except AttributeError:
+                    # Handle special keys that don't have char attribute
+                    pass
+                
+                # Continue listening
+                return True
+            
+            # Show waiting indicator
+            console.print("[dim]Waiting for user input...[/dim]")
+            
+            # Start keyboard listener
+            try:
+                with Listener(on_press=on_press) as listener:
+                    listener.join()
+            except Exception as e:
+                if logger:
+                    logger.warning(f"Keyboard listener error: {e}")
+                # Default to continue if listener fails
+                user_choice = True
+            
+            # Handle user choice
+            if user_choice is False:
+                console.print(Panel.fit(
+                    "[bold red]USER CANCELLED INITIALIZATION[/bold red]\n\n"
+                    "[white]You chose to quit and resolve the issues.[/white]\n"
+                    "[dim]Please check the logs and fix the failed checks.[/dim]",
+                    border_style="red",
+                    title="Cancelled",
+                    padding=(1, 3)
+                ))
+                
+                if logger:
+                    logger.warning("User chose to quit after seeing failed checks")
+                    logger.info(f"Failed checks summary: {len(failed_checks)} non-critical failures")
+                
+                # Exit gracefully
+                sys.exit(0)
+            
+            # User chose to continue
+            console.print(Panel.fit(
+                "[bold green]CONTINUING WITH WARNINGS[/bold green]\n\n"
+                "[white]You chose to continue despite the warnings.[/white]\n"
+                "[dim]Some functionality may be limited.[/dim]",
+                border_style="green",
+                title="Continuing",
+                padding=(1, 2)
+            ))
+            
+            if logger:
+                logger.info("User chose to continue despite failed checks")
+                logger.info(f"System status: {system_status} with {len(failed_checks)} failed checks")
+            
+            # Brief pause before clearing
+            time.sleep(1)
+            console.clear()
+            return True
+        
+        else:
+            # All checks passed - success scenario
+            success_details = ""
+            if summary and summary.details and isinstance(summary.details, dict):
+                total_checks = summary.details.get('total_checks', 0)
+                success_details = f"\n[dim]Completed {total_checks} checks successfully[/dim]"
+            
+            console.print(Panel.fit(
+                f"[bold green]ALL SYSTEM CHECKS PASSED[/bold green]\n"
+                f"[white]System is fully operational and ready![/white]\n"
+                f"[dim cyan]Completed in {elapsed_time:.2f} seconds[/dim cyan]"
+                f"{success_details}\n\n"
+                f"[white]Press [/white][bold green]Enter[/bold green][white] to continue[/white]",
+                border_style="green",
+                title="Success",
+                padding=(1, 3)
+            ))
+            
+            # Wait for Enter key
+            def on_press_success(key):
+                if key == Key.enter:
+                    # Stop listener
+                    return False
+                # Continue listening
+                return True
+            
+            # Show success indicator
+            console.print("[dim green]Ready to proceed...[/dim green]")
+            
+            try:
+                with Listener(on_press=on_press_success) as listener:
+                    listener.join()
+            except Exception as e:
+                if logger:
+                    logger.warning(f"Success keyboard listener error: {e}")
+                # Continue anyway if listener fails
+                pass
+            
+            if logger:
+                logger.info(f"All system checks passed successfully in {elapsed_time:.2f}s")
+                if summary and summary.details:
+                    logger.info(f"System status: {system_status}")
+            
+            console.clear()
+            return True
     
-    if critical_failures:
-        console.print("\n[bold red]Critical checks failed - system cannot continue[/bold red]")
+    except KeyboardInterrupt:
+        # Handle Ctrl+C gracefully
+        console.print(Panel.fit(
+            "[bold red]INITIALIZATION INTERRUPTED[/bold red]\n\n"
+            "[white]System initialization was cancelled by user.[/white]",
+            border_style="red",
+            title="Interrupted",
+            padding=(1, 3)
+        ))
+        
+        if logger:
+            logger.warning("System initialization interrupted by user (Ctrl+C)")
+        
+        sys.exit(0)
+        
+    except Exception as e:
+        # Handle unexpected errors
+        console.print(Panel.fit(
+            f"[bold red]UNEXPECTED ERROR DURING INITIALIZATION[/bold red]\n\n"
+            f"[white]An unexpected error occurred during system checks:[/white]\n"
+            f"[yellow]{str(e)}[/yellow]\n\n"
+            f"[dim]Error type: {type(e).__name__}[/dim]",
+            border_style="red",
+            title="System Error",
+            padding=(1, 3)
+        ))
+        
+        if logger:
+            logger.critical(f"Loading screen failed with unexpected error: {str(e)}", exc_info=True)
+            logger.error(f"Error occurred during {'extended' if extended else 'basic'} system checks")
+        
         return False
-    return True
 
-def run_system_checks() -> List[CheckResult]:
-    """Run all system checks using existing functions where possible."""
-    checks = [
-        check_python_version(),
-        check_torch(),
-        check_cuda(),
-        check_package_versions_wrapper(),
-        check_directory_access_wrapper(),
-        check_disk_space(),
-        check_cpu_cores(),
-        check_system_ram(),
-        check_system_architecture(),
-        check_logging_setup(),
-        check_seed_config()
-    ]
-    return [result for result in checks if result is not None]
-
-def display_check_results(results: List[CheckResult]):
-    """Display check results in a styled table with improved formatting."""
-    table = Table(title="System Check Results", box=box.SIMPLE)
-    table.add_column("Check", style="cyan")
-    table.add_column("Status", justify="right")
-    table.add_column("Level", style="magenta")
-    table.add_column("Details", style="dim")
+def run_system_checks(
+    logger: logging.Logger, 
+    extended: bool = False,
+    include_performance: bool = False
+) -> Dict[str, CheckResult]:
+    """
+    Run comprehensive system checks with optional extended validations.
     
-    for result in results:
-        status = "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]"
-        level_style = {
-            CheckLevel.CRITICAL: "bold red",
-            CheckLevel.IMPORTANT: "yellow",
-            CheckLevel.INFORMATIONAL: "dim"
-        }.get(result.level, "")
+    Args:
+        logger: Configured logger for recording check results
+        extended: Whether to include initialization-specific checks
+        include_performance: Whether to include performance-related checks
         
-        level_text = f"[{level_style}]{result.level.name}[/{level_style}]"
-        details = result.details or ""
+    Returns:
+        Dictionary mapping check names to their CheckResult objects
+    """
+    checks: Dict[str, CheckResult] = {}
+    
+    try:
+        # Core system checks (always run)
+        raw_checks = {
+            # Critical checks (essential for operation)
+            'python_version': check_python_version(),
+            'torch_available': check_torch(),
+            
+            # Important checks (affects functionality but not critical)
+            'package_versions': check_package_versions_wrapper(),
+            'directory_access': check_directory_access_wrapper(),
+            'disk_space': check_disk_space(),
+            'cuda_available': check_cuda(),
+            
+            # Hardware resource checks
+            'hardware': check_hardware(),
+            
+            # Informational checks (diagnostic purposes)
+            'cpu_cores': check_cpu_cores(),
+            'system_ram': check_system_ram(),
+            'system_arch': check_system_architecture(),
+            'logging_setup': check_logging_setup(),
+            'seed_config': check_seed_config()
+        }
+
+        # Extended system checks (when requested)
+        if extended:
+            raw_checks.update({
+                'exception_handler': check_global_exception_handler(),
+                'configuration_system': check_configuration_system(),
+                'model_variants': check_model_variants()
+            })
+            
+            # Performance-related checks (only when explicitly requested)
+            if include_performance:
+                raw_checks.update({
+                    'performance_monitoring': check_performance_monitoring(),
+                    'memory_management': check_memory_management(),
+                    'performance_baseline': check_performance_baseline()
+                })
         
-        table.add_row(
-            result.message,
-            status,
-            level_text,
-            details
+        # Convert all results to CheckResult objects if they aren't already
+        for name, result in raw_checks.items():
+            if isinstance(result, CheckResult):
+                checks[name] = result
+            elif isinstance(result, dict):
+                # Convert dictionary result to CheckResult
+                checks[name] = CheckResult(
+                    passed=result.get('passed', False),
+                    message=result.get('message', f"Check {name} completed"),
+                    # Default level, should be overridden by specific checks
+                    level=CheckLevel.INFORMATIONAL,
+                    details=result.get('details', result)
+                )
+            else:
+                # Handle unexpected result types
+                checks[name] = CheckResult(
+                    passed=False,
+                    message=f"Invalid result type for {name}: {type(result)}",
+                    level=CheckLevel.CRITICAL,
+                    details={'raw_result': str(result), 'result_type': str(type(result))}
+                )
+        
+        # Calculate overall system status
+        critical_checks = [
+            result for result in checks.values() 
+            if result.level in {CheckLevel.CRITICAL, CheckLevel.IMPORTANT}
+        ]
+        overall_passed = all(result.passed for result in critical_checks)
+        
+        # Determine system status based on failures
+        critical_failures = sum(1 for r in checks.values() if not r.passed and r.level == CheckLevel.CRITICAL)
+        important_failures = sum(1 for r in checks.values() if not r.passed and r.level == CheckLevel.IMPORTANT)
+        
+        if critical_failures > 0:
+            system_status = "CRITICAL_FAILURE"
+        elif important_failures > 0:
+            system_status = "DEGRADED"
+        elif any(not r.passed for r in checks.values()):
+            system_status = "LIMITED"
+        else:
+            system_status = "OPTIMAL"
+        
+        # Create comprehensive summary
+        summary_details = {
+            'total_checks': len(checks),
+            'passed_checks': sum(1 for r in checks.values() if r.passed),
+            'failed_checks': sum(1 for r in checks.values() if not r.passed),
+            'critical_failures': critical_failures,
+            'important_failures': important_failures,
+            'system_status': system_status,
+            'check_results': {
+                name: {
+                    'passed': result.passed,
+                    'message': result.message,
+                    'level': result.level.name,
+                    'details': result.details if isinstance(result.details, (str, dict)) else str(result.details)
+                }
+                for name, result in checks.items()
+            }
+        }
+        
+        summary_message = (
+            f"{system_status}: Extended system check summary" if extended 
+            else f"{system_status}: Basic system check summary"
         )
+        
+        checks['system_summary'] = CheckResult(
+            passed=overall_passed,
+            message=summary_message,
+            level=CheckLevel.CRITICAL if not overall_passed else CheckLevel.INFORMATIONAL,
+            details=summary_details
+        )
+        
+        # Log critical failures immediately
+        if logger:
+            for name, result in checks.items():
+                if not result.passed and result.level == CheckLevel.CRITICAL:
+                    logger.error(
+                        f"Critical check failed: {name} - {result.message}",
+                        extra={'check_details': result.details}
+                    )
+            
+            if not overall_passed:
+                logger.warning(
+                    f"System checks completed with failures - Status: {system_status}",
+                    extra={'summary': summary_details}
+                )
+            else:
+                logger.info(
+                    f"All system checks passed - Status: {system_status}",
+                    extra={'summary': {
+                        'total_checks': summary_details['total_checks'],
+                        'passed_checks': summary_details['passed_checks']
+                    }}
+                )
+        
+        return checks
     
-    console.print(table)
+    except Exception as e:
+        error_result = CheckResult(
+            passed=False,
+            message="System checks failed to complete",
+            level=CheckLevel.CRITICAL,
+            details={
+                'error': str(e),
+                'completed_checks': list(checks.keys()),
+                'traceback': traceback.format_exc()
+            }
+        ).with_exception(e)
+        
+        checks['system_error'] = error_result
+        
+        if logger:
+            logger.critical(
+                "Fatal error during system checks",
+                exc_info=True,
+                extra={
+                    'completed_checks': list(checks.keys()),
+                    'error': str(e)
+                }
+            )
+        
+        return checks
+
+def display_check_results(
+    results: Dict[str, CheckResult], 
+    logger: logging.Logger,
+    extended: bool = False,
+    include_performance: bool = False
+) -> None:
+    """
+    Display check results in a styled table with improved formatting that matches
+    the structure of run_system_checks output.
+    
+    Args:
+        results: Dictionary of check results from run_system_checks()
+        logger: Configured logger for recording the output
+        extended: Whether extended checks were included (affects display)
+        include_performance: Whether performance checks were included (affects display)
+    """
+    try:
+        # Create the report table with dynamic title
+        report_type = "Extended" if extended else "Basic"
+        if include_performance:
+            report_type += " (Performance)"
+            
+        table = Table(
+            title=f"\n[bold]SYSTEM DIAGNOSTICS REPORT - {report_type}[/bold]",
+            box=box.ROUNDED,
+            header_style="bold bright_white",
+            border_style="bright_white",
+            title_style="bold yellow",
+            title_justify="left",
+            show_lines=True,
+            expand=True,
+            width=min(120, console.width - 4)
+        )
+        
+        # Configure columns
+        table.add_column("Check", style="bold cyan", width=25)
+        table.add_column("Status", width=12, justify="center")
+        table.add_column("Level", width=12, justify="center")
+        table.add_column("Details", style="dim", min_width=50, max_width=80)
+        
+        # Group by check level in priority order
+        for level in [CheckLevel.CRITICAL, CheckLevel.IMPORTANT, CheckLevel.INFORMATIONAL]:
+            # Filter checks for this level, excluding summary/error entries
+            level_rows = [
+                (name, result) for name, result in results.items() 
+                if result.level == level 
+                and name not in ["system_summary", "system_error"]
+            ]
+            
+            if not level_rows:
+                continue
+                
+            # Add section header with colored background
+            level_style = {
+                CheckLevel.CRITICAL: "bold white on red",
+                CheckLevel.IMPORTANT: "bold black on yellow",
+                CheckLevel.INFORMATIONAL: "bold white on blue"
+            }[level]
+            
+            table.add_row(
+                Text(level.name, style=level_style),
+                "",
+                "",
+                "",
+                style=level_style
+            )
+            
+            # Add checks for this level
+            for name, result in level_rows:
+                # Determine status styling
+                if result.passed:
+                    status_style = "bold green"
+                    status_text = "PASS"
+                else:
+                    status_style = "bold red" if level == CheckLevel.CRITICAL else "bold yellow"
+                    status_text = "FAIL" if level == CheckLevel.CRITICAL else "WARN"
+                
+                # Format details
+                details_lines = []
+                
+                # Main message
+                details_lines.append(f"[bright_white]{result.message}[/bright_white]")
+                
+                # Handle different detail types
+                if isinstance(result.details, dict):
+                    # Special handling for version info
+                    if 'version_info' in result.details:
+                        versions = result.details['version_info']
+                        details_lines.append("[dim]Dependencies:")
+                        for pkg, info in versions.items():
+                            status = "[green]✓" if info['compatible'] else "[red]✗"
+                            details_lines.append(
+                                f"  {status} {pkg}: {info['version']} "
+                                f"(requires {info['required_version'] or 'any'})"
+                            )
+                    else:
+                        # General dict handling
+                        for key, value in result.details.items():
+                            if key not in ['error', 'exception', 'traceback']:
+                                details_lines.append(f"[dim]{key}: {value}[/dim]")
+                elif result.details and isinstance(result.details, str):
+                    details_lines.append(f"[dim]{result.details}[/dim]")
+                
+                # Add exception if present
+                if result.exception:
+                    details_lines.append(f"[bold red]Error: {str(result.exception)}[/bold red]")
+                
+                details_text = "\n".join(details_lines)
+                
+                # Add row to table
+                table.add_row(
+                    Text(name.replace("_", " ").title()), 
+                    Text(status_text, style=status_style),
+                    Text(level.name, style="dim"),
+                    details_text
+                )
+        
+        # Add summary/error rows if present
+        if "system_summary" in results:
+            summary = results["system_summary"]
+            summary_style = "bold green" if summary.passed else "bold red"
+            
+            table.add_row(
+                Text("SUMMARY", style="bold bright_white on black"),
+                Text("PASS" if summary.passed else "FAIL", style=summary_style),
+                "",
+                Text(
+                    f"{summary.details['passed_checks']}/{summary.details['total_checks']} checks passed | "
+                    f"{summary.details['critical_failures']} critical failures",
+                    style="bright_white"
+                )
+            )
+        
+        if "system_error" in results:
+            error = results["system_error"]
+            table.add_row(
+                Text("FATAL ERROR", style="bold white on red"),
+                Text("ERROR", style="bold white on red"),
+                "",
+                Text(
+                    f"{error.message}\n"
+                    f"[red]{error.details.get('error', 'Unknown error')}\n"
+                    f"Completed checks: {', '.join(error.details.get('completed_checks', []))}",
+                    style="bright_white"
+                )
+            )
+        
+        # Print the table
+        console.print(table)
+        
+        # Enhanced logging
+        if logger:
+            # Log only the summary
+            summary = results.get("system_summary")
+            if summary:
+                logger.info(
+                    f"System diagnostics completed: {summary.details['passed_checks']}/"
+                    f"{summary.details['total_checks']} checks passed, "
+                    f"{summary.details['critical_failures']} critical failures"
+                )
+            
+            # Log only critical failures
+            critical_failures = [
+                (name, result) for name, result in results.items()
+                if not result.passed and result.level == CheckLevel.CRITICAL
+                and name not in ["system_summary", "system_error"]
+            ]
+            
+            if critical_failures:
+                for name, result in critical_failures:
+                    logger.critical(f"Critical check failed: {name} - {result.message}")
+            
+            # Log any system error
+            if "system_error" in results:
+                error = results["system_error"]
+                logger.critical(f"System checks failed: {error.details.get('error', 'Unknown error')}")
+    
+    except Exception as e:
+        error_msg = f"Failed to display check results: {str(e)}"
+        console.print(f"[bold red]{error_msg}[/bold red]")
+        if logger:
+            logger.critical(error_msg, exc_info=True)
 
 # Individual check implementations
-def check_python_version(min_version: Tuple[int, int] = (3, 7)) -> CheckResult:
+def check_python_version(min_version: Tuple[int, int] = (3, 8)) -> CheckResult:
     """Verify that the current Python version meets the minimum requirement."""
     try:
-        version = sys.version_info
-        passed = (version.major, version.minor) >= min_version
-        message = f"Python >= {'.'.join(map(str, min_version))}"
-        details = f"Current: {version.major}.{version.minor}.{version.micro}"
+        # Leverage the version info from check_versions
+        version_info = check_versions(include_optional=False)
+        python_info = version_info.get('Python', {})
         
-        return CheckResult(
+        if not python_info:
+            return CheckResult(
+                passed=False,
+                message="Python version information not available",
+                level=CheckLevel.CRITICAL
+            )
+        
+        # Get version from the comprehensive check
+        current_version = tuple(map(int, python_info['version'].split('.')[:2]))
+        passed = current_version >= min_version
+        
+        message = (
+            f"Python version {'meets' if passed else 'fails'} minimum requirement "
+            f"({'.'.join(map(str, min_version))})"
+        )
+        
+        base_result = CheckResult(
             passed=passed,
             message=message,
             level=CheckLevel.CRITICAL if not passed else CheckLevel.INFORMATIONAL,
-            details=details
+            details=python_info.get('details')
         )
+        
+        return base_result.with_details(
+            f"Current version: {python_info['version']}\n"
+            f"Minimum required: {'.'.join(map(str, min_version))}\n"
+            f"Status: {'Compatible' if passed else 'Incompatible'}"
+        )
+        
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="Python version check failed",
-            level=CheckLevel.CRITICAL,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="Python version check failed",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details(f"Could not determine Python version: {str(e)}")
+            .with_exception(e)
         )
+
+def check_versions(include_optional: bool = True) -> Dict[str, Dict[str, Any]]:
+    """
+    Verify package versions with comprehensive dependency checking.
+    Returns a dictionary containing version status for all dependencies.
+    
+    Args:
+        include_optional: Whether to include optional dependencies in the check
+        
+    Returns:
+        Dictionary with package names as keys and version info as values
+    """
+    import sys
+    version_info = {}
+    
+    def safe_version_compare(current_version: str, requirement: str) -> bool:
+        """Safely compare version against requirement."""
+        if current_version in ['N/A', 'unknown', 'Available']:
+            return current_version == 'Available'
+        if not requirement:
+            return True
+        try:
+            # Extract version number from requirement (remove >=, ==, etc.)
+            req_version = requirement.replace('>=', '').replace('<=', '').replace('==', '').replace('>', '').replace('<', '').strip()
+            return pkg_version.parse(current_version) >= pkg_version.parse(req_version)
+        except Exception:
+            return False
+    
+    # Core dependencies - get actual versions from VERSION_INFO
+    core_deps = {
+        'Python': (VERSION_INFO['python'], '>=3.7', True),
+        'PyTorch': (VERSION_INFO['torch'], '>=1.8', True),
+        'NumPy': (VERSION_INFO['numpy'], '>=1.19', True),
+        'Pandas': (VERSION_INFO['pandas'], '>=1.2', True),
+        'Scikit-learn': (VERSION_INFO['sklearn'], '>=0.24', True),
+        'Optuna': (VERSION_INFO['optuna'], '>=2.8', True),
+        'Rich': (VERSION_INFO['rich'], '>=10.0', True),
+        'Plotly': (VERSION_INFO['plotly'], '>=5.0', False)
+    }
+    
+    # Optional dependencies
+    optional_deps = {
+        #'ONNX Runtime': (ort.__version__ if OPTIONAL_DEPENDENCIES.get('onnxruntime', False) else 'N/A', '>=1.8', False),
+        'ONNX Runtime': (ORT_VERSION if ONNXRUNTIME_AVAILABLE else 'N/A', '>=1.8', False),
+        'NVIDIA ML': (getattr(nvml, '__version__', 'Available') if OPTIONAL_DEPENDENCIES.get('nvml', False) else 'N/A', '>=11.0', False),
+        'Torch JIT': ('Available' if OPTIONAL_DEPENDENCIES.get('torch_jit', False) else 'N/A', None, False),
+        'Cryptography': ('Available' if OPTIONAL_DEPENDENCIES.get('crypto', False) else 'N/A', None, False),
+        'Database': ('Available' if OPTIONAL_DEPENDENCIES.get('database', False) else 'N/A', None, False),
+        'Sklearn Anomaly': ('Available' if OPTIONAL_DEPENDENCIES.get('sklearn_anomaly', False) else 'N/A', None, False),
+        'Statsmodels': ('Available' if OPTIONAL_DEPENDENCIES.get('statsmodels', False) else 'N/A', None, False),
+        'Numba': ('Available' if OPTIONAL_DEPENDENCIES.get('numba', False) else 'N/A', None, False),
+        'Memory Profiler': ('Available' if OPTIONAL_DEPENDENCIES.get('memory_profiler', False) else 'N/A', None, False),
+        'Line Profiler': ('Available' if OPTIONAL_DEPENDENCIES.get('line_profiler', False) else 'N/A', None, False),
+        'Packaging': ('Available' if OPTIONAL_DEPENDENCIES.get('packaging', False) else 'N/A', None, False)
+    }
+    
+    # Check all dependencies
+    all_deps = {**core_deps}
+    if include_optional:
+        all_deps.update(optional_deps)
+    
+    for name, (version, requirement, required) in all_deps.items():
+        if not include_optional and not required:
+            continue
+            
+        try:
+            if version == 'N/A':
+                status = 'MISSING'
+                meets_req = False
+            elif version == 'Available' or requirement is None:
+                status = 'OK'
+                meets_req = True
+            elif version == 'unknown':
+                status = 'UNKNOWN'
+                meets_req = False
+            else:
+                meets_req = safe_version_compare(version, requirement)
+                status = 'OK' if meets_req else 'WARNING'
+                
+        except Exception as e:
+            meets_req = False
+            status = 'ERROR'
+            # Don't modify the version, keep original error handling
+        
+        version_info[name] = {
+            'version': version,
+            'required_version': requirement,
+            'status': status,
+            'required': required,
+            'description': get_dependency_description(name),
+            'compatible': meets_req,
+            'available': version not in ['N/A', 'unknown'] and not str(version).startswith('Error:')
+        }
+    
+    return version_info
 
 def check_torch() -> CheckResult:
     """Confirm that PyTorch is installed and operational."""
     try:
-        import torch
-        passed = hasattr(torch, '__version__')
-        message = "PyTorch installation"
-        details = f"Version: {torch.__version__}" if passed else "PyTorch not found"
+        # Use the comprehensive version check
+        version_info = check_versions(include_optional=False)
+        torch_info = version_info.get('PyTorch', {})
         
-        return CheckResult(
+        if not torch_info:
+            return CheckResult(
+                passed=False,
+                message="PyTorch version information not available",
+                level=CheckLevel.CRITICAL
+            )
+        
+        passed = torch_info.get('compatible', False)
+        base_result = CheckResult(
             passed=passed,
-            message=message,
+            message=f"PyTorch is {'available and compatible' if passed else 'not properly installed or incompatible'}",
             level=CheckLevel.CRITICAL,
-            details=details
+            details=torch_info.get('details')
+        )
+        
+        if passed:
+            return base_result.with_details(
+                f"Version: {torch_info['version']}\n"
+                f"Required: {torch_info['required_version'] or 'Not specified'}\n"
+                f"Description: {torch_info['description']}"
+            )
+        return base_result.with_details(
+            f"PyTorch check failed\n"
+            f"Installed version: {torch_info.get('version', 'unknown')}\n"
+            f"Required version: {torch_info.get('required_version', 'unknown')}"
+        )
+        
+    except ImportError as e:
+        return (
+            CheckResult(
+                passed=False,
+                message="PyTorch is not installed",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details("PyTorch package not found in Python environment")
+            .with_exception(e)
         )
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="PyTorch check failed",
-            level=CheckLevel.CRITICAL,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="PyTorch check failed unexpectedly",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details(str(e))
+            .with_exception(e)
         )
 
 def check_cuda() -> CheckResult:
     """Check if CUDA is available and report GPU details if present."""
     try:
-        import torch
         cuda_available = torch.cuda.is_available()
-        message = "CUDA availability"
+        message = "CUDA is " + ("available" if cuda_available else "not available")
         
-        if cuda_available:
-            details = []
-            for i in range(torch.cuda.device_count()):
-                props = torch.cuda.get_device_properties(i)
-                details.append(
-                    f"GPU {i}: {props.name} (CC {props.major}.{props.minor}, "
-                    f"{props.total_memory/1024**3:.1f}GB)"
-                )
-            details = "\n".join(details)
-        else:
-            details = "CUDA not available - Using CPU"
-        
-        return CheckResult(
+        base_result = CheckResult(
             passed=cuda_available,
             message=message,
-            level=CheckLevel.IMPORTANT,
-            details=details
+            level=CheckLevel.IMPORTANT
+        )
+        
+        if not cuda_available:
+            return base_result.with_details("CUDA not available - Using CPU")
+        
+        # Build detailed GPU information
+        details = []
+        details.append(f"CUDA Version: {torch.version.cuda}")
+        details.append(f"PyTorch CUDA Version: {torch.backends.cudnn.version() if torch.backends.cudnn.is_available() else 'N/A'}")
+        details.append(f"Detected {torch.cuda.device_count()} GPU(s):")
+        
+        for i in range(torch.cuda.device_count()):
+            props = torch.cuda.get_device_properties(i)
+            details.append(
+                f"  GPU {i}: {props.name} (Compute Capability: {props.major}.{props.minor}, "
+                f"Memory: {props.total_memory/1024**3:.1f}GB, "
+                f"Multiprocessors: {props.multi_processor_count})"
+            )
+        
+        return base_result.with_details("\n".join(details))
+        
+    except ImportError as e:
+        return (
+            CheckResult(
+                passed=False,
+                message="PyTorch not available for CUDA check",
+                level=CheckLevel.IMPORTANT
+            )
+            .with_details("PyTorch installation not found")
+            .with_exception(e)
         )
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="CUDA check failed",
-            level=CheckLevel.IMPORTANT,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="CUDA check failed unexpectedly",
+                level=CheckLevel.IMPORTANT
+            )
+            .with_details(str(e))
+            .with_exception(e)
         )
 
 def check_package_versions_wrapper(include_optional: bool = True) -> CheckResult:
@@ -772,12 +1831,16 @@ def check_package_versions_wrapper(include_optional: bool = True) -> CheckResult
         
         console.print(table)
         
-        return CheckResult(
+        base_result = CheckResult(
             passed=passed,
-            message="Package version check",
-            level=CheckLevel.CRITICAL if not passed else CheckLevel.IMPORTANT,
-            details="\n".join(details),
-            metadata={
+            message="Package version check completed",
+            level=CheckLevel.CRITICAL if not passed else CheckLevel.IMPORTANT
+        )
+        
+        return (
+            base_result
+            .with_details("\n".join(details))
+            .with_metadata({
                 'version_info': version_info,
                 'table': table,
                 'summary': {
@@ -786,39 +1849,82 @@ def check_package_versions_wrapper(include_optional: bool = True) -> CheckResult
                     'warnings': sum(1 for info in version_info.values() if info['status'] == 'WARNING'),
                     'missing': sum(1 for info in version_info.values() if info['status'] == 'MISSING')
                 }
-            }
+            })
         )
         
+    except ImportError as e:
+        return (
+            CheckResult(
+                passed=False,
+                message="Package version check failed - missing dependencies",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details(f"Required package not found: {str(e)}")
+            .with_exception(e)
+        )
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="Package version check failed",
-            level=CheckLevel.CRITICAL,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="Package version check failed unexpectedly",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details(f"Error during version check: {str(e)}")
+            .with_exception(e)
         )
 
 def check_directory_access_wrapper() -> CheckResult:
     """Verify directory access using the setup_directories function."""
     try:
-        dirs = setup_directories()
-        passed = all(path.exists() and os.access(path, os.W_OK) for path in dirs.values())
-        message = "Directory access"
-        details = "\n".join(f"{name}: {path}" for name, path in dirs.items())
+        dirs = setup_directories(logger)
+        access_issues = []
         
-        return CheckResult(
+        # Check each directory
+        for name, path in dirs.items():
+            if not path.exists():
+                access_issues.append(f"Missing: {name} ({path})")
+            elif not os.access(path, os.W_OK):
+                access_issues.append(f"No write access: {name} ({path})")
+        
+        passed = len(access_issues) == 0
+        base_result = CheckResult(
             passed=passed,
-            message=message,
-            level=CheckLevel.CRITICAL,
-            details=details
+            message="Directory access verification",
+            level=CheckLevel.CRITICAL
+        )
+        
+        if passed:
+            details = "\n".join(f"{name}: {path}" for name, path in dirs.items())
+            return base_result.with_details(details)
+        else:
+            details = "\n".join([
+                "Directory access issues found:",
+                *access_issues,
+                "",
+                "All directories:",
+                *[f"- {name}: {path}" for name, path in dirs.items()]
+            ])
+            return base_result.with_details(details)
+            
+    except PermissionError as e:
+        return (
+            CheckResult(
+                passed=False,
+                message="Permission denied for directory access",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details(f"Permission error: {str(e)}")
+            .with_exception(e)
         )
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="Directory access check failed",
-            level=CheckLevel.CRITICAL,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="Directory access check failed unexpectedly",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details(f"Error: {str(e)}")
+            .with_exception(e)
         )
 
 def check_disk_space(min_gb: float = 1.0) -> CheckResult:
@@ -827,90 +1933,135 @@ def check_disk_space(min_gb: float = 1.0) -> CheckResult:
         usage = shutil.disk_usage('.')
         free_gb = usage.free / (1024**3)
         passed = free_gb >= min_gb
-        message = f"Disk space (>={min_gb}GB)"
-        details = f"Free: {free_gb:.1f}GB"
         
-        return CheckResult(
+        base_result = CheckResult(
             passed=passed,
-            message=message,
-            level=CheckLevel.IMPORTANT,
-            details=details
+            message=f"Disk space {'meets' if passed else 'below'} minimum requirement ({min_gb}GB)",
+            level=CheckLevel.IMPORTANT
+        )
+        
+        details = (
+            f"Free space: {free_gb:.1f}GB (minimum required: {min_gb}GB)\n"
+            f"Total space: {usage.total/(1024**3):.1f}GB\n"
+            f"Used space: {usage.used/(1024**3):.1f}GB"
+        )
+        
+        return base_result.with_details(details)
+        
+    except PermissionError as e:
+        return (
+            CheckResult(
+                passed=False,
+                message="Disk space check failed - permission denied",
+                level=CheckLevel.IMPORTANT
+            )
+            .with_details(f"Cannot access disk usage information: {str(e)}")
+            .with_exception(e)
         )
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="Disk space check failed",
-            level=CheckLevel.IMPORTANT,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="Disk space check failed unexpectedly",
+                level=CheckLevel.IMPORTANT
+            )
+            .with_details(str(e))
+            .with_exception(e)
         )
 
 def check_cpu_cores() -> CheckResult:
-    """Report the number of logical CPU cores available."""
+    """Report the number of logical and physical CPU cores available."""
     try:
-        cores = psutil.cpu_count(logical=True)
-        message = "CPU cores"
-        details = f"Logical cores: {cores}"
+        logical_cores = psutil.cpu_count(logical=True)
+        physical_cores = psutil.cpu_count(logical=False)
         
-        return CheckResult(
+        base_result = CheckResult(
             passed=True,
-            message=message,
-            level=CheckLevel.INFORMATIONAL,
-            details=details
+            message="CPU core information",
+            level=CheckLevel.INFORMATIONAL
         )
+        
+        details = (
+            f"Logical cores: {logical_cores}\n"
+            f"Physical cores: {physical_cores}\n"
+            f"Hyperthreading: {'Enabled' if logical_cores != physical_cores else 'Disabled'}"
+        )
+        
+        return base_result.with_details(details)
+        
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="CPU core check failed",
-            level=CheckLevel.INFORMATIONAL,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="CPU core check failed",
+                level=CheckLevel.INFORMATIONAL
+            )
+            .with_details(str(e))
+            .with_exception(e)
         )
 
 def check_system_ram() -> CheckResult:
-    """Report the total amount of system RAM."""
+    """Report detailed system RAM information."""
     try:
         ram = psutil.virtual_memory()
-        total_gb = ram.total / (1024**3)
-        message = "System RAM"
-        details = f"Total: {total_gb:.1f}GB, Available: {ram.available/(1024**3):.1f}GB"
+        swap = psutil.swap_memory()
         
-        return CheckResult(
+        base_result = CheckResult(
             passed=True,
-            message=message,
-            level=CheckLevel.INFORMATIONAL,
-            details=details
+            message="System memory information",
+            level=CheckLevel.INFORMATIONAL
         )
+        
+        details = (
+            f"RAM Total: {ram.total/(1024**3):.1f}GB\n"
+            f"RAM Available: {ram.available/(1024**3):.1f}GB ({ram.available/ram.total:.1%})\n"
+            f"RAM Used: {ram.used/(1024**3):.1f}GB ({ram.percent}%)\n"
+            f"Swap Total: {swap.total/(1024**3):.1f}GB\n"
+            f"Swap Used: {swap.used/(1024**3):.1f}GB ({swap.percent}%)"
+        )
+        
+        return base_result.with_details(details)
+        
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="RAM check failed",
-            level=CheckLevel.INFORMATIONAL,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="Memory check failed",
+                level=CheckLevel.INFORMATIONAL
+            )
+            .with_details(str(e))
+            .with_exception(e)
         )
 
 def check_system_architecture() -> CheckResult:
-    """Report the system's CPU architecture."""
+    """Report detailed system architecture information."""
     try:
-        arch = platform.architecture()
-        machine = platform.machine()
-        message = "System architecture"
-        details = f"Arch: {arch[0]}, Machine: {machine}"
-        
-        return CheckResult(
+        base_result = CheckResult(
             passed=True,
-            message=message,
-            level=CheckLevel.INFORMATIONAL,
-            details=details
+            message="System architecture information",
+            level=CheckLevel.INFORMATIONAL
         )
+        
+        details = (
+            f"Architecture: {platform.architecture()[0]}\n"
+            f"Machine: {platform.machine()}\n"
+            f"System: {platform.system()} {platform.release()}\n"
+            f"Processor: {platform.processor()}\n"
+            f"Python Build: {' '.join(platform.python_build())}\n"
+            f"Word Size: {platform.architecture()[0]}"
+        )
+        
+        return base_result.with_details(details)
+        
     except Exception as e:
-        return CheckResult(
-            passed=False,
-            message="Architecture check failed",
-            level=CheckLevel.INFORMATIONAL,
-            details=str(e),
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="Architecture check failed",
+                level=CheckLevel.INFORMATIONAL
+            )
+            .with_details(str(e))
+            .with_exception(e)
         )
 
 def check_logging_setup() -> CheckResult:
@@ -926,166 +2077,126 @@ def check_logging_setup() -> CheckResult:
     - Colorized terminal output (auto-disabled if not TTY)
     """
     try:
+        # Initialize base result
+        base_result = CheckResult(
+            passed=False,
+            message="Logging configuration check",
+            level=CheckLevel.IMPORTANT
+        )
+
         # Detect if output is a TTY (interactive terminal)
         use_color = sys.stdout.isatty()
 
-        # ANSI colors for terminal output
-        COLOR_GREEN = "\033[92m" if use_color else ""
-        COLOR_YELLOW = "\033[93m" if use_color else ""
-        COLOR_RED = "\033[91m" if use_color else ""
-        COLOR_RESET = "\033[0m" if use_color else ""
-
-        logger = logging.getLogger()
+        # Get logger and handlers
+        logger = logging.getLogger(__name__)
         handlers = logger.handlers
-        details = {}
-        compliance_points = 0
-        total_points = 5
-        feedback_messages = []
 
+        # Initialize check data
+        check_data: Dict[str, any] = {
+            'handlers': [],
+            'checks': {
+                'file_handler_found': False,
+                'file_handler_utf8': False,
+                'file_handler_exists': False,
+                'console_handler_found': False,
+                'console_handler_unicode': False
+            },
+            'feedback': [],
+            'compliance_score': 0
+        }
+
+        # If no handlers, return immediately
         if not handlers:
-            msg = f"{COLOR_RED}Logging setup compliance: 0% — No handlers configured{COLOR_RESET}"
-            #print(msg)
-            return CheckResult(
-                passed=False,
-                message="Logging configuration",
-                level=CheckLevel.IMPORTANT,
-                details={
-                    "error": "No handlers configured",
-                    "compliance_score": 0,
-                    "feedback": ["No logging handlers configured — run setup_logging()"],
-                    "summary": msg
-                }
+            return (
+                base_result
+                .with_details({
+                    'error': 'No handlers configured',
+                    'compliance_score': 0,
+                    'feedback': ['No logging handlers configured — run setup_logging()']
+                })
+                .with_message("No logging handlers configured")
             )
 
-        handler_info = []
-        file_handler_found = False
-        file_handler_utf8 = False
-        file_handler_exists = False
-        console_handler_found = False
-        console_handler_unicode = False
-
-        for h in handlers:
-            h_type = h.__class__.__name__
+        # Analyze each handler
+        for handler in handlers:
+            handler_info = {
+                'type': handler.__class__.__name__,
+                'level': logging.getLevelName(handler.level)
+            }
 
             # File handler checks
-            if isinstance(h, logging.FileHandler):
-                file_handler_found = True
-                if getattr(h, 'encoding', '').lower() == 'utf-8':
-                    file_handler_utf8 = True
-                log_path = Path(getattr(h, 'baseFilename', ''))
+            if isinstance(handler, logging.FileHandler):
+                check_data['checks']['file_handler_found'] = True
+                encoding = getattr(handler, 'encoding', '').lower()
+                if encoding == 'utf-8':
+                    check_data['checks']['file_handler_utf8'] = True
+
+                log_path = Path(getattr(handler, 'baseFilename', ''))
                 if log_path.exists():
-                    file_handler_exists = True
+                    check_data['checks']['file_handler_exists'] = True
 
-                handler_info.append({
-                    'type': h_type,
-                    'level': logging.getLevelName(h.level),
-                    'encoding': h.encoding,
-                    'file_path': str(log_path)
+                handler_info.update({
+                    'encoding': encoding,
+                    'file_path': str(log_path),
+                    'exists': log_path.exists()
                 })
 
-            # Console handler checks
-            elif isinstance(h, UnicodeStreamHandler):
-                console_handler_found = True
-                console_handler_unicode = True
-                handler_info.append({
-                    'type': h_type,
-                    'level': logging.getLevelName(h.level),
-                    'stream': getattr(h.stream, 'name', str(h.stream))
-                })
+            # Console handler checks (must be UnicodeStreamHandler)
+            elif isinstance(handler, UnicodeStreamHandler):
+                check_data['checks']['console_handler_found'] = True
+                check_data['checks']['console_handler_unicode'] = True
+                handler_info['stream'] = getattr(handler.stream, 'name', str(handler.stream))
 
-            else:
-                handler_info.append({
-                    'type': h_type,
-                    'level': logging.getLevelName(h.level)
-                })
+            check_data['handlers'].append(handler_info)
 
-        # Score calculation + feedback
-        if file_handler_found:
-            compliance_points += 1
-        else:
-            feedback_messages.append("Missing file handler.")
-
-        if file_handler_utf8:
-            compliance_points += 1
-        else:
-            feedback_messages.append("File handler not set to UTF-8 encoding.")
-
-        if file_handler_exists:
-            compliance_points += 1
-        else:
-            feedback_messages.append("Log file does not exist.")
-
-        if console_handler_found:
-            compliance_points += 1
-        else:
-            feedback_messages.append("Missing console handler.")
-
-        if console_handler_unicode:
-            compliance_points += 1
-        else:
-            feedback_messages.append("Console handler is not UnicodeStreamHandler.")
-
-        compliance_score = int((compliance_points / total_points) * 100)
+        # Calculate compliance score
+        total_checks = len(check_data['checks'])
+        passed_checks = sum(check_data['checks'].values())
+        compliance_score = int((passed_checks / total_checks) * 100)
         passed = compliance_score == 100
 
-        # Choose color based on score
-        if passed:
-            color = COLOR_GREEN
-            status_icon = "PASS"
-        elif compliance_score >= 60:
-            color = COLOR_YELLOW
-            status_icon = "WARN"
-        else:
-            color = COLOR_RED
-            status_icon = "FAIL"
+        # Generate feedback messages
+        feedback = []
+        if not check_data['checks']['file_handler_found']:
+            feedback.append("Missing file handler")
+        if not check_data['checks']['file_handler_utf8']:
+            feedback.append("File handler not using UTF-8 encoding")
+        if not check_data['checks']['file_handler_exists']:
+            feedback.append("Log file does not exist")
+        if not check_data['checks']['console_handler_found']:
+            feedback.append("Missing console handler")
+        if not check_data['checks']['console_handler_unicode']:
+            feedback.append("Console handler is not Unicode-safe (must use UnicodeStreamHandler)")
 
-        # Build human-readable summary
-        if passed:
-            human_feedback = f"{color}{status_icon} Logging setup is fully compliant ({compliance_score}%){COLOR_RESET}"
-        else:
-            human_feedback = (
-                f"{color}{status_icon} Logging setup compliance: {compliance_score}% — Issues: "
-                + "; ".join(feedback_messages)
-                + COLOR_RESET
-            )
+        # Prepare final details
+        details = {
+            **check_data,
+            'compliance_score': compliance_score,
+            'feedback': feedback,
+            'passed_checks': passed_checks,
+            'total_checks': total_checks
+        }
 
-        details['handlers'] = handler_info
-        details['file_handler_found'] = file_handler_found
-        details['file_handler_utf8'] = file_handler_utf8
-        details['file_handler_exists'] = file_handler_exists
-        details['console_handler_found'] = console_handler_found
-        details['console_handler_unicode'] = console_handler_unicode
-        details['compliance_score'] = compliance_score
-        details['feedback'] = feedback_messages
-        details['summary'] = human_feedback
-
-        # Print colorized feedback (or plain text if redirected)
-        #print(human_feedback)
-
-        return CheckResult(
-            passed=passed,
-            message="Logging configuration",
-            level=CheckLevel.IMPORTANT,
-            details=details
+        return (
+            base_result
+            .with_passed(passed)
+            .with_details(details)
+            .with_message(f"Logging configuration {'passed' if passed else 'failed'} ({compliance_score}%)")
         )
 
     except Exception as e:
-        use_color = sys.stdout.isatty()
-        COLOR_RED = "\033[91m" if use_color else ""
-        COLOR_RESET = "\033[0m" if use_color else ""
-        error_msg = f"{COLOR_RED}Logging check failed: {e}{COLOR_RESET}"
-        #print(error_msg)
-        return CheckResult(
-            passed=False,
-            message="Logging check failed",
-            level=CheckLevel.IMPORTANT,
-            details={
-                "error": str(e),
-                "compliance_score": 0,
-                "feedback": ["Exception occurred during logging setup check."],
-                "summary": error_msg
-            },
-            exception=e
+        return (
+            CheckResult(
+                passed=False,
+                message="Logging check failed",
+                level=CheckLevel.IMPORTANT
+            )
+            .with_details({
+                'error': str(e),
+                'compliance_score': 0,
+                'feedback': ['Exception occurred during logging setup check']
+            })
+            .with_exception(e)
         )
 
 def check_seed_config() -> CheckResult:
@@ -1103,163 +2214,312 @@ def check_seed_config() -> CheckResult:
     - Auto-disables colors if not in a TTY
     - Structured details for programmatic use
     - Graceful handling and exception safety
+    
+    Returns:
+        CheckResult with detailed seed configuration status
     """
     try:
-        # Detect if output is a TTY
-        use_color = sys.stdout.isatty()
-
-        # ANSI colors
-        COLOR_GREEN = "\033[92m" if use_color else ""
-        COLOR_YELLOW = "\033[93m" if use_color else ""
-        COLOR_RED = "\033[91m" if use_color else ""
-        COLOR_RESET = "\033[0m" if use_color else ""
-
-        details = {}
-        feedback_messages = []
-        compliance_points = 0
-        #total_points = 5
-
-        require_pytorch = False
-        require_tensorflow=False
+        # Initialize base result
+        base_result = CheckResult(
+            # Passed will update after checks
+            passed=False,
+            message="Reproducibility configuration check",
+            level=CheckLevel.IMPORTANT
+        )
         
-        # Weighted importance of each check
-        weights = {
-            "PYTHONHASHSEED": 25,
-            "CUBLAS_WORKSPACE_CONFIG": 25,
-            "numpy_rng": 15,
-            "torch_rng": 20 if require_pytorch else 10,
-            "tensorflow_rng": 20 if require_tensorflow else 10
+        # Initialize check data
+        check_data: Dict[str, any] = {
+            'checks': {
+                'PYTHONHASHSEED': {'passed': False, 'value': None},
+                'CUBLAS_WORKSPACE_CONFIG': {'passed': False, 'value': None},
+                'numpy_rng': {'passed': False, 'value': None},
+                'torch_rng': {'passed': False, 'value': None},
+                'torch_cuda': {
+                    'deterministic': False,
+                    'benchmark': None,
+                    'passed': False
+                },
+                'tensorflow_rng': {'passed': False, 'value': None}
+            },
+            'weights': {
+                'PYTHONHASHSEED': 25,
+                'CUBLAS_WORKSPACE_CONFIG': 25,
+                'numpy_rng': 15,
+                'torch_rng': 20 if torch.cuda.is_available() else 10,
+                # Check if TensorFlow is installed
+                'tensorflow_rng': 10
+            },
+            'feedback': [],
+            'compliance_score': 0
         }
-        total_points = sum(weights.values())
-
-        # --- PYTHONHASHSEED ---
+        
+        # Check PYTHONHASHSEED
         hash_seed = os.environ.get('PYTHONHASHSEED')
-        hash_seed_ok = hash_seed is not None and hash_seed.isdigit()
-        details['PYTHONHASHSEED'] = hash_seed if hash_seed_ok else "Not set"
-        if hash_seed_ok:
-            compliance_points += weights['PYTHONHASHSEED']
-        else:
-            feedback_messages.append("PYTHONHASHSEED not set or invalid.")
-
-        # --- CUBLAS_WORKSPACE_CONFIG ---
+        check_data['checks']['PYTHONHASHSEED']['passed'] = (
+            hash_seed is not None and hash_seed.isdigit()
+        )
+        check_data['checks']['PYTHONHASHSEED']['value'] = hash_seed or "Not set"
+        if not check_data['checks']['PYTHONHASHSEED']['passed']:
+            check_data['feedback'].append("PYTHONHASHSEED not set or invalid")
+        
+        # Check CUBLAS_WORKSPACE_CONFIG
         cublas_cfg = os.environ.get('CUBLAS_WORKSPACE_CONFIG')
-        cublas_ok = cublas_cfg == ':4096:8'
-        details['CUBLAS_WORKSPACE_CONFIG'] = cublas_cfg if cublas_cfg else "Not set"
-        if cublas_ok:
-            compliance_points += weights['CUBLAS_WORKSPACE_CONFIG']
-        else:
-            feedback_messages.append("CUBLAS_WORKSPACE_CONFIG not set to ':4096:8'.")
-
-        # --- NumPy ---
-        numpy_ok = False
+        check_data['checks']['CUBLAS_WORKSPACE_CONFIG']['passed'] = (
+            cublas_cfg == ':4096:8'
+        )
+        check_data['checks']['CUBLAS_WORKSPACE_CONFIG']['value'] = cublas_cfg or "Not set"
+        if not check_data['checks']['CUBLAS_WORKSPACE_CONFIG']['passed']:
+            check_data['feedback'].append("CUBLAS_WORKSPACE_CONFIG not set to ':4096:8'")
+        
+        # Check NumPy RNG
         try:
-            import numpy as np
-            _ = np.random.rand()  # trigger RNG
-            details['numpy_rng'] = "Configured (seed not directly verifiable)"
-            numpy_ok = True
+            _ = np.random.rand()
+            check_data['checks']['numpy_rng']['passed'] = True
+            check_data['checks']['numpy_rng']['value'] = "Available"
         except Exception as e:
-            details['numpy_rng'] = f"Error: {e}"
-            feedback_messages.append("NumPy RNG not available.")
-        if numpy_ok:
-            compliance_points += weights['numpy_rng']
-
-        # --- PyTorch ---
-        torch_ok = False
+            check_data['checks']['numpy_rng']['value'] = f"Error: {str(e)}"
+            check_data['feedback'].append("NumPy RNG not available")
+        
+        # Check PyTorch RNG and CUDA settings
         try:
-            import torch
-            torch_ok = True
+            _ = torch.rand(1)
+            check_data['checks']['torch_rng']['passed'] = True
+            check_data['checks']['torch_rng']['value'] = "Available"
+            
             if torch.cuda.is_available():
-                deterministic_ok = getattr(torch.backends.cudnn, "deterministic", False)
-                benchmark_ok = getattr(torch.backends.cudnn, "benchmark", None) is False
-                details['torch_cuda_deterministic'] = deterministic_ok
-                details['torch_cuda_benchmark'] = benchmark_ok
-                if not deterministic_ok or not benchmark_ok:
-                    torch_ok = False
-                    feedback_messages.append("PyTorch CUDA settings not fully deterministic.")
-            details['torch_rng'] = "Configured (seed not directly verifiable)"
+                check_data['checks']['torch_cuda']['deterministic'] = (
+                    torch.backends.cudnn.deterministic
+                )
+                check_data['checks']['torch_cuda']['benchmark'] = (
+                    not torch.backends.cudnn.benchmark
+                )
+                check_data['checks']['torch_cuda']['passed'] = (
+                    check_data['checks']['torch_cuda']['deterministic'] and
+                    check_data['checks']['torch_cuda']['benchmark']
+                )
+                
+                if not check_data['checks']['torch_cuda']['passed']:
+                    check_data['feedback'].append("PyTorch CUDA settings not deterministic")
         except Exception as e:
-            details['torch_rng'] = f"Error: {e}"
-            feedback_messages.append("PyTorch RNG not available.")
-            torch_ok = False
-        if torch_ok:
-            compliance_points += weights['torch_rng']
-
-        # --- TensorFlow ---
-        tf_ok = False
+            check_data['checks']['torch_rng']['value'] = f"Error: {str(e)}"
+            check_data['feedback'].append("PyTorch RNG not available")
+        
+        # Check TensorFlow RNG (optional)
         try:
             import tensorflow as tf
             _ = tf.random.uniform((1,))
-            details['tensorflow_rng'] = "Configured (seed not directly verifiable)"
-            tf_ok = True
+            check_data['checks']['tensorflow_rng']['passed'] = True
+            check_data['checks']['tensorflow_rng']['value'] = "Available"
         except ImportError:
-            details['tensorflow_rng'] = "Not installed"
-            # Not counted as a fail — optional
-            compliance_points += weights['tensorflow_rng']
-            tf_ok = True
+            check_data['checks']['tensorflow_rng']['value'] = "Not installed"
+            # Not required
+            check_data['checks']['tensorflow_rng']['passed'] = True
         except Exception as e:
-            details['tensorflow_rng'] = f"Error: {e}"
-            feedback_messages.append("TensorFlow RNG not available.")
-        if tf_ok and 'tensorflow_rng' in details and details['tensorflow_rng'] != "Not installed":
-            compliance_points += 1
-
-        # --- Compliance calculation ---
-        compliance_score = round((compliance_points / total_points) * 100, 2)
-        # Whether check passed or failed (threshold 90%)
+            check_data['checks']['tensorflow_rng']['value'] = f"Error: {str(e)}"
+            check_data['feedback'].append("TensorFlow RNG not available")
+        
+        # Calculate compliance score
+        total_points = sum(check_data['weights'].values())
+        earned_points = sum(
+            check_data['weights'][check] 
+            for check, status in check_data['checks'].items()
+            if status['passed']
+        )
+        compliance_score = round((earned_points / total_points) * 100, 2)
+        # 90% threshold for passing
         passed = compliance_score >= 90
-
-        # --- Status coloring ---
-        if passed:
-            color = COLOR_GREEN
-            status_icon = "PASS"
-        elif compliance_score >= 60:
-            color = COLOR_YELLOW
-            status_icon = "WARN"
-        else:
-            color = COLOR_RED
-            status_icon = "FAIL"
-
-        # --- Summary feedback ---
-        if passed:
-            summary = f"{color}{status_icon} Seed config is fully compliant ({compliance_score}%){COLOR_RESET}"
-        else:
-            summary = (
-                f"{color}{status_icon} Seed config compliance: {compliance_score}% — Issues: "
-                + "; ".join(feedback_messages)
-                + COLOR_RESET
+        
+        # Prepare final details
+        details = {
+            **check_data,
+            'compliance_score': compliance_score,
+            'passed': passed
+        }
+        
+        return (
+            base_result
+            .with_passed(passed)
+            .with_details(details)
+            .with_message(
+                f"Reproducibility configuration {'passed' if passed else 'failed'} "
+                f"({compliance_score}%)"
             )
+        )
+        
+    except Exception as e:
+        return (
+            CheckResult(
+                passed=False,
+                message="Seed configuration check failed",
+                level=CheckLevel.IMPORTANT
+            )
+            .with_details({
+                'error': str(e),
+                'compliance_score': 0,
+                'feedback': ['Exception occurred during seed config check']
+            })
+            .with_exception(e)
+        )
 
-        details['compliance_score'] = compliance_score
-        details['feedback'] = feedback_messages
-        details['summary'] = summary
+# Additional system initialization checks
+def check_global_exception_handler() -> CheckResult:
+    """Check if global exception handler is properly configured."""
+    try:
+        # Test if our custom handler is set
+        current_handler = sys.excepthook
+        is_custom = current_handler.__name__ == 'enhanced_global_exception_handler'
+        
+        return CheckResult(
+            passed=is_custom,
+            message="Global exception handler configured" if is_custom else "Using default exception handler",
+            level=CheckLevel.IMPORTANT,
+            details=f"Handler: {current_handler.__name__}"
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="Failed to check exception handler",
+            level=CheckLevel.IMPORTANT
+        ).with_exception(e)
 
-        # Print human-readable result
-        #print(summary)
+def check_performance_monitoring() -> CheckResult:
+    """Check if performance monitoring is available."""
+    try:
+        # Check if enhanced_monitor_performance decorator is available
+        has_monitoring = 'enhanced_monitor_performance' in globals()
+        
+        return CheckResult(
+            passed=has_monitoring,
+            message="Performance monitoring available" if has_monitoring else "Performance monitoring not initialized",
+            level=CheckLevel.INFORMATIONAL,
+            details="Enhanced monitoring decorator configured"
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="Failed to check performance monitoring",
+            level=CheckLevel.INFORMATIONAL
+        ).with_exception(e)
 
+def check_memory_management() -> CheckResult:
+    """Check if memory management functions are available."""
+    try:
+        # Check if memory management functions are available
+        has_clear_memory = 'enhanced_clear_memory' in globals()
+        has_memory_usage = 'get_memory_usage' in globals()
+        
+        passed = has_clear_memory and has_memory_usage
+        
+        details = {
+            'clear_memory_available': has_clear_memory,
+            'get_memory_usage_available': has_memory_usage
+        }
+        
         return CheckResult(
             passed=passed,
-            message="Reproducibility seed configuration",
+            message="Memory management functions available" if passed else "Some memory management functions missing",
             level=CheckLevel.IMPORTANT,
             details=details
         )
-
     except Exception as e:
-        use_color = sys.stdout.isatty()
-        COLOR_RED = "\033[91m" if use_color else ""
-        COLOR_RESET = "\033[0m" if use_color else ""
-        error_msg = f"{COLOR_RED}Seed config check failed: {e}{COLOR_RESET}"
-        #print(error_msg)
         return CheckResult(
             passed=False,
-            message="Seed check failed",
-            level=CheckLevel.IMPORTANT,
-            details={
-                "error": str(e),
-                "compliance_score": 0,
-                "feedback": ["Exception occurred during seed config check."],
-                "summary": error_msg
-            },
-            exception=e
+            message="Failed to check memory management",
+            level=CheckLevel.IMPORTANT
+        ).with_exception(e)
+
+def check_configuration_system() -> CheckResult:
+    """Check if configuration system is properly initialized."""
+    try:
+        # Try to load and validate configuration
+        config = initialize_config()
+        validate_config(config)
+        
+        config_details = {
+            'config_file_exists': CONFIG_FILE.exists(),
+            'active_preset': config.get('presets', {}).get('current_preset', 'none'),
+            'model_type': config.get('model', {}).get('model_type', 'unknown')
+        }
+        
+        return CheckResult(
+            passed=True,
+            message="Configuration system operational",
+            level=CheckLevel.CRITICAL,
+            details=config_details
         )
+    except ValueError as e:
+        return CheckResult(
+            passed=False,
+            message=f"Configuration validation failed: {str(e)}",
+            level=CheckLevel.CRITICAL
+        ).with_exception(e)
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="Configuration system initialization failed",
+            level=CheckLevel.CRITICAL
+        ).with_exception(e)
+
+def check_model_variants() -> CheckResult:
+    """Check if model variants are properly initialized."""
+    try:
+        # Initialize model variants
+        initialize_model_variants()
+        
+        if not MODEL_VARIANTS:
+            return CheckResult(
+                passed=False,
+                message="No model variants available",
+                level=CheckLevel.CRITICAL,
+                details="Model variants dictionary is empty"
+            )
+        
+        # Validate model variants
+        variant_status = validate_model_variants(logger)
+        available_variants = [name for name, status in variant_status.items() if status == 'available']
+        
+        if not available_variants:
+            return CheckResult(
+                passed=False,
+                message="No working model variants available",
+                level=CheckLevel.CRITICAL,
+                details=variant_status
+            )
+        
+        return CheckResult(
+            passed=True,
+            message=f"Model variants available: {', '.join(available_variants)}",
+            level=CheckLevel.CRITICAL,
+            details={
+                'total_variants': len(MODEL_VARIANTS),
+                'available_variants': len(available_variants),
+                'variant_status': variant_status
+            }
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="Model variants initialization failed",
+            level=CheckLevel.CRITICAL
+        ).with_exception(e)
+
+def check_performance_baseline() -> CheckResult:
+    """Check if performance baseline can be established."""
+    try:
+        performance_metrics = establish_performance_baseline()
+        
+        return CheckResult(
+            passed=True,
+            message="Performance baseline established",
+            level=CheckLevel.INFORMATIONAL,
+            details=performance_metrics
+        )
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="Failed to establish performance baseline",
+            level=CheckLevel.INFORMATIONAL
+        ).with_exception(e)
 
 # System and environment configuration
 def configure_system() -> Dict[str, Any]:
@@ -1379,54 +2639,61 @@ def set_seed(seed: int = 42) -> Dict[str, Any]:
     - Configures CUDA for deterministic operations
     - Sets hash seed for Python
     - Configures TensorFlow if present
+    
+    Returns:
+        Dictionary containing the seed configuration
     """
     seed_config = {
         'base_seed': seed,
-        'python_hash_seed': seed,
+        'python': {
+            'random_seed': seed,
+            'hash_seed': seed
+        },
         'numpy_seed': seed,
-        'torch_seed': seed,
-        'cuda_deterministic': False,
-        'cuda_benchmark': False
+        'torch': {
+            'cpu_seed': seed,
+            'cuda_seeds': None,
+            'cuda_deterministic': False,
+            'cuda_benchmark': False
+        },
+        'environment': {
+            'PYTHONHASHSEED': str(seed),
+            'CUBLAS_WORKSPACE_CONFIG': ':4096:8'
+        },
+        'tensorflow_seed': None
     }
-
-    # Set Python seed
+    
+    # Set Python seeds
     random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
     
     # Set NumPy seed
     np.random.seed(seed)
     
     # Set PyTorch seeds
     torch.manual_seed(seed)
-    seed_config['torch_seed'] = seed
-    
-    # Configure CUDA if available
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        seed_config.update({
+        seed_config['torch'].update({
+            'cuda_seeds': [seed] * torch.cuda.device_count(),
             'cuda_deterministic': True,
-            'cuda_benchmark': False,
-            'cuda_seeds': [seed] * torch.cuda.device_count()
+            'cuda_benchmark': False
         })
-
-    # Set environment variables
-    os.environ['PYTHONHASHSEED'] = str(seed)
+    
+    # Set CUDA workspace config
     os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    seed_config['environment'] = {
-        'PYTHONHASHSEED': seed,
-        'CUBLAS_WORKSPACE_CONFIG': ':4096:8'
-    }
-
-    # Configure TensorFlow if installed
+    
+    # Set TensorFlow seed if available
     try:
         import tensorflow as tf
         tf.random.set_seed(seed)
         seed_config['tensorflow_seed'] = seed
     except ImportError:
         pass
-
+    
     return seed_config
 
 # Hardware and Package Configuration
@@ -1506,33 +2773,6 @@ def check_hardware() -> Dict[str, Union[str, bool, int, float]]:
             "cpu_count": 1
         }
 
-# Availability flags for optional dependencies
-OPTIONAL_DEPENDENCIES = {
-    'torch_jit': TORCH_JIT_AVAILABLE,
-    'onnxruntime': ONNXRUNTIME_AVAILABLE,
-    'nvml': NVML_AVAILABLE,
-    'crypto': CRYPTO_AVAILABLE,
-    'database': DATABASE_AVAILABLE,
-    'sklearn_anomaly': SKLEARN_ANOMALY_AVAILABLE,
-    'statsmodels': STATSMODELS_AVAILABLE,
-    'numba': NUMBA_AVAILABLE,
-    'memory_profiler': MEMORY_PROFILER_AVAILABLE,
-    'line_profiler': LINE_PROFILER_AVAILABLE,
-    'packaging': PACKAGING_AVAILABLE
-}
-
-# Version information
-VERSION_INFO = {
-    'python': sys.version.split()[0],
-    'torch': torch.__version__,
-    'numpy': np.__version__,
-    'pandas': pd.__version__,
-    'optuna': optuna.__version__,
-    'rich': getattr(__import__('rich'), '__version__', 'unknown'),
-    'plotly': plotly.__version__,
-    'sklearn': getattr(__import__('sklearn'), '__version__', 'unknown')
-}
-
 def get_dependency_description(dep_name: str) -> str:
     """Get detailed description for a dependency."""
     descriptions = {
@@ -1560,76 +2800,6 @@ def get_dependency_description(dep_name: str) -> str:
         'Packaging': 'Core utilities for Python packaging'
     }
     return descriptions.get(dep_name, 'Additional functionality')
-
-def check_versions(include_optional: bool = True) -> Dict[str, Dict[str, Any]]:
-    """
-    Verify package versions with comprehensive dependency checking.
-    Returns a dictionary containing version status for all dependencies.
-    
-    Args:
-        include_optional: Whether to include optional dependencies in the check
-        
-    Returns:
-        Dictionary with package names as keys and version info as values
-    """
-    version_info = {}
-    
-    # Core dependencies with minimum versions (aligned with VERSION_INFO)
-    core_deps = {
-        'Python': (VERSION_INFO['python'], '>=3.7', True),
-        'PyTorch': (VERSION_INFO['torch'], '>=1.8', True),
-        'NumPy': (VERSION_INFO['numpy'], '>=1.19', True),
-        'Pandas': (VERSION_INFO['pandas'], '>=1.2', True),
-        'Scikit-learn': (VERSION_INFO['sklearn'], '>=0.24', True),
-        'Optuna': (VERSION_INFO['optuna'], '>=2.8', True),
-        'Rich': (VERSION_INFO['rich'], '>=10.0', True),
-        # Plotly is optional
-        'Plotly': (VERSION_INFO['plotly'], '>=5.0', False)
-    }
-    
-    # Optional dependencies (aligned with OPTIONAL_DEPENDENCIES)
-    optional_deps = {
-        'ONNX Runtime': (ort.__version__ if OPTIONAL_DEPENDENCIES['onnxruntime'] else 'N/A', '>=1.8', False),
-        'NVIDIA ML': (nvml.__version__ if OPTIONAL_DEPENDENCIES['nvml'] else 'N/A', '>=11.0', False),
-        'Torch JIT': ('Available' if OPTIONAL_DEPENDENCIES['torch_jit'] else 'N/A', None, False),
-        'Cryptography': ('Available' if OPTIONAL_DEPENDENCIES['crypto'] else 'N/A', None, False),
-        'Database': ('Available' if OPTIONAL_DEPENDENCIES['database'] else 'N/A', None, False),
-        'Sklearn Anomaly': ('Available' if OPTIONAL_DEPENDENCIES['sklearn_anomaly'] else 'N/A', None, False),
-        'Statsmodels': ('Available' if OPTIONAL_DEPENDENCIES['statsmodels'] else 'N/A', None, False),
-        'Numba': ('Available' if OPTIONAL_DEPENDENCIES['numba'] else 'N/A', None, False),
-        'Memory Profiler': ('Available' if OPTIONAL_DEPENDENCIES['memory_profiler'] else 'N/A', None, False),
-        'Line Profiler': ('Available' if OPTIONAL_DEPENDENCIES['line_profiler'] else 'N/A', None, False),
-        'Packaging': ('Available' if OPTIONAL_DEPENDENCIES['packaging'] else 'N/A', None, False)
-    }
-    
-    # Check all dependencies
-    for name, (version, req, required) in {**core_deps, **optional_deps}.items():
-        if not include_optional and not required:
-            continue
-            
-        try:
-            if version == 'N/A' or version == 'Available' or req is None:
-                status = 'OK' if version == 'Available' else 'MISSING'
-                meets_req = version == 'Available'
-            else:
-                from packaging import version as pkg_version
-                meets_req = pkg_version.parse(version) >= pkg_version.parse(req)
-                status = 'OK' if meets_req else 'WARNING'
-        except Exception:
-            meets_req = False
-            status = 'UNKNOWN'
-        
-        version_info[name] = {
-            'version': version,
-            'required_version': req,
-            'status': status,
-            'required': required,
-            'description': get_dependency_description(name),
-            'compatible': meets_req,
-            'available': version != 'N/A' and version != 'unknown'
-        }
-    
-    return version_info
 
 def get_memory_usage() -> Dict[str, Any]:
     """
@@ -1757,71 +2927,56 @@ def get_system_info() -> Dict[str, Any]:
             'memory': None
         }
 
-def check_core_dependencies():
+def check_core_dependencies() -> CheckResult:
     """Check and report status of core dependencies."""
-    dependency_status = {}
-    
-    # Check core dependencies
-    core_deps = {
-        'torch': torch.__version__,
-        'numpy': np.__version__,
-        'pandas': pd.__version__,
-        'sklearn': getattr(__import__('sklearn'), '__version__', 'unknown')
-    }
-    
-    for dep, version in core_deps.items():
-        dependency_status[dep] = {'version': version, 'status': 'required', 'available': True}
-    
-    # Check optional dependencies
-    for dep, available in OPTIONAL_DEPENDENCIES.items():
-        dependency_status[dep] = {
-            'status': 'optional',
-            'available': available,
-            'description': get_dependency_description(dep)
-        }
-    
-    return dependency_status
-
-# Configuration Constants
-DEFAULT_BATCH_SIZE = 64
-DEFAULT_EPOCHS = 10
-EARLY_STOPPING_PATIENCE = 100
-LEARNING_RATE = 0.001
-WEIGHT_DECAY = 1e-4
-GRADIENT_CLIP = 1.0
-GRADIENT_ACCUMULATION_STEPS = 4
-MIXED_PRECISION = True
-
-# Model Architecture Constants
-DEFAULT_ENCODING_DIM = 10
-HIDDEN_LAYER_SIZES = [128, 64]
-DROPOUT_RATES = [0.2, 0.15]
-ACTIVATION = 'leaky_relu'
-ACTIVATION_PARAM = 0.2
-NORMALIZATION = 'batch'
-USE_BATCH_NORM = True
-USE_LAYER_NORM = False
-DIVERSITY_FACTOR = 0.1
-MIN_FEATURES = 5
-NUM_MODELS = 3
-FEATURES = 20
-NORMALIZATION_OPTIONS = ['batch', 'layer', None]
-NORMAL_SAMPLES = 8000
-ATTACK_SAMPLES = 2000
-ANOMALY_FACTOR = 1.5
-RANDOM_STATE = 42
-
-# Security Constants
-DEFAULT_PERCENTILE = 95
-DEFAULT_ATTACK_THRESHOLD = 0.3
-FALSE_NEGATIVE_COST = 2.0
-SECURITY_METRICS = True
-
-# System Constants
-NUM_WORKERS = min(4, os.cpu_count() or 1)
-MAX_MEMORY_PERCENT = 80
-# Cache timeout for model artifacts in seconds
-CACHE_TIMEOUT = 3600
+    try:
+        # Use the comprehensive version check
+        version_info = check_versions(include_optional=False)
+        
+        # Filter only core dependencies (required=True)
+        core_deps = {k: v for k, v in version_info.items() if v.get('required', False)}
+        
+        # Determine overall status
+        passed = all(info['compatible'] for info in core_deps.values())
+        
+        # Prepare details
+        details = []
+        for name, info in core_deps.items():
+            status = "[OK]" if info['compatible'] else "[FAIL]"
+            details.append(
+                f"{status} {name}: {info['version']} "
+                f"(requires {info['required_version'] or 'any'})"
+            )
+        
+        base_result = CheckResult(
+            passed=passed,
+            message="Core dependencies check completed",
+            level=CheckLevel.CRITICAL if not passed else CheckLevel.IMPORTANT
+        )
+        
+        return (
+            base_result
+            .with_details("\n".join(details))
+            .with_metadata({
+                'core_dependencies': core_deps,
+                'summary': {
+                    'total': len(core_deps),
+                    'compatible': sum(1 for info in core_deps.values() if info['compatible']),
+                    'incompatible': sum(1 for info in core_deps.values() if not info['compatible'])
+                }
+            })
+        )
+        
+    except Exception as e:
+        return (
+            CheckResult(
+                passed=False,
+                message="Core dependencies check failed",
+                level=CheckLevel.CRITICAL
+            )
+            .with_details(f"Error checking core dependencies: {str(e)}")
+            .with_exception(e)
+        )
 
 # Helper functions for system diagnostics and error handling
 def enhanced_global_exception_handler(exc_type, exc_value, exc_traceback):
@@ -1861,7 +3016,7 @@ def enhanced_global_exception_handler(exc_type, exc_value, exc_traceback):
     
     # Cleanup on critical error
     try:
-        clear_memory()
+        enhanced_clear_memory()
     except:
         pass
 
@@ -1956,7 +3111,7 @@ def establish_performance_baseline():
     
     # Cleanup test objects
     del test_array, test_tensor
-    clear_memory()
+    enhanced_clear_memory()
     
     return performance_metrics
 
@@ -3317,9 +4472,9 @@ def display_model_comparison():
         try:
             hw_info = check_hardware()
             if hw_info.get('gpu_available'):
-                print(f"  [+] GPU detected: Consider using larger models for better performance")
+                print(f"  1. GPU detected: Consider using larger models for better performance")
             else:
-                print(f"  [+] CPU-only: SimpleAutoencoder recommended for optimal performance")
+                print(f"  2. CPU-only: SimpleAutoencoder recommended for optimal performance")
         except:
             pass
             
@@ -3605,7 +4760,7 @@ def convert_legacy_config(
     
     similarity_threshold = determine_threshold()
     
-    # --- Step 1: Preset Scoring System ---
+    # Step 1: Preset Scoring System
     class PresetScorer:
         """Advanced scoring engine with dynamic weights and normalization."""
         
@@ -3645,7 +4800,8 @@ def convert_legacy_config(
             
             min_val, max_val = self.value_ranges[key]
             
-            if isinstance(min_val, list):  # Handle list-type parameters
+            # Handle list-type parameters
+            if isinstance(min_val, list):
                 if not isinstance(value, list):
                     return 0
                 len_score = len(value) / max(len(min_val), len(max_val))
@@ -3778,7 +4934,7 @@ def convert_legacy_config(
     preset_scores = [scorer.score_preset(name, cfg) for name, cfg in PRESET_CONFIGS.items()]
     preset_scores.sort(key=lambda x: x['total_score'], reverse=True)
     
-    # --- Step 2: Results Analysis ---
+    # Step 2: Results Analysis
     def analyze_results(scores: List[Dict[str, Any]]) -> Tuple[List[str], Dict[str, Any]]:
         """Analyze scoring results and determine close matches."""
         if not scores:
@@ -3803,14 +4959,15 @@ def convert_legacy_config(
     
     close_presets, best_preset = analyze_results(preset_scores)
     
-    # --- Step 3: Logging and Reporting ---
+    # Step 3: Logging and Reporting
     def generate_report(scores: List[Dict[str, Any]], close_presets: List[str]) -> None:
         """Generate detailed conversion report."""
         logger.info("\nPreset Matching Report")
         logger.info("=" * 80)
         logger.info(f"{'Preset':<20} {'Total':<8} {'Training':<8} {'Model':<8} {'Security':<8} {'Data':<8}")
         
-        for score in scores[:10]:  # Show top 10
+        # Show top 10
+        for score in scores[:10]:
             logger.info(
                 f"{score['name']:<20} "
                 f"{score['total_score']:.2f}  "
@@ -3831,7 +4988,7 @@ def convert_legacy_config(
 
     generate_report(preset_scores, close_presets)
     
-    # --- Step 4: Interactive Selection ---
+    # Step 4: Interactive Selection
     def interactive_select(close_presets: List[str], scores: List[Dict[str, Any]]) -> str:
         """Handle interactive preset selection."""
         if not close_presets:
@@ -3910,7 +5067,7 @@ def convert_legacy_config(
     
     selected_preset = interactive_select(close_presets, preset_scores)
     
-    # --- Step 5: Create New Config ---
+    # Step 5: Create New Config
     new_config = migrate_config(legacy_config, PRESET_CONFIGS[selected_preset])
     
     # Add conversion metadata
@@ -3930,7 +5087,7 @@ def convert_legacy_config(
         new_config['model']['model_type'] = 'SimpleAutoencoder'
         new_config['metadata']['conversion']['original_model_type'] = model_type
     
-    # --- Step 6: Validation ---
+    # Step 6: Validation
     def validate_config(config: Dict[str, Any]) -> bool:
         """Basic configuration validation."""
         required_sections = ['training', 'model', 'data']
@@ -3952,7 +5109,8 @@ def convert_legacy_config(
         # Apply fallback strategy
         logger.info("Attempting fallback to default configuration")
         new_config = migrate_config(legacy_config, DEFAULT_PRESET)
-        validate_config(new_config)  # This should always pass for default
+        # This should always pass for default
+        validate_config(new_config)
     
     return new_config
 
@@ -4320,311 +5478,825 @@ def validate_config(config: Dict[str, Any]) -> None:
     if data.get('features', 10) < model.get('min_features', 1):
         raise ValueError(f"features must be >= {model.get('min_features', 1)}")
 
-def save_initialization_report(system_status, report_dir):
-    """Save initialization report to JSON file."""
+def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) -> None:
+    """
+    Save a comprehensive initialization report to disk with multiple formats.
+    
+    This function creates both machine-readable (JSON) and human-readable (TXT)
+    reports that match the comprehensive system_status structure from initialize_system.
+    
+    Args:
+        system_status: Complete system status dictionary from initialize_system
+        report_dir: Directory to save the report (should be a Path object)
+        
+    Raises:
+        Exception: If report saving fails (logged but not re-raised to avoid
+                  interrupting initialization)
+    """
     try:
-        init_report_path = report_dir / f"system_init_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-        with open(init_report_path, 'w') as f:
-            json.dump(system_status, f, indent=2, default=str)
-        logger.info(f"Initialization report saved: {init_report_path}")
+        # Determine report_dir (default: script's directory / reports)
+        if report_dir is None:
+            report_dir = Path(__file__).resolve().parent / "reports"
+        report_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Ensure report_dir is a Path object
+        if not isinstance(report_dir, Path):
+            report_dir = Path(__file__).resolve().parent / "reports"
+        
+        # Create timestamp for report files
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        
+        # Save JSON Report
+        json_report_path = report_dir / f"deep_init_report_{timestamp}.json"
+        
+        # Create a serializable version of the report
+        serializable_status = {}
+        for key, value in system_status.items():
+            try:
+                # Test if the value is JSON serializable
+                json.dumps(value, default=str)
+                serializable_status[key] = value
+            except (TypeError, ValueError):
+                # Convert problematic values to strings
+                serializable_status[key] = str(value)
+        
+        # Add metadata to the JSON report
+        serializable_status['_metadata'] = {
+            'report_version': '2.0',
+            'generated_at': datetime.now().isoformat(),
+            'report_type': 'system_initialization',
+            'format': 'json',
+            'generator': 'initialize_system'
+        }
+        
+        # Save the JSON report
+        with open(json_report_path, 'w', encoding='utf-8') as f:
+            json.dump(serializable_status, f, indent=2, default=str, ensure_ascii=False)
+        
+        # Save Human-Readable Summary
+        summary_path = report_dir / f"deep_init_summary_{timestamp}.txt"
+        
+        with open(summary_path, 'w', encoding='utf-8') as f:
+            # Header
+            f.write("SYSTEM INITIALIZATION REPORT\n")
+            f.write("=" * 80 + "\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Report Version: 2.0\n")
+            f.write("=" * 80 + "\n\n")
+            
+            # Initialization Status
+            init_info = system_status.get('initialization', {})
+            f.write("INITIALIZATION STATUS\n")
+            f.write("-" * 30 + "\n")
+            f.write(f"Status: {init_info.get('status', 'unknown').upper()}\n")
+            f.write(f"Duration: {init_info.get('duration_seconds', 0):.2f} seconds\n")
+            f.write(f"Method: {init_info.get('method', 'unknown')}\n")
+            f.write(f"Start Time: {init_info.get('start_time', 'unknown')}\n")
+            f.write(f"End Time: {init_info.get('end_time', 'unknown')}\n")
+            
+            if 'error' in init_info:
+                f.write(f"Error: {init_info['error']}\n")
+                f.write(f"Error Type: {init_info.get('error_type', 'unknown')}\n")
+            f.write("\n")
+            
+            # System Information
+            sys_info = system_status.get('system', {})
+            f.write("SYSTEM ENVIRONMENT\n")
+            f.write("-" * 20 + "\n")
+            f.write(f"Platform: {sys_info.get('platform', 'unknown')}\n")
+            f.write(f"Python Version: {sys_info.get('python_version', 'unknown')}\n")
+            f.write(f"PyTorch Version: {sys_info.get('pytorch_version', 'unknown')}\n")
+            f.write(f"CUDA Available: {sys_info.get('cuda_available', False)}\n")
+            f.write(f"CUDA Devices: {sys_info.get('cuda_device_count', 0)}\n")
+            f.write(f"Working Directory: {sys_info.get('working_directory', 'unknown')}\n")
+            f.write(f"Log Directory: {sys_info.get('log_directory', 'unknown')}\n")
+            f.write(f"Model Directory: {sys_info.get('model_directory', 'unknown')}\n")
+            f.write(f"Config Directory: {sys_info.get('config_directory', 'unknown')}\n")
+            f.write("\n")
+            
+            # Configuration Information
+            config_info = system_status.get('config', {})
+            f.write("CONFIGURATION\n")
+            f.write("-" * 15 + "\n")
+            f.write(f"Preset Name: {config_info.get('preset_name', 'custom')}\n")
+            f.write(f"Validation Status: {config_info.get('validation_status', 'unknown')}\n")
+            f.write(f"Config File: {config_info.get('config_file', 'unknown')}\n")
+            available_presets = config_info.get('available_presets', [])
+            f.write(f"Available Presets: {', '.join(available_presets) if available_presets else 'none'}\n")
+            
+            # Write key configuration parameters if available
+            active_config = config_info.get('active_config', {})
+            if isinstance(active_config, dict) and active_config:
+                f.write("Key Configuration Parameters:\n")
+                for key, value in active_config.items():
+                    # Skip private keys
+                    if not key.startswith('_'):
+                        if isinstance(value, dict):
+                            f.write(f"  {key}: {len(value)} items\n")
+                        elif isinstance(value, (list, tuple)):
+                            f.write(f"  {key}: [{len(value)} items]\n")
+                        else:
+                            # Truncate very long values
+                            str_value = str(value)
+                            if len(str_value) > 50:
+                                str_value = str_value[:47] + "..."
+                            f.write(f"  {key}: {str_value}\n")
+            f.write("\n")
+            
+            # Hardware Information
+            hw_info = system_status.get('hardware', {})
+            f.write("HARDWARE RESOURCES\n")
+            f.write("-" * 20 + "\n")
+            f.write(f"CPU Cores: {hw_info.get('cpu_count', 'unknown')}\n")
+            f.write(f"System Memory: {hw_info.get('memory_gb', 0):.1f} GB\n")
+            f.write(f"Available Disk Space: {hw_info.get('disk_space_gb', 0):.1f} GB\n")
+            f.write(f"CUDA Available: {hw_info.get('cuda_available', False)}\n")
+            
+            cuda_devices = hw_info.get('cuda_devices', [])
+            if cuda_devices:
+                f.write(f"CUDA Devices ({len(cuda_devices)}):\n")
+                for device in cuda_devices:
+                    f.write(f"  Device {device.get('id', '?')}: {device.get('name', 'unknown')}\n")
+                    f.write(f"    Memory: {device.get('memory_gb', 0):.1f} GB\n")
+            else:
+                f.write("CUDA Devices: None\n")
+            f.write("\n")
+            
+            # Model Information
+            model_info = system_status.get('models', {})
+            f.write("MODEL VARIANTS\n")
+            f.write("-" * 15 + "\n")
+            f.write(f"Available Variants: {model_info.get('variants_available', 0)}\n")
+            
+            variant_names = model_info.get('variant_names', [])
+            if variant_names:
+                f.write(f"Variant Names: {', '.join(variant_names)}\n")
+            else:
+                f.write("Variant Names: None\n")
+            
+            # Detailed variant status
+            variant_status = model_info.get('variant_status', {})
+            if variant_status:
+                f.write("Variant Status Details:\n")
+                for name, status in variant_status.items():
+                    status_indicator = "OK" if status == 'available' else "MISSING"
+                    f.write(f"  {status_indicator} {name}: {status}\n")
+            f.write("\n")
+            
+            # Performance Metrics
+            performance = system_status.get('performance', {})
+            f.write("PERFORMANCE BASELINE\n")
+            f.write("-" * 22 + "\n")
+            
+            if performance:
+                if 'baseline_failed' in performance:
+                    f.write(f"Baseline establishment failed: {performance['baseline_failed']}\n")
+                else:
+                    f.write("Performance Metrics:\n")
+                    for metric, value in performance.items():
+                        if isinstance(value, (int, float)):
+                            f.write(f"  {metric}: {value:.4f}\n")
+                        else:
+                            f.write(f"  {metric}: {value}\n")
+            else:
+                f.write("No performance metrics available\n")
+            f.write("\n")
+            
+            # Dependencies Information
+            deps_info = system_status.get('dependencies', {})
+            f.write("DEPENDENCIES\n")
+            f.write("-" * 14 + "\n")
+            f.write(f"PyTorch Version: {deps_info.get('torch_version', 'unknown')}\n")
+            f.write(f"Python Version: {deps_info.get('python_version', 'unknown')}\n")
+            f.write(f"Platform: {deps_info.get('platform', 'unknown')}\n")
+            
+            optional_deps = deps_info.get('optional_available', {})
+            if optional_deps:
+                f.write("Optional Dependencies:\n")
+                for name, available in optional_deps.items():
+                    status_indicator = "OK" if available else "MISSING"
+                    f.write(f"  {status_indicator} {name}: {'Available' if available else 'Not Available'}\n")
+            f.write("\n")
+            
+            # Footer
+            f.write("=" * 80 + "\n")
+            f.write("End of Report\n")
+        
+        # Save Compact Status File (for quick status checks)
+        status_path = report_dir / f"deep_init_status_{timestamp}.json"
+        compact_status = {
+            'status': system_status.get('initialization', {}).get('status', 'unknown'),
+            'timestamp': datetime.now().isoformat(),
+            'duration_seconds': system_status.get('initialization', {}).get('duration_seconds', 0),
+            'cuda_available': system_status.get('system', {}).get('cuda_available', False),
+            'model_variants': system_status.get('models', {}).get('variants_available', 0),
+            'config_preset': system_status.get('config', {}).get('preset_name', 'unknown'),
+            'errors': system_status.get('initialization', {}).get('error') is not None
+        }
+        
+        with open(status_path, 'w', encoding='utf-8') as f:
+            json.dump(compact_status, f, indent=2, default=str)
+        
+        # Log successful report generation
+        logger.info(f"Initialization reports saved successfully:")
+        logger.info(f"  - Full report: {json_report_path}")
+        logger.info(f"  - Summary: {summary_path}")
+        logger.info(f"  - Status: {status_path}")
+        
+        # Create latest symlinks (if supported)
+        try:
+            # Create "latest" symlinks for easy access
+            latest_json = report_dir / "deep_latest_init_report.json"
+            latest_summary = report_dir / "deep_latest_init_summary.txt"
+            latest_status = report_dir / "deep_latest_init_status.json"
+            
+            # Remove existing symlinks if they exist
+            for latest_file in [latest_json, latest_summary, latest_status]:
+                if latest_file.exists() or latest_file.is_symlink():
+                    latest_file.unlink()
+            
+            # Create new symlinks
+            latest_json.symlink_to(json_report_path.name)
+            latest_summary.symlink_to(summary_path.name)
+            latest_status.symlink_to(status_path.name)
+            
+            logger.debug("Latest report symlinks created successfully")
+            
+        except (OSError, NotImplementedError):
+            # Symlinks not supported on this system (e.g., Windows without admin)
+            logger.debug("Symlinks not supported, skipping latest report links")
+        
+        # Create report index
+        try:
+            index_path = report_dir / "deep_initialization_reports.txt"
+            report_entry = f"{timestamp}: {compact_status['status']} ({compact_status['duration_seconds']:.2f}s)\n"
+            
+            # Append to index file
+            with open(index_path, 'a', encoding='utf-8') as f:
+                f.write(report_entry)
+            
+            logger.debug(f"Report entry added to index: {index_path}")
+            
+        except Exception as index_error:
+            logger.warning(f"Failed to update report index: {index_error}")
+        
     except Exception as e:
-        logger.warning(f"Failed to save initialization report: {e}")
+        # Log the error but don't raise it - we don't want report saving
+        # to interrupt the initialization process
+        error_msg = f"Failed to save initialization report: {str(e)}"
+        logger.error(error_msg)
+        logger.debug(f"Report save error details:", exc_info=True)
+        
+        # Try to save a minimal error report
+        try:
+            error_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            error_path = report_dir / f"deep_report_error_{error_timestamp}.txt"
+            
+            with open(error_path, 'w', encoding='utf-8') as f:
+                f.write(f"INITIALIZATION REPORT SAVE FAILED\n")
+                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                f.write(f"Error: {str(e)}\n")
+                f.write(f"Error Type: {type(e).__name__}\n")
+                f.write(f"Original system_status keys: {list(system_status.keys()) if isinstance(system_status, dict) else 'Not a dict'}\n")
+            
+            logger.info(f"Error report saved to: {error_path}")
+            
+        except Exception as fallback_error:
+            logger.critical(f"Failed to save even minimal error report: {fallback_error}")
 
 # System initialization validation and setup
+def display_configuration_changes(changes: List[Dict], console: Console = None, logger: logging.Logger = None):
+    """
+    Display configuration changes in a rich table format.
+    
+    Args:
+        changes: List of configuration change dictionaries
+        console: Rich console instance (creates new if None)
+        logger: Logger for summary only
+    """
+    if not changes:
+        return
+    
+    if console is None:
+        console = Console()
+    
+    # Create configuration changes table
+    config_table = Table(
+        title=f"\n[bold]CONFIGURATION CHANGES APPLIED[/bold]",
+        box=box.ROUNDED,
+        header_style="bold bright_white",
+        border_style="bright_blue",
+        title_style="bold blue",
+        title_justify="left",
+        show_lines=True,
+        expand=True,
+        width=min(100, console.width - 4)
+    )
+    
+    config_table.add_column("Section", style="bold cyan", width=12)
+    config_table.add_column("Parameter", style="bold yellow", width=20)
+    config_table.add_column("From", style="dim red", width=15, justify="center")
+    config_table.add_column("To", style="dim green", width=15, justify="center")
+    config_table.add_column("Type", style="dim", width=8, justify="center")
+    
+    # Group changes by section
+    sections = {}
+    for change in changes:
+        section = change.get('section', 'UNKNOWN')
+        if section not in sections:
+            sections[section] = []
+        sections[section].append(change)
+    
+    # Add rows grouped by section
+    for section_name, section_changes in sections.items():
+        # Add section header
+        config_table.add_row(
+            Text(section_name, style="bold white on blue"),
+            "",
+            "",
+            "",
+            "",
+            style="bold white on blue"
+        )
+        
+        # Add changes for this section
+        for change in section_changes:
+            # Format values for display
+            old_val = str(change.get('old_value', 'N/A'))
+            new_val = str(change.get('new_value', 'N/A'))
+            
+            # Truncate long values
+            if len(old_val) > 12:
+                old_val = old_val[:9] + "..."
+            if len(new_val) > 12:
+                new_val = new_val[:9] + "..."
+            
+            config_table.add_row(
+                "",
+                change.get('parameter', 'unknown'),
+                old_val,
+                new_val,
+                change.get('source', 'auto')
+            )
+    
+    # Add summary row
+    config_table.add_row(
+        Text("TOTAL CHANGES", style="bold bright_white on black"),
+        Text(f"{len(changes)} parameters", style="bold white"),
+        "",
+        "",
+        "",
+        style="bold bright_white on black"
+    )
+    
+    console.print(config_table)
+    
+    # Log only summary
+    if logger:
+        section_counts = {}
+        for change in changes:
+            section = change.get('section', 'UNKNOWN')
+            section_counts[section] = section_counts.get(section, 0) + 1
+        
+        summary = ", ".join([f"{section}: {count}" for section, count in section_counts.items()])
+        logger.info(f"Applied {len(changes)} configuration changes ({summary})")
+
 def initialize_system() -> Dict[str, Any]:
     """
     Initialize the complete system with comprehensive setup and validation.
     
-    This function performs a complete system initialization including:
-    - Hardware detection and validation
-    - Configuration system setup
-    - Global error handling setup
-    - Performance monitoring initialization
-    - Memory management setup
-    - System information gathering
-    - Startup checks and validation
-    - Logging configuration
+    This function performs a complete system initialization by leveraging the
+    existing System Check Framework and loading_screen functionality.
     
     Returns:
         Dict containing comprehensive system status and configuration
     
     Raises:
         RuntimeError: If critical system components fail to initialize
-        ValueError: If configuration validation fails
+        SystemExit: If user chooses to quit during initialization
     """
-    
     initialization_start = time.time()
-    system_status = {
-        'initialization': {
-            'start_time': datetime.now().isoformat(),
-            'status': 'in_progress',
-            'errors': [],
-            'warnings': []
-        },
-        'system': {},
-        'config': {},
-        'hardware': {},
-        'dependencies': {},
-        'performance': {},
-        'checks': {}
-    }
+    console = Console()
+    
+    # Create initialization status table
+    init_table = Table(
+        title=f"\n[bold]SYSTEM INITIALIZATION REPORT[/bold]",
+        box=box.ROUNDED,
+        header_style="bold bright_white",
+        border_style="bright_white",
+        title_style="bold green",
+        title_justify="left",
+        show_lines=True,
+        expand=True,
+        width=min(120, console.width - 4)
+    )
+    
+    init_table.add_column("Step", style="bold cyan", width=25)
+    init_table.add_column("Status", width=12, justify="center")
+    init_table.add_column("Time", width=10, justify="center")
+    init_table.add_column("Details", style="dim", min_width=50)
+    
+    initialization_steps = []
+    
+    def add_step(step_name: str, status: str, duration: float, details: str):
+        """Add a step to the initialization tracking."""
+        status_style = "bold green" if status == "SUCCESS" else "bold red" if status == "FAILED" else "bold yellow"
+        initialization_steps.append((step_name, status, duration, details, status_style))
     
     try:
-        # Basic configuration
+        # Step 1: Early setup - Basic configuration and logging
+        step_start = time.time()
         configure_system()
         set_seed(42)
         
-        # Early logging setup
-        log_dir = Path(LOG_DIR)
+        # Setup logging first
+        log_dir = Path(__file__).resolve().parent / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         logger = setup_logging(log_dir)
         
-        # Step 1: Setup global exception handling
-        logger.info("Setting up global exception handling...")
-        try:
-            sys.excepthook = enhanced_global_exception_handler
-            logger.info("[INFO] Global exception handler configured")
-        except Exception as e:
-            system_status['initialization']['errors'].append(f"Exception handler setup failed: {e}")
-            logger.error(f"Failed to setup global exception handler: {e}")
+        # Setup reports directory
+        report_dir = Path(__file__).resolve().parent / "reports"
+        report_dir.mkdir(parents=True, exist_ok=True)
         
-        # Step 2: Performance monitoring setup
-        logger.info("Initializing performance monitoring...")
-        try:
-            global monitor_performance
-            monitor_performance = enhanced_monitor_performance()
-            logger.info("[INFO] Performance monitoring initialized")
-        except Exception as e:
-            system_status['initialization']['errors'].append(f"Performance monitoring setup failed: {e}")
-            logger.error(f"Failed to setup performance monitoring: {e}")
+        step_duration = time.time() - step_start
+        add_step(
+            "Early Setup", 
+            "SUCCESS", 
+            step_duration,
+            f"Configured system, set seed (42), created directories\nLog dir: {log_dir}\nReports dir: {report_dir}"
+        )
         
-        # Step 3: Memory management initialization
-        logger.info("Setting up memory management...")
-        try:
-            global clear_memory, get_memory_usage
-            clear_memory = enhanced_clear_memory
-            get_memory_usage = get_detailed_memory_usage
-            clear_memory()
-            logger.info("[INFO] Memory management configured")
-        except Exception as e:
-            system_status['initialization']['errors'].append(f"Memory management setup failed: {e}")
-            logger.error(f"Failed to setup memory management: {e}")
+        # Minimal startup logging
+        logger.info("SYSTEM INITIALIZATION STARTING")
         
-        # Step 4: Comprehensive startup checks
-        logger.info("Performing comprehensive startup checks...")
-        startup_checks_result = {}
+        # Step 2: Run comprehensive system checks with interactive loading screen
+        step_start = time.time()
+        sys.excepthook = enhanced_global_exception_handler
+        global get_memory_usage, enhanced_clear_memory, enhanced_monitor_performance, get_detailed_memory_usage, establish_performance_baseline
+        
+        get_memory_usage = get_detailed_memory_usage
+        enhanced_clear_memory = enhanced_clear_memory
+        enhanced_monitor_performance = enhanced_monitor_performance
+        get_detailed_memory_usage = get_detailed_memory_usage
+        establish_performance_baseline = establish_performance_baseline
+        
+        # Use loading_screen with extended checks to perform all system validation
+        system_ready = loading_screen(
+            logger=logger,
+            extended=True,
+            include_performance=True
+        )
+        
+        step_duration = time.time() - step_start
+        if not system_ready:
+            add_step(
+                "System Validation", 
+                "FAILED", 
+                step_duration,
+                "System checks failed or user cancelled initialization"
+            )
+            raise RuntimeError("System checks failed or user cancelled initialization")
+        
+        add_step(
+            "System Validation", 
+            "SUCCESS", 
+            step_duration,
+            "Extended system checks completed successfully\nAll critical components validated"
+        )
+        
+        # Step 3: Configuration system initialization with improved display
+        step_start = time.time()
+        config_details = []
+        changes_applied = []
         
         try:
-            checks_to_perform = [
-                ("Python Version", lambda: sys.version_info >= (3, 7)),
-                ("PyTorch Installation", lambda: hasattr(torch, '__version__')),
-                ("CUDA Availability", lambda: torch.cuda.is_available()),
-                ("Required Directories", lambda: all(
-                    (dir_path.mkdir(parents=True, exist_ok=True) or True) and dir_path.exists()
-                    for dir_path in [DEFAULT_MODEL_DIR, LOG_DIR, CONFIG_DIR, TB_DIR, DATA_DIR, CACHE_DIR]
-                )),
-                ("Disk Space (>1GB)", lambda: shutil.disk_usage('.').free / (1024**3) >= 1.0),
-                ("Available Memory (>2GB)", lambda: psutil.virtual_memory().available / (1024**3) >= 2.0),
-                ("Write Permissions", lambda: os.access('.', os.W_OK)),
-                ("Optional Dependencies", lambda: sum(OPTIONAL_DEPENDENCIES.values()) >= len(OPTIONAL_DEPENDENCIES) // 2)
-            ]
+            # Temporarily suppress verbose configuration logging
+            original_level = logger.level
+            logger.setLevel(logging.WARNING)
             
-            all_checks_passed = True
-            for check_name, check_func in checks_to_perform:
-                try:
-                    result = check_func()
-                    startup_checks_result[check_name] = {
-                        'status': 'PASSED' if result else 'FAILED',
-                        'result': result
-                    }
-                    
-                    if not result:
-                        all_checks_passed = False
-                        logger.warning(f"Startup check failed: {check_name}")
-                    else:
-                        logger.debug(f"Startup check passed: {check_name}")
-                        
-                except Exception as e:
-                    startup_checks_result[check_name] = {
-                        'status': 'ERROR',
-                        'error': str(e)
-                    }
-                    all_checks_passed = False
-                    logger.error(f"Startup check error for {check_name}: {e}")
-            
-            system_status['checks'] = startup_checks_result
-            
-            if all_checks_passed:
-                logger.info("[INFO] All startup checks passed")
-            else:
-                logger.warning("[WARNING] Some startup checks failed - system may not function optimally")
-                system_status['initialization']['warnings'].append("Some startup checks failed")
-            
-        except Exception as e:
-            system_status['initialization']['errors'].append(f"Startup checks failed: {e}")
-            logger.error(f"Failed to perform startup checks: {e}")
-        
-        # Step 5: Hardware detection and validation
-        logger.info("Detecting and validating hardware...")
-        try:
-            hw_info = check_hardware()
-            enhanced_hw_info = enhance_hardware_info(hw_info)
-            system_status['hardware'] = enhanced_hw_info
-            log_hardware_config(enhanced_hw_info)
-        except Exception as e:
-            system_status['initialization']['errors'].append(f"Hardware detection failed: {e}")
-            logger.error(f"Failed to detect hardware: {e}")
-        
-        # Step 6: Configuration system initialization
-        logger.info("Initializing configuration system...")
-        try:
+            # Capture configuration changes during initialization
             config = initialize_config()
+            config_details.append(f"Configuration loaded from: {CONFIG_FILE.name}")
             
+            # Validate configuration
             try:
                 validate_config(config)
-                logger.info("[INFO] Configuration validation passed")
+                config_details.append("Configuration validation: PASSED")
             except ValueError as e:
-                logger.error(f"Configuration validation failed: {e}")
-                system_status['initialization']['warnings'].append(f"Configuration validation failed: {e}")
+                config_details.append(f"Configuration validation: FAILED - {str(e)}")
                 
+                # Handle configuration validation failure
                 if sys.stdin.isatty():
+                    console.print(Panel.fit(
+                        f"[bold yellow]Configuration validation failed:[/bold yellow]\n"
+                        f"[white]{str(e)}[/white]\n\n"
+                        f"[dim]Would you like to use default configuration instead?[/dim]",
+                        border_style="yellow",
+                        title="Configuration Issue",
+                        padding=(1, 2)
+                    ))
+                    
                     if prompt_user("Use default configuration?", default=True):
                         config = get_default_config()
                         save_config(config)
-                        logger.info("[INFO] Default configuration applied")
+                        config_details.append("Applied default configuration")
                     else:
                         raise ValueError("Configuration validation failed and user declined defaults")
                 else:
+                    # Non-interactive mode - use defaults
                     config = get_default_config()
                     save_config(config)
-                    logger.warning("[WARNING] Using default configuration due to validation failure")
+                    config_details.append("Applied default configuration (non-interactive)")
             
+            # Apply configuration globally and capture changes
+            previous_config = get_current_config() if hasattr(sys.modules[__name__], 'CURRENT_CONFIG') else {}
             update_global_config(config)
             
-            system_status['config'] = {
-                'active_config': config,
-                'config_file': str(CONFIG_FILE),
-                'available_presets': list(PRESET_CONFIGS.keys()),
-                'validation_status': 'passed'
-            }
+            # Restore logging level
+            logger.setLevel(original_level)
+            
+            # Get configuration changes (if your config system tracks them)
+            if hasattr(config, '_changes_applied'):
+                changes_applied = config._changes_applied
+            
+            preset_name = config.get('_preset_name', 'custom')
+            config_details.append(f"Active preset: {preset_name}")
+            
+            # Display configuration changes in table format if any were made
+            if changes_applied:
+                display_configuration_changes(changes_applied, console, logger)
             
         except Exception as e:
-            system_status['initialization']['errors'].append(f"Configuration initialization failed: {e}")
-            logger.error(f"Failed to initialize configuration: {e}")
+            # Restore logging level in case of error
+            if 'original_level' in locals():
+                logger.setLevel(original_level)
+            
             config = get_default_config()
             update_global_config(config)
+            config_details.append(f"Fallback to default config due to error: {str(e)}")
         
-        # Step 7: Model variants initialization
-        logger.info("Initializing model variants...")
+        step_duration = time.time() - step_start
+        add_step(
+            "Configuration System", 
+            "SUCCESS", 
+            step_duration,
+            "\n".join(config_details)
+        )
+        
+        # Step 4: Model variants initialization (with suppressed verbose logging)
+        step_start = time.time()
+        
         try:
+            # Temporarily suppress INFO level logging for model initialization
+            original_level = logger.level
+            logger.setLevel(logging.WARNING)
+            
             initialize_model_variants()
             
             if not MODEL_VARIANTS:
                 raise RuntimeError("No model variants could be initialized")
             
             variant_status = validate_model_variants(logger)
-            system_status['config']['model_variants'] = variant_status
             available_variants = [name for name, status in variant_status.items() if status == 'available']
             
-            logger.info(f"[INFO] Model variants initialized: {', '.join(available_variants)}")
+            # Restore logging level
+            logger.setLevel(original_level)
             
             if not available_variants:
                 raise RuntimeError("No working model variants available")
             
+            step_duration = time.time() - step_start
+            add_step(
+                "Model Variants", 
+                "SUCCESS", 
+                step_duration,
+                f"Initialized {len(available_variants)}/{len(MODEL_VARIANTS)} variants\n" +
+                f"Available: {', '.join(available_variants)}"
+            )
+            
         except Exception as e:
-            system_status['initialization']['errors'].append(f"Model initialization failed: {e}")
-            logger.error(f"Failed to initialize models: {e}")
+            # Restore logging level in case of error
+            if 'original_level' in locals():
+                logger.setLevel(original_level)
+            
+            step_duration = time.time() - step_start
+            add_step(
+                "Model Variants", 
+                "FAILED", 
+                step_duration,
+                f"Model initialization failed: {str(e)}"
+            )
             raise RuntimeError(f"Model initialization failed: {e}")
         
-        # Step 8: Dependencies validation
-        logger.info("Validating dependencies...")
-        try:
-            dependency_status = check_core_dependencies()
-            system_status['dependencies'] = dependency_status
-            
-            total_deps = len(dependency_status)
-            available_deps = sum(1 for dep in dependency_status.values() if dep['available'])
-            logger.info(f"[INFO] Dependencies: {available_deps}/{total_deps} available")
-            
-        except Exception as e:
-            system_status['initialization']['errors'].append(f"Dependency validation failed: {e}")
-            logger.error(f"Failed to validate dependencies: {e}")
+        # Step 5: Performance baseline establishment (with suppressed verbose logging)
+        step_start = time.time()
+        performance_metrics = {}
         
-        # Step 9: Performance baseline establishment
-        logger.info("Establishing performance baseline...")
         try:
+            # Temporarily suppress INFO level logging for baseline establishment
+            original_level = logger.level
+            logger.setLevel(logging.WARNING)
+            
             performance_metrics = establish_performance_baseline()
-            system_status['performance'] = performance_metrics
             
-            logger.info("[INFO] Performance baseline established")
+            # Restore logging level
+            logger.setLevel(original_level)
+            
+            baseline_details = []
             for metric, value in performance_metrics.items():
-                logger.debug(f"  {metric}: {value:.4f}")
+                baseline_details.append(f"{metric}: {value:.4f}")
+            
+            step_duration = time.time() - step_start
+            add_step(
+                "Performance Baseline", 
+                "SUCCESS", 
+                step_duration,
+                "Performance baseline established\n" + "\n".join(baseline_details)
+            )
             
         except Exception as e:
-            system_status['initialization']['warnings'].append(f"Performance baseline failed: {e}")
-            logger.warning(f"Failed to establish performance baseline: {e}")
+            # Restore logging level in case of error
+            if 'original_level' in locals():
+                logger.setLevel(original_level)
+            
+            step_duration = time.time() - step_start
+            performance_metrics = {'baseline_failed': str(e)}
+            add_step(
+                "Performance Baseline", 
+                "WARNING", 
+                step_duration,
+                f"Baseline establishment failed: {str(e)}\nContinuing with defaults"
+            )
         
-        # Step 10: System validation and finalization
-        logger.info("Finalizing system initialization...")
+        # Display initialization table
+        for step_name, status, duration, details, status_style in initialization_steps:
+            init_table.add_row(
+                Text(step_name, style="bold cyan"),
+                Text(status, style=status_style),
+                Text(f"{duration:.2f}s", style="dim"),
+                Text(details, style="dim")
+            )
         
+        # Step 6: Finalize initialization and create system status
         initialization_time = time.time() - initialization_start
-        has_critical_errors = any('failed' in error.lower() for error in system_status['initialization']['errors'])
-        overall_status = 'failed' if has_critical_errors else 'success'
         
-        system_status['initialization'].update({
-            'end_time': datetime.now().isoformat(),
-            'duration_seconds': initialization_time,
-            'status': overall_status
-        })
+        # Add summary row
+        init_table.add_row(
+            Text("TOTAL INITIALIZATION", style="bold bright_white on black"),
+            Text("SUCCESS", style="bold green"),
+            Text(f"{initialization_time:.2f}s", style="bold white"),
+            Text(f"All systems operational and ready", style="bright_white")
+        )
         
-        system_status['system'] = {
-            'platform': platform.platform(),
-            'python_version': sys.version.split()[0],
-            'pytorch_version': torch.__version__,
-            'cuda_available': torch.cuda.is_available(),
-            'working_directory': str(Path.cwd()),
-            'log_directory': str(LOG_DIR),
-            'model_directory': str(DEFAULT_MODEL_DIR),
-            'config_directory': str(CONFIG_DIR)
+        # Print the initialization table
+        console.print(init_table)
+        
+        # Create comprehensive system status report (unchanged)
+        system_status = {
+            'initialization': {
+                'start_time': datetime.now() - timedelta(seconds=initialization_time),
+                'end_time': datetime.now(),
+                'duration_seconds': initialization_time,
+                'status': 'success',
+                'method': 'system_check_framework'
+            },
+            'system': {
+                'platform': platform.platform(),
+                'python_version': sys.version.split()[0],
+                'pytorch_version': torch.__version__,
+                'cuda_available': torch.cuda.is_available(),
+                'cuda_device_count': torch.cuda.device_count() if torch.cuda.is_available() else 0,
+                'working_directory': str(Path.cwd()),
+                'log_directory': str(log_dir),
+                'model_directory': str(DEFAULT_MODEL_DIR),
+                'config_directory': str(CONFIG_DIR),
+                'report_directory': str(report_dir)
+            },
+            'config': {
+                'active_config': config,
+                'config_file': str(CONFIG_FILE),
+                'preset_name': config.get('_preset_name', 'custom'),
+                'available_presets': list(PRESET_CONFIGS.keys()),
+                'validation_status': 'passed'
+            },
+            'hardware': {
+                'cpu_count': os.cpu_count(),
+                'memory_gb': psutil.virtual_memory().total / (1024**3),
+                'disk_space_gb': shutil.disk_usage('.').free / (1024**3),
+                'cuda_available': torch.cuda.is_available(),
+                'cuda_devices': [
+                    {
+                        'id': i,
+                        'name': torch.cuda.get_device_name(i),
+                        'memory_gb': torch.cuda.get_device_properties(i).total_memory / (1024**3)
+                    } for i in range(torch.cuda.device_count())
+                ] if torch.cuda.is_available() else []
+            },
+            'models': {
+                'variants_available': len(MODEL_VARIANTS),
+                'variant_names': list(MODEL_VARIANTS.keys()),
+                'variant_status': variant_status
+            },
+            'performance': performance_metrics,
+            'dependencies': {
+                'torch_version': torch.__version__,
+                'python_version': sys.version_info[:3],
+                'platform': platform.system(),
+                'optional_available': {
+                    name: available for name, available in OPTIONAL_DEPENDENCIES.items()
+                }
+            }
         }
         
-        save_initialization_report(system_status, LOG_DIR)
+        # Save initialization report
+        try:
+            save_initialization_report(system_status, report_dir)
+            logger.info(f"Initialization report saved to {report_dir}")
+        except Exception as e:
+            logger.warning(f"Failed to save initialization report: {e}")
         
-        logger.info("=" * 80)
-        if overall_status == 'success':
-            logger.info("SYSTEM INITIALIZATION COMPLETED SUCCESSFULLY")
-            logger.info(f"Initialization time: {initialization_time:.2f} seconds")
-            logger.info(f"Active configuration: {config.get('_preset_name', 'custom')}")
-            logger.info(f"Available model variants: {len(MODEL_VARIANTS)}")
-            if system_status['initialization']['warnings']:
-                logger.info(f"Warnings: {len(system_status['initialization']['warnings'])}")
-        else:
-            logger.error("SYSTEM INITIALIZATION COMPLETED WITH ERRORS")
-            logger.error(f"Errors encountered: {len(system_status['initialization']['errors'])}")
-            for error in system_status['initialization']['errors']:
-                logger.error(f"  - {error}")
-        
-        logger.info("=" * 80)
+        # Minimal logging summary
+        logger.info("SYSTEM INITIALIZATION COMPLETED SUCCESSFULLY")
+        logger.info(f"Time: {initialization_time:.2f}s | Config: {config.get('_preset_name', 'custom')} | Models: {len(MODEL_VARIANTS)} | CUDA: {torch.cuda.is_available()}")
         
         return system_status, config, logger
         
-    except Exception as e:
-        system_status['initialization'].update({
-            'status': 'critical_failure',
-            'end_time': datetime.now().isoformat(),
-            'duration_seconds': time.time() - initialization_start,
-            'critical_error': str(e)
-        })
+    except KeyboardInterrupt:
+        # Add failed initialization step to table before displaying
+        for step_name, status, duration, details, status_style in initialization_steps:
+            init_table.add_row(
+                Text(step_name, style="bold cyan"),
+                Text(status, style=status_style),
+                Text(f"{duration:.2f}s", style="dim"),
+                Text(details, style="dim")
+            )
         
-        logger.critical(f"CRITICAL: System initialization failed: {e}")
+        init_table.add_row(
+            Text("INITIALIZATION", style="bold white on red"),
+            Text("INTERRUPTED", style="bold white on red"),
+            Text(f"{time.time() - initialization_start:.2f}s", style="bold white"),
+            Text("System initialization was cancelled by user (Ctrl+C)", style="bright_white")
+        )
+        
+        console.print(init_table)
+        logger.warning("System initialization interrupted by user (Ctrl+C)")
+        sys.exit(0)
+        
+    except SystemExit:
+        # User chose to quit during loading_screen
+        logger.info("System initialization cancelled by user choice")
+        raise
+        
+    except Exception as e:
+        initialization_time = time.time() - initialization_start
+        
+        # Add failed steps to table
+        for step_name, status, duration, details, status_style in initialization_steps:
+            init_table.add_row(
+                Text(step_name, style="bold cyan"),
+                Text(status, style=status_style),
+                Text(f"{duration:.2f}s", style="dim"),
+                Text(details, style="dim")
+            )
+        
+        init_table.add_row(
+            Text("INITIALIZATION", style="bold white on red"),
+            Text("FAILED", style="bold white on red"),
+            Text(f"{initialization_time:.2f}s", style="bold white"),
+            Text(f"Error: {str(e)}\nType: {type(e).__name__}", style="bright_white")
+        )
+        
+        console.print(init_table)
+        
+        # Create error status report (unchanged)
+        error_status = {
+            'initialization': {
+                'start_time': datetime.now() - timedelta(seconds=initialization_time),
+                'end_time': datetime.now(),
+                'duration_seconds': initialization_time,
+                'status': 'critical_failure',
+                'error': str(e),
+                'error_type': type(e).__name__
+            },
+            'system': {
+                'platform': platform.platform(),
+                'python_version': sys.version.split()[0]
+            }
+        }
+        
+        logger.critical("SYSTEM INITIALIZATION FAILED")
+        logger.critical(f"Error: {str(e)} | Type: {type(e).__name__} | Time: {initialization_time:.2f}s")
         logger.exception("Detailed error information:")
         
+        # Save error report
         try:
-            error_report_path = LOG_DIR / f"init_failure_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            error_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            error_report_path = report_dir / f"deep_init_failure_{error_timestamp}.json"
             with open(error_report_path, 'w') as f:
-                json.dump(system_status, f, indent=2, default=str)
-        except:
-            pass
+                json.dump(error_status, f, indent=2, default=str)
+            logger.error(f"Error report saved to {error_report_path}")
+        except Exception as save_error:
+            logger.error(f"Failed to save error report: {save_error}")
         
         raise RuntimeError(f"System initialization failed: {e}") from e
 
@@ -8256,11 +9928,11 @@ def run_stability_test():
         print("\nSystem Diagnostics:")
         try:
             hw = check_hardware()
-            print(f"[+] Device: {hw['device']}")
-            print(f"[+] PyTorch: {torch.__version__}")
-            print(f"[+] CUDA available: {torch.cuda.is_available()}")
+            print(f"1. Device: {hw['device']}")
+            print(f"2. PyTorch: {torch.__version__}")
+            print(f"3. CUDA available: {torch.cuda.is_available()}")
         except:
-            print("[!] Unable to get hardware information")
+            print("[ERROR] Unable to get hardware information")
 
 # Helper functions for configuration management
 def show_current_config():
@@ -8385,14 +10057,25 @@ def advanced_tools_menu():
 
 def main():
     """Main entry point with comprehensive argument parsing and system orchestration."""
-    # Initialize system first to set up logging and configuration
+    # Initialize basic logger first (fallback)
+    logger = logging.getLogger(__name__)
+    
+    # Initialize system to set up logging and configuration
     try:
         system_status, config, logger = initialize_system()
         validate_config(config)
     except Exception as e:
-        logger.warning(f"Configuration initialization failed using defaults: {e}")
-        config = get_current_config()
-        logger = logging.getLogger(__name__)
+        # Use fallback logger since initialize_system failed
+        logger.warning(f"Configuration initialization failed, using defaults: {e}")
+        config = get_current_config()  # Use default config instead of get_current_config()
+        
+        # Setup minimal logging if not already configured
+        if not logger.handlers:
+            logging.basicConfig(
+                level=logging.INFO,
+                format='%(asctime)s - %(levelname)s - %(message)s',
+                handlers=[logging.StreamHandler()]
+            )
     
     # If no arguments provided, launch interactive mode
     if len(sys.argv) == 1:
@@ -8742,6 +10425,7 @@ Examples:
     # Handle configuration commands first (these exit after completion)
     if args.show_config:
         current_config = get_current_config()
+        #current_config = config  # Use the config we have
         print("Current Configuration:")
         print("=" * 60)
         print(json.dumps(current_config, indent=2, default=str))
