@@ -1123,6 +1123,8 @@ def loading_screen(
 def _handle_user_decision_safe(results, system_status, important_failed, informational_failed, 
                               elapsed_time, supports_color, banner_width, console_width, logger):
     """Thread-safe user decision handling with proper resource cleanup."""
+    listener = None
+    
     try:
         # Collect failed non-critical checks safely
         failed_checks = []
@@ -1198,14 +1200,14 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             f"- Informational failures: {informational_failed}\n"
             f"- Total execution time: {elapsed_time:.2f}s\n\n"
             f"The system can continue with reduced functionality.\n"
-            f"Press Enter to continue anyway or Esc to quit and resolve issues"
+            f"Continue anyway? (Y/n)"
         )
         
         try:
             if supports_color and banner_width > 60:
                 console.print(Panel.fit(
-                    f"[bold {status_color}]{prompt_text}[/bold {status_color}]" if supports_color else prompt_text,
-                    border_style=status_color if supports_color else "ascii",
+                    f"[bold {status_color}]{prompt_text}[/bold {status_color}]",
+                    border_style=status_color,
                     title="User Decision Required",
                     padding=(1, 3),
                     width=min(banner_width, console_width - 4)
@@ -1217,66 +1219,38 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             console.print(f"\n{status_message}\n")
             console.print(prompt_text)
         
-        # Thread-safe keyboard input with timeout and cleanup
+        # Use standard input instead of pynput to avoid buffer issues
         user_choice = None
-        listener = None
-        listener_thread = None
+        max_attempts = 3
         
-        def safe_key_handler(key):
-            nonlocal user_choice
+        for attempt in range(max_attempts):
             try:
-                if key == Key.enter:
-                    user_choice = True
-                    return False  # Stop listener
-                elif key == Key.esc:
-                    user_choice = False
-                    return False  # Stop listener
-                elif hasattr(key, 'char') and key.char:
-                    char = key.char.lower()
-                    if char in ['q', 'n']:  # Quit/No
-                        user_choice = False
-                        return False
-                    elif char in ['c', 'y']:  # Continue/Yes
-                        user_choice = True
-                        return False
-            except Exception:
-                pass  # Ignore key handling errors
-            return True  # Continue listening
-        
-        # Safe input handling with timeout
-        console.print("[dim]Waiting for user input... (Enter to continue, Esc to quit)[/dim]" if supports_color else "Waiting for user input... (Enter to continue, Esc to quit)")
-        
-        try:
-            # Use a timeout to prevent infinite waiting
-            listener = Listener(on_press=safe_key_handler)
-            listener.start()
-            
-            # Wait with timeout
-            start_wait = time.perf_counter()
-            timeout_seconds = 300  # 5 minute timeout
-            
-            while user_choice is None and (time.perf_counter() - start_wait) < timeout_seconds:
-                time.sleep(0.1)
-                if not listener.running:
-                    break
-            
-            # Timeout handling
-            if user_choice is None:
-                user_choice = True  # Default to continue on timeout
-                console.print("[yellow]Input timeout - continuing with warnings[/yellow]" if supports_color else "Input timeout - continuing with warnings")
+                response = input("\nYour choice: ").strip().lower()
                 
-        except Exception as input_error:
-            user_choice = True  # Default to continue on input error
-            console.print(f"Input error - continuing with warnings: {input_error}")
-            if logger:
-                logger.warning(f"User input error: {input_error}")
-        finally:
-            # Cleanup listener safely
-            try:
-                if listener:
-                    listener.stop()
-            except Exception:
-                pass
+                # Default to yes
+                if response in ['y', 'yes', '']:
+                    user_choice = True
+                    break
+                elif response in ['n', 'no', 'q', 'quit']:
+                    user_choice = False
+                    break
+                else:
+                    if attempt < max_attempts - 1:
+                        console.print("Please enter 'y' for yes or 'n' for no.")
+                    
+            except (EOFError, KeyboardInterrupt):
+                user_choice = False
+                break
+            except Exception as input_error:
+                if logger:
+                    logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
+                if attempt < max_attempts - 1:
+                    console.print("Input error, please try again.")
+        
+        # Default to continue if no valid choice after max attempts
+        if user_choice is None:
+            user_choice = True
+            console.print("Using default choice: continue")
         
         # Handle user choice with safe output
         if user_choice is False:
@@ -1304,7 +1278,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                 logger.warning("User chose to quit after seeing failed checks")
                 logger.info(f"Failed checks summary: {len(failed_checks)} non-critical failures")
             
-            sys.exit(0)
+            return False
         
         # User chose to continue
         try:
@@ -1331,8 +1305,6 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             logger.info("User chose to continue despite failed checks")
             logger.info(f"System status: {system_status} with {len(failed_checks)} failed checks")
         
-        # Brief pause before clearing
-        time.sleep(1)
         return True
         
     except Exception as decision_error:
@@ -1340,6 +1312,42 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             logger.error(f"Error in user decision handling: {decision_error}")
         console.print(f"Error in user input - continuing with warnings: {decision_error}")
         return True  # Default to continue on error
+    
+    finally:
+        # Clean up input buffer
+        try:
+            import sys
+            import select
+            import time
+            
+            # Small delay for any pending I/O
+            time.sleep(0.05)
+            
+            # Flush streams
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
+            # Clear input buffer
+            if hasattr(select, 'select') and sys.stdin.isatty():
+                while select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                    line = sys.stdin.readline()
+                    if not line:
+                        break
+            
+            # Windows approach
+            try:
+                import msvcrt
+                while msvcrt.kbhit():
+                    msvcrt.getch()
+            except ImportError:
+                pass
+            
+            # Final flush
+            sys.stdin.flush()
+            
+        except Exception as cleanup_error:
+            if logger:
+                logger.debug(f"Input buffer cleanup failed: {cleanup_error}")
 
 def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width, console_width, logger):
     """Handle successful system checks scenario with safe input."""
@@ -1354,7 +1362,7 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
             f"System is fully operational and ready!\n"
             f"Completed in {elapsed_time:.2f} seconds"
             f"{success_details}\n\n"
-            f"Press Enter to continue"
+            f"Press Enter to continue..."
         )
         
         try:
@@ -1371,33 +1379,14 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         except Exception:
             console.print(f"\nSUCCESS:\n{success_message}")
         
-        # Safe success input handling
-        console.print("[dim green]Ready to proceed...[/dim green]" if supports_color else "Ready to proceed...")
-        
-        listener = None
+        # Simple input handling without pynput
         try:
-            def success_key_handler(key):
-                if key == Key.enter:
-                    return False  # Stop listener
-                return True  # Continue listening
-            
-            listener = Listener(on_press=success_key_handler)
-            listener.start()
-            
-            # Wait with timeout
-            start_wait = time.perf_counter()
-            while listener.running and (time.perf_counter() - start_wait) < 30:  # 30 second timeout
-                time.sleep(0.1)
-                
-        except Exception as success_input_error:
+            input()  # Just wait for Enter
+        except (EOFError, KeyboardInterrupt):
+            pass  # User interrupted, continue anyway
+        except Exception as input_error:
             if logger:
-                logger.debug(f"Success input error: {success_input_error}")
-        finally:
-            try:
-                if listener:
-                    listener.stop()
-            except Exception:
-                pass
+                logger.debug(f"Success input error: {input_error}")
         
         if logger:
             logger.info(f"All system checks passed successfully in {elapsed_time:.2f}s")
@@ -1412,6 +1401,42 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
             logger.error(f"Error in success scenario: {success_error}")
         console.print("All checks passed - continuing...")
         return True
+    
+    finally:
+        # Clean up input buffer
+        try:
+            import sys
+            import select
+            import time
+            
+            # Small delay for any pending I/O
+            time.sleep(0.05)
+            
+            # Flush streams
+            sys.stdout.flush()
+            sys.stderr.flush()
+            
+            # Clear input buffer
+            if hasattr(select, 'select') and sys.stdin.isatty():
+                while select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], []):
+                    line = sys.stdin.readline()
+                    if not line:
+                        break
+            
+            # Windows approach
+            try:
+                import msvcrt
+                while msvcrt.kbhit():
+                    msvcrt.getch()
+            except ImportError:
+                pass
+            
+            # Final flush
+            sys.stdin.flush()
+            
+        except Exception as cleanup_error:
+            if logger:
+                logger.debug(f"Input buffer cleanup failed: {cleanup_error}")
 
 def run_system_checks(
     logger: logging.Logger, 
@@ -1459,8 +1484,8 @@ def run_system_checks(
         if extended:
             raw_checks.update({
                 'exception_handler': check_global_exception_handler(),
-                'configuration_system': check_configuration_system(),
-                'model_variants': check_model_variants()
+                'configuration_system': check_configuration_system_wrapper(),
+                'model_variants': check_model_variants_wrapper()
             })
             
             # Performance-related checks (only when explicitly requested)
@@ -1632,7 +1657,7 @@ def display_check_results(
         # Configure columns
         table.add_column("Check", style="bold cyan", width=25)
         table.add_column("Status", width=12, justify="center")
-        table.add_column("Level", width=12, justify="center")
+        table.add_column("Level", width=14, justify="center")
         table.add_column("Details", style="dim", min_width=50, max_width=80)
         
         # Group by check level in priority order
@@ -1672,7 +1697,7 @@ def display_check_results(
                     status_style = "bold red" if level == CheckLevel.CRITICAL else "bold yellow"
                     status_text = "FAIL" if level == CheckLevel.CRITICAL else "WARN"
                 
-                # Format details with special handling for configuration and model checks
+                # Format details with special handling for specific checks
                 details_lines = []
                 
                 # Main message
@@ -1680,7 +1705,7 @@ def display_check_results(
                 
                 # Enhanced detail formatting
                 if isinstance(result.details, dict):
-                    # Special handling for configuration system
+                    # Special handling for configuration system - show basic info only
                     if name == 'configuration_system':
                         if 'sections_loaded' in result.details:
                             details_lines.append(f"[dim]Sections: {result.details['sections_loaded']}, Parameters: {result.details['total_parameters']}[/dim]")
@@ -1688,6 +1713,7 @@ def display_check_results(
                             details_lines.append(f"[dim]Active preset: {result.details['active_preset'] or 'default'}[/dim]")
                         if 'model_type' in result.details:
                             details_lines.append(f"[dim]Model type: {result.details['model_type']}[/dim]")
+                        # Note that detailed tables were already displayed by the wrapper
                     
                     # Special handling for model variants
                     elif name == 'model_variants':
@@ -1711,7 +1737,7 @@ def display_check_results(
                     # General dict handling for other checks
                     else:
                         for key, value in result.details.items():
-                            if key not in ['error', 'exception', 'traceback', 'variant_status']:
+                            if key not in ['error', 'exception', 'traceback', 'variant_status', 'section_details', 'full_details']:
                                 if isinstance(value, (int, float, str, bool)):
                                     details_lines.append(f"[dim]{key}: {value}[/dim]")
                 
@@ -1763,7 +1789,7 @@ def display_check_results(
                 )
             )
         
-        # Print the table
+        # Print the main table
         console.print(table)
         
         # Enhanced logging - suppress redundant configuration/model messages
@@ -1771,7 +1797,7 @@ def display_check_results(
             # Log only the summary
             summary = results.get("system_summary")
             if summary:
-                logger.info(
+                logger.debug(
                     f"System diagnostics completed: {summary.details['passed_checks']}/"
                     f"{summary.details['total_checks']} checks passed, "
                     f"{summary.details['critical_failures']} critical failures, "
@@ -1782,13 +1808,13 @@ def display_check_results(
             if 'configuration_system' in results:
                 config_result = results['configuration_system']
                 if config_result.passed and isinstance(config_result.details, dict):
-                    logger.info(f"Configuration system: {config_result.details.get('sections_loaded', 0)} sections loaded")
+                    logger.debug(f"Configuration system: {config_result.details.get('sections_loaded', 0)} sections loaded")
             
             if 'model_variants' in results:
                 model_result = results['model_variants']
                 if model_result.passed and isinstance(model_result.details, dict):
                     variants = model_result.details.get('variant_names', [])
-                    logger.info(f"Model variants: {len(variants)} available ({', '.join(variants)})")
+                    logger.debug(f"Model variants: {len(variants)} available ({', '.join(variants)})")
             
             # Log only critical failures
             critical_failures = [
@@ -2744,24 +2770,82 @@ def check_memory_management() -> CheckResult:
         ).with_exception(e)
 
 def check_configuration_system() -> CheckResult:
-    """Check if configuration system is properly initialized with improved logging."""
+    """Check if configuration system is properly initialized with enhanced detail collection."""
     try:
         # Suppress individual log messages during system checks
-        config_logger = logging.getLogger('config')
-        original_level = config_logger.level
-        config_logger.setLevel(logging.WARNING)  # Only show warnings/errors
+        #config_logger = logging.getLogger('config')
+        config_logger = setup_logging(log_dir=LOG_DIR)
+        #original_level = config_logger.level
+        original_level = config_logger.getEffectiveLevel()
+        #config_logger.setLevel(logging.WARNING)  # Only show warnings/errors
+        config_logger.setLevel(logging.WARNING)
         
         try:
             # Initialize configuration silently
             config = initialize_config()
             validate_config(config)
             
+            # Collect detailed configuration information
+            config_sections = {}
+            total_params = 0
+            
+            for section_name, section_data in config.items():
+                if isinstance(section_data, dict):
+                    param_count = len(section_data)
+                    total_params += param_count
+                    
+                    # Collect key parameters for each section
+                    key_params = {}
+                    if section_name == 'model':
+                        key_params = {
+                            'model_type': section_data.get('model_type', 'unknown'),
+                            'input_size': section_data.get('input_size', 'unknown'),
+                            'num_classes': section_data.get('num_classes', 'unknown'),
+                            'dropout_rate': section_data.get('dropout_rate', 'unknown')
+                        }
+                    elif section_name == 'training':
+                        key_params = {
+                            'batch_size': section_data.get('batch_size', 'unknown'),
+                            'learning_rate': section_data.get('learning_rate', 'unknown'),
+                            'epochs': section_data.get('epochs', 'unknown'),
+                            'optimizer': section_data.get('optimizer', 'unknown')
+                        }
+                    elif section_name == 'data':
+                        key_params = {
+                            'dataset_path': section_data.get('dataset_path', 'not_set'),
+                            'validation_split': section_data.get('validation_split', 'unknown'),
+                            'preprocessing': section_data.get('preprocessing', 'none')
+                        }
+                    elif section_name == 'presets':
+                        key_params = {
+                            'current_preset': section_data.get('current_preset', 'default'),
+                            'available_presets': list(section_data.get('available', {}).keys()) if 'available' in section_data else []
+                        }
+                    else:
+                        # For other sections, show first few parameters
+                        key_params = dict(list(section_data.items())[:3])
+                    
+                    config_sections[section_name] = {
+                        'parameter_count': param_count,
+                        'status': 'loaded',
+                        'key_parameters': key_params
+                    }
+                else:
+                    config_sections[section_name] = {
+                        'parameter_count': 1,
+                        'status': 'loaded',
+                        'value': str(section_data)
+                    }
+            
             config_details = {
                 'config_file_exists': CONFIG_FILE.exists(),
-                'active_preset': config.get('presets', {}).get('current_preset', 'none'),
+                'config_file_path': str(CONFIG_FILE),
+                'active_preset': config.get('presets', {}).get('current_preset', 'default'),
                 'model_type': config.get('model', {}).get('model_type', 'unknown'),
                 'sections_loaded': len(config),
-                'total_parameters': sum(len(section) if isinstance(section, dict) else 1 for section in config.values())
+                'total_parameters': total_params,
+                'section_details': config_sections,
+                'validation_passed': True
             }
             
             return CheckResult(
@@ -2778,23 +2862,235 @@ def check_configuration_system() -> CheckResult:
         return CheckResult(
             passed=False,
             message=f"Configuration validation failed: {str(e)}",
-            level=CheckLevel.CRITICAL
+            level=CheckLevel.CRITICAL,
+            details={
+                'config_file_exists': CONFIG_FILE.exists() if 'CONFIG_FILE' in globals() else False,
+                'validation_error': str(e),
+                'validation_passed': False
+            }
         ).with_exception(e)
     except Exception as e:
         return CheckResult(
             passed=False,
             message="Configuration system initialization failed",
-            level=CheckLevel.CRITICAL
+            level=CheckLevel.CRITICAL,
+            details={
+                'config_file_exists': False,
+                'initialization_error': str(e),
+                'validation_passed': False
+            }
         ).with_exception(e)
 
+def check_configuration_system_wrapper() -> CheckResult:
+    """
+    Run comprehensive configuration system check with rich table output.
+    
+    Returns:
+        CheckResult object with detailed configuration information and rich display
+    """
+    try:
+        # Get the configuration check results
+        config_result = check_configuration_system()
+        
+        # If the check failed, return it as-is
+        if not config_result.passed:
+            return config_result
+        
+        # Display the detailed configuration tables
+        display_configuration_details(config_result)
+        
+        # Prepare summary details for the main table
+        if isinstance(config_result.details, dict):
+            summary_details = {
+                'sections_loaded': config_result.details.get('sections_loaded', 0),
+                'total_parameters': config_result.details.get('total_parameters', 0),
+                'active_preset': config_result.details.get('active_preset', 'default'),
+                'model_type': config_result.details.get('model_type', 'unknown'),
+                'config_file_exists': config_result.details.get('config_file_exists', False),
+                'validation_passed': config_result.details.get('validation_passed', False),
+                # Include full details for potential future use
+                'full_details': config_result.details
+            }
+        else:
+            summary_details = config_result.details
+        
+        return CheckResult(
+            passed=config_result.passed,
+            message="Configuration system check with detailed breakdown",
+            level=CheckLevel.CRITICAL,
+            details=summary_details,
+            metadata=config_result.metadata,
+            exception=config_result.exception
+        )
+        
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="Configuration system wrapper check failed",
+            level=CheckLevel.CRITICAL,
+            details={
+                'wrapper_error': str(e),
+                'validation_passed': False
+            }
+        ).with_exception(e)
+
+def display_configuration_details(config_result: CheckResult) -> None:
+    """
+    Display detailed configuration information in a rich table format.
+    
+    Args:
+        config_result: CheckResult from check_configuration_system()
+    """
+    if not isinstance(config_result.details, dict):
+        console.print("[yellow]No detailed configuration information available[/yellow]")
+        return
+    
+    try:
+        details = config_result.details
+        
+        # Main configuration overview table
+        overview_table = Table(
+            title="[bold yellow]Configuration System Overview[/bold yellow]",
+            title_justify="left",
+            box=box.ROUNDED,
+            header_style="bold bright_white",
+            border_style="cyan",
+            show_lines=True,
+            width=min(100, console.width - 4)
+        )
+        
+        overview_table.add_column("Property", style="bold yellow", width=20)
+        overview_table.add_column("Value", style="bright_white", width=30)
+        overview_table.add_column("Status", style="bold green", width=15, justify="center")
+        
+        # Add overview rows
+        overview_table.add_row(
+            "Config File",
+            str(details.get('config_file_path', 'Unknown')),
+            "EXISTS" if details.get('config_file_exists', False) else "MISSING"
+        )
+        
+        overview_table.add_row(
+            "Active Preset",
+            details.get('active_preset', 'default'),
+            "ACTIVE"
+        )
+        
+        overview_table.add_row(
+            "Model Type",
+            details.get('model_type', 'unknown'),
+            "CONFIGURED"
+        )
+        
+        overview_table.add_row(
+            "Sections Loaded",
+            str(details.get('sections_loaded', 0)),
+            "LOADED"
+        )
+        
+        overview_table.add_row(
+            "Total Parameters",
+            str(details.get('total_parameters', 0)),
+            "COUNTED"
+        )
+        
+        overview_table.add_row(
+            "Validation",
+            "Passed" if details.get('validation_passed', False) else "Failed",
+            "PASS" if details.get('validation_passed', False) else "FAIL"
+        )
+        
+        console.print(overview_table)
+        console.print()
+        
+        # Section details table
+        if 'section_details' in details and details['section_details']:
+            sections_table = Table(
+                title="[bold yellow]Configuration Sections Detail[/bold yellow]",
+                title_justify="left",
+                box=box.ROUNDED,
+                header_style="bold bright_white",
+                border_style="cyan",
+                show_lines=True,
+                expand=True,
+                width=min(120, console.width - 4)
+            )
+            
+            sections_table.add_column("Section", style="bold yellow", width=15)
+            sections_table.add_column("Parameters", style="bright_white", width=12, justify="center")
+            sections_table.add_column("Status", style="bold green", width=10, justify="center")
+            sections_table.add_column("Key Configuration", style="dim", min_width=50)
+            
+            for section_name, section_info in details['section_details'].items():
+                # Format key parameters
+                key_config_lines = []
+                
+                if 'key_parameters' in section_info:
+                    for param, value in section_info['key_parameters'].items():
+                        if isinstance(value, list):
+                            value_str = ', '.join(str(v) for v in value) if value else 'none'
+                        else:
+                            value_str = str(value)
+                        
+                        # Color coding for specific values
+                        if param == 'current_preset':
+                            key_config_lines.append(f"[bold bright_white]{param}:[/] [green]{value_str}[/]")
+                        elif param in ['model_type', 'optimizer']:
+                            key_config_lines.append(f"[bold bright_white]{param}:[/] [cyan]{value_str}[/]")
+                        elif param in ['batch_size', 'learning_rate', 'epochs']:
+                            key_config_lines.append(f"[bold bright_white]{param}:[/] [yellow]{value_str}[/]")
+                        elif 'unknown' in str(value) or 'not_set' in str(value):
+                            key_config_lines.append(f"[bold bright_white]{param}:[/] [red]{value_str}[/]")
+                        else:
+                            key_config_lines.append(f"[bold bright_white]{param}:[/] [dim]{value_str}[/]")
+                
+                elif 'value' in section_info:
+                    key_config_lines.append(f"[dim]Value: {section_info['value']}[/dim]")
+                
+                key_config_text = "\n".join(key_config_lines) if key_config_lines else "[dim]No key parameters[/dim]"
+                
+                sections_table.add_row(
+                    Text(section_name.upper(), style="bold yellow"),
+                    str(section_info.get('parameter_count', 0)),
+                    Text(section_info.get('status', 'unknown').upper(), style="bold green"),
+                    key_config_text
+                )
+            
+            console.print(sections_table)
+        
+        # Error information if validation failed
+        if not details.get('validation_passed', True):
+            error_table = Table(
+                title="[bold red]Configuration Errors[/bold red]",
+                title_justify="left",
+                box=box.ROUNDED,
+                header_style="bold bright_white",
+                border_style="red",
+                width=min(100, console.width - 4)
+            )
+            
+            error_table.add_column("Error Type", style="bold red", width=20)
+            error_table.add_column("Details", style="bright_white")
+            
+            if 'validation_error' in details:
+                error_table.add_row("Validation Error", details['validation_error'])
+            
+            if 'initialization_error' in details:
+                error_table.add_row("Initialization Error", details['initialization_error'])
+            
+            console.print()
+            console.print(error_table)
+    
+    except Exception as e:
+        console.print(f"[bold red]Error displaying configuration details: {str(e)}[/bold red]")
+
 def check_model_variants() -> CheckResult:
-    """Check if model variants are properly initialized with improved logging."""
+    """Check if model variants are properly initialized with enhanced detail collection."""
     try:
         # Suppress individual log messages during system checks
         model_logger = logging.getLogger('models')
         original_level = model_logger.level
-        # Only show warnings/errors
-        model_logger.setLevel(logging.WARNING)
+        model_logger.setLevel(logging.WARNING)  # Only show warnings/errors
         
         try:
             # Initialize model variants silently
@@ -2805,39 +3101,100 @@ def check_model_variants() -> CheckResult:
                     passed=False,
                     message="No model variants available",
                     level=CheckLevel.CRITICAL,
-                    details="Model variants dictionary is empty"
+                    details={
+                        'total_variants': 0,
+                        'available_variants': 0,
+                        'variant_names': [],
+                        'variant_status': {},
+                        'initialization_passed': False,
+                        'error': 'Model variants dictionary is empty'
+                    }
                 )
             
             # Validate model variants silently
             variant_status = validate_model_variants(logger, silent=True)
             available_variants = [name for name, status in variant_status.items() if status == 'available']
+            failed_variants = [name for name, status in variant_status.items() if status != 'available']
             
-            if not available_variants:
-                return CheckResult(
-                    passed=False,
-                    message="No working model variants available",
-                    level=CheckLevel.CRITICAL,
-                    details=variant_status
-                )
+            # Collect detailed variant information
+            variant_details = {}
+            for variant_name, variant_class in MODEL_VARIANTS.items():
+                variant_info = {
+                    'class_name': variant_class.__name__,
+                    'status': variant_status.get(variant_name, 'unknown'),
+                    'available': variant_name in available_variants
+                }
+                
+                # Try to get additional metadata from the class
+                try:
+                    if hasattr(variant_class, '__doc__') and variant_class.__doc__:
+                        variant_info['description'] = variant_class.__doc__.strip().split('\n')[0]
+                    else:
+                        variant_info['description'] = f"{variant_class.__name__} model variant"
+                    
+                    # Check for configuration requirements
+                    if hasattr(variant_class, 'get_default_config'):
+                        try:
+                            default_config = variant_class.get_default_config()
+                            if isinstance(default_config, dict):
+                                variant_info['config_parameters'] = len(default_config)
+                                variant_info['key_config'] = {
+                                    k: v for k, v in list(default_config.items())[:3]
+                                }
+                            else:
+                                variant_info['config_parameters'] = 'unknown'
+                                variant_info['key_config'] = {}
+                        except Exception:
+                            variant_info['config_parameters'] = 'error'
+                            variant_info['key_config'] = {}
+                    else:
+                        variant_info['config_parameters'] = 'none'
+                        variant_info['key_config'] = {}
+                    
+                    # Check for initialization requirements
+                    if hasattr(variant_class, '__init__'):
+                        import inspect
+                        sig = inspect.signature(variant_class.__init__)
+                        variant_info['init_parameters'] = len([
+                            p for p in sig.parameters.values() 
+                            if p.name != 'self' and p.default == inspect.Parameter.empty
+                        ])
+                    else:
+                        variant_info['init_parameters'] = 0
+                        
+                except Exception as e:
+                    variant_info['description'] = f"Error analyzing {variant_class.__name__}"
+                    variant_info['config_parameters'] = 'error'
+                    variant_info['init_parameters'] = 'error'
+                    variant_info['analysis_error'] = str(e)
+                
+                variant_details[variant_name] = variant_info
             
-            # Prepare structured details
-            variant_details = {
+            # Determine overall success
+            passed = len(available_variants) > 0
+            
+            model_variants_details = {
                 'total_variants': len(MODEL_VARIANTS),
                 'available_variants': len(available_variants),
+                'failed_variants': len(failed_variants),
                 'variant_names': available_variants,
+                'failed_names': failed_variants,
                 'variant_status': variant_status,
+                'variant_details': variant_details,
+                'initialization_passed': True,
                 'initialization_summary': {
                     'attempted': len(MODEL_VARIANTS),
                     'successful': len(available_variants),
-                    'failed': len(MODEL_VARIANTS) - len(available_variants)
+                    'failed': len(failed_variants),
+                    'success_rate': len(available_variants) / len(MODEL_VARIANTS) * 100 if MODEL_VARIANTS else 0
                 }
             }
             
             return CheckResult(
-                passed=True,
-                message=f"Model variants available: {', '.join(available_variants)}",
+                passed=passed,
+                message="Model variants system operational" if passed else "Some model variants failed initialization",
                 level=CheckLevel.CRITICAL,
-                details=variant_details
+                details=model_variants_details
             )
         finally:
             # Restore original logging level
@@ -2847,8 +3204,278 @@ def check_model_variants() -> CheckResult:
         return CheckResult(
             passed=False,
             message="Model variants initialization failed",
-            level=CheckLevel.CRITICAL
+            level=CheckLevel.CRITICAL,
+            details={
+                'total_variants': 0,
+                'available_variants': 0,
+                'variant_names': [],
+                'initialization_passed': False,
+                'initialization_error': str(e)
+            }
         ).with_exception(e)
+
+def check_model_variants_wrapper() -> CheckResult:
+    """
+    Run comprehensive model variants check with rich table output.
+    
+    Returns:
+        CheckResult object with detailed model variants information and rich display
+    """
+    try:
+        # Get the model variants check results
+        variants_result = check_model_variants()
+        
+        # If the check failed completely, return it as-is
+        if not variants_result.passed and not variants_result.details.get('initialization_passed', False):
+            return variants_result
+        
+        # Display the detailed model variants tables
+        display_model_variants_details(variants_result)
+        
+        # Prepare summary details for the main table
+        if isinstance(variants_result.details, dict):
+            summary_details = {
+                'total_variants': variants_result.details.get('total_variants', 0),
+                'available_variants': variants_result.details.get('available_variants', 0),
+                'failed_variants': variants_result.details.get('failed_variants', 0),
+                'variant_names': variants_result.details.get('variant_names', []),
+                'success_rate': variants_result.details.get('initialization_summary', {}).get('success_rate', 0),
+                'initialization_passed': variants_result.details.get('initialization_passed', False),
+                # Include full details for potential future use
+                'full_details': variants_result.details
+            }
+        else:
+            summary_details = variants_result.details
+        
+        return CheckResult(
+            passed=variants_result.passed,
+            message="Model variants check with detailed breakdown",
+            level=CheckLevel.CRITICAL,
+            details=summary_details,
+            metadata=variants_result.metadata,
+            exception=variants_result.exception
+        )
+        
+    except Exception as e:
+        return CheckResult(
+            passed=False,
+            message="Model variants wrapper check failed",
+            level=CheckLevel.CRITICAL,
+            details={
+                'wrapper_error': str(e),
+                'initialization_passed': False
+            }
+        ).with_exception(e)
+
+def display_model_variants_details(variants_result: CheckResult) -> None:
+    """
+    Display detailed model variants information in a rich table format.
+    
+    Args:
+        variants_result: CheckResult from check_model_variants()
+    """
+    if not isinstance(variants_result.details, dict):
+        console.print("[yellow]No detailed model variants information available[/yellow]")
+        return
+    
+    try:
+        details = variants_result.details
+        
+        # Main model variants overview table
+        overview_table = Table(
+            title="[bold yellow]Model Variants System Overview[/bold yellow]",
+            title_justify="left",
+            box=box.ROUNDED,
+            header_style="bold bright_white",
+            border_style="cyan",
+            show_lines=True,
+            width=min(100, console.width - 4)
+        )
+        
+        overview_table.add_column("Property", style="bold yellow", width=20)
+        overview_table.add_column("Value", style="bright_white", width=30)
+        overview_table.add_column("Status", style="bold green", width=15, justify="center")
+        
+        # Add overview rows
+        overview_table.add_row(
+            "Total Variants",
+            str(details.get('total_variants', 0)),
+            "COUNTED"
+        )
+        
+        overview_table.add_row(
+            "Available Variants",
+            str(details.get('available_variants', 0)),
+            "READY" if details.get('available_variants', 0) > 0 else "NONE"
+        )
+        
+        overview_table.add_row(
+            "Failed Variants",
+            str(details.get('failed_variants', 0)),
+            "FAILED" if details.get('failed_variants', 0) > 0 else "NONE"
+        )
+        
+        success_rate = details.get('initialization_summary', {}).get('success_rate', 0)
+        overview_table.add_row(
+            "Success Rate",
+            f"{success_rate:.1f}%",
+            "PASS" if success_rate >= 50 else "WARN" if success_rate > 0 else "FAIL"
+        )
+        
+        available_names = details.get('variant_names', [])
+        overview_table.add_row(
+            "Available Models",
+            ', '.join(available_names) if available_names else "None",
+            "LISTED"
+        )
+        
+        overview_table.add_row(
+            "Initialization",
+            "Passed" if details.get('initialization_passed', False) else "Failed",
+            "PASS" if details.get('initialization_passed', False) else "FAIL"
+        )
+        
+        console.print(overview_table)
+        console.print()
+        
+        # Variant details table
+        if 'variant_details' in details and details['variant_details']:
+            variants_table = Table(
+                title="[bold yellow]Model Variants Detail[/bold yellow]",
+                title_justify="left",
+                box=box.ROUNDED,
+                header_style="bold bright_white",
+                border_style="cyan",
+                show_lines=True,
+                expand=True,
+                width=min(120, console.width - 4)
+            )
+            
+            variants_table.add_column("Variant", style="bold yellow", width=20)
+            variants_table.add_column("Class", style="bright_white", width=20)
+            variants_table.add_column("Status", style="bold green", width=12, justify="center")
+            variants_table.add_column("Details", style="dim", min_width=50)
+            
+            for variant_name, variant_info in details['variant_details'].items():
+                # Format variant details
+                detail_lines = []
+                
+                # Description
+                if 'description' in variant_info:
+                    detail_lines.append(f"[bold bright_white]Description:[/] [dim]{variant_info['description']}[/dim]")
+                
+                # Configuration parameters
+                config_params = variant_info.get('config_parameters', 'unknown')
+                if config_params == 'error':
+                    detail_lines.append(f"[bold bright_white]Config:[/] [red]Analysis error[/red]")
+                elif config_params == 'none':
+                    detail_lines.append(f"[bold bright_white]Config:[/] [dim]No default config[/dim]")
+                elif isinstance(config_params, int):
+                    detail_lines.append(f"[bold bright_white]Config:[/] [cyan]{config_params} parameters[/cyan]")
+                else:
+                    detail_lines.append(f"[bold bright_white]Config:[/] [yellow]{config_params}[/yellow]")
+                
+                # Key configuration items
+                key_config = variant_info.get('key_config', {})
+                if key_config:
+                    config_items = []
+                    for param, value in key_config.items():
+                        config_items.append(f"{param}={value}")
+                    if config_items:
+                        detail_lines.append(f"[dim]Key params: {', '.join(config_items)}[/dim]")
+                
+                # Initialization parameters
+                init_params = variant_info.get('init_parameters', 'unknown')
+                if init_params != 'error' and isinstance(init_params, int):
+                    detail_lines.append(f"[bold bright_white]Required args:[/] [yellow]{init_params}[/yellow]")
+                
+                # Error information
+                if 'analysis_error' in variant_info:
+                    detail_lines.append(f"[red]Analysis error: {variant_info['analysis_error']}[/red]")
+                
+                details_text = "\n".join(detail_lines) if detail_lines else "[dim]No additional details[/dim]"
+                
+                # Status styling
+                status = variant_info.get('status', 'unknown')
+                if status == 'available':
+                    status_style = "bold green"
+                    status_text = "AVAILABLE"
+                elif status == 'error':
+                    status_style = "bold red"
+                    status_text = "ERROR"
+                elif status == 'missing':
+                    status_style = "bold yellow"
+                    status_text = "MISSING"
+                else:
+                    status_style = "bold white"
+                    status_text = status.upper()
+                
+                variants_table.add_row(
+                    Text(variant_name, style="bold yellow"),
+                    variant_info.get('class_name', 'Unknown'),
+                    Text(status_text, style=status_style),
+                    details_text
+                )
+            
+            console.print(variants_table)
+        
+        # Failed variants summary if any
+        failed_names = details.get('failed_names', [])
+        if failed_names:
+            failed_table = Table(
+                title="[bold red]Failed Model Variants[/bold red]",
+                title_justify="left",
+                box=box.ROUNDED,
+                header_style="bold bright_white",
+                border_style="red",
+                show_lines=True,
+                width=min(100, console.width - 4)
+            )
+            
+            failed_table.add_column("Variant", style="bold red", width=25)
+            failed_table.add_column("Status", style="bright_white", width=15)
+            failed_table.add_column("Issue", style="dim")
+            
+            variant_status = details.get('variant_status', {})
+            for variant_name in failed_names:
+                status = variant_status.get(variant_name, 'unknown')
+                issue_desc = {
+                    'error': 'Initialization error occurred',
+                    'missing': 'Required dependencies missing',
+                    'incompatible': 'Configuration incompatible',
+                    'unknown': 'Unknown issue'
+                }.get(status, f"Status: {status}")
+                
+                failed_table.add_row(variant_name, status.upper(), issue_desc)
+            
+            console.print()
+            console.print(failed_table)
+        
+        # Error information if initialization failed
+        if not details.get('initialization_passed', True):
+            error_table = Table(
+                title="[bold red]Model Variants Errors[/bold red]",
+                title_justify="left",
+                box=box.ROUNDED,
+                header_style="bold bright_white",
+                border_style="red",
+                width=min(100, console.width - 4)
+            )
+            
+            error_table.add_column("Error Type", style="bold red", width=20)
+            error_table.add_column("Details", style="bright_white")
+            
+            if 'initialization_error' in details:
+                error_table.add_row("Initialization Error", details['initialization_error'])
+            
+            if 'error' in details:
+                error_table.add_row("System Error", details['error'])
+            
+            console.print()
+            console.print(error_table)
+    
+    except Exception as e:
+        console.print(f"[bold red]Error displaying model variants details: {str(e)}[/bold red]")
 
 def check_performance_baseline() -> CheckResult:
     """Check if performance baseline can be established."""
@@ -5913,7 +6540,7 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
         section_count = len([k for k, v in loaded_config.items() if isinstance(v, dict)])
         total_params = sum(len(v) if isinstance(v, dict) else 1 for v in loaded_config.values())
         
-        logger.info(f"Successfully loaded configuration: {section_count} sections, {total_params} parameters")
+        logger.debug(f"Successfully loaded configuration: {section_count} sections, {total_params} parameters")
         logger.debug(f"Configuration sections: {list(loaded_config.keys())}")
         
         return loaded_config
@@ -11005,7 +11632,7 @@ def compare_model_architectures(input_dim: int = None) -> Dict[str, Any]:
         # Generate comparative analysis and recommendations
         results['_summary'] = generate_comparative_summary(results, hardware_context)
         
-        logger.info(f"Model architecture comparison completed: {results['_metadata']['successful_comparisons']}/{results['_metadata']['available_variants']} models analyzed")
+        logger.debug(f"Model architecture comparison completed: {results['_metadata']['successful_comparisons']}/{results['_metadata']['available_variants']} models analyzed")
         
         return results
         
@@ -13747,7 +14374,7 @@ class EnhancedAutoencoder(nn.Module):
                 # Skip connection (when architecturally reasonable)
                 self.skip = (
                     nn.Linear(self.input_dim, self.input_dim)
-                    if self.skip_connection and self.input_dim <= self.encoding_dim * 2
+                    if self.skip_connection and self.input_dim <= 1000
                     else None
                 )
                 
@@ -17068,12 +17695,35 @@ def configuration_menu():
             input("\nPress Enter to continue...")
 
 def interactive_main():
-    """Main interactive interface."""
+    """Main interactive interface."""    
+    # Clear any residual input buffer from system initialization
+    if hasattr(sys.stdin, 'flush'):
+        try:
+            sys.stdin.flush()
+        except:
+            pass
+    
+    # Add a small delay to ensure all output is complete
+    time.sleep(0.2)
+    
     while True:
         show_banner()
         print_main_menu()
         
-        choice = input(Fore.WHITE + Style.BRIGHT + "\nSelect an option " + Fore.YELLOW + Style.BRIGHT + "(1-9): ").strip()
+        # More robust input handling with retry logic
+        choice = None
+        while not choice:
+            try:
+                choice = input(Fore.WHITE + Style.BRIGHT + "\nSelect an option " + Fore.YELLOW + Style.BRIGHT + "(1-9): ").strip()
+                
+                # If we got empty input, don't show debug messages, just retry
+                if not choice:
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nExiting...")
+                print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
+                return
         
         try:
             if choice == "1":
@@ -17097,7 +17747,7 @@ def interactive_main():
                 print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
                 break
             else:
-                print(Fore.RED + Style.BRIGHT + "Invalid selection. Please try again.")
+                print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 1-9.")
             
         except KeyboardInterrupt:
             print(Fore.YELLOW + Style.BRIGHT + "\nOperation interrupted")
@@ -17105,7 +17755,12 @@ def interactive_main():
             print(Fore.RED + Style.BRIGHT + f"\nError: {str(e)}")
         
         if choice not in ("9", "0"):
-            input(Style.DIM + "\nPress Enter to continue..." + Style.RESET_ALL)
+            try:
+                input(Style.DIM + "\nPress Enter to continue..." + Style.RESET_ALL)
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nExiting...")
+                print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
+                break
 
 def show_system_info():
     """System information display."""
@@ -17501,14 +18156,6 @@ def main():
         # Use fallback logger since initialize_system failed
         logger.warning(f"Configuration initialization failed, using defaults: {e}")
         config = get_current_config()
-        
-        # Setup minimal logging if not already configured
-        if not logger.handlers:
-            logging.basicConfig(
-                level=logging.INFO,
-                format='%(asctime)s - %(levelname)s - %(message)s',
-                handlers=[logging.StreamHandler()]
-            )
     
     # If no arguments provided, launch interactive mode
     if len(sys.argv) == 1:
