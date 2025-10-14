@@ -1,0 +1,185 @@
+$dynamic_css
+
+<div class="analysis-section quick-actions-section">
+    <h2 style="color: #e65100; display: flex; align-items: center; gap: 10px; position: relative; z-index: 2;">
+        🚀 Quick Actions
+        <span style="font-size: 0.6em; background: rgba(233, 101, 0, 0.1); padding: 4px 12px; border-radius: 12px; font-weight: normal; backdrop-filter: blur(10px);">
+            JavaScript: <span id="quickActionsJsStatus" style="font-weight: 600;">Loading...</span>
+        </span>
+    </h2>
+    
+    <!-- Main Action Cards Grid -->
+    <div class="metric-grid quick-actions-grid">
+        <div class="metric-card quick-action-card" 
+             data-tab="history"
+             onclick="window.DashboardJS ? window.DashboardJS.showTab('history', event) : showTab('history', event)"
+             tabindex="0"
+             role="button"
+             aria-label="View initialization history">
+            <div class="metric-title">📊 Initialization History</div>
+            <div class="metric-value" style="color: #1976d2;">$total_entries</div>
+            <div class="metric-description">
+                <span>Total entries available</span>
+                <div style="margin-top: 5px; font-size: 0.85em; color: #666;">
+                    View detailed history and trends
+                </div>
+            </div>
+            <div class="quick-action-shortcut">
+                <kbd>H</kbd>
+            </div>
+        </div>
+        
+        <div class="metric-card quick-action-card" 
+             data-tab="performance"
+             onclick="window.DashboardJS ? window.DashboardJS.showTab('performance', event) : showTab('performance', event)"
+             tabindex="0"
+             role="button"
+             aria-label="View performance benchmarks">
+            <div class="metric-title">⚡ Performance Benchmarks</div>
+            <div class="metric-value performance-status">$performance_status</div>
+            <div class="metric-description">
+                <span>System performance testing</span>
+                <div style="margin-top: 5px; font-size: 0.85em; color: #666;">
+                    $performance_status_message
+                </div>
+            </div>
+            <div class="quick-action-shortcut">
+                <kbd>P</kbd>
+            </div>
+        </div>
+        
+        <div class="metric-card quick-action-card" 
+             data-tab="configuration"
+             onclick="window.DashboardJS ? window.DashboardJS.showTab('configuration', event) : showTab('configuration', event)"
+             tabindex="0"
+             role="button"
+             aria-label="Manage configurations">
+            <div class="metric-title">⚙️ Configuration Manager</div>
+            <div class="metric-value presets-count">$available_presets_count</div>
+            <div class="metric-description">
+                <span>Available configuration presets</span>
+                <div style="margin-top: 5px; font-size: 0.85em; color: #666;">
+                    Manage system configurations
+                </div>
+            </div>
+            <div class="quick-action-shortcut">
+                <kbd>C</kbd>
+            </div>
+        </div>
+        
+        <div class="metric-card quick-action-card" 
+             data-tab="dependencies"
+             onclick="window.DashboardJS ? window.DashboardJS.showTab('dependencies', event) : showTab('dependencies', event)"
+             tabindex="0"
+             role="button"
+             aria-label="Check dependency status">
+            <div class="metric-title">📦 Dependency Status</div>
+            <div class="metric-value dependencies-count">$core_dependencies_count</div>
+            <div class="metric-description">
+                <span>Core dependencies tracked</span>
+                <div style="margin-top: 5px; font-size: 0.85em; color: #666;">
+                    Check compatibility status
+                </div>
+            </div>
+            <div class="quick-action-shortcut">
+                <kbd>D</kbd>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Initializations Section -->
+    <div style="margin-top: 30px; position: relative; z-index: 2;">
+        <h3 style="color: #e65100; display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+            🕒 Recent Initializations
+            <span style="font-size: 0.7em; background: rgba(233, 101, 0, 0.1); padding: 4px 12px; border-radius: 12px; font-weight: normal; backdrop-filter: blur(10px);">
+                Last 4 Entries
+            </span>
+        </h3>
+        
+        <div class="metric-grid recent-initializations-grid">
+            $recent_initialization_cards
+        </div>
+        
+        <!-- Fallback message when no recent initializations -->
+        <div id="no-recent-initializations" style="display: none;" class="sr-only">
+            <div class="metric-card" style="text-align: center; padding: 30px;">
+                <div class="metric-title" style="color: #666;">No Previous Initializations</div>
+                <div class="metric-value" style="font-size: 1.5em; color: #999;">N/A</div>
+                <div class="metric-description" style="color: #666;">
+                    This appears to be the first initialization today.<br>
+                    Previous entries will appear here after subsequent runs.
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Export Actions -->
+    <div style="margin-top: 25px; padding-top: 20px; border-top: 2px solid rgba(233, 101, 0, 0.2); position: relative; z-index: 2;">
+        <h4 style="color: #e65100; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+            📥 Export Options
+        </h4>
+        <div class="export-actions">
+            <button class="quick-export-btn primary-export" 
+                    onclick="window.DashboardJS ? window.DashboardJS.exportData() : exportDashboardData()" 
+                    title="Export complete dashboard data including all historical entries"
+                    aria-label="Export complete data">
+                <span class="button-icon">💾</span>
+                Export Complete Data
+            </button>
+            
+            <button class="quick-export-btn secondary-export" 
+                    onclick="window.print()" 
+                    title="Print or save current dashboard view as PDF"
+                    aria-label="Print dashboard">
+                <span class="button-icon">🖨️</span>
+                Print Dashboard
+            </button>
+            
+            <button class="quick-export-btn tertiary-export" 
+                    onclick="window.DashboardJS ? window.DashboardJS.showTab('reports', event) : showTab('reports', event)" 
+                    title="View all reports and export options"
+                    aria-label="View all reports"
+                    style="background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%); box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);">
+                <span class="button-icon">📄</span>
+                View All Reports
+            </button>
+        </div>
+        
+        <!-- Keyboard Shortcuts Help -->
+        <div class="keyboard-shortcuts-section" style="margin-top: 20px; padding: 15px; background: linear-gradient(135deg, rgba(233, 101, 0, 0.05) 0%, rgba(233, 101, 0, 0.1) 100%); border-radius: 8px; border-left: 4px solid #ff9800;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: #e65100; font-weight: 600;">
+                ⌨️ Keyboard Shortcuts
+            </div>
+            <div class="shortcuts-grid">
+                <div class="shortcut-item">
+                    <kbd>H</kbd>
+                    <span>History</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>P</kbd>
+                    <span>Performance</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>C</kbd>
+                    <span>Configuration</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>D</kbd>
+                    <span>Dependencies</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>R</kbd>
+                    <span>Reports</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>E</kbd>
+                    <span>Export</span>
+                </div>
+                <div class="shortcut-item">
+                    <kbd>ESC</kbd>
+                    <span>Close Modal</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

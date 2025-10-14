@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Learning System Dashboard - $date_str</title>
+    <meta name="description" content="Comprehensive deep learning system status and performance monitoring dashboard">
+    <meta name="generator" content="Template Renderer v3.0">
+    
+    <!-- External CSS -->
+    <link rel="stylesheet" href="dashboard_styles.css">
+    
+    <!-- External JavaScript Module -->
+    <script src="dashboard_template.js" defer></script>
+    
+    <!-- Data Injection Script -->
+    <script>
+        $javascript_data
+    </script>
+</head>
+<body>
+    <!-- Dashboard Architecture Metadata -->
+    <!-- This dashboard uses template-based architecture with external JavaScript module -->
+    
+    <div class="container">
+        <!-- Enhanced Header Section -->
+        <div class="header">
+            <h1>Deep Learning System Dashboard</h1>
+            <div class="subtitle">
+                Comprehensive system status and performance monitoring
+            </div>
+            <div class="header-stats">
+                <div class="header-stat">
+                    <div class="number">$total_entries</div>
+                    <div class="label">Total Initializations</div>
+                </div>
+                <div class="header-stat">
+                    <div class="number">$time_str</div>
+                    <div class="label">Current Sequence</div>
+                </div>
+                <div class="header-stat">
+                    <div class="number">$date_str</div>
+                    <div class="label">Session Date</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- QUICK ACTIONS SECTION -->
+        $quick_actions_html
+
+        <!-- Enhanced Current System Status Section -->
+        <div class="analysis-section current-status-section">
+            <h2>Current System Status</h2>
+            
+            <!-- Health Score with visual indicator -->
+            <div class="health-score-container">
+                <div class="health-score $health_score_class" id="systemHealthScore">
+                    $system_health_score%
+                    <div class="sub-score">System Health Score</div>
+                </div>
+            </div>
+            
+            <div class="metric-grid current-status-grid">
+                <!-- Initialization Card -->
+                <div class="metric-card initialization-card">
+                    <div class="metric-title">Initialization</div>
+                    <div class="metric-value $init_status_class">
+                        $init_status
+                    </div>
+                    <div class="metric-description">
+                        <span>Duration:</span>
+                        <span class="value">$init_duration s</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Method:</span>
+                        <span class="value">$init_method</span>
+                    </div>
+                </div>
+                
+                <!-- Hardware Card -->
+                <div class="metric-card hardware-card">
+                    <div class="metric-title">CUDA GPU</div>
+                    <div class="metric-value $cuda_status_class">
+                        $cuda_status
+                    </div>
+                    <div class="metric-description">
+                        <span>GPU Count:</span>
+                        <span class="value">$gpu_count</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Model Variants:</span>
+                        <span class="value">$model_variants</span>
+                    </div>
+                </div>
+                
+                <!-- Configuration Scores Card -->
+                <div class="metric-card configuration-scores-card">
+                    <div class="metric-title">Configuration Scores</div>
+                    
+                    <div class="score-item">
+                        <div class="metric-description">
+                            <span>Seed Reproducibility:</span>
+                            <span class="value">$reproducibility_score%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill progress-fill-reproducibility" 
+                                 data-value="$reproducibility_score%" 
+                                 aria-label="Reproducibility Score: $reproducibility_score%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="score-item">
+                        <div class="metric-description">
+                            <span>Logging Compliance:</span>
+                            <span class="value">$logging_compliance%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill progress-fill-logging" 
+                                 data-value="$logging_compliance%" 
+                                 aria-label="Logging Compliance: $logging_compliance%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-status">
+                        <div class="metric-description">
+                            <span>Performance Monitoring:</span>
+                            <span class="value $performance_monitoring_class">
+                                $performance_monitoring_status
+                            </span>
+                        </div>
+                        
+                        <div class="metric-description">
+                            <span>Memory Management:</span>
+                            <span class="value $memory_management_class">
+                                $memory_management_status
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- System Resources Card -->
+                <div class="metric-card system-resources-card">
+                    <div class="metric-title">System Resources</div>
+                    
+                    <div class="resource-item">
+                        <div class="metric-description">
+                            <span>CPU Cores (logical):</span>
+                            <span class="value">$cpu_logical_cores</span>
+                        </div>
+                        
+                        <div class="metric-description">
+                            <span>CPU Cores (physical):</span>
+                            <span class="value">$cpu_physical_cores</span>
+                        </div>
+                    </div>
+                    
+                    <div class="resource-item">
+                        <div class="metric-description">
+                            <span>Total RAM:</span>
+                            <span class="value">$ram_total_gb GB</span>
+                        </div>
+                        
+                        <div class="metric-description">
+                            <span>Available RAM:</span>
+                            <span class="value">$ram_available_gb GB</span>
+                        </div>
+                        
+                        <div class="progress-bar ram-progress">
+                            <div class="progress-fill progress-fill-ram" 
+                                 data-value="$ram_percent%" 
+                                 aria-label="RAM Usage: $ram_percent%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Container for detailed sections -->
+        <div class="tab-container">
+            <div class="tab-buttons" role="tablist">
+                <button class="tab-button" role="tab" aria-controls="hardware" 
+                        onclick="window.DashboardJS ? window.DashboardJS.showTab('hardware', event) : console.warn('DashboardJS not loaded')"
+                        tabindex="0">
+                    <span class="tab-icon">🖥️</span>
+                    Hardware
+                </button>
+                <button class="tab-button" role="tab" aria-controls="configuration" 
+                        onclick="window.DashboardJS ? window.DashboardJS.showTab('configuration', event) : console.warn('DashboardJS not loaded')"
+                        tabindex="0">
+                    <span class="tab-icon">⚙️</span>
+                    Configuration
+                </button>
+                <button class="tab-button" role="tab" aria-controls="performance" 
+                        onclick="window.DashboardJS ? window.DashboardJS.showTab('performance', event) : console.warn('DashboardJS not loaded')"
+                        tabindex="0">
+                    <span class="tab-icon">📊</span>
+                    Performance
+                </button>
+                <button class="tab-button" role="tab" aria-controls="dependencies" 
+                        onclick="window.DashboardJS ? window.DashboardJS.showTab('dependencies', event) : console.warn('DashboardJS not loaded')"
+                        tabindex="0">
+                    <span class="tab-icon">📦</span>
+                    Dependencies
+                </button>
+                <button class="tab-button" role="tab" aria-controls="history" 
+                        onclick="window.DashboardJS ? window.DashboardJS.showTab('history', event) : console.warn('DashboardJS not loaded')"
+                        tabindex="0">
+                    <span class="tab-icon">📈</span>
+                    History
+                </button>
+                <button class="tab-button" role="tab" aria-controls="reports" 
+                        onclick="window.DashboardJS ? window.DashboardJS.showTab('reports', event) : console.warn('DashboardJS not loaded')"
+                        tabindex="0">
+                    <span class="tab-icon">📄</span>
+                    Reports
+                </button>
+            </div>
+            
+            <!-- Hardware Tab -->
+            <div id="hardware" class="tab-content" role="tabpanel" aria-labelledby="hardware-tab">
+                <div class="tab-header">
+                    <h3>Hardware Details</h3>
+                    <p class="tab-description">Comprehensive system hardware information and resource utilization</p>
+                </div>
+                
+                <div class="metric-grid hardware-details-grid">
+                    <div class="metric-card cpu-info-card">
+                        <div class="metric-title">CPU Information</div>
+                        <div class="metric-description">
+                            <span>Cores:</span>
+                            <span class="value">$cpu_logical_cores logical, $cpu_physical_cores physical</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Frequency:</span>
+                            <span class="value">$cpu_frequency GHz</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card memory-info-card">
+                        <div class="metric-title">Memory</div>
+                        <div class="metric-description">
+                            <span>Total:</span>
+                            <span class="value">$ram_total_gb GB</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Available:</span>
+                            <span class="value">$ram_available_gb GB</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill progress-fill-ram" 
+                                 data-value="$ram_percent%" 
+                                 aria-label="RAM Usage: $ram_percent%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card storage-info-card">
+                        <div class="metric-title">Storage</div>
+                        <div class="metric-description">
+                            <span>Total:</span>
+                            <span class="value">$storage_total_gb GB</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Free:</span>
+                            <span class="value">$storage_free_gb GB</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill progress-fill-storage" 
+                                 data-value="$storage_used_percent%" 
+                                 aria-label="Storage Usage: $storage_used_percent%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="gpu-section">
+                    <h3>GPU Information</h3>
+                    <div class="gpu-content">
+                        $gpu_info_html
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Configuration Tab -->
+            <div id="configuration" class="tab-content" role="tabpanel" aria-labelledby="configuration-tab">
+                <div class="tab-header">
+                    <h3>Configuration Details</h3>
+                    <p class="tab-description">System configuration, presets, and model variant status</p>
+                </div>
+                
+                <div class="metric-grid configuration-details-grid">
+                    <div class="metric-card preset-config-card">
+                        <div class="metric-title">Preset Configuration</div>
+                        <div class="metric-description">
+                            <span>Name:</span>
+                            <span class="value">$preset_name</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Status:</span>
+                            <span class="value">$validation_status</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Config File:</span>
+                            <span class="value">$config_file</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card available-presets-card">
+                        <div class="metric-title">Available Presets</div>
+                        <div class="metric-value">$available_presets_count</div>
+                        <div class="metric-description preset-list">
+                            $available_presets
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card model-variants-card">
+                        <div class="metric-title">Model Variants</div>
+                        <div class="metric-value">$model_variants</div>
+                        <div class="metric-description">
+                            Available model configurations
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="variant-status-section">
+                    <h3>Variant Status</h3>
+                    <div class="table-container">
+                        <table class="variant-status-table">
+                            <thead>
+                                <tr>
+                                    <th>Variant</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                $variant_status_rows
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Performance Tab -->
+            <div id="performance" class="tab-content" role="tabpanel" aria-labelledby="performance-tab">
+                <div class="tab-header">
+                    <h3>Performance Metrics</h3>
+                    <p class="tab-description">System performance benchmarks and capability assessment</p>
+                </div>
+                
+                <div class="performance-content">
+                    $performance_html
+                </div>
+            </div>
+            
+            <!-- Dependencies Tab -->
+            <div id="dependencies" class="tab-content" role="tabpanel" aria-labelledby="dependencies-tab">
+                <div class="tab-header">
+                    <h3>Dependencies</h3>
+                    <p class="tab-description">Core framework and dependency status information</p>
+                </div>
+                
+                <div class="metric-grid dependencies-overview-grid">
+                    <div class="metric-card core-framework-card">
+                        <div class="metric-title">Core Framework</div>
+                        <div class="metric-description">
+                            <span>Python:</span>
+                            <span class="value">$python_version</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>PyTorch:</span>
+                            <span class="value">$pytorch_version</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Platform:</span>
+                            <span class="value">$platform</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dependencies-tables">
+                    <div class="dependencies-section">
+                        <h3>Core Dependencies</h3>
+                        <div class="table-container">
+                            <table class="dependencies-table">
+                                <thead>
+                                    <tr>
+                                        <th>Dependency</th>
+                                        <th>Version</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    $core_deps_html
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="dependencies-section">
+                        <h3>Optional Dependencies</h3>
+                        <div class="table-container">
+                            <table class="dependencies-table optional-deps-table">
+                                <thead>
+                                    <tr>
+                                        <th>Dependency</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    $optional_deps_html
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- History Tab (Dynamically Generated) -->
+            $history_tab_content
+            
+            <!-- Reports Tab -->
+            <div id="reports" class="tab-content" role="tabpanel" aria-labelledby="reports-tab">
+                <div class="tab-header">
+                    <h3>Report Files</h3>
+                    <p class="tab-description">Generated reports and export options for current session</p>
+                </div>
+                
+                <div class="metric-card reports-overview-card">
+                    <div class="metric-title">Consolidated Reports for $date_str</div>
+                    <div class="reports-grid">
+                        <div class="report-item">
+                            <span class="report-label">Full Reports:</span>
+                            <span class="report-value">$report_filename ($report_entries_count entries)</span>
+                        </div>
+                        <div class="report-item">
+                            <span class="report-label">Summary:</span>
+                            <span class="report-value">$summary_filename</span>
+                        </div>
+                        <div class="report-item">
+                            <span class="report-label">Status:</span>
+                            <span class="report-value">$status_filename ($status_entries_count entries)</span>
+                        </div>
+                        <div class="report-item">
+                            <span class="report-label">Diagnostics:</span>
+                            <span class="report-value">$diagnostics_filename ($diagnostics_entries_count entries)</span>
+                        </div>
+                        <div class="report-item">
+                            <span class="report-label">Dashboard Data:</span>
+                            <span class="report-value">$dashboard_json_filename ($dashboard_entries_count entries)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="reports-actions-section">
+                    <h3>Report Generation Information</h3>
+                    <div class="metric-grid reports-info-grid">
+                        <div class="metric-card generation-details-card">
+                            <div class="metric-title">Generation Details</div>
+                            <div class="metric-description">
+                                <span>Generated At:</span>
+                                <span class="value">$formatted_timestamp</span>
+                            </div>
+                            <div class="metric-description">
+                                <span>Dashboard Version:</span>
+                                <span class="value">3.0 (Template-Based)</span>
+                            </div>
+                            <div class="metric-description">
+                                <span>Template Engine:</span>
+                                <span class="value">Python String Template</span>
+                            </div>
+                            <div class="metric-description">
+                                <span>JavaScript Module:</span>
+                                <span class="value" id="jsModuleStatus">External Module</span>
+                            </div>
+                        </div>
+                        
+                        <div class="metric-card export-options-card">
+                            <div class="metric-title">Export Options</div>
+                            <div class="export-actions">
+                                <button class="export-button primary-export" 
+                                        onclick="window.DashboardJS ? window.DashboardJS.exportData() : console.warn('DashboardJS not loaded')"
+                                        title="Export complete dashboard data including all historical entries"
+                                        tabindex="0">
+                                    <span class="button-icon">📊</span>
+                                    Export All Data
+                                </button>
+                                <button class="export-button secondary-export" 
+                                        onclick="window.DashboardJS ? window.DashboardJS.printDashboard() : window.print()"
+                                        title="Print or save current dashboard view as PDF"
+                                        tabindex="0">
+                                    <span class="button-icon">🖨️</span>
+                                    Print Dashboard
+                                </button>
+                            </div>
+                            <div class="export-description">
+                                Export complete dashboard data including all historical entries and system status information
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>Deep Learning System Dashboard</h4>
+                    <p>Template-Based Architecture v3.0</p>
+                </div>
+                <div class="footer-section">
+                    <p><strong>Last Updated:</strong> $formatted_timestamp</p>
+                    <p><strong>Session:</strong> $date_str-$time_str</p>
+                </div>
+                <div class="footer-section">
+                    <p>Powered by Template Renderer Module</p>
+                    <p>External JavaScript Module Architecture</p>
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Loading indicator for JavaScript module -->
+    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>Loading dashboard functionality...</p>
+    </div>
+    
+    <!-- Notification container for user feedback -->
+    <div id="notificationContainer" class="notification-container"></div>
+</body>
+</html>
