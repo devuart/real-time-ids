@@ -28454,23 +28454,28 @@ def display_model_initialization_summary(
             if model_type == 'SimpleAutoencoder':
                 title_color = "bold green"
                 border_color = "green"
+                header_color = "bold yellow"
                 title = "SimpleAutoencoder Initialization Complete"
             elif model_type == 'EnhancedAutoencoder':
                 title_color = "bold cyan"
                 border_color = "cyan"
+                header_color = "bold yellow"
                 title = "EnhancedAutoencoder Initialization Complete"
             else:  # AutoencoderEnsemble
                 title_color = "bold magenta"
                 border_color = "magenta"
+                header_color = "bold yellow"
                 title = "AutoencoderEnsemble Initialization Complete"
             
             # Create main model information table
             model_table = Table(
-                title=f"[{title_color}]{title}[/{title_color}]",
+                #title=f"[{title_color}]{title}[/{title_color}]",
+                title=title,
                 box=box.ROUNDED,
-                header_style="bold white",
+                header_style=header_color,
                 border_style=border_color,
-                title_style=f"{title_color}",
+                #title_style=f"{title_color}",
+                title_style=title_color,
                 title_justify="left",
                 show_lines=True,
                 expand=False
@@ -28478,7 +28483,7 @@ def display_model_initialization_summary(
             
             model_table.add_column("Attribute", style="bold cyan", width=20)
             model_table.add_column("Value", style="bold white", width=35)
-            model_table.add_column("Details", style="bold white", width=25)
+            model_table.add_column("Details", style=title_color, width=25)
             
             # Format memory usage
             if memory_mb > 1000:
@@ -28522,7 +28527,7 @@ def display_model_initialization_summary(
             # Add basic rows to table
             model_table.add_row(
                 "Model Type", 
-                Text(model_type, style="bold white"), 
+                Text(model_type, style=title_color), 
                 "Architecture class"
             )
             
@@ -38613,7 +38618,8 @@ def train_epoch(
                 'data_loading_time': data_loading_time,
                 'avg_forward_time': forward_time / num_batches if num_batches > 0 else 0,
                 'avg_backward_time': backward_time / num_batches if num_batches > 0 else 0,
-                'avg_optimizer_time': optimizer_time / (accumulated_steps // gradient_accumulation_steps) if accumulated_steps > 0 else 0,
+                #'avg_optimizer_time': optimizer_time / (accumulated_steps // gradient_accumulation_steps) if accumulated_steps > 0 else 0,
+                'avg_optimizer_time': optimizer_time / max(accumulated_steps // gradient_accumulation_steps, 1) if accumulated_steps > 0 else 0,
                 'avg_data_loading_time': data_loading_time / num_batches if num_batches > 0 else 0
             },
             'config_applied': final_config,
@@ -42343,14 +42349,49 @@ def train_model(
         #     logger.error(f"Failed to save config: {e}")
         
         # Save configuration used
+        # try:
+        #     save_dir = config_dir if config_dir is not None else model_dir
+        #     if isinstance(save_dir, str):
+        #         save_dir = Path(save_dir)
+            
+        #     config_path = save_dir / "training_config.json"
+        #     with open(config_path, "w") as f:
+        #         json.dump(config, f, indent=2, default=str)
+        #     saved_artifacts['config_path'] = str(config_path)
+        #     logger.info(f"Training configuration saved: {config_path}")
+        # except Exception as e:
+        #     logger.error(f"Failed to save config: {e}")
+        
+        # Save configuration used
         try:
             save_dir = config_dir if config_dir is not None else model_dir
             if isinstance(save_dir, str):
                 save_dir = Path(save_dir)
             
             config_path = save_dir / "training_config.json"
+            
+            # Create a serializable copy of config to avoid circular references
+            serializable_config = {}
+            for key, value in config.items():
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    serializable_config[key] = value
+                elif isinstance(value, (list, tuple)):
+                    serializable_config[key] = [
+                        item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                        for item in value
+                    ]
+                elif isinstance(value, dict):
+                    serializable_config[key] = {
+                        str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                        for k, v in value.items()
+                    }
+                elif isinstance(value, (Path,)):
+                    serializable_config[key] = str(value)
+                else:
+                    serializable_config[key] = str(value)
+            
             with open(config_path, "w") as f:
-                json.dump(config, f, indent=2, default=str)
+                json.dump(serializable_config, f, indent=2)
             saved_artifacts['config_path'] = str(config_path)
             logger.info(f"Training configuration saved: {config_path}")
         except Exception as e:
@@ -42401,14 +42442,86 @@ def train_model(
         }
         
         # Save final results summary
+        # try:
+        #     results_path = results_dir / "training_results.json"
+        #     with open(results_path, "w") as f:
+        #         json.dump(final_results, f, indent=2, default=str)
+        #     saved_artifacts['results_path'] = str(results_path)
+        #     logger.info(f"Final results summary saved: {results_path}")
+        # except Exception as e:
+        #     logger.error(f"Failed to save results summary: {e}")
+        
+        # Save final results summary
         try:
-            #results_path = model_dir / "training_results.json"
-            #results_dir = Path(__file__).resolve().parent / "results"
-            #results_path = results_dir / "training_results.json"
-            #results_path.mkdir(parents=True, exist_ok=True)
             results_path = results_dir / "training_results.json"
+            
+            # Create a serializable copy of final_results to avoid circular references
+            serializable_results = {}
+            for key, value in final_results.items():
+                if key == 'configuration':
+                    # Handle configuration separately with the same serialization logic
+                    serializable_config = {}
+                    for config_key, config_value in value.items():
+                        if isinstance(config_value, (str, int, float, bool, type(None))):
+                            serializable_config[config_key] = config_value
+                        elif isinstance(config_value, (list, tuple)):
+                            serializable_config[config_key] = [
+                                item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                                for item in config_value
+                            ]
+                        elif isinstance(config_value, dict):
+                            serializable_config[config_key] = {
+                                str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                                for k, v in config_value.items()
+                            }
+                        elif isinstance(config_value, (Path,)):
+                            serializable_config[config_key] = str(config_value)
+                        else:
+                            serializable_config[config_key] = str(config_value)
+                    serializable_results[key] = serializable_config
+                elif key == 'training_stats':
+                    # Handle training_stats with special care for complex objects
+                    serializable_stats = {}
+                    for stats_key, stats_value in value.items():
+                        if stats_key == 'config_applied':
+                            # Skip the full config in training_stats to avoid duplication
+                            serializable_stats[stats_key] = 'config_saved_separately'
+                        elif isinstance(stats_value, (str, int, float, bool, type(None))):
+                            serializable_stats[stats_key] = stats_value
+                        elif isinstance(stats_value, (list, tuple)):
+                            serializable_stats[stats_key] = [
+                                item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                                for item in stats_value
+                            ]
+                        elif isinstance(stats_value, dict):
+                            serializable_stats[stats_key] = {
+                                str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                                for k, v in stats_value.items()
+                            }
+                        elif isinstance(stats_value, (Path,)):
+                            serializable_stats[stats_key] = str(stats_value)
+                        else:
+                            serializable_stats[stats_key] = str(stats_value)
+                    serializable_results[key] = serializable_stats
+                elif isinstance(value, (str, int, float, bool, type(None))):
+                    serializable_results[key] = value
+                elif isinstance(value, (list, tuple)):
+                    serializable_results[key] = [
+                        item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                        for item in value
+                    ]
+                elif isinstance(value, dict):
+                    serializable_results[key] = {
+                        str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                        for k, v in value.items()
+                    }
+                elif isinstance(value, (Path,)):
+                    serializable_results[key] = str(value)
+                else:
+                    serializable_results[key] = str(value)
+            
             with open(results_path, "w") as f:
-                json.dump(final_results, f, indent=2, default=str)
+                json.dump(serializable_results, f, indent=2)
             saved_artifacts['results_path'] = str(results_path)
             logger.info(f"Final results summary saved: {results_path}")
         except Exception as e:
@@ -42423,9 +42536,9 @@ def train_model(
                 logger.warning(f"Failed to close TensorBoard writer: {e}")
         
         # Log final summary with comprehensive parameter compatibility information
-        logger.info("=" * 80)
+        logger.info("=" * 40)
         logger.info("TRAINING COMPLETED SUCCESSFULLY")
-        logger.info("=" * 80)
+        logger.info("=" * 40)
         logger.info(f"Model Type: {model_type}")
         logger.info(f"Training Time: {total_training_time/60:.1f} minutes ({final_epoch} epochs)")
         logger.info(f"Best Validation Loss: {best_val_loss:.6f}")
@@ -42442,7 +42555,7 @@ def train_model(
         logger.info("Saved Artifacts:")
         for artifact_type, artifact_path in saved_artifacts.items():
             logger.info(f"  {artifact_type}: {artifact_path}")
-        logger.info("=" * 80)
+        logger.info("=" * 40)
         
         return final_results
         
@@ -42513,13 +42626,71 @@ def train_model(
                 error_info["data_info"] = {"error": "Could not extract data info"}
         
         # Save error information to file
+        # try:
+        #     error_dir = Path(locals().get('model_dir', DEFAULT_MODEL_DIR))
+        #     error_dir.mkdir(parents=True, exist_ok=True)
+        #     error_path = error_dir / f"training_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+        #     with open(error_path, "w") as f:
+        #         json.dump(error_info, f, indent=2, default=str)
+            
+        #     logger.error(f"Error information saved to: {error_path}")
+        #     error_info["error_log_path"] = str(error_path)
+            
+        # except Exception as save_error:
+        #     logger.error(f"Failed to save error information: {save_error}")
+        #     error_info["save_error"] = str(save_error)
+        
+        # Save error information to file
         try:
-            error_dir = Path(locals().get('model_dir', DEFAULT_MODEL_DIR))
+            error_dir = Path(locals().get('results_dir', RESULTS_DIR))
             error_dir.mkdir(parents=True, exist_ok=True)
             error_path = error_dir / f"training_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             
+            # Create serializable error info
+            serializable_error_info = {}
+            for key, value in error_info.items():
+                if key == 'configuration':
+                    # Skip complex configuration in error info to avoid circular references
+                    serializable_error_info[key] = 'configuration_available_in_separate_file'
+                elif key == 'training_stats':
+                    # Handle training_stats with special care
+                    serializable_stats = {}
+                    for stats_key, stats_value in value.items():
+                        if stats_key == 'config_applied':
+                            serializable_stats[stats_key] = 'config_not_included_in_error_file'
+                        elif isinstance(stats_value, (str, int, float, bool, type(None))):
+                            serializable_stats[stats_key] = stats_value
+                        elif isinstance(stats_value, (list, tuple)):
+                            serializable_stats[stats_key] = [
+                                item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                                for item in stats_value
+                            ]
+                        elif isinstance(stats_value, dict):
+                            serializable_stats[stats_key] = {
+                                str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                                for k, v in stats_value.items()
+                            }
+                        else:
+                            serializable_stats[stats_key] = str(stats_value)
+                    serializable_error_info[key] = serializable_stats
+                elif isinstance(value, (str, int, float, bool, type(None))):
+                    serializable_error_info[key] = value
+                elif isinstance(value, (list, tuple)):
+                    serializable_error_info[key] = [
+                        item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                        for item in value
+                    ]
+                elif isinstance(value, dict):
+                    serializable_error_info[key] = {
+                        str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                        for k, v in value.items()
+                    }
+                else:
+                    serializable_error_info[key] = str(value)
+            
             with open(error_path, "w") as f:
-                json.dump(error_info, f, indent=2, default=str)
+                json.dump(serializable_error_info, f, indent=2)
             
             logger.error(f"Error information saved to: {error_path}")
             error_info["error_log_path"] = str(error_path)
@@ -42601,11 +42772,63 @@ def train_model(
                     partial_results["data_info"] = error_info["data_info"]
                 
                 # Save partial results
+                # try:
+                #     if locals().get('model_dir'):
+                #         partial_results_path = Path(locals()['model_dir']) / "partial_training_results.json"
+                #         with open(partial_results_path, "w") as f:
+                #             json.dump(partial_results, f, indent=2, default=str)
+                #         partial_results["partial_results_path"] = str(partial_results_path)
+                #         logger.info(f"Partial results saved: {partial_results_path}")
+                # except Exception as partial_save_error:
+                #     logger.warning(f"Failed to save partial results: {partial_save_error}")
+                
+                # Save partial results
                 try:
-                    if locals().get('model_dir'):
-                        partial_results_path = Path(locals()['model_dir']) / "partial_training_results.json"
+                    if locals().get('results_dir'):
+                        partial_results_path = Path(locals()['results_dir']) / "partial_training_results.json"
+                        
+                        # Create serializable partial results
+                        serializable_partial = {}
+                        for key, value in partial_results.items():
+                            if key == 'configuration':
+                                # Skip complex configuration
+                                serializable_partial[key] = 'configuration_not_included_in_partial_results'
+                            elif key == 'training_history':
+                                # Handle training_history carefully
+                                serializable_history = {}
+                                for history_key, history_value in value.items():
+                                    if isinstance(history_value, (str, int, float, bool, type(None))):
+                                        serializable_history[history_key] = history_value
+                                    elif isinstance(history_value, (list, tuple)):
+                                        serializable_history[history_key] = [
+                                            item if isinstance(item, (str, int, float, bool, type(None))) else float(item) if isinstance(item, (np.number,)) else str(item)
+                                            for item in history_value
+                                        ]
+                                    elif isinstance(history_value, dict):
+                                        serializable_history[history_key] = {
+                                            str(k): v if isinstance(v, (str, int, float, bool, type(None))) else float(v) if isinstance(v, (np.number,)) else str(v)
+                                            for k, v in history_value.items()
+                                        }
+                                    else:
+                                        serializable_history[history_key] = str(history_value)
+                                serializable_partial[key] = serializable_history
+                            elif isinstance(value, (str, int, float, bool, type(None))):
+                                serializable_partial[key] = value
+                            elif isinstance(value, (list, tuple)):
+                                serializable_partial[key] = [
+                                    item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                                    for item in value
+                                ]
+                            elif isinstance(value, dict):
+                                serializable_partial[key] = {
+                                    str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                                    for k, v in value.items()
+                                }
+                            else:
+                                serializable_partial[key] = str(value)
+                        
                         with open(partial_results_path, "w") as f:
-                            json.dump(partial_results, f, indent=2, default=str)
+                            json.dump(serializable_partial, f, indent=2)
                         partial_results["partial_results_path"] = str(partial_results_path)
                         logger.info(f"Partial results saved: {partial_results_path}")
                 except Exception as partial_save_error:
@@ -42742,7 +42965,7 @@ def train_model_interactive(
         #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "INTERACTIVE AUTOENCODER TRAINING SETUP")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        print(Fore.YELLOW + Style.BRIGHT + f"\nActive Context:")
+        print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
@@ -42829,7 +43052,7 @@ def train_model_interactive(
             # print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
             
             # Core configuration
-            print(Fore.YELLOW + Style.BRIGHT + "\nCore Configuration:")
+            print(Fore.YELLOW + Style.BRIGHT + "Core Configuration:")
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.GREEN + f"{'Real Data' if use_real_data_final else 'Synthetic Data'}")
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + f"{model_type}")
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
@@ -43089,7 +43312,7 @@ def _interactive_express_setup(
         #current_model_type = base_config.get('model', {}).get('model_type', 'Unknown')
         #current_model_type = model_type
         
-        print(Fore.YELLOW + Style.BRIGHT + f"\nBase Context:")
+        print(Fore.YELLOW + Style.BRIGHT + f"Base Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + f"Express Setup")
@@ -43098,9 +43321,9 @@ def _interactive_express_setup(
         
         # Data Source Selection
         if use_real_data is None:
-            print(Fore.YELLOW + Style.BRIGHT + "\nDATA SOURCE SELECTION")
-            #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
-            print(Fore.WHITE + Style.BRIGHT + "\n1. Real network data " + Fore.GREEN + Style.BRIGHT + "(recommended for production)")
+            print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SOURCE SELECTION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(recommended for production)")
             print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(good for testing and development)")
             print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
@@ -43122,9 +43345,9 @@ def _interactive_express_setup(
             print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if use_real_data else 'Synthetic Data'}")
         
         # Model Architecture Selection
-        print(Fore.YELLOW + Style.BRIGHT + "\nMODEL ARCHITECTURE SELECTION")
-        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
-        print(Fore.WHITE + Style.BRIGHT + "\n1. EnhancedAutoencoder " + Fore.GREEN + Style.BRIGHT + "(recommended - advanced features, good balance)")
+        print(Fore.MAGENTA + Style.BRIGHT + "\nMODEL ARCHITECTURE SELECTION")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "1. EnhancedAutoencoder " + Fore.GREEN + Style.BRIGHT + "(recommended - advanced features, good balance)")
         print(Fore.WHITE + Style.BRIGHT + "2. SimpleAutoencoder " + Fore.GREEN + Style.BRIGHT + "(fast and lightweight, minimal resources)")  
         print(Fore.WHITE + Style.BRIGHT + "3. AutoencoderEnsemble " + Fore.GREEN + Style.BRIGHT + "(best accuracy, slower, more resources)")
         print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
@@ -43148,9 +43371,9 @@ def _interactive_express_setup(
         print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {model_type}")
         
         # Training Duration Selection
-        print(Fore.YELLOW + Style.BRIGHT + "\nTRAINING DURATION SELECTION")
-        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
-        print(Fore.WHITE + Style.BRIGHT + "\n1. Quick Test " + Fore.GREEN + Style.BRIGHT + "(10 epochs - 1-3 minutes)")
+        print(Fore.MAGENTA + Style.BRIGHT + "\nTRAINING DURATION SELECTION")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "1. Quick Test " + Fore.GREEN + Style.BRIGHT + "(10 epochs - 1-3 minutes)")
         print(Fore.WHITE + Style.BRIGHT + "2. Standard " + Fore.GREEN + Style.BRIGHT + "(50 epochs - 5-15 minutes)")
         print(Fore.WHITE + Style.BRIGHT + "3. Thorough " + Fore.GREEN + Style.BRIGHT + "(100 epochs - 15-30 minutes)")
         print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
@@ -43174,16 +43397,16 @@ def _interactive_express_setup(
         print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {epochs} epochs")
         
         # Performance Configuration
-        print(Fore.YELLOW + Style.BRIGHT + "\nPERFORMANCE CONFIGURATION")
-        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+        print(Fore.MAGENTA + Style.BRIGHT + "\nPERFORMANCE CONFIGURATION")
+        (Fore.CYAN + Style.BRIGHT + "-" * 40)
         mixed_precision = torch.cuda.is_available()
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name() if torch.cuda.is_available() else "Unknown"
-            print(Fore.GREEN + Style.BRIGHT + f"\n✓ GPU detected: {gpu_name}")
+            print(Fore.GREEN + Style.BRIGHT + f"GPU detected: {gpu_name}")
             print(Fore.GREEN + Style.BRIGHT + "  Using mixed precision for faster training")
         else:
-            print(Fore.YELLOW + Style.BRIGHT + "\n[i] CPU mode: Standard precision")
-            print(Fore.YELLOW + Style.BRIGHT + "  Consider using GPU for better performance")
+            print(Fore.MAGENTA + Style.BRIGHT + "CPU mode: Standard precision")
+            print(Fore.MAGENTA + Style.BRIGHT + "  Consider using GPU for better performance")
         
         # Build final configuration with smart defaults
         final_config = base_config.copy()
@@ -43437,7 +43660,7 @@ def _interactive_express_setup(
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         # Core configuration display
-        print(Fore.YELLOW + Style.BRIGHT + "\nCore Configuration:")
+        print(Fore.YELLOW + Style.BRIGHT + "Core Configuration:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Source: " + Fore.GREEN + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + f"{model_type}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Duration: " + Fore.GREEN + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
@@ -43480,7 +43703,7 @@ def _interactive_express_setup(
         print(Fore.WHITE + Style.BRIGHT + f"  └─ Checkpoints: " + Fore.GREEN + f"{'Enabled' if monitoring_config.get('save_checkpoints', False) else 'Disabled'}")
         
         # Confirmation with enhanced styling
-        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*50)
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         try:
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with these express settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -43495,7 +43718,7 @@ def _interactive_express_setup(
             return None
         else:
             # Enhanced fallback options with styling
-            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?\n")
+            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?")
             print(Fore.WHITE + Style.BRIGHT + "1. Try express setup again with different settings")
             print(Fore.WHITE + Style.BRIGHT + "2. Switch to custom configuration for full control")
             print(Fore.RED + Style.BRIGHT + "0. Return to previous menu")
@@ -43588,18 +43811,18 @@ def _interactive_preset_setup(
         
         # Clear screen and show context
         #print("\033c", end="")
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "PRESET CONFIGURATION SETUP")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "PRESET CONFIGURATION SETUP")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         # Extract context from base_config for consistent display
         #current_preset = base_config.get('presets', {}).get('current_preset', 'Custom/Default')
         #current_model_type = base_config.get('model', {}).get('model_type', 'Unknown')
         
-        print(Fore.GREEN + Style.BRIGHT + f"\nBase Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.CYAN + Style.BRIGHT + f"{current_preset}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Current Model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + f"Preset Selection")
+        print(Fore.YELLOW + Style.BRIGHT + f"Base Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.YELLOW + Style.BRIGHT + f"{current_model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.YELLOW + Style.BRIGHT + f"Preset Selection")
         
         print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Preset Configurations:\n")
         #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
@@ -43651,7 +43874,7 @@ def _interactive_preset_setup(
             print()  # Empty line for spacing
         
         # Enhanced navigation options
-        print(Fore.YELLOW + Style.BRIGHT + "\nNavigation Options:\n")
+        print(Fore.YELLOW + Style.BRIGHT + "\nNavigation Options:")
         print(Fore.WHITE + Style.BRIGHT + f"{len(available_presets)+1}. " + Fore.GREEN + Style.BRIGHT + "Switch to Express Setup")
         print(Fore.WHITE + Style.BRIGHT + f"{len(available_presets)+2}. " + Fore.GREEN + Style.BRIGHT + "Switch to Custom Configuration")
         print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
@@ -43690,9 +43913,9 @@ def _interactive_preset_setup(
         # Load and display selected preset details
         preset_config = globals()['PRESET_CONFIGS'][selected_preset].copy()
         
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + f"SELECTED PRESET: {selected_preset}")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + f"SELECTED PRESET: {selected_preset}")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         # Extract preset details for display
         model_config = preset_config.get('model', {})
@@ -43708,8 +43931,8 @@ def _interactive_preset_setup(
         recommended_use = metadata.get('recommended_use', 'General purpose')
         
         # Display preset overview
-        print(Fore.YELLOW + Style.BRIGHT + "\nPreset Overview:")
-        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Description: " + Fore.WHITE + Style.BRIGHT + f"{description}")
+        print(Fore.YELLOW + Style.BRIGHT + "Preset Overview:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Description: " + Fore.GREEN + Style.BRIGHT + f"{description}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Recommended Use: " + Fore.GREEN + Style.BRIGHT + f"{recommended_use}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + Style.BRIGHT + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
@@ -43749,7 +43972,7 @@ def _interactive_preset_setup(
         print(Fore.CYAN + Style.BRIGHT + f"  └─ Validation Split: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('validation_split', 'Default')}")
         
         # Customization options with enhanced descriptions
-        print(Fore.YELLOW + Style.BRIGHT + "\nCustomization Options:\n")
+        print(Fore.YELLOW + Style.BRIGHT + "\nCustomization Options:")
         print(Fore.WHITE + Style.BRIGHT + "1. Use preset as-is " + Fore.GREEN + Style.BRIGHT + "(recommended for first use)")
         print(Fore.WHITE + Style.BRIGHT + "2. Customize data source only " + Fore.GREEN + Style.BRIGHT + "(keep preset, change data)")
         print(Fore.WHITE + Style.BRIGHT + "3. Customize training duration " + Fore.GREEN + Style.BRIGHT + "(adjust epochs and patience)")
@@ -43777,8 +44000,8 @@ def _interactive_preset_setup(
         # Data source customization
         if custom_choice in ['2', '3', '4', '5'] or use_real_data is None:
             if use_real_data is None:
-                print(Fore.YELLOW + Style.BRIGHT + "\nDATA SOURCE SELECTION\n")
-                #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
+                print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SOURCE SELECTION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                 print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(production use)")
                 print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(testing/development)")
                 print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
@@ -43804,8 +44027,8 @@ def _interactive_preset_setup(
         
         # Training duration customization
         if custom_choice in ['3', '4', '5']:
-            print(Fore.YELLOW + Style.BRIGHT + "\nTRAINING DURATION CUSTOMIZATION\n")
-            #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
+            print(Fore.MAGENTA + Style.BRIGHT + "\nTRAINING DURATION CUSTOMIZATION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             current_epochs = training_config.get('epochs', 50)
             estimated_time = _estimate_training_time(current_epochs, model_type)
             
@@ -43836,8 +44059,8 @@ def _interactive_preset_setup(
         
         # Model architecture customization
         if custom_choice in ['4', '5']:
-            print(Fore.YELLOW + Style.BRIGHT + "\nMODEL ARCHITECTURE CUSTOMIZATION\n")
-            #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
+            print(Fore.MAGENTA + Style.BRIGHT + "\nMODEL ARCHITECTURE CUSTOMIZATION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             current_model_type = model_config.get('model_type', 'EnhancedAutoencoder')
             
             print(Fore.YELLOW + Style.BRIGHT + f"Current model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
@@ -43875,15 +44098,15 @@ def _interactive_preset_setup(
             return _interactive_custom_setup(final_config, use_real_data, **kwargs)
         
         # Final confirmation with comprehensive summary
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "FINAL CONFIGURATION SUMMARY")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "FINAL CONFIGURATION SUMMARY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         final_model_type = final_config.get('model', {}).get('model_type', model_type)
         final_epochs = final_config.get('training', {}).get('epochs', epochs)
         final_data_source = final_config.get('data', {}).get('use_real_data', use_real_data)
         
-        print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration:")
+        print(Fore.YELLOW + Style.BRIGHT + "Configuration:")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Preset: " + Fore.GREEN + Style.BRIGHT + f"{selected_preset}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model: " + Fore.GREEN + Style.BRIGHT + f"{final_model_type}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data: " + Fore.GREEN + Style.BRIGHT + f"{'Real' if final_data_source else 'Synthetic'}")
@@ -43915,7 +44138,7 @@ def _interactive_preset_setup(
             return None
         else:
             # Enhanced fallback options
-            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?\n")
+            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?")
             print(Fore.WHITE + Style.BRIGHT + "1. Try preset selection again")
             print(Fore.WHITE + Style.BRIGHT + "2. Switch to express setup")
             print(Fore.WHITE + Style.BRIGHT + "3. Switch to custom configuration")
@@ -44006,13 +44229,13 @@ def _interactive_custom_setup(
             model_type = model_section.get("model_type", "Unknown")
         
         # Menu header with context matching other functions
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "CUSTOM CONFIGURATION SETUP")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + "Full Custom Control")
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "CUSTOM CONFIGURATION SETUP")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.YELLOW + Style.BRIGHT + "Full Custom Control")
         
         print("\nFull interactive configuration with complete control over all parameters.\n")
         print("Press Enter to accept defaults shown in parentheses.\n")
@@ -44021,12 +44244,12 @@ def _interactive_custom_setup(
         final_config = base_config.copy()
         
         # DATA CONFIGURATION SECTION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "DATA CONFIGURATION")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "DATA CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         if use_real_data is None:
-            print(Fore.GREEN + Style.BRIGHT + "\nData Source Selection:\n")
+            print(Fore.YELLOW + Style.BRIGHT + "Data Source Selection:")
             print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.YELLOW + Style.BRIGHT + "(requires data files)")
             print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.YELLOW + Style.BRIGHT + "(generated automatically)")
             print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
@@ -44129,11 +44352,11 @@ def _interactive_custom_setup(
         data_config['data_preprocessing'] = preprocessing in ('', 'y', 'yes')
 
         # MODEL ARCHITECTURE SECTION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "MODEL ARCHITECTURE")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "MODEL ARCHITECTURE")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        print(Fore.GREEN + Style.BRIGHT + "\nModel Type Selection:")
+        print(Fore.GREEN + Style.BRIGHT + "Model Type Selection:")
         model_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
         for i, mtype in enumerate(model_types, 1):
             print(Fore.WHITE + Style.BRIGHT + f"{i}. {mtype}")
@@ -44299,13 +44522,13 @@ def _interactive_custom_setup(
         model_config['min_features'] = int(min_features) if min_features else 5
 
         # TRAINING CONFIGURATION SECTION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "TRAINING CONFIGURATION")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "TRAINING CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         training_config = final_config.setdefault('training', {})
         
-        print(Fore.GREEN + Style.BRIGHT + "\nBasic Training Parameters:")
+        print(Fore.YELLOW + Style.BRIGHT + "Basic Training Parameters:")
         cancel_msg = Fore.RED + Style.BRIGHT + "\nTraining configuration cancelled"
         
         epochs = input(Fore.YELLOW + Style.BRIGHT + "Number of epochs " + Fore.WHITE + Style.BRIGHT + "(50): " + Style.RESET_ALL).strip()
@@ -44519,15 +44742,15 @@ def _interactive_custom_setup(
             training_config['mixed_precision'] = False
 
         # SYSTEM & HARDWARE CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "SYSTEM & HARDWARE CONFIGURATION")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "SYSTEM & HARDWARE CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         hardware_config = final_config.setdefault('hardware', {})
         system_config = final_config.setdefault('system', {})
         advanced_config = final_config.setdefault('advanced_training', {})
         
-        device_choice = input(Fore.YELLOW + Style.BRIGHT + "\nDevice " + Fore.WHITE + Style.BRIGHT + "(auto/cpu/cuda): " + Style.RESET_ALL).strip()
+        device_choice = input(Fore.YELLOW + Style.BRIGHT + "Device " + Fore.WHITE + Style.BRIGHT + "(auto/cpu/cuda): " + Style.RESET_ALL).strip()
         cancel_msg = Fore.RED + Style.BRIGHT + "\nHardware configuration cancelled"
         
         if device_choice.lower() == 'c':
@@ -44624,13 +44847,13 @@ def _interactive_custom_setup(
         system_config['distributed_training'] = distributed_training in ('y', 'yes')
 
         # MONITORING & LOGGING CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "MONITORING & LOGGING")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "MONITORING & LOGGING")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         monitoring_config = final_config.setdefault('monitoring', {})
         
-        tensorboard = input(Fore.YELLOW + Style.BRIGHT + "\nEnable TensorBoard logging? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        tensorboard = input(Fore.YELLOW + Style.BRIGHT + "Enable TensorBoard logging? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         cancel_msg = Fore.RED + Style.BRIGHT + "\nMonitoring configuration cancelled"
         
         if tensorboard == 'c':
@@ -44687,7 +44910,7 @@ def _interactive_custom_setup(
             return None
         monitoring_config['metrics_frequency'] = int(metrics_freq) if metrics_freq else 1
         
-        print(Fore.GREEN + Style.BRIGHT + "\nMetrics to track (space-separated):")
+        print(Fore.YELLOW + Style.BRIGHT + "\nMetrics to track (space-separated):")
         print(Fore.WHITE + Style.BRIGHT + "Available: loss, reconstruction_error, anomaly_detection_rate, mse_statistics")
         metrics_input = input(Fore.YELLOW + Style.BRIGHT + "Metrics " + Fore.WHITE + Style.BRIGHT + "(default: loss reconstruction_error): " + Style.RESET_ALL).strip()
         if metrics_input.lower() == 'c':
@@ -44747,13 +44970,13 @@ def _interactive_custom_setup(
         monitoring_config['profiling_enabled'] = profiling in ('y', 'yes')
 
         # SECURITY & ANOMALY DETECTION CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "SECURITY & ANOMALY DETECTION")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "SECURITY & ANOMALY DETECTION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         security_config = final_config.setdefault('security', {})
         
-        percentile = input(Fore.YELLOW + Style.BRIGHT + "\nAnomaly threshold percentile " + Fore.WHITE + Style.BRIGHT + "(95.0): " + Style.RESET_ALL).strip()
+        percentile = input(Fore.YELLOW + Style.BRIGHT + "Anomaly threshold percentile " + Fore.WHITE + Style.BRIGHT + "(95.0): " + Style.RESET_ALL).strip()
         cancel_msg = Fore.RED + Style.BRIGHT + "\nSecurity configuration cancelled"
         
         if percentile.lower() == 'c':
@@ -44867,13 +45090,13 @@ def _interactive_custom_setup(
                 security_config['uncertainty_threshold'] = float(uncertainty)
 
         # VALIDATION & TESTING CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "VALIDATION & TESTING")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "VALIDATION & TESTING")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         validation_config = final_config.setdefault('validation', {})
         
-        detailed_metrics = input(Fore.YELLOW + Style.BRIGHT + "\nCalculate detailed metrics? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        detailed_metrics = input(Fore.YELLOW + Style.BRIGHT + "Calculate detailed metrics? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         cancel_msg = Fore.RED + Style.BRIGHT + "\nValidation configuration cancelled"
         
         if detailed_metrics == 'c':
@@ -44937,13 +45160,13 @@ def _interactive_custom_setup(
             validation_config['metrics'] = ['loss', 'reconstruction_error']
 
         # EXPORT & SAVING CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "EXPORT & SAVING")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "EXPORT & SAVING")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         export_config = final_config.setdefault('export', {})
         
-        save_model = input(Fore.YELLOW + Style.BRIGHT + "\nSave trained model? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        save_model = input(Fore.YELLOW + Style.BRIGHT + "Save trained model? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         cancel_msg = Fore.RED + Style.BRIGHT + "\nExport configuration cancelled"
         
         if save_model == 'c':
@@ -45000,11 +45223,11 @@ def _interactive_custom_setup(
         system_config['checkpoint_dir'] = checkpoint_dir if checkpoint_dir else DEFAULT_MODEL_DIR
 
         # REPRODUCIBILITY & SYSTEM CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "REPRODUCIBILITY & SYSTEM")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "REPRODUCIBILITY & SYSTEM")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        reproducible = input(Fore.YELLOW + Style.BRIGHT + "\nEnable reproducible training? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        reproducible = input(Fore.YELLOW + Style.BRIGHT + "Enable reproducible training? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         cancel_msg = Fore.RED + Style.BRIGHT + "\nSystem configuration cancelled"
         
         if reproducible == 'c':
@@ -45044,13 +45267,13 @@ def _interactive_custom_setup(
         system_config['environment_health'] = env_health if env_health else 'auto'
 
         # HYPERPARAMETER OPTIMIZATION CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         hpo_config = final_config.setdefault('hyperparameter_optimization', {})
         
-        hpo_enabled = input(Fore.YELLOW + Style.BRIGHT + "\nEnable hyperparameter optimization? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
+        hpo_enabled = input(Fore.YELLOW + Style.BRIGHT + "Enable hyperparameter optimization? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         cancel_msg = Fore.RED + Style.BRIGHT + "\nHPO configuration cancelled"
         
         if hpo_enabled == 'c':
@@ -45134,9 +45357,9 @@ def _interactive_custom_setup(
             hpo_config['generate_plots'] = generate_plots in ('', 'y', 'yes')
 
         # PRESETS & ADVANCED CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "PRESETS & ADVANCED")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "PRESETS & ADVANCED")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         presets_config = final_config.setdefault('presets', {})
         
@@ -45170,7 +45393,7 @@ def _interactive_custom_setup(
             print(cancel_msg)
             return None
         if experimental_features in ('y', 'yes'):
-            print(Fore.GREEN + Style.BRIGHT + "\nAvailable experimental features:")
+            print(Fore.YELLOW + Style.BRIGHT + "\nAvailable experimental features:")
             print(Fore.WHITE + Style.BRIGHT + "1. Advanced attention mechanisms")
             print(Fore.WHITE + Style.BRIGHT + "2. Dynamic architecture adjustment")
             print(Fore.WHITE + Style.BRIGHT + "3. Adaptive learning rates")
@@ -45200,9 +45423,9 @@ def _interactive_custom_setup(
         experimental_config['auto_optimize'] = auto_optimize in ('y', 'yes')
 
         # METADATA & DOCUMENTATION CONFIGURATION
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "METADATA & DOCUMENTATION")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "METADATA & DOCUMENTATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         metadata_config = final_config.setdefault('metadata', {})
         
@@ -45265,9 +45488,9 @@ def _interactive_custom_setup(
         })
 
         # FINAL CONFIGURATION REVIEW
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*60)
-        print(Fore.CYAN + Style.BRIGHT + "CONFIGURATION REVIEW")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*60)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "CONFIGURATION REVIEW")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         # Comprehensive configuration summary
         estimated_time = _estimate_training_time(
@@ -45276,7 +45499,7 @@ def _interactive_custom_setup(
             training_config.get('batch_size', 64)
         )
         
-        print(Fore.YELLOW + Style.BRIGHT + f"\nConfiguration Summary:")
+        print(Fore.YELLOW + Style.BRIGHT + f"Configuration Summary:")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data: " + Fore.GREEN + Style.BRIGHT + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('epochs', 50)} epochs")
@@ -45422,7 +45645,7 @@ def _interactive_custom_setup(
 def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
     try:
         print("\nLAUNCHING TRAINING")
-        print("="*50)
+        print("="*40)
         
         training_params = {}
         
@@ -45561,6 +45784,7 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
         training_params.setdefault('checkpoint_dir', CHECKPOINTS_DIR)
         training_params.setdefault('data_dir', DATA_DIR)
         training_params.setdefault('config_dir', CONFIG_DIR)
+        training_params.setdefault('results_dir', RESULTS_DIR)
         
         if monitoring_config.get('tensorboard_dir'):
             training_params['tensorboard_dir'] = monitoring_config['tensorboard_dir']
@@ -46220,7 +46444,7 @@ def _display_training_results(results: Dict[str, Any]) -> None:
             print(f"-" * 40)
             print(f"TensorBoard Logs: {experiment_dir}")
         
-        print("="*80)
+        print("-"*40)
         
         additional_info = []
         
@@ -46276,7 +46500,7 @@ def _display_training_results(results: Dict[str, Any]) -> None:
             print("-" * 40)
             for info in additional_info:
                 print(f"- {info}")
-            print("="*80)
+            print("-"*40)
         
     except Exception as e:
         print(f"\nError displaying training results: {str(e)}")
@@ -46287,7 +46511,7 @@ def _display_training_results(results: Dict[str, Any]) -> None:
             print(f"Available keys: {list(results.keys())}")
         except Exception:
             print("Failed to extract basic result information")
-        print("="*80)
+        print("-"*40)
 
 def train_model_quick(
     # Quick Test Parameters
@@ -46335,9 +46559,14 @@ def train_model_quick(
         banner_config = show_banner(return_config=True)
         
         # Use the config returned from show_banner or fallback
-        if banner_config is not None:
+        # if banner_config is not None:
+        #     config = banner_config
+        # elif config is None:
+        #     config = get_current_config()
+        
+        if config is None and banner_config is not None:
             config = banner_config
-        elif config is None:
+        else:
             config = get_current_config()
         
         # Extract configuration context with error handling
@@ -46365,7 +46594,7 @@ def train_model_quick(
         #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "QUICK MODEL TRAINING - FAST TEST MODE")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        print(Fore.YELLOW + Style.BRIGHT + f"\nActive Context:")
+        print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
@@ -46422,6 +46651,7 @@ def train_model_quick(
         export_onnx = quick_training_config.setdefault('export_onnx', cleaned_params.get('export_onnx', False))
         tensorboard_logging = quick_training_config.setdefault('tensorboard_logging', cleaned_params.get('tensorboard_logging', False))
         model_dir = quick_training_config.setdefault('model_dir', cleaned_params.get('model_dir', DEFAULT_MODEL_DIR / "quick_test"))
+        results_dir = quick_training_config.setdefault('results_dir', cleaned_params.get('results_dir', RESULTS_DIR / "quick_test"))
         random_seed = quick_training_config.setdefault('random_seed', cleaned_params.get('random_seed', 42))
         non_interactive = quick_training_config.setdefault('non_interactive', cleaned_params.get('non_interactive', False))
         interactive = quick_training_config.setdefault('interactive', cleaned_params.get('interactive', not cleaned_params.get('non_interactive', False)))
@@ -46478,7 +46708,7 @@ def train_model_quick(
                     choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-5): " + Style.RESET_ALL).strip()
                     if choice in ['0', '1', '2', '3', '4', '5']:
                         break
-                    print(Fore.RED + Style.BRIGHT + "Invalid choice. Please select 0-5.")
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
                 except (EOFError, KeyboardInterrupt):
                     print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                     return {'success': False, 'cancelled': True, 'message': 'Quick training cancelled by user'}
@@ -46488,7 +46718,7 @@ def train_model_quick(
                 return {'success': False, 'cancelled': True, 'message': 'Quick training cancelled by user'}
             
             elif choice == '2':
-                print(Fore.YELLOW + Style.BRIGHT + "\nTRAINING PARAMETERS")
+                print(Fore.MAGENTA + Style.BRIGHT + "\nTRAINING PARAMETERS")
                 print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                 
                 # Epochs
@@ -46497,9 +46727,9 @@ def train_model_quick(
                     try:
                         quick_epochs = int(new_epochs)
                         quick_training_config['quick_epochs'] = quick_epochs
-                        print(Fore.GREEN + Style.BRIGHT + f"Updated epochs to {quick_epochs}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUpdated epochs to {quick_epochs}")
                     except ValueError:
-                        print(Fore.RED + Style.BRIGHT + "Invalid input, keeping current value")
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid input, keeping current value")
                 
                 # Batch size
                 new_batch_size = input(Fore.YELLOW + Style.BRIGHT + f"Batch size ({quick_batch_size}): " + Style.RESET_ALL).strip()
@@ -46507,9 +46737,9 @@ def train_model_quick(
                     try:
                         quick_batch_size = int(new_batch_size)
                         quick_training_config['quick_batch_size'] = quick_batch_size
-                        print(Fore.GREEN + Style.BRIGHT + f"Updated batch size to {quick_batch_size}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUpdated batch size to {quick_batch_size}")
                     except ValueError:
-                        print(Fore.RED + Style.BRIGHT + "Invalid input, keeping current value")
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid input, keeping current value")
                 
                 # Learning rate
                 new_lr = input(Fore.YELLOW + Style.BRIGHT + f"Learning rate ({quick_learning_rate}): " + Style.RESET_ALL).strip()
@@ -46517,9 +46747,9 @@ def train_model_quick(
                     try:
                         quick_learning_rate = float(new_lr)
                         quick_training_config['quick_learning_rate'] = quick_learning_rate
-                        print(Fore.GREEN + Style.BRIGHT + f"Updated learning rate to {quick_learning_rate}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUpdated learning rate to {quick_learning_rate}")
                     except ValueError:
-                        print(Fore.RED + Style.BRIGHT + "Invalid input, keeping current value")
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid input, keeping current value")
                 
                 # Encoding dimension
                 new_encoding = input(Fore.YELLOW + Style.BRIGHT + f"Encoding dimension ({quick_encoding_dim}): " + Style.RESET_ALL).strip()
@@ -46527,12 +46757,12 @@ def train_model_quick(
                     try:
                         quick_encoding_dim = int(new_encoding)
                         quick_training_config['quick_encoding_dim'] = quick_encoding_dim
-                        print(Fore.GREEN + Style.BRIGHT + f"Updated encoding dimension to {quick_encoding_dim}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUpdated encoding dimension to {quick_encoding_dim}")
                     except ValueError:
-                        print(Fore.RED + Style.BRIGHT + "Invalid input, keeping current value")
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid input, keeping current value")
             
             elif choice == '3':
-                print(Fore.YELLOW + Style.BRIGHT + "\nMODEL TYPE SELECTION")
+                print(Fore.MAGENTA + Style.BRIGHT + "\nMODEL TYPE SELECTION")
                 print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                 
                 model_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
@@ -46564,11 +46794,11 @@ def train_model_quick(
                             quick_training_config['quick_encoding_dim'] = 12
                             quick_encoding_dim = 12
                         
-                        print(Fore.GREEN + Style.BRIGHT + f"Updated model type to {quick_model_type}")
-                        print(Fore.GREEN + Style.BRIGHT + f"Adjusted encoding dimension to {quick_encoding_dim}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUpdated model type to {quick_model_type}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nAdjusted encoding dimension to {quick_encoding_dim}")
             
             elif choice == '4':
-                print(Fore.YELLOW + Style.BRIGHT + "\nDATA SETTINGS")
+                print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SETTINGS")
                 print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                 
                 # Real vs synthetic data
@@ -46576,11 +46806,11 @@ def train_model_quick(
                 if use_real_choice in ['y', 'yes']:
                     use_real_data = True
                     quick_training_config['use_real_data'] = True
-                    print(Fore.GREEN + Style.BRIGHT + "Switched to real data mode")
+                    print(Fore.GREEN + Style.BRIGHT + "\nSwitched to real data mode")
                 elif use_real_choice in ['n', 'no']:
                     use_real_data = False
                     quick_training_config['use_real_data'] = False
-                    print(Fore.GREEN + Style.BRIGHT + "Using synthetic data")
+                    print(Fore.GREEN + Style.BRIGHT + "\nUsing synthetic data")
                 
                 if not use_real_data:
                     # Synthetic data parameters
@@ -46589,30 +46819,30 @@ def train_model_quick(
                         try:
                             quick_normal_samples = int(new_normal)
                             quick_training_config['quick_normal_samples'] = quick_normal_samples
-                            print(Fore.GREEN + Style.BRIGHT + f"Updated normal samples to {quick_normal_samples}")
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUpdated normal samples to {quick_normal_samples}")
                         except ValueError:
-                            print(Fore.RED + Style.BRIGHT + "Invalid input, keeping current value")
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid input, keeping current value")
                     
                     new_attack = input(Fore.YELLOW + Style.BRIGHT + f"Attack samples ({quick_attack_samples}): " + Style.RESET_ALL).strip()
                     if new_attack:
                         try:
                             quick_attack_samples = int(new_attack)
                             quick_training_config['quick_attack_samples'] = quick_attack_samples
-                            print(Fore.GREEN + Style.BRIGHT + f"Updated attack samples to {quick_attack_samples}")
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUpdated attack samples to {quick_attack_samples}")
                         except ValueError:
-                            print(Fore.RED + Style.BRIGHT + "Invalid input, keeping current value")
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid input, keeping current value")
                     
                     new_features = input(Fore.YELLOW + Style.BRIGHT + f"Features ({quick_features}): " + Style.RESET_ALL).strip()
                     if new_features:
                         try:
                             quick_features = int(new_features)
                             quick_training_config['quick_features'] = quick_features
-                            print(Fore.GREEN + Style.BRIGHT + f"Updated features to {quick_features}")
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUpdated features to {quick_features}")
                         except ValueError:
-                            print(Fore.RED + Style.BRIGHT + "Invalid input, keeping current value")
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid input, keeping current value")
             
             elif choice == '5':
-                print(Fore.YELLOW + Style.BRIGHT + "\nOPTIMIZATION SETTINGS")
+                print(Fore.MAGENTA + Style.BRIGHT + "\nOPTIMIZATION SETTINGS")
                 print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                 
                 # Fast mode
@@ -46623,7 +46853,7 @@ def train_model_quick(
                 elif fast_choice in ['n', 'no']:
                     fast_mode = False
                     quick_training_config['fast_mode'] = False
-                print(Fore.GREEN + Style.BRIGHT + f"Fast mode: {'Enabled' if fast_mode else 'Disabled'}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nFast mode: {'Enabled' if fast_mode else 'Disabled'}")
                 
                 # Minimal logging
                 log_choice = input(Fore.YELLOW + Style.BRIGHT + f"Minimal logging? (Y/n, current: {'Yes' if minimal_logging else 'No'}): " + Style.RESET_ALL).strip().lower()
@@ -46633,7 +46863,7 @@ def train_model_quick(
                 elif log_choice in ['n', 'no']:
                     minimal_logging = False
                     quick_training_config['minimal_logging'] = False
-                print(Fore.GREEN + Style.BRIGHT + f"Minimal logging: {'Enabled' if minimal_logging else 'Disabled'}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nMinimal logging: {'Enabled' if minimal_logging else 'Disabled'}")
                 
                 # TensorBoard logging
                 tb_choice = input(Fore.YELLOW + Style.BRIGHT + f"TensorBoard logging? (y/N, current: {'Yes' if tensorboard_logging else 'No'}): " + Style.RESET_ALL).strip().lower()
@@ -46643,7 +46873,7 @@ def train_model_quick(
                 elif tb_choice in ['', 'n', 'no']:
                     tensorboard_logging = False
                     quick_training_config['tensorboard_logging'] = False
-                print(Fore.GREEN + Style.BRIGHT + f"TensorBoard logging: {'Enabled' if tensorboard_logging else 'Disabled'}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nTensorBoard logging: {'Enabled' if tensorboard_logging else 'Disabled'}")
                 
                 # Save results
                 save_choice = input(Fore.YELLOW + Style.BRIGHT + f"Save results? (Y/n, current: {'Yes' if save_results else 'No'}): " + Style.RESET_ALL).strip().lower()
@@ -46653,7 +46883,7 @@ def train_model_quick(
                 elif save_choice in ['n', 'no']:
                     save_results = False
                     quick_training_config['save_results'] = False
-                print(Fore.GREEN + Style.BRIGHT + f"Save results: {'Enabled' if save_results else 'Disabled'}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nSave results: {'Enabled' if save_results else 'Disabled'}")
                 
                 # Skip validation
                 skip_choice = input(Fore.YELLOW + Style.BRIGHT + f"Skip validation? (y/N, current: {'Yes' if skip_validation else 'No'}): " + Style.RESET_ALL).strip().lower()
@@ -46663,10 +46893,10 @@ def train_model_quick(
                 elif skip_choice in ['', 'n', 'no']:
                     skip_validation = False
                     quick_training_config['skip_validation'] = False
-                print(Fore.GREEN + Style.BRIGHT + f"Skip validation: {'Enabled' if skip_validation else 'Disabled'}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nSkip validation: {'Enabled' if skip_validation else 'Disabled'}")
             
             # Final confirmation
-            print(Fore.YELLOW + Style.BRIGHT + f"\nUpdated Quick Training Configuration:")
+            print(Fore.MAGENTA + Style.BRIGHT + f"\nUpdated Quick Training Configuration:")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             
             print(Fore.YELLOW + Style.BRIGHT + "Core Settings:")
@@ -46684,7 +46914,7 @@ def train_model_quick(
             
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nProceed with quick training? (Y/n): " + Style.RESET_ALL).lower().strip()
             if confirm not in ('', 'y', 'yes'):
-                print(Fore.RED + Style.BRIGHT + "Quick training cancelled by user")
+                print(Fore.RED + Style.BRIGHT + "\nQuick training cancelled by user")
                 return {'success': False, 'cancelled': True, 'message': 'Quick training cancelled by user'}
         
         # Set up logging level
@@ -47056,10 +47286,10 @@ def train_model_quick(
                         for i, rec in enumerate(recommendations, 1):
                             print(Fore.CYAN + Style.BRIGHT + f"{i}. {rec}")
                     
-                    print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+                    print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
                     print(Fore.GREEN + Style.BRIGHT + "Quick training completed!")
                     print(Fore.GREEN + Style.BRIGHT + "Ready for production or further testing.")
-                    print(Fore.YELLOW + Style.BRIGHT + "="*40)
+                    print(Fore.YELLOW + Style.BRIGHT + "-"*40)
             
             else:
                 # Training failed or returned error
@@ -47258,9 +47488,14 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
         banner_config = show_banner(return_config=True)
         
         # Use the config returned from show_banner or fallback
-        if banner_config is not None:
+        # if banner_config is not None:
+        #     config = banner_config
+        # elif config is None:
+        #     config = get_current_config()
+        
+        if config is None and banner_config is not None:
             config = banner_config
-        elif config is None:
+        else:
             config = get_current_config()
         
         # Extract configuration context with error handling
@@ -47285,13 +47520,13 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "CUSTOM TRAINING CONFIGURATION")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "CUSTOM TRAINING CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
         
         base_config = {}
         try:
@@ -47311,12 +47546,12 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
             )
             base_config = {}
         
-        print(Fore.WHITE + Style.BRIGHT + "Configuration includes:")
-        print(Fore.CYAN + Style.BRIGHT + "  ├─ Model architecture parameters")
-        print(Fore.CYAN + Style.BRIGHT + "  ├─ Training hyperparameters")
-        print(Fore.CYAN + Style.BRIGHT + "  ├─ Data configuration")
-        print(Fore.CYAN + Style.BRIGHT + "  ├─ System and hardware settings")
-        print(Fore.CYAN + Style.BRIGHT + "  └─ Security and monitoring options")
+        print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration includes:")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ Model architecture parameters")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ Training hyperparameters")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ Data configuration")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ System and hardware settings")
+        print(Fore.GREEN + Style.BRIGHT + "  └─ Security and monitoring options")
         
         print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration Sections:")
         print(Fore.WHITE + Style.BRIGHT + "1. Model Architecture " + Fore.GREEN + Style.BRIGHT + "(Layers, Activation, Normalization)")
@@ -47337,16 +47572,16 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                 section_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect section to configure (0-9): " + Style.RESET_ALL).strip()
                 
                 if section_choice == '0':
-                    print(Fore.RED + Style.BRIGHT + "Custom training cancelled")
+                    print(Fore.RED + Style.BRIGHT + "\nCustom training cancelled")
                     return None
                 
                 elif section_choice == '1':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nMODEL ARCHITECTURE CONFIGURATION")
-                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nMODEL ARCHITECTURE CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                     
                     model_config = final_config.setdefault('model', {})
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nModel Type:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Model Type:")
                     model_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
                     for i, mtype in enumerate(model_types, 1):
                         current = Fore.GREEN + Style.BRIGHT + " (current)" if mtype == model_config.get('model_type', 'EnhancedAutoencoder') else ""
@@ -47360,10 +47595,10 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     
                     while True:
                         try:
-                            model_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select model type (1-{len(model_types)}, default=2): " + Style.RESET_ALL).strip()
+                            model_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect model type (1-{len(model_types)}, default=2): " + Style.RESET_ALL).strip()
                             if model_choice in ['', '1', '2', '3']:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(model_types)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(model_types)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47371,7 +47606,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     model_type = model_types[int(model_choice)-1] if model_choice else 'EnhancedAutoencoder'
                     model_config['model_type'] = model_type
                     
-                    print(Fore.CYAN + Style.BRIGHT + f"\nArchitecture for {model_type}:")
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nArchitecture for {model_type}:")
                     
                     encoding_dim = input(Fore.YELLOW + Style.BRIGHT + "Encoding dimension (16/32/24 for Simple/Enhanced/Ensemble): " + Style.RESET_ALL).strip()
                     if encoding_dim:
@@ -47405,18 +47640,18 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         else:
                             model_config['dropout_rates'] = [0.2 - i*0.05 for i in range(hidden_len)]
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nActivation Functions:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nActivation Functions:")
                     activations = ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu']
                     for i, act in enumerate(activations, 1):
-                        current = Fore.GREEN + " (current)" if act == model_config.get('activation', 'leaky_relu') else ""
+                        current = Fore.GREEN + Style.BRIGHT + " (current)" if act == model_config.get('activation', 'leaky_relu') else ""
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. {act}{current}")
                     
                     while True:
                         try:
-                            act_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select activation (1-{len(activations)}, default=2): " + Style.RESET_ALL).strip()
+                            act_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect activation (1-{len(activations)}, default=2): " + Style.RESET_ALL).strip()
                             if act_choice in [''] + [str(i) for i in range(1, len(activations)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(activations)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(activations)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47431,18 +47666,18 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         activation_param = input(Fore.YELLOW + Style.BRIGHT + "Alpha for ELU (1.0): " + Style.RESET_ALL).strip()
                         model_config['activation_param'] = float(activation_param) if activation_param else 1.0
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nNormalization:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nNormalization:")
                     norm_options = ['none', 'batch', 'layer', 'instance', 'group']
                     for i, norm in enumerate(norm_options, 1):
-                        current = Fore.GREEN + " (current)" if norm == model_config.get('normalization', 'batch') else ""
+                        current = Fore.GREEN + Style.BRIGHT + " (current)" if norm == model_config.get('normalization', 'batch') else ""
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. {norm}{current}")
                     
                     while True:
                         try:
-                            norm_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select normalization (1-{len(norm_options)}, default=2): " + Style.RESET_ALL).strip()
+                            norm_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect normalization (1-{len(norm_options)}, default=2): " + Style.RESET_ALL).strip()
                             if norm_choice in [''] + [str(i) for i in range(1, len(norm_options)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(norm_options)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(norm_options)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47463,18 +47698,18 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     bias = input(Fore.YELLOW + Style.BRIGHT + "Use bias in layers? (Y/n): " + Style.RESET_ALL).strip().lower()
                     model_config['bias'] = bias in ('', 'y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nWeight Initialization:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nWeight Initialization:")
                     init_methods = ['xavier_uniform', 'xavier_normal', 'kaiming_uniform', 'kaiming_normal', 'orthogonal']
                     for i, init in enumerate(init_methods, 1):
-                        current = Fore.GREEN + " (current)" if init == model_config.get('weight_init', 'xavier_uniform') else ""
+                        current = Fore.GREEN + Style.BRIGHT + " (current)" if init == model_config.get('weight_init', 'xavier_uniform') else ""
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. {init}{current}")
                     
                     while True:
                         try:
-                            init_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select initialization (1-{len(init_methods)}, default=1): " + Style.RESET_ALL).strip()
+                            init_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect initialization (1-{len(init_methods)}, default=1): " + Style.RESET_ALL).strip()
                             if init_choice in [''] + [str(i) for i in range(1, len(init_methods)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(init_methods)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(init_methods)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47483,7 +47718,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     model_config['weight_init'] = weight_init
                     
                     if model_type in ['EnhancedAutoencoder', 'AutoencoderEnsemble']:
-                        print(Fore.CYAN + Style.BRIGHT + "\nEnhanced Features:")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nEnhanced Features:")
                         attention = input(Fore.YELLOW + Style.BRIGHT + "Use attention mechanism? (Y/n): " + Style.RESET_ALL).strip().lower()
                         model_config['use_attention'] = attention in ('', 'y', 'yes')
                         
@@ -47498,7 +47733,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                             model_config['legacy_mode'] = legacy in ('y', 'yes')
                     
                     if model_type == 'AutoencoderEnsemble':
-                        print(Fore.CYAN + Style.BRIGHT + "\nEnsemble Configuration:")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nEnsemble Configuration:")
                         num_models = input(Fore.YELLOW + Style.BRIGHT + "Number of ensemble models (3): " + Style.RESET_ALL).strip()
                         model_config['num_models'] = int(num_models) if num_models else 3
                         
@@ -47511,12 +47746,12 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     print(Fore.GREEN + Style.BRIGHT + f"\nModel configuration updated for {model_type}")
                 
                 elif section_choice == '2':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nTRAINING PARAMETERS CONFIGURATION")
-                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nTRAINING PARAMETERS CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                     
                     training_config = final_config.setdefault('training', {})
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nBasic Training Parameters:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Basic Training Parameters:")
                     epochs = input(Fore.YELLOW + Style.BRIGHT + "Number of epochs (50): " + Style.RESET_ALL).strip()
                     training_config['epochs'] = int(epochs) if epochs else 50
                     
@@ -47532,7 +47767,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     validation_split = input(Fore.YELLOW + Style.BRIGHT + "Validation split (0.2): " + Style.RESET_ALL).strip()
                     training_config['validation_split'] = float(validation_split) if validation_split else 0.2
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nRegularization:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nRegularization:")
                     weight_decay = input(Fore.YELLOW + Style.BRIGHT + "Weight decay (1e-4): " + Style.RESET_ALL).strip()
                     training_config['weight_decay'] = float(weight_decay) if weight_decay else 1e-4
                     
@@ -47542,18 +47777,18 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     grad_accum = input(Fore.YELLOW + Style.BRIGHT + "Gradient accumulation steps (1): " + Style.RESET_ALL).strip()
                     training_config['gradient_accumulation_steps'] = int(grad_accum) if grad_accum else 1
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nOptimizer Configuration:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nOptimizer Configuration:")
                     optimizers = ['AdamW', 'Adam', 'SGD', 'RMSprop', 'Adagrad']
                     for i, opt in enumerate(optimizers, 1):
-                        current = Fore.GREEN + " (current)" if opt == training_config.get('optimizer', 'AdamW') else ""
+                        current = Fore.GREEN + Style.BRIGHT + " (current)" if opt == training_config.get('optimizer', 'AdamW') else ""
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. {opt}{current}")
                     
                     while True:
                         try:
-                            opt_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select optimizer (1-{len(optimizers)}, default=1): " + Style.RESET_ALL).strip()
+                            opt_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect optimizer (1-{len(optimizers)}, default=1): " + Style.RESET_ALL).strip()
                             if opt_choice in [''] + [str(i) for i in range(1, len(optimizers)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(optimizers)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(optimizers)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47575,18 +47810,18 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         momentum = input(Fore.YELLOW + Style.BRIGHT + "SGD momentum (0.9): " + Style.RESET_ALL).strip()
                         training_config['momentum'] = float(momentum) if momentum else 0.9
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nLearning Rate Scheduler:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nLearning Rate Scheduler:")
                     scheduler_options = ['None', 'ReduceLROnPlateau', 'StepLR', 'CosineAnnealingLR', 'ExponentialLR', 'OneCycleLR']
                     for i, sched in enumerate(scheduler_options, 1):
-                        current = Fore.GREEN + " (current)" if sched == training_config.get('scheduler', 'ReduceLROnPlateau') else ""
+                        current = Fore.GREEN + Style.BRIGHT + " (current)" if sched == training_config.get('scheduler', 'ReduceLROnPlateau') else ""
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. {sched}{current}")
                     
                     while True:
                         try:
-                            sched_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select scheduler (1-{len(scheduler_options)}, default=2): " + Style.RESET_ALL).strip()
+                            sched_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect scheduler (1-{len(scheduler_options)}, default=2): " + Style.RESET_ALL).strip()
                             if sched_choice in [''] + [str(i) for i in range(1, len(scheduler_options)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(scheduler_options)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(scheduler_options)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47639,7 +47874,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         
                         training_config['scheduler_params'] = scheduler_params
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nTraining Options:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nTraining Options:")
                     early_stopping = input(Fore.YELLOW + Style.BRIGHT + "Enable early stopping? (Y/n): " + Style.RESET_ALL).strip().lower()
                     training_config['early_stopping'] = early_stopping in ('', 'y', 'yes')
                     
@@ -47652,20 +47887,20 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     else:
                         training_config['mixed_precision'] = False
                     
-                    print(Fore.GREEN + Style.BRIGHT + "Training configuration updated")
+                    print(Fore.GREEN + Style.BRIGHT + "\nTraining configuration updated")
                 
                 elif section_choice == '3':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nDATA CONFIGURATION")
-                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nDATA CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                     
                     data_config = final_config.setdefault('data', {})
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nData Source:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Data Source:")
                     use_real_data = input(Fore.YELLOW + Style.BRIGHT + "Use real network data? (y/N): " + Style.RESET_ALL).strip().lower()
                     data_config['use_real_data'] = use_real_data in ('y', 'yes')
                     
                     if data_config['use_real_data']:
-                        print(Fore.CYAN + Style.BRIGHT + "\nReal Data Configuration:")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nReal Data Configuration:")
                         data_path = input(Fore.YELLOW + Style.BRIGHT + "Data file path (optional): " + Style.RESET_ALL).strip()
                         if data_path:
                             data_config['data_path'] = data_path
@@ -47674,7 +47909,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         if artifacts_path:
                             data_config['artifacts_path'] = artifacts_path
                     else:
-                        print(Fore.CYAN + Style.BRIGHT + "\nSynthetic Data Configuration:")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nSynthetic Data Configuration:")
                         normal_samples = input(Fore.YELLOW + Style.BRIGHT + "Normal samples (8000): " + Style.RESET_ALL).strip()
                         data_config['normal_samples'] = int(normal_samples) if normal_samples else 8000
                         
@@ -47696,7 +47931,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     stratified = input(Fore.YELLOW + Style.BRIGHT + "Use stratified split? (Y/n): " + Style.RESET_ALL).strip().lower()
                     data_config['stratified_split'] = stratified in ('', 'y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nData Preprocessing:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nData Preprocessing:")
                     norm_options = ['standard', 'minmax', 'robust', 'none']
                     for i, norm in enumerate(norm_options, 1):
                         current = Fore.GREEN + Style.BRIGHT + " (current)" if norm == data_config.get('data_normalization', 'standard') else ""
@@ -47704,10 +47939,10 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     
                     while True:
                         try:
-                            norm_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select normalization (1-{len(norm_options)}, default=1): " + Style.RESET_ALL).strip()
+                            norm_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect normalization (1-{len(norm_options)}, default=1): " + Style.RESET_ALL).strip()
                             if norm_choice in [''] + [str(i) for i in range(1, len(norm_options)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(norm_options)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(norm_options)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47718,16 +47953,16 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     preprocessing = input(Fore.YELLOW + Style.BRIGHT + "Enable data preprocessing? (Y/n): " + Style.RESET_ALL).strip().lower()
                     data_config['data_preprocessing'] = preprocessing in ('', 'y', 'yes')
                     
-                    print(Fore.GREEN + Style.BRIGHT + "Data configuration updated")
+                    print(Fore.GREEN + Style.BRIGHT + "\nData configuration updated")
                 
                 elif section_choice == '4':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nSYSTEM & HARDWARE CONFIGURATION")
-                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nSYSTEM & HARDWARE CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                     
                     hardware_config = final_config.setdefault('hardware', {})
                     system_config = final_config.setdefault('system', {})
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nDevice Configuration:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Device Configuration:")
                     device_options = ['auto', 'cpu', 'cuda']
                     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                         device_options.append('mps')
@@ -47738,10 +47973,10 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     
                     while True:
                         try:
-                            dev_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select device (1-{len(device_options)}, default=1): " + Style.RESET_ALL).strip()
+                            dev_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect device (1-{len(device_options)}, default=1): " + Style.RESET_ALL).strip()
                             if dev_choice in [''] + [str(i) for i in range(1, len(device_options)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(device_options)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(device_options)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47759,7 +47994,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     gpu_memory = input(Fore.YELLOW + Style.BRIGHT + "Recommended GPU memory GB (4.0): " + Style.RESET_ALL).strip()
                     hardware_config['recommended_gpu_memory'] = float(gpu_memory) if gpu_memory else 4.0
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nPerformance Settings:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nPerformance Settings:")
                     num_workers = input(Fore.YELLOW + Style.BRIGHT + "Data loader workers (4): " + Style.RESET_ALL).strip()
                     system_config['num_workers'] = int(num_workers) if num_workers else 4
                     
@@ -47775,7 +48010,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     benchmark_mode = input(Fore.YELLOW + Style.BRIGHT + "Enable benchmark mode? (y/N): " + Style.RESET_ALL).strip().lower()
                     system_config['benchmark_mode'] = benchmark_mode in ('y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nReproducibility:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nReproducibility:")
                     reproducible = input(Fore.YELLOW + Style.BRIGHT + "Enable reproducible training? (Y/n): " + Style.RESET_ALL).strip().lower()
                     system_config['reproducible'] = reproducible in ('', 'y', 'yes')
                     
@@ -47783,7 +48018,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         random_seed = input(Fore.YELLOW + Style.BRIGHT + "Random seed (42): " + Style.RESET_ALL).strip()
                         system_config['random_seed'] = int(random_seed) if random_seed else 42
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nDirectories:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nDirectories:")
                     model_dir = input(Fore.YELLOW + Style.BRIGHT + f"Model directory ({DEFAULT_MODEL_DIR}): " + Style.RESET_ALL).strip()
                     system_config['model_dir'] = model_dir if model_dir else DEFAULT_MODEL_DIR
                     
@@ -47793,29 +48028,29 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     tb_dir = input(Fore.YELLOW + Style.BRIGHT + f"TensorBoard directory ({TB_DIR}): " + Style.RESET_ALL).strip()
                     system_config['tensorboard_dir'] = tb_dir if tb_dir else TB_DIR
                     
-                    print(Fore.GREEN + Style.BRIGHT + "System & hardware configuration updated")
+                    print(Fore.GREEN + Style.BRIGHT + "\nSystem & hardware configuration updated")
                 
                 elif section_choice == '5':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nSECURITY & ANOMALY DETECTION CONFIGURATION")
-                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nSECURITY & ANOMALY DETECTION CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                     
                     security_config = final_config.setdefault('security', {})
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nAnomaly Detection:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Anomaly Detection:")
                     percentile = input(Fore.YELLOW + Style.BRIGHT + "Anomaly threshold percentile (95.0): " + Style.RESET_ALL).strip()
                     security_config['percentile'] = float(percentile) if percentile else 95.0
                     
                     threshold_methods = ['percentile', 'adaptive', 'statistical', 'robust']
                     for i, method in enumerate(threshold_methods, 1):
-                        current = Fore.GREEN + " (current)" if method == security_config.get('anomaly_threshold_strategy', 'percentile') else ""
+                        current = Fore.GREEN + Style.BRIGHT + " (current)" if method == security_config.get('anomaly_threshold_strategy', 'percentile') else ""
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. {method}{current}")
                     
                     while True:
                         try:
-                            method_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select threshold method (1-{len(threshold_methods)}, default=1): " + Style.RESET_ALL).strip()
+                            method_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect threshold method (1-{len(threshold_methods)}, default=1): " + Style.RESET_ALL).strip()
                             if method_choice in [''] + [str(i) for i in range(1, len(threshold_methods)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(threshold_methods)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(threshold_methods)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47829,7 +48064,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     adaptive_thresh = input(Fore.YELLOW + Style.BRIGHT + "Use adaptive thresholding? (Y/n): " + Style.RESET_ALL).strip().lower()
                     security_config['adaptive_threshold'] = adaptive_thresh in ('', 'y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nAdvanced Security Options:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nAdvanced Security Options:")
                     attack_thresh = input(Fore.YELLOW + Style.BRIGHT + "Attack threshold (optional): " + Style.RESET_ALL).strip()
                     if attack_thresh:
                         security_config['attack_threshold'] = float(attack_thresh)
@@ -47864,7 +48099,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     
                     model_type = final_config.get('model', {}).get('model_type', 'EnhancedAutoencoder')
                     if model_type == 'AutoencoderEnsemble':
-                        print(Fore.CYAN + Style.BRIGHT + "\nEnsemble Security:")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nEnsemble Security:")
                         voting_methods = ['average', 'majority', 'weighted', 'max', 'min']
                         for i, voting in enumerate(voting_methods, 1):
                             current = Fore.GREEN + Style.BRIGHT + " (current)" if voting == security_config.get('ensemble_voting', 'average') else ""
@@ -47872,10 +48107,10 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         
                         while True:
                             try:
-                                voting_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select ensemble voting (1-{len(voting_methods)}, default=1): " + Style.RESET_ALL).strip()
+                                voting_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect ensemble voting (1-{len(voting_methods)}, default=1): " + Style.RESET_ALL).strip()
                                 if voting_choice in [''] + [str(i) for i in range(1, len(voting_methods)+1)]:
                                     break
-                                print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(voting_methods)}")
+                                print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(voting_methods)}")
                             except (EOFError, KeyboardInterrupt):
                                 print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                                 continue
@@ -47887,15 +48122,15 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         if uncertainty:
                             security_config['uncertainty_threshold'] = float(uncertainty)
                     
-                    print(Fore.GREEN + Style.BRIGHT + "Security configuration updated")
+                    print(Fore.GREEN + Style.BRIGHT + "\nSecurity configuration updated")
                 
                 elif section_choice == '6':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nMONITORING & LOGGING CONFIGURATION")
-                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nMONITORING & LOGGING CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                     
                     monitoring_config = final_config.setdefault('monitoring', {})
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nLogging Options:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Logging Options:")
                     verbose = input(Fore.YELLOW + Style.BRIGHT + "Verbose output? (Y/n): " + Style.RESET_ALL).strip().lower()
                     monitoring_config['verbose'] = verbose in ('', 'y', 'yes')
                     
@@ -47909,10 +48144,10 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     
                     while True:
                         try:
-                            level_choice = input(Fore.YELLOW + Style.BRIGHT + f"Select console logging level (1-{len(console_levels)}, default=2): " + Style.RESET_ALL).strip()
+                            level_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect console logging level (1-{len(console_levels)}, default=2): " + Style.RESET_ALL).strip()
                             if level_choice in [''] + [str(i) for i in range(1, len(console_levels)+1)]:
                                 break
-                            print(Fore.RED + Style.BRIGHT + f"Please select 1-{len(console_levels)}")
+                            print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(console_levels)}")
                         except (EOFError, KeyboardInterrupt):
                             print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                             continue
@@ -47920,14 +48155,14 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     console_level = console_levels[int(level_choice)-1] if level_choice else 'INFO'
                     monitoring_config['console_logging_level'] = console_level
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nProgress Tracking:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nProgress Tracking:")
                     tensorboard = input(Fore.YELLOW + Style.BRIGHT + "Enable TensorBoard logging? (Y/n): " + Style.RESET_ALL).strip().lower()
                     monitoring_config['tensorboard_logging'] = tensorboard in ('', 'y', 'yes')
                     
                     progress_bar = input(Fore.YELLOW + Style.BRIGHT + "Show progress bars? (Y/n): " + Style.RESET_ALL).strip().lower()
                     monitoring_config['progress_bar'] = progress_bar in ('', 'y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nCheckpoints and Saving:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nCheckpoints and Saving:")
                     checkpoints = input(Fore.YELLOW + Style.BRIGHT + "Save training checkpoints? (Y/n): " + Style.RESET_ALL).strip().lower()
                     monitoring_config['save_checkpoints'] = checkpoints in ('', 'y', 'yes')
                     
@@ -47941,15 +48176,15 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     save_history = input(Fore.YELLOW + Style.BRIGHT + "Save model history? (Y/n): " + Style.RESET_ALL).strip().lower()
                     monitoring_config['save_model_history'] = save_history in ('', 'y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nMetrics and Frequencies:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nMetrics and Frequencies:")
                     log_freq = input(Fore.YELLOW + Style.BRIGHT + "Log frequency (1): " + Style.RESET_ALL).strip()
                     monitoring_config['log_frequency'] = int(log_freq) if log_freq else 1
                     
                     metrics_freq = input(Fore.YELLOW + Style.BRIGHT + "Metrics frequency (1): " + Style.RESET_ALL).strip()
                     monitoring_config['metrics_frequency'] = int(metrics_freq) if metrics_freq else 1
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nMetrics to track (space-separated):")
-                    print(Fore.CYAN + Style.BRIGHT + "Available: loss, reconstruction_error, anomaly_detection_rate, mse_statistics, memory_usage")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nMetrics to track (space-separated):")
+                    print(Fore.GREEN + Style.BRIGHT + "Available: loss, reconstruction_error, anomaly_detection_rate, mse_statistics, memory_usage")
                     metrics_input = input(Fore.YELLOW + Style.BRIGHT + "Metrics (default: loss reconstruction_error): " + Style.RESET_ALL).strip()
                     if metrics_input:
                         monitoring_config['metrics_to_track'] = metrics_input.split()
@@ -47971,17 +48206,17 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     profiling = input(Fore.YELLOW + Style.BRIGHT + "Enable profiling? (y/N): " + Style.RESET_ALL).strip().lower()
                     monitoring_config['profiling_enabled'] = profiling in ('y', 'yes')
                     
-                    print(Fore.GREEN + Style.BRIGHT + "Monitoring configuration updated")
+                    print(Fore.GREEN + Style.BRIGHT + "\nMonitoring configuration updated")
                 
                 elif section_choice == '7':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nADVANCED OPTIONS CONFIGURATION")
-                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nADVANCED OPTIONS CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                     
                     validation_config = final_config.setdefault('validation', {})
                     experimental_config = final_config.setdefault('experimental', {})
                     export_config = final_config.setdefault('export', {})
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nValidation and Testing:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Validation and Testing:")
                     detailed_metrics = input(Fore.YELLOW + Style.BRIGHT + "Calculate detailed metrics? (Y/n): " + Style.RESET_ALL).strip().lower()
                     validation_config['detailed_metrics'] = detailed_metrics in ('', 'y', 'yes')
                     
@@ -48010,7 +48245,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     confidence_intervals = input(Fore.YELLOW + Style.BRIGHT + "Calculate confidence intervals? (y/N): " + Style.RESET_ALL).strip().lower()
                     validation_config['confidence_intervals'] = confidence_intervals in ('y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nExport Options:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nExport Options:")
                     save_model = input(Fore.YELLOW + Style.BRIGHT + "Save trained model? (Y/n): " + Style.RESET_ALL).strip().lower()
                     export_config['save_model'] = save_model in ('', 'y', 'yes')
                     
@@ -48023,17 +48258,17 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     export_onnx = input(Fore.YELLOW + Style.BRIGHT + "Export to ONNX format? (y/N): " + Style.RESET_ALL).strip().lower()
                     export_config['export_onnx'] = export_onnx in ('y', 'yes')
                     
-                    print(Fore.CYAN + Style.BRIGHT + "\nExperimental Features:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nExperimental Features:")
                     experimental_features = input(Fore.YELLOW + Style.BRIGHT + "Enable experimental features? (y/N): " + Style.RESET_ALL).strip().lower()
                     if experimental_features in ('y', 'yes'):
-                        print(Fore.YELLOW + Style.BRIGHT + "Available experimental features:")
-                        print(Fore.GREEN + Style.BRIGHT + "1. Advanced attention mechanisms")
-                        print(Fore.GREEN + Style.BRIGHT + "2. Dynamic architecture adjustment")
-                        print(Fore.GREEN + Style.BRIGHT + "3. Adaptive learning rates")
-                        print(Fore.GREEN + Style.BRIGHT + "4. Novel regularization techniques")
-                        print(Fore.GREEN + Style.BRIGHT + "5. Memory optimization")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nAvailable experimental features:")
+                        print(Fore.WHITE + Style.BRIGHT + "1. Advanced attention mechanisms")
+                        print(Fore.WHITE + Style.BRIGHT + "2. Dynamic architecture adjustment")
+                        print(Fore.WHITE + Style.BRIGHT + "3. Adaptive learning rates")
+                        print(Fore.WHITE + Style.BRIGHT + "4. Novel regularization techniques")
+                        print(Fore.WHITE + Style.BRIGHT + "5. Memory optimization")
                         
-                        exp_features_input = input(Fore.YELLOW + Style.BRIGHT + "Select features (space-separated numbers, optional): " + Style.RESET_ALL).strip()
+                        exp_features_input = input(Fore.YELLOW + Style.BRIGHT + "\nSelect features (space-separated numbers, optional): " + Style.RESET_ALL).strip()
                         if exp_features_input:
                             feature_map = {
                                 '1': 'advanced_attention',
@@ -48051,11 +48286,11 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     auto_optimize = input(Fore.YELLOW + Style.BRIGHT + "Enable automatic optimization? (y/N): " + Style.RESET_ALL).strip().lower()
                     experimental_config['auto_optimize'] = auto_optimize in ('y', 'yes')
                     
-                    print(Fore.GREEN + Style.BRIGHT + "Advanced options configuration updated")
+                    print(Fore.GREEN + Style.BRIGHT + "\nAdvanced options configuration updated")
                 
                 elif section_choice == '8':
-                    print(Fore.YELLOW + Style.BRIGHT + "\nCOMPLETE CONFIGURATION REVIEW")
-                    print(Fore.GREEN + Style.BRIGHT + "=" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nCOMPLETE CONFIGURATION REVIEW")
+                    print(Fore.CYAN + Style.BRIGHT + "=" * 40)
                     
                     model_config = final_config.get('model', {})
                     training_config = final_config.get('training', {})
@@ -48068,7 +48303,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     experimental_config = final_config.get('experimental', {})
                     export_config = final_config.get('export', {})
                     
-                    print(Fore.YELLOW + Style.BRIGHT + "\nModel Configuration:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Model Configuration:")
                     print(Fore.CYAN + Style.BRIGHT + f"  ├─ Type: " + Fore.GREEN + f"{model_config.get('model_type', 'EnhancedAutoencoder')}")
                     print(Fore.CYAN + Style.BRIGHT + f"  ├─ Encoding Dim: " + Fore.GREEN + f"{model_config.get('encoding_dim', 32)}")
                     print(Fore.CYAN + Style.BRIGHT + f"  ├─ Hidden Dims: " + Fore.GREEN + f"{model_config.get('hidden_dims', [256, 128, 64])}")
@@ -48079,7 +48314,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     
                     if model_config.get('model_type') == 'AutoencoderEnsemble':
                         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Ensemble Size: " + Fore.GREEN + f"{model_config.get('num_models', 3)}")
-                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Diversity Factor: " + Fore.GREEN + f"{model_config.get('diversity_factor', 0.3)}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Diversity Factor: " + Fore.GREEN + f"{model_config.get('diversity_factor', 0.3)}")
                     elif model_config.get('model_type') == 'EnhancedAutoencoder':
                         features = []
                         if model_config.get('use_attention', True):
@@ -48145,24 +48380,14 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         continue
                 
                 elif section_choice == '9':
-                    print(Fore.GREEN + Style.BRIGHT + "\nFINAL CONFIGURATION SUMMARY")
-                    print(Fore.YELLOW + Style.BRIGHT + "=" * 40)
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nFINAL CONFIGURATION SUMMARY")
+                    print(Fore.CYAN + Style.BRIGHT + "=" * 40)
                     
                     model_config = final_config.get('model', {})
                     training_config = final_config.get('training', {})
                     data_config = final_config.get('data', {})
                     hardware_config = final_config.get('hardware', {})
                     system_config = final_config.get('system', {})
-                    
-                    console.print(
-                        Panel.fit(
-                            "READY TO START CUSTOM TRAINING",
-                            style="bold green",
-                            border_style="green",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
                     
                     print(Fore.YELLOW + Style.BRIGHT + "Final Configuration:")
                     print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model: " + Fore.GREEN + f"{model_config.get('model_type', 'EnhancedAutoencoder')}")
@@ -48183,25 +48408,25 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         print(Fore.GREEN + Style.BRIGHT + "\nLaunching custom training...")
                         return _launch_training_with_config(final_config)
                     else:
-                        save_config = input(Fore.YELLOW + Style.BRIGHT + "Save this configuration for later? (y/N): " + Style.RESET_ALL).strip().lower()
+                        save_config = input(Fore.YELLOW + Style.BRIGHT + "\nSave this configuration for later? (y/N): " + Style.RESET_ALL).strip().lower()
                         if save_config in ('y', 'yes'):
-                            config_name = input(Fore.YELLOW + Style.BRIGHT + "Configuration name: " + Style.RESET_ALL).strip()
+                            config_name = input(Fore.YELLOW + Style.BRIGHT + "\nConfiguration name: " + Style.RESET_ALL).strip()
                             if config_name:
                                 try:
-                                    config_path = Path(final_config.get('system', {}).get('model_dir', DEFAULT_MODEL_DIR)) / f"custom_config_{config_name}.json"
+                                    config_path = Path(final_config.get('system', {}).get('config_dir', CONFIG_DIR)) / f"custom_config_{config_name}.json"
                                     config_path.parent.mkdir(parents=True, exist_ok=True)
                                     with open(config_path, 'w') as f:
                                         import json
                                         json.dump(final_config, f, indent=2, default=str)
-                                    print(Fore.GREEN + Style.BRIGHT + f"Configuration saved to: {config_path}")
+                                    print(Fore.GREEN + Style.BRIGHT + f"\nConfiguration saved to: {config_path}")
                                 except Exception as e:
-                                    print(Fore.RED + Style.BRIGHT + f"Failed to save configuration: {e}")
+                                    print(Fore.RED + Style.BRIGHT + f"\nFailed to save configuration: {e}")
                         
-                        print(Fore.RED + Style.BRIGHT + "Training cancelled")
+                        print(Fore.RED + Style.BRIGHT + "\nTraining cancelled")
                         return None
                 
                 else:
-                    print(Fore.RED + Style.BRIGHT + "Invalid choice. Please select 0-9.")
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-9.")
             
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
@@ -48288,9 +48513,14 @@ def run_stability_test(
         banner_config = show_banner(return_config=True)
         
         # Use the config returned from show_banner or fallback
-        if banner_config is not None:
+        # if banner_config is not None:
+        #     config = banner_config
+        # elif config is None:
+        #     config = get_current_config()
+        
+        if config is None and banner_config is not None:
             config = banner_config
-        elif config is None:
+        else:
             config = get_current_config()
         
         # Extract configuration context with error handling
@@ -48315,8 +48545,8 @@ def run_stability_test(
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.YELLOW + Style.BRIGHT + "SYSTEM STABILITY TEST")
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "SYSTEM STABILITY TEST")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
@@ -48392,7 +48622,8 @@ def run_stability_test(
         # Output defaults
         verbose = stability_config.setdefault('verbose', cleaned_params.get('verbose', True))
         save_test_results = stability_config.setdefault('save_test_results', cleaned_params.get('save_test_results', True))
-        test_results_dir = stability_config.setdefault('test_results_dir', cleaned_params.get('test_results_dir', DEFAULT_MODEL_DIR / "stability_tests"))
+        #test_results_dir = stability_config.setdefault('test_results_dir', cleaned_params.get('test_results_dir', DEFAULT_MODEL_DIR / "stability_tests"))
+        test_results_dir = stability_config.setdefault('test_results_dir', cleaned_params.get('results_dir', RESULTS_DIR / "stability_tests"))
         interactive = stability_config.setdefault('interactive', cleaned_params.get('interactive', not cleaned_params.get('non_interactive', False)))
         
         # Error handling defaults
@@ -48452,7 +48683,7 @@ def run_stability_test(
             
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nProceed with stability test? (Y/n): " + Style.RESET_ALL).lower().strip()
             if confirm not in ('', 'y', 'yes'):
-                print(Fore.RED + Style.BRIGHT + "Stability test cancelled by user")
+                print(Fore.RED + Style.BRIGHT + "\nStability test cancelled by user")
                 test_results['overall_status'] = 'CANCELLED'
                 return test_results
         
@@ -48517,14 +48748,14 @@ def run_stability_test(
                 test_results['system_info'] = system_info
                 
                 if verbose:
-                    print(Fore.YELLOW + Style.BRIGHT + "System Information:")
-                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ System: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('system', 'Unknown')} {system_info.get('machine', '')}")
-                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Python: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('python_version', '').split()[0]}")
-                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('pytorch_version', 'Unknown')}")
-                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('device', 'Unknown')}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nSystem Information:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ System: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('system', 'Unknown')} {system_info.get('machine', '')}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Python: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('python_version', '').split()[0]}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('pytorch_version', 'Unknown')}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('device', 'Unknown')}")
                     if torch.cuda.is_available():
-                        print(Fore.WHITE + Style.BRIGHT + f"  ├─ CUDA: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('cuda_version', 'Unknown')}")
-                        print(Fore.WHITE + Style.BRIGHT + f"  └─ GPUs: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('gpu_count', 0)}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ CUDA: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('cuda_version', 'Unknown')}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ GPUs: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('gpu_count', 0)}")
                     print()
                 
             except Exception as e:
@@ -48588,11 +48819,12 @@ def run_stability_test(
                 hw_test_results['status'] = 'PASSED'
                 
                 if verbose:
-                    print(Fore.GREEN + Style.BRIGHT + f"Hardware compatibility test passed:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: {device}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Tensor operations: OK")
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nHardware compatibility test passed:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{device}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Tensor operations: " + Fore.YELLOW + Style.BRIGHT + f"OK")
                     if test_mixed_precision and device.type == 'cuda':
-                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mixed precision: {hw_test_results['details'].get('mixed_precision', 'N/A')}")
+                        print(Fore.GREEN + Style.BRIGHT + f"   Device: " + Fore.YELLOW + Style.BRIGHT + f"{device}")
+                        print(Fore.GREEN + Style.BRIGHT + f"     └─ Mixed precision: " + Fore.YELLOW + Style.BRIGHT + f"{hw_test_results['details'].get('mixed_precision', 'N/A')}")
                 
             except Exception as e:
                 hw_test_results['status'] = 'FAILED'
@@ -48601,7 +48833,7 @@ def run_stability_test(
                 test_results['errors'].append(f"Hardware compatibility test failed: {e}")
                 
                 if verbose:
-                    print(Fore.RED + Style.BRIGHT + f"Hardware compatibility test failed: {e}")
+                    print(Fore.RED + Style.BRIGHT + f"\nHardware compatibility test failed: {e}")
                 
                 if not continue_on_error:
                     test_results['test_results']['hardware_compatibility'] = hw_test_results
@@ -48687,10 +48919,10 @@ def run_stability_test(
                 data_test_results['status'] = 'PASSED'
                 
                 if verbose:
-                    print(Fore.GREEN + Style.BRIGHT + f"Data pipeline test passed:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Synthetic data: {test_normal_samples + test_attack_samples} samples, {test_features} features")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ DataLoaders: {len(train_loader)} train, {len(val_loader)} val, {len(test_loader)} test batches")
-                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Data quality score: {validation_result['quality_score']:.2f}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nData pipeline test passed:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Synthetic data: " + Fore.YELLOW + Style.BRIGHT + f"{test_normal_samples + test_attack_samples} samples, {test_features} features")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ DataLoaders: " + Fore.YELLOW + Style.BRIGHT + f"{len(train_loader)} train, {len(val_loader)} val, {len(test_loader)} test batches")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Data quality score: " + Fore.YELLOW + Style.BRIGHT + f"{validation_result['quality_score']:.2f}")
             
             except Exception as e:
                 data_test_results['status'] = 'FAILED'
@@ -48699,7 +48931,7 @@ def run_stability_test(
                 test_results['errors'].append(f"Data pipeline test failed: {e}")
                 
                 if verbose:
-                    print(Fore.RED + Style.BRIGHT + f"Data pipeline test failed: {e}")
+                    print(Fore.RED + Style.BRIGHT + f"\nData pipeline test failed: {e}")
                 
                 if not continue_on_error:
                     test_results['test_results']['data_pipeline'] = data_test_results
@@ -48800,11 +49032,11 @@ def run_stability_test(
                 model_test_results['status'] = 'PASSED'
                 
                 if verbose:
-                    print(Fore.GREEN + Style.BRIGHT + f"Model initialization test passed:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: {test_model_type} ({type(model).__name__})")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parameters: {total_params:,} total, {trainable_params:,} trainable")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Forward pass: {test_input.shape} → {test_output.shape}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Device: {next(model.parameters()).device}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nModel initialization test passed:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{test_model_type} ({type(model).__name__})")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parameters: " + Fore.YELLOW + Style.BRIGHT + f"{total_params:,} total, {trainable_params:,} trainable")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Forward pass: " + Fore.YELLOW + Style.BRIGHT + f"{test_input.shape} → {test_output.shape}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{next(model.parameters()).device}")
             
             except Exception as e:
                 model_test_results['status'] = 'FAILED'
@@ -48813,7 +49045,7 @@ def run_stability_test(
                 test_results['errors'].append(f"Model initialization test failed: {e}")
                 
                 if verbose:
-                    print(Fore.RED + Style.BRIGHT + f"Model initialization test failed: {e}")
+                    print(Fore.RED + Style.BRIGHT + f"\nModel initialization test failed: {e}")
                 
                 if not continue_on_error:
                     test_results['test_results']['model_initialization'] = model_test_results
@@ -48939,12 +49171,12 @@ def run_stability_test(
                     training_test_results['status'] = 'PASSED'
                     
                     if verbose:
-                        print(Fore.GREEN + Style.BRIGHT + f"Training stability test passed:")
-                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: {final_metrics.get('final_epoch', 0)}/{test_epochs}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best validation loss: {best_val_loss:.6f}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training quality: {training_quality}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training time: {training_time:.1f} minutes")
-                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Threshold: {final_metrics.get('threshold', 0):.6f}")
+                        print(Fore.YELLOW + Style.BRIGHT + f"\nTraining stability test passed:")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{final_metrics.get('final_epoch', 0)}/{test_epochs}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best validation loss: " + Fore.YELLOW + Style.BRIGHT + f"{best_val_loss:.6f}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training quality: " + Fore.YELLOW + Style.BRIGHT + f"{training_quality}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training time: " + Fore.YELLOW + Style.BRIGHT + f"{training_time:.1f} minutes")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Threshold: " + Fore.YELLOW + Style.BRIGHT + f"{final_metrics.get('threshold', 0):.6f}")
                 
                 else:
                     # Training failed or returned error
@@ -48955,7 +49187,7 @@ def run_stability_test(
                     test_results['errors'].append(f"Training failed: {error_info}")
                     
                     if verbose:
-                        print(Fore.RED + Style.BRIGHT + f"Training stability test failed: {error_info}")
+                        print(Fore.RED + Style.BRIGHT + f"\nTraining stability test failed: {error_info}")
                 
                 training_test_results['duration_seconds'] = time.time() - training_start_time
             
@@ -48966,7 +49198,7 @@ def run_stability_test(
                 test_results['errors'].append(f"Training stability test failed: {e}")
                 
                 if verbose:
-                    print(Fore.RED + Style.BRIGHT + f"Training stability test failed: {e}")
+                    print(Fore.RED + Style.BRIGHT + f"\nTraining stability test failed: {e}")
             
             test_results['test_results']['training_stability'] = training_test_results
             
@@ -49040,11 +49272,11 @@ def run_stability_test(
                     }
                     
                     if verbose:
-                        print(Fore.GREEN + Style.BRIGHT + f"Performance benchmarking passed:")
-                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Throughput: {samples_per_second:.1f} samples/sec")
-                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Inference time: {throughput_time * 1000:.2f} ms")
+                        print(Fore.YELLOW + Style.BRIGHT + f"\nPerformance benchmarking passed:")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Throughput: " + Fore.YELLOW + Style.BRIGHT + f"{samples_per_second:.1f} samples/sec")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Inference time: " + Fore.YELLOW + Style.BRIGHT + f"{throughput_time * 1000:.2f} ms")
                         if torch.cuda.is_available():
-                            print(Fore.GREEN + Style.BRIGHT + f"  └─ Memory usage: {memory_usage_mb:.1f} MB")
+                            print(Fore.GREEN + Style.BRIGHT + f"  └─ Memory usage: " + Fore.YELLOW + Style.BRIGHT + f"{memory_usage_mb:.3f} MB")
                 
                 except Exception as e:
                     perf_test_results['status'] = 'FAILED'
@@ -49053,7 +49285,7 @@ def run_stability_test(
                     test_results['warnings'].append(f"Performance benchmarking failed: {e}")
                     
                     if verbose:
-                        print(Fore.RED + Style.BRIGHT + f"Performance benchmarking failed: {e}")
+                        print(Fore.RED + Style.BRIGHT + f"\nPerformance benchmarking failed: {e}")
                 
                 test_results['test_results']['performance_benchmarking'] = perf_test_results
             
@@ -49099,7 +49331,7 @@ def run_stability_test(
                     if verbose:
                         for mt, result in multi_model_results.items():
                             status_symbol = "✓" if result['status'] == 'PASSED' else "✗"
-                            print(Fore.GREEN + Style.BRIGHT + f"  {status_symbol} {mt}: {result['status']}")
+                            print(Fore.GREEN + Style.BRIGHT + f"\n  {status_symbol} {mt}: {result['status']}")
             
             # Stress test
             if stress_test:
@@ -49151,7 +49383,7 @@ def run_stability_test(
                     if verbose:
                         status_symbol = "✓" if stress_test_results['status'] == 'PASSED' else "⚠" if stress_test_results['status'] == 'PARTIAL' else "✗"
                         status_color = Fore.GREEN if stress_test_results['status'] == 'PASSED' else Fore.YELLOW if stress_test_results['status'] == 'PARTIAL' else Fore.RED
-                        print(status_color + Style.BRIGHT + f"{status_symbol} Stress test: {successful_iterations}/{stress_iterations} iterations successful")
+                        print(status_color + Style.BRIGHT + f"\n{status_symbol} Stress test: {successful_iterations}/{stress_iterations} iterations successful")
                 
                 except Exception as e:
                     stress_test_results['status'] = 'FAILED'
@@ -49160,7 +49392,7 @@ def run_stability_test(
                     test_results['warnings'].append(f"Stress test failed: {e}")
                     
                     if verbose:
-                        print(Fore.RED + Style.BRIGHT + f"Stress test failed: {e}")
+                        print(Fore.RED + Style.BRIGHT + f"\nStress test failed: {e}")
                 
                 test_results['test_results']['stress_test'] = stress_test_results
             
@@ -49251,14 +49483,14 @@ def run_stability_test(
             
             # Display comprehensive results
             if verbose:
-                print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
-                print(Fore.YELLOW + Style.BRIGHT + "STABILITY TEST RESULTS")
-                print(Fore.CYAN + Style.BRIGHT + "="*40)
+                print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+                print(Fore.MAGENTA + Style.BRIGHT + "STABILITY TEST RESULTS")
+                print(Fore.CYAN + Style.BRIGHT + "-"*40)
                 
                 # Overall status
                 status_symbol = "✓" if overall_status == 'PASSED' else "⚠" if overall_status == 'PARTIAL' else "✗"
                 status_color = Fore.GREEN if overall_status == 'PASSED' else Fore.YELLOW if overall_status == 'PARTIAL' else Fore.RED
-                print(Fore.WHITE + Style.BRIGHT + f"\nOverall Status: " + status_color + Style.BRIGHT + f"{status_symbol} {overall_status} - {status_description}")
+                print(Fore.WHITE + Style.BRIGHT + f"Overall Status: " + status_color + Style.BRIGHT + f"{status_symbol} {overall_status} - {status_description}")
                 
                 # Summary
                 summary = test_results['summary']
@@ -49306,7 +49538,7 @@ def run_stability_test(
                     for i, warning in enumerate(test_results['warnings'], 1):
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. " + Fore.YELLOW + Style.BRIGHT + f"{warning}")
                 
-                print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+                print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
                 
                 # Final recommendation
                 if overall_status == 'PASSED':
@@ -49320,7 +49552,7 @@ def run_stability_test(
                     final_color = Fore.RED
                 
                 print(final_color + Style.BRIGHT + final_msg)
-                print(Fore.CYAN + Style.BRIGHT + "="*40)
+                print(Fore.CYAN + Style.BRIGHT + "-"*40)
             
             # Cleanup
             try:
@@ -52443,6 +52675,1576 @@ def run_hyperparameter_optimization(
         except Exception:
             pass
 
+def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
+    """Menu for hyperparameter optimization options with context display and error handling."""
+    while True:
+        # Clear screen and show banner
+        print("\033c", end="")
+        banner_config = show_banner(return_config=True)
+        
+        # Use the config returned from show_banner or fallback
+        if config is None and banner_config is not None:
+            config = banner_config
+        else:
+            config = get_current_config()
+        
+        # Extract configuration sections with error handling
+        hpo_config = config.get('hyperparameter_optimization', {})
+        data_config = config.get('data', {})
+        system_config = config.get('system', {})
+        model_config = config.get('model', {})
+        training_config = config.get('training', {})
+        
+        # Context extraction using multiple fallbacks
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Extract config source with fallbacks
+        if "runtime" in config and isinstance(config["runtime"], dict):
+            config_source = config["runtime"].get("config_source", "Unknown")
+        elif "metadata" in config and isinstance(config["metadata"], dict):
+            config_source = config["metadata"].get("config_source", "Unknown")
+        
+        # HPO-specific context extraction
+        hpo_data_path = data_config.get('data_path', 'Default')
+        preset_count = len(PRESET_CONFIGS) if 'PRESET_CONFIGS' in globals() else 'Unknown'
+        hpo_preset_count = len([p for p in PRESET_CONFIGS.values() if p.get('hyperparameter_optimization', {}).get('enabled', False)]) if 'PRESET_CONFIGS' in globals() else 'Unknown'
+        hpo_epoch_count = training_config.get('epochs', 'Default')
+        hpo_batch_count = training_config.get('batch_size', 'Default')
+        hpo_normal_samples_count = data_config.get('normal_samples', 10000)
+        hpo_trials_count = hpo_config.get('n_trials', 50)
+        hpo_strategy = hpo_config.get('strategy', 'optuna')
+        hpo_timeout = hpo_config.get('timeout', 3600)
+        
+        # Menu display with context
+        print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION MENU")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Active HPO Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_strategy}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_trials_count}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_timeout}s")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Data: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_data_path}")
+        
+        # Menu options with context-aware descriptions
+        print(Fore.YELLOW + Style.BRIGHT + "\nOptimization Options:")
+        print(Fore.WHITE + Style.BRIGHT + "1. Express HPO (Quick Setup) " + Fore.GREEN + Style.BRIGHT + f"(Trials: {hpo_trials_count})")
+        print(Fore.WHITE + Style.BRIGHT + "2. HPO with Current Configuration " + Fore.GREEN + Style.BRIGHT + f"(Preset: {preset_name})")
+        print(Fore.WHITE + Style.BRIGHT + "3. HPO with Synthetic Data " + Fore.GREEN + Style.BRIGHT + f"(Samples: {hpo_normal_samples_count})")
+        print(Fore.WHITE + Style.BRIGHT + "4. HPO with Real Data " + Fore.GREEN + Style.BRIGHT + f"(Source: {hpo_data_path})")
+        print(Fore.WHITE + Style.BRIGHT + "5. Custom HPO Configuration " + Fore.GREEN + Style.BRIGHT + "(Full Interactive Setup)")
+        print(Fore.WHITE + Style.BRIGHT + "6. Select HPO Preset " + Fore.GREEN + Style.BRIGHT + f"(Available: {hpo_preset_count})")
+        print(Fore.WHITE + Style.BRIGHT + "7. Continue Existing Study " + Fore.GREEN + Style.BRIGHT + "(Resume Previous HPO)")
+        print(Fore.WHITE + Style.BRIGHT + "8. Quick HPO Test " + Fore.GREEN + Style.BRIGHT + "(10 Trials, 5 Epochs)")
+        print(Fore.WHITE + Style.BRIGHT + "9. HPO Model Comparison " + Fore.GREEN + Style.BRIGHT + "(Compare All Model Types)")
+        print(Fore.RED + Style.BRIGHT + "0. Back to Main Menu")
+        
+        # Input handling with retry logic
+        choice = None
+        while not choice:
+            try:
+                choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-9): ").strip()
+                
+                # If empty input, retry
+                if not choice:
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
+                return
+        
+        try:
+            if choice == "1":
+                try:
+                    result = run_hyperparameter_optimization_interactive(
+                        use_current_config=False,
+                        preset="express_hpo" if "express_hpo" in PRESET_CONFIGS else None,
+                        config=config
+                    )
+                    _handle_hpo_result(result, "Express HPO")
+                    
+                except Exception as e:
+                    message = (
+                        f"Error encountered during Express HPO: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Model: {model_type}\n"
+                        f"  - Preset: {preset_name}\n"
+                        f"  - Trials: {hpo_trials_count}\n\n"
+                        f"This could be due to:\n"
+                        f"  - Invalid HPO configuration\n"
+                        f"  - Missing optimization dependencies\n"
+                        f"  - System resource constraints\n"
+                        f"  - Data loading issues"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "EXPRESS HPO ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "2":
+                try:
+                    result = run_hyperparameter_optimization_interactive(
+                        use_current_config=True,
+                        config=config
+                    )
+                    _handle_hpo_result(result, "Current Configuration HPO")
+                    
+                except Exception as e:
+                    message = (
+                        f"Error encountered during Current Configuration HPO: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Model: {model_type}\n"
+                        f"  - Preset: {preset_name}\n"
+                        f"  - Config Source: {config_source}\n\n"
+                        f"Please check:\n"
+                        f"  - Current configuration validity\n"
+                        f"  - Model compatibility with HPO\n"
+                        f"  - Configuration file integrity"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "CURRENT CONFIG HPO ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "3":
+                try:
+                    result = run_hyperparameter_optimization_interactive(
+                        use_real_data=False,
+                        config=config
+                    )
+                    _handle_hpo_result(result, "Synthetic Data HPO")
+                    
+                except Exception as e:
+                    message = (
+                        f"Error encountered during Synthetic Data HPO: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Model: {model_type}\n"
+                        f"  - Synthetic Samples: {hpo_normal_samples_count}\n\n"
+                        f"Please verify:\n"
+                        f"  - Data generation configuration\n"
+                        f"  - Model compatibility with synthetic data\n"
+                        f"  - System memory availability"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "SYNTHETIC DATA HPO ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "4":
+                try:
+                    result = run_hyperparameter_optimization_interactive(
+                        use_real_data=True,
+                        config=config
+                    )
+                    _handle_hpo_result(result, "Real Data HPO")
+                    
+                except Exception as e:
+                    message = (
+                        f"Error encountered during Real Data HPO: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Data Path: {hpo_data_path}\n"
+                        f"  - Model: {model_type}\n\n"
+                        f"Please verify:\n"
+                        f"  - Data file exists and is accessible\n"
+                        f"  - Data format is compatible\n"
+                        f"  - Sufficient disk space\n"
+                        f"  - Data preprocessing requirements"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "REAL DATA HPO ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "5":
+                try:
+                    result = run_hyperparameter_optimization_interactive(
+                        use_current_config=False,
+                        config=config
+                    )
+                    _handle_hpo_result(result, "Custom HPO")
+                    
+                except Exception as e:
+                    message = (
+                        f"Error encountered during Custom HPO setup: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Model: {model_type}\n"
+                        f"  - Preset: {preset_name}\n\n"
+                        f"Please check:\n"
+                        f"  - Parameter validation rules\n"
+                        f"  - Configuration file permissions\n"
+                        f"  - Interactive input handling"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "CUSTOM HPO ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "6":
+                try:
+                    _hpo_preset_selection_menu(config)
+                except Exception as e:
+                    message = (
+                        f"Error encountered during HPO preset selection: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Available Presets: {hpo_preset_count}\n"
+                        f"  - Current Preset: {preset_name}\n\n"
+                        f"Please verify:\n"
+                        f"  - HPO preset configuration files\n"
+                        f"  - Preset validation logic\n"
+                        f"  - Configuration loading mechanisms"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "HPO PRESET SELECTION ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "7":
+                try:
+                    result = run_hyperparameter_optimization_interactive(
+                        use_current_config=False,
+                        config=config,
+                        non_interactive=False
+                    )
+                    _handle_hpo_result(result, "Continued Study HPO")
+                    
+                except Exception as e:
+                    message = (
+                        f"Error encountered while continuing existing study: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Model: {model_type}\n"
+                        f"  - Strategy: {hpo_strategy}\n\n"
+                        f"Please check:\n"
+                        f"  - Existing study files exist\n"
+                        f"  - Study database accessibility\n"
+                        f"  - Study compatibility with current configuration"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "CONTINUE STUDY ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "8":
+                try:
+                    _run_quick_hpo_test(config)
+                except Exception as e:
+                    message = (
+                        f"Error encountered during quick HPO test: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Model: {model_type}\n"
+                        f"  - Test Type: 10 trials, 5 epochs\n\n"
+                        f"This may indicate:\n"
+                        f"  - Basic HPO functionality issues\n"
+                        f"  - Model initialization problems\n"
+                        f"  - Resource allocation failures"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "QUICK HPO TEST ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "9":
+                try:
+                    _run_hpo_model_comparison(config)
+                except Exception as e:
+                    message = (
+                        f"Error encountered during HPO model comparison: {str(e)}\n"
+                        f"Context:\n"
+                        f"  - Model: {model_type}\n"
+                        f"  - Comparison Type: Multi-model HPO\n\n"
+                        f"Please ensure:\n"
+                        f"  - Multiple models are configured\n"
+                        f"  - Comparison data is available\n"
+                        f"  - Sufficient system resources"
+                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+                    print(Fore.RED + Style.BRIGHT + "HPO MODEL COMPARISON ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    print(Fore.WHITE + Style.BRIGHT + message)
+                    print(Fore.RED + Style.BRIGHT + "-"*40)
+                    
+            elif choice == "0":
+                return
+            else:
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid selection '{choice}'. Please enter a number from 0-9.")
+        
+        except KeyboardInterrupt:
+            print(Fore.YELLOW + Style.BRIGHT + "\nHPO operation interrupted by user")
+        except Exception as e:
+            logger.error(f"HPO menu error: {e}", exc_info=True)
+            message = (
+                f"Unexpected error in HPO menu: {str(e)}\n"
+                f"Context:\n"
+                f"  - Selected Option: {choice}\n"
+                f"  - Current Preset: {preset_name}\n"
+                f"  - Model Type: {model_type}\n"
+                f"  - Config Source: {config_source}\n\n"
+                f"This could indicate:\n"
+                f"  - System resource exhaustion\n"
+                f"  - HPO configuration corruption\n"
+                f"  - Dependency conflicts\n"
+                f"  - Optimization algorithm issues\n\n"
+                f"Please check the logs for detailed information."
+            )
+            print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.RED + Style.BRIGHT + "HPO MENU ERROR")
+            print(Fore.RED + Style.BRIGHT + "-"*40)
+            print(Fore.WHITE + Style.BRIGHT + message)
+            print(Fore.RED + Style.BRIGHT + "-"*40)
+        
+        # Only continue if not exiting
+        if choice != "0":
+            try:
+                input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
+                break
+
+def _handle_hpo_result(result: Optional[Dict[str, Any]], hpo_type: str) -> None:
+    """Handle and display HPO results with appropriate formatting"""
+    try:
+        if result is None:
+            console.print(
+                Panel.fit(
+                    "[bold yellow]HPO operation was cancelled by user.[/bold yellow]",
+                    title="HPO CANCELLED",
+                    style="bold yellow",
+                    border_style="yellow",
+                    padding=(1, 2),
+                    box=box.ROUNDED
+                )
+            )
+            return
+        
+        success = result.get('success', False)
+        
+        if success:
+            n_completed = result.get('n_trials_completed', 0)
+            best_value = result.get('best_value', 'N/A')
+            total_time = result.get('total_time_minutes', 0)
+            
+            # Format best_value properly
+            if isinstance(best_value, (int, float)) and best_value != float('inf'):
+                best_value_str = f"{best_value:.6f}"
+            else:
+                best_value_str = str(best_value)
+            
+            message = (
+                f"{hpo_type} completed successfully!\n\n"
+                f"Results Summary:\n"
+                f"- Trials Completed: {n_completed}\n"
+                f"- Best Objective Value: {best_value_str}\n"
+                f"- Total Time: {total_time:.1f} minutes\n\n"
+                "Detailed results and visualizations have been generated.\n"
+                "Check the study directory for complete analysis."
+            )
+            
+            console.print(
+                Panel.fit(
+                    f"[bold green]{message}[/bold green]",
+                    title="HPO SUCCESS",
+                    style="bold green",
+                    border_style="green",
+                    padding=(1, 2),
+                    box=box.ROUNDED
+                )
+            )
+            
+            # Show artifacts if available
+            artifacts = []
+            if result.get('saved_files'):
+                artifacts.extend([f"Study Files: {len(result['saved_files'])} files"])
+            if result.get('plots'):
+                artifacts.extend([f"Visualizations: {len(result['plots'])} plots"])
+            if result.get('final_model_training', {}).get('success'):
+                artifacts.append("Final Model: Trained successfully")
+            
+            if artifacts:
+                print(Fore.CYAN + Style.BRIGHT + "\nGenerated Artifacts:")
+                for artifact in artifacts:
+                    print(Fore.WHITE + f"  - {artifact}")
+        else:
+            error = result.get('error', 'Unknown error')
+            error_type = result.get('error_type', 'UnknownError')
+            n_completed = result.get('n_trials_completed', 0)
+            
+            message = (
+                f"{hpo_type} encountered issues.\n\n"
+                f"Error: {error}\n"
+                f"Type: {error_type}\n"
+            )
+            
+            if n_completed > 0:
+                message += f"\nPartial Results:\n• {n_completed} trials completed\n"
+                best_value = result.get('best_value')
+                if best_value and best_value != float('inf'):
+                    # Format best_value properly for partial results too
+                    if isinstance(best_value, (int, float)):
+                        best_value_str = f"{best_value:.6f}"
+                    else:
+                        best_value_str = str(best_value)
+                    message += f"- Best value found: {best_value_str}\n"
+                message += "\nSome optimization progress was made despite the error."
+            
+            console.print(
+                Panel.fit(
+                    f"[bold red]{message}[/bold red]",
+                    title="HPO ERROR",
+                    style="bold red",
+                    border_style="red",
+                    padding=(1, 2),
+                    box=box.ROUNDED
+                )
+            )
+            
+            # Show recommendations if available
+            recommendations = result.get('recommendations', [])
+            if recommendations:
+                print(Fore.YELLOW + Style.BRIGHT + "\nRecommendations:")
+                for i, rec in enumerate(recommendations, 1):
+                    print(Fore.WHITE + f"  {i}. {rec}")
+    
+    except Exception as e:
+        logger.error(f"Error handling HPO result: {e}", exc_info=True)
+        console.print(
+            Panel.fit(
+                f"[bold red]Error processing HPO results: {str(e)}[/bold red]",
+                title="RESULT PROCESSING ERROR",
+                style="bold red",
+                border_style="red",
+                padding=(1, 2),
+                box=box.ROUNDED
+            )
+        )
+
+def _hpo_preset_selection_menu(config: Dict[str, Any]) -> None:
+    """Interactive menu for selecting HPO presets with context display and error handling."""
+    while True:
+        try:
+            # Clear screen and show banner
+            print("\033c", end="")
+            banner_config = show_banner(return_config=True)
+            
+            # Use the config returned from show_banner or fallback
+            if config is None and banner_config is not None:
+                config = banner_config
+            else:
+                config = get_current_config()
+            
+            # Extract configuration sections with error handling
+            hpo_config = config.get('hyperparameter_optimization', {})
+            presets_config = config.get('presets', {})
+            model_config = config.get('model', {})
+            data_config = config.get('data', {})
+            
+            # Context extraction using multiple fallbacks
+            current_preset = "Custom/Default"
+            model_type = "Unknown"
+            config_source = "Unknown"
+            
+            # Method 1: Check presets section
+            presets_section = config.get("presets", {})
+            if isinstance(presets_section, dict):
+                current_preset = presets_section.get("current_preset", "Custom/Default")
+            
+            # Method 2: Check metadata for preset_used
+            if current_preset in ["Custom/Default", None, ""]:
+                metadata = config.get("metadata", {})
+                if isinstance(metadata, dict):
+                    current_preset = metadata.get("preset_used", "Custom/Default")
+            
+            # Method 3: Check legacy _preset_name field
+            if current_preset in ["Custom/Default", None, ""]:
+                current_preset = config.get("_preset_name", "Custom/Default")
+            
+            # Method 4: Check runtime information
+            if current_preset in ["Custom/Default", None, ""]:
+                runtime = config.get("runtime", {})
+                if isinstance(runtime, dict):
+                    current_preset = runtime.get("active_preset", "Custom/Default")
+            
+            # Clean up preset name display
+            if current_preset in ["Custom/Default", None, "", "none"]:
+                current_preset = "Custom/Default"
+            elif isinstance(current_preset, str):
+                current_preset = current_preset.title()
+            
+            # Extract model type with error handling
+            if isinstance(model_config, dict):
+                model_type = model_config.get('model_type', 'Unknown')
+            
+            # Extract config source with fallbacks
+            if "runtime" in config and isinstance(config["runtime"], dict):
+                config_source = config["runtime"].get("config_source", "Unknown")
+            elif "metadata" in config and isinstance(config["metadata"], dict):
+                config_source = config["metadata"].get("config_source", "Unknown")
+            
+            # Get available HPO-enabled presets
+            hpo_presets = {}
+            for name, preset_config in PRESET_CONFIGS.items():
+                hpo_config = preset_config.get('hyperparameter_optimization', {})
+                if hpo_config.get('enabled', False) or 'hyperparameter_optimization' in preset_config:
+                    hpo_presets[name] = {
+                        'config': preset_config,
+                        'hpo_config': hpo_config,
+                        'description': preset_config.get('metadata', {}).get('description', f'{name.title()} preset'),
+                        'trials': hpo_config.get('n_trials', 50),
+                        'strategy': hpo_config.get('strategy', 'optuna'),
+                        'model_type': preset_config.get('model', {}).get('model_type', 'Unknown'),
+                        'timeout': hpo_config.get('timeout', 3600),
+                        'sampler': hpo_config.get('sampler', 'TPESampler'),
+                        'pruner': hpo_config.get('pruner', 'MedianPruner')
+                    }
+            
+            # header display with context
+            print(Fore.MAGENTA + Style.BRIGHT + "HPO PRESET SELECTION MENU")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Config Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Available HPO Presets: " + Fore.YELLOW + Style.BRIGHT + f"{len(hpo_presets)}")
+            
+            # Handle no presets case with feedback
+            if not hpo_presets:
+                print(Fore.RED + Style.BRIGHT + f"\nNo HPO-enabled presets found in configuration.")
+                print(Fore.YELLOW + Style.BRIGHT + f"\nCurrent Context:")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Active Preset: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('enabled', False)}")
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('strategy', 'optuna')}")
+                print(Fore.YELLOW + Style.BRIGHT + f"\nRecommendations:")
+                print(Fore.MAGENTA + Style.BRIGHT + f"  ├─ 1. Use Express HPO setup with intelligent defaults.")
+                print(Fore.MAGENTA + Style.BRIGHT + f"  ├─ 2. Create custom HPO configuration.")
+                print(Fore.MAGENTA + Style.BRIGHT + f"  └─ 3. Check preset configuration files.")
+                
+                # input handling with retry logic
+                confirm = None
+                while not confirm:
+                    try:
+                        confirm = input(Fore.YELLOW + Style.BRIGHT + "\nProceed with express setup instead? (Y/n): ").strip().lower()
+                        if not confirm:
+                            continue
+                    except (EOFError, KeyboardInterrupt):
+                        print(Fore.RED + Style.BRIGHT + "\nReturning to HPO menu...")
+                        return
+                
+                if confirm not in ('', 'y', 'yes'):
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nExpress setup cancelled.")
+                    continue
+                
+                # Launch express HPO with context
+                result = run_hyperparameter_optimization_interactive(
+                    use_current_config=False,
+                    config=config
+                )
+                _handle_hpo_result(result, "Express HPO")
+                return
+            
+            # preset listing with context-aware display
+            print(Fore.YELLOW + Style.BRIGHT + "\nAvailable HPO Presets:")
+            
+            preset_list = list(hpo_presets.items())
+            for i, (name, info) in enumerate(preset_list, 1):
+                # Color code based on strategy and compatibility
+                strategy_color = Fore.GREEN if info['strategy'] == 'optuna' else Fore.CYAN
+                model_compatible = info['model_type'] == model_type or info['model_type'] == 'Unknown'
+                model_color = Fore.GREEN if model_compatible else Fore.YELLOW
+                
+                print(Fore.CYAN + Style.BRIGHT + f"{i}. {name.upper()}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Description: " + Fore.GREEN + Style.BRIGHT + f"{info['description']}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Trials: " + Fore.CYAN + Style.BRIGHT + f"{info['trials']}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Strategy: " + strategy_color + Style.BRIGHT + f"{info['strategy'].upper()}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + model_color + Style.BRIGHT + f"{info['model_type']}")
+                print(Fore.WHITE + Style.BRIGHT + f"  └─ Timeout: " + Fore.MAGENTA + Style.BRIGHT + f"{info['timeout']}s")
+                
+                # Show additional preset info if available
+                metadata = info['config'].get('metadata', {})
+                if 'recommended_for' in metadata:
+                    print(Fore.WHITE + Style.BRIGHT + f"   Recommended for: " + Fore.MAGENTA + Style.BRIGHT + f"{metadata['recommended_for']}")
+                
+                # Show optimization focus if available
+                hpo_config = info['hpo_config']
+                if 'optimization_focus' in hpo_config:
+                    focus = hpo_config['optimization_focus']
+                    focus_color = Fore.GREEN if focus == 'accuracy' else Fore.CYAN
+                    print(Fore.WHITE + Style.BRIGHT + f"   Focus: " + focus_color + Style.BRIGHT + f"{focus.title()}")
+                
+                # Show sampler and pruner info
+                print(Fore.WHITE + Style.BRIGHT + f"   Sampler: " + Fore.BLUE + Style.BRIGHT + f"{info['sampler']}")
+                print(Fore.WHITE + Style.BRIGHT + f"   Pruner: " + Fore.BLUE + Style.BRIGHT + f"{info['pruner']}")
+                
+                # Compatibility warning
+                if not model_compatible and info['model_type'] != 'Unknown':
+                    print(Fore.YELLOW + Style.BRIGHT + f"   [!] Note: This preset is configured for {info['model_type']}")
+                
+                print()
+            
+            print(Fore.RED + Style.BRIGHT + "0. Back to HPO Menu")
+            
+            # input handling with retry logic
+            choice = None
+            while not choice:
+                try:
+                    choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect preset (0-{len(preset_list)}): ").strip()
+                    
+                    # If empty input, retry
+                    if not choice:
+                        continue
+                        
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nReturning to HPO menu...")
+                    return
+            
+            try:
+                choice_num = int(choice)
+                
+                if choice_num == 0:
+                    return
+                elif 1 <= choice_num <= len(preset_list):
+                    selected_name, selected_info = preset_list[choice_num - 1]
+                    
+                    # confirmation with detailed preset information
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nSelected HPO Preset: " + Fore.GREEN + Style.BRIGHT + f"{selected_name.upper()}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration Details:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{selected_info['description']}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimization Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{selected_info['strategy'].upper()}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Number of Trials: " + Fore.YELLOW + Style.BRIGHT + f"{selected_info['trials']}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{selected_info['timeout']} seconds")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Target Model: " + Fore.YELLOW + Style.BRIGHT + f"{selected_info['model_type']}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{selected_info['sampler']}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{selected_info['pruner']}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nCurrent Context:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Active Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset}")
+                    
+                    # Model compatibility check
+                    if selected_info['model_type'] != model_type and selected_info['model_type'] != 'Unknown':
+                        print(Fore.RED + Style.BRIGHT + "\nModel Compatibility Warning!")
+                        print(Fore.YELLOW + Style.BRIGHT + f"  ├─ This preset is configured for: " + Fore.GREEN + Style.BRIGHT + f"{selected_info['model_type']}")
+                        print(Fore.YELLOW + Style.BRIGHT + f"  ├─ Your current model is: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
+                        print(Fore.RED + Style.BRIGHT + f"  └─ The optimization may not be optimal for your model architecture.")
+                    
+                    # confirmation input
+                    confirm = None
+                    while not confirm:
+                        try:
+                            confirm = input(Fore.YELLOW + Style.BRIGHT + "\nProceed with this preset? (Y/n): ").strip().lower()
+                            if not confirm:
+                                continue
+                        except (EOFError, KeyboardInterrupt):
+                            print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled.")
+                            break
+                    
+                    if confirm not in ('', 'y', 'yes'):
+                        print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled.")
+                        continue
+                    
+                    # Launch HPO with selected preset
+                    result = run_hyperparameter_optimization_interactive(
+                        preset=selected_name,
+                        config=selected_info['config']
+                    )
+                    _handle_hpo_result(result, f"{selected_name.title()} Preset HPO")
+                    
+                else:
+                    print(Fore.RED + Style.BRIGHT + f"\nInvalid selection '{choice}'. Please enter a number from 0-{len(preset_list)}.")
+            
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid input '{choice}'. Please enter a valid number.")
+        
+        except KeyboardInterrupt:
+            print(Fore.RED + Style.BRIGHT + "\nHPO preset selection interrupted by user!")
+            break
+        except Exception as e:
+            logger.error(f"HPO preset selection error: {e}", exc_info=True)
+            message = (
+                f"Error encountered during HPO preset selection: {str(e)}\n"
+                f"Context:\n"
+                f"- Current Preset: {current_preset if 'current_preset' in locals() else 'Unknown'}\n"
+                f"- Model Type: {model_type if 'model_type' in locals() else 'Unknown'}\n"
+                f"- Available Presets: {len(hpo_presets) if 'hpo_presets' in locals() else 0}\n"
+                f"- Config Source: {config_source if 'config_source' in locals() else 'Unknown'}\n\n"
+                f"This could be due to:\n"
+                f"- Configuration file corruption\n"
+                f"- Preset definition problems\n"
+                f"- Missing dependencies\n"
+                f"- System resource constraints\n"
+                f"- Data access issues\n\n"
+                f"Please check the logs for detailed information."
+            )
+            
+            print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.RED + Style.BRIGHT + "HPO PRESET SELECTION ERROR")
+            print(Fore.RED + Style.BRIGHT + "-"*40)
+            print(Fore.WHITE + Style.BRIGHT + message)
+            print(Fore.RED + Style.BRIGHT + "-"*40)
+        
+        # Only continue if we're not returning to previous menu
+        if choice != "0":
+            try:
+                input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nReturning to HPO menu...")
+                break
+
+def _run_quick_hpo_test(config: Dict[str, Any]) -> None:
+    """Run a quick HPO test with minimal parameters and context display."""
+    try:
+        # Clear screen and show banner
+        print("\033c", end="")
+        banner_config = show_banner(return_config=True)
+        
+        # Use the config returned from show_banner or fallback
+        if config is None and banner_config is not None:
+            config = banner_config
+        else:
+            config = get_current_config()
+        
+        # Extract configuration context for display
+        hpo_config = config.get('hyperparameter_optimization', {})
+        data_config = config.get('data', {})
+        model_config = config.get('model', {})
+        training_config = config.get('training', {})
+        
+        # Context extraction using multiple fallbacks
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Extract config source with fallbacks
+        if "runtime" in config and isinstance(config["runtime"], dict):
+            config_source = config["runtime"].get("config_source", "Unknown")
+        elif "metadata" in config and isinstance(config["metadata"], dict):
+            config_source = config["metadata"].get("config_source", "Unknown")
+        
+        # Enhanced header with context display
+        print(Fore.MAGENTA + Style.BRIGHT + "QUICK HPO TEST")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Test Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        
+        # test description with context-aware information
+        message = (
+            f"Quick HPO Test Overview\n"
+            f"Purpose: Fast hyperparameter optimization for testing and validation\n"
+            f"Test Configuration:\n"
+            f"- Optimization Trials: 10 (reduced for speed)\n"
+            f"- Epochs per Trial: 5 (quick convergence)\n"
+            f"- Model Type: {model_type}\n"
+            f"- Cross-Validation: 3-fold (balanced accuracy/speed)\n"
+            f"- Data Source: Synthetic (consistent testing)\n"
+            f"- Early Stopping: Enabled (efficient resource use)\n"
+            f"- Maximum Timeout: 15 minutes\n\n"
+            f"Expected Duration: 5-15 minutes\n"
+            f"Ideal For:\n"
+            f"- System testing and validation\n"
+            f"- Configuration verification\n"
+            f"- Quick experiments and prototyping\n"
+            f"- Resource requirement assessment\n"
+            f"- Pipeline functionality testing"
+        )
+        
+        print(Fore.YELLOW + Style.BRIGHT + f"\n{message}")
+        print(Fore.MAGENTA + Style.BRIGHT + "-" * 40)
+        
+        # confirmation with context
+        confirm_message = (
+            f"Current Context Summary\n\n"
+            f"- Active Preset: {preset_name}\n"
+            f"- Target Model: {model_type}\n"
+            f"- Configuration Source: {config_source}\n"
+            f"- Test Type: Quick HPO (10 trials, 5 epochs)\n"
+            f"- Data: Synthetic (consistent testing environment)\n"
+            f"- Expected Duration: 5-15 minutes"
+        )
+        
+        print(Fore.GREEN + Style.BRIGHT + f"\n{confirm_message}")
+        print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+        
+        # input handling with retry logic
+        confirm = None
+        while not confirm:
+            try:
+                confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart quick HPO test? (Y/n): ").strip().lower()
+                if not confirm:
+                    continue
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nQuick HPO test cancelled by user.")
+                return
+        
+        if confirm not in ('', 'y', 'yes'):
+            print(Fore.RED + Style.BRIGHT + "\nQuick HPO test cancelled.")
+            return
+        
+        # Create quick test configuration with settings
+        quick_config = deepcopy(config) if config else {}
+        
+        # HPO configuration
+        hpo_config = quick_config.setdefault('hyperparameter_optimization', {})
+        hpo_config.update({
+            'enabled': True,
+            'n_trials': 10,
+            'timeout': 900,  # 15 minutes max
+            'strategy': 'optuna',
+            'trial_epochs': 5,
+            'trial_patience': 3,
+            'model_search': {
+                'enabled': False,  # Single model for speed
+                'model_types': [model_type] if model_type != 'Unknown' else ['EnhancedAutoencoder']
+            },
+            'cross_validation': {
+                'enabled': True,
+                'folds': 3,
+                'shuffle': True,
+                'random_state': 42  # For reproducibility
+            },
+            'early_stopping': {
+                'enabled': True,
+                'patience': 5,
+                'min_trials': 5,
+                'improvement_threshold': 0.01
+            },
+            'sampling': {
+                'sampler': 'TPESampler',
+                'n_startup_trials': 5,
+                'n_ei_candidates': 24
+            },
+            'pruning': {
+                'pruner': 'MedianPruner',
+                'n_startup_trials': 5,
+                'n_warmup_steps': 3
+            },
+            'generate_plots': True,
+            'save_study': True,
+            'study_name': f"quick_hpo_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            'test_mode': True,
+            'quick_test': True
+        })
+        
+        # data configuration for quick testing
+        data_config = quick_config.setdefault('data', {})
+        data_config.update({
+            'use_real_data': False,
+            'normal_samples': 5000,
+            'attack_samples': 1000,
+            'features': 20,
+            'test_size': 0.2,
+            'validation_size': 0.1,
+            'random_state': 42,
+            'synthetic_data': {
+                'enabled': True,
+                'complexity': 'medium',
+                'noise_level': 0.05,
+                'correlation_strength': 0.3
+            }
+        })
+        
+        # training configuration for quick testing
+        training_config = quick_config.setdefault('training', {})
+        training_config.update({
+            'quick_test_mode': True,
+            'verbose': 1,
+            'save_checkpoints': False,
+            'early_stopping_patience': 3,
+            'reduce_lr_patience': 2
+        })
+        
+        # system configuration for resource management
+        system_config = quick_config.setdefault('system', {})
+        system_config.update({
+            'quick_test': True,
+            'resource_limits': {
+                'max_memory_usage': '4GB',
+                'max_cpu_usage': 80,
+                'max_gpu_usage': 70
+            }
+        })
+        
+        # Add metadata for tracking
+        metadata_config = quick_config.setdefault('metadata', {})
+        metadata_config.update({
+            'test_type': 'quick_hpo',
+            'start_time': datetime.now().isoformat(),
+            'preset_used': preset_name,
+            'model_type': model_type,
+            'quick_test': True
+        })
+        
+        print(Fore.GREEN + Style.BRIGHT + "\nConfiguration Applied Successfully.")
+        print(Fore.GREEN + Style.BRIGHT + f"Study Name: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config['study_name']}")
+        
+        # Small delay to ensure user sees the configuration
+        time.sleep(1)
+        
+        # Run the HPO with configuration
+        result = run_hyperparameter_optimization_interactive(
+            use_real_data=False,
+            config=quick_config,
+            non_interactive=True
+        )
+        
+        # result handling with context
+        if result:
+            _handle_hpo_result(result, "Quick HPO Test")
+            
+            # Additional quick test specific feedback
+            if result.get('success', False):
+                message = (
+                    f"Quick HPO Test Completed Successfully!\n"
+                    f"Test Summary:\n"
+                    f"- Completed Trials: {result.get('total_trials', 'N/A')}\n"
+                    f"- Best Score: {result.get('best_score', 'N/A'):.4f}\n"
+                    f"- Duration: {result.get('duration', 'N/A')}\n"
+                    f"- Model: {model_type}\n"
+                    f"- Preset: {preset_name}\n\n"
+                    f"The quick test validated your HPO setup and configuration."
+                )
+                print(Fore.GREEN + Style.BRIGHT + "\n" + "-"*40)
+                print(Fore.GREEN + Style.BRIGHT + f"{message}")
+                print(Fore.GREEN + Style.BRIGHT + "-"*40)
+            
+            else:
+                message = (
+                    f"Quick HPO Test Completed with Notes\n"
+                    f"Test completed but encountered some issues.\n"
+                    f"Check the detailed results above for more information.\n\n"
+                    f"This is normal for quick tests and helps identify\n"
+                    f"potential configuration improvements."
+                )
+                print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+                print(Fore.YELLOW + Style.BRIGHT + f"{message}")
+                print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        
+        else:
+            message = (
+                f"Quick HPO Test Failed to Return Results\n"
+                f"The test may have encountered an unexpected issue.\n"
+                f"Check the logs for detailed error information."
+            )
+            print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.RED + Style.BRIGHT + f"{message}")
+            print(Fore.RED + Style.BRIGHT + "-"*40)
+    
+    except KeyboardInterrupt:
+        print(Fore.RED + Style.BRIGHT + "\nQuick HPO test interrupted by user.")
+        return
+    except Exception as e:
+        logger.error(f"Quick HPO test error: {e}", exc_info=True)
+        message = (
+            f"Quick HPO test failed: {str(e)}\n"
+            f"Context:\n"
+            f"- Model: {model_type if 'model_type' in locals() else 'Unknown'}\n"
+            f"- Preset: {preset_name if 'preset_name' in locals() else 'Unknown'}\n"
+            f"- Config Source: {config_source if 'config_source' in locals() else 'Unknown'}\n"
+            f"- Test Type: Quick HPO (10 trials, 5 epochs)\n\n"
+            f"This could be due to:\n"
+            f"- System resource constraints\n"
+            f"- Configuration conflicts\n"
+            f"- Missing dependencies\n"
+            f"- Data generation issues\n"
+            f"- Model initialization problems\n\n"
+            f"Please check the logs for detailed information."
+        )
+        
+        print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.RED + Style.BRIGHT + "QUICK HPO TEST ERROR")
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        print(Fore.WHITE + Style.BRIGHT + message)
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+
+def _run_hpo_model_comparison(config: Dict[str, Any]) -> None:
+    """Run HPO comparing all available model types with context display and error handling."""
+    try:
+        # Clear screen and show banner
+        print("\033c", end="")
+        banner_config = show_banner(return_config=True)
+        
+        # Use the config returned from show_banner or fallback
+        if config is None and banner_config is not None:
+            config = banner_config
+        else:
+            config = get_current_config()
+        
+        # Extract configuration context for display
+        hpo_config = config.get('hyperparameter_optimization', {})
+        data_config = config.get('data', {})
+        model_config = config.get('model', {})
+        training_config = config.get('training', {})
+        
+        # Context extraction using multiple fallbacks
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Extract config source with fallbacks
+        if "runtime" in config and isinstance(config["runtime"], dict):
+            config_source = config["runtime"].get("config_source", "Unknown")
+        elif "metadata" in config and isinstance(config["metadata"], dict):
+            config_source = config["metadata"].get("config_source", "Unknown")
+        
+        # Get available models for comparison
+        available_models = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
+        
+        # Header with context display
+        print(Fore.MAGENTA + Style.BRIGHT + "HPO MODEL COMPARISON")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Comparison Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Models to Compare: " + Fore.YELLOW + Style.BRIGHT + f"{len(available_models)}")
+        
+        # Comparison description with context-aware information
+        print(Fore.MAGENTA + Style.BRIGHT + "MODEL COMPARISON SETUP")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + "HPO Model Comparison Overview")
+        print(Fore.CYAN + Style.BRIGHT + "Purpose: " + Fore.YELLOW + Style.BRIGHT + "Comprehensive optimization and comparison of all model architectures")
+        print(Fore.MAGENTA + Style.BRIGHT + "\nModels Being Compared:")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ SimpleAutoencoder: " + Fore.YELLOW + Style.BRIGHT + "Basic architecture for baseline performance")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ EnhancedAutoencoder: " + Fore.YELLOW + Style.BRIGHT + "Advanced features for improved accuracy")
+        print(Fore.CYAN + Style.BRIGHT + "  └─ AutoencoderEnsemble: " + Fore.YELLOW + Style.BRIGHT + "Multiple models for robust performance")
+        print(Fore.MAGENTA + Style.BRIGHT + "\nComparison Process:")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Each model type is optimized independently")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Performance metrics are collected and analyzed")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Best hyperparameters are identified for each architecture")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Comprehensive visualizations are generated")
+        print(Fore.CYAN + Style.BRIGHT + "  └─ Detailed comparison report is created")
+        print(Fore.MAGENTA + Style.BRIGHT + "\nExpected Outcomes:")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Identification of best-performing model for your data")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Optimal hyperparameters for each architecture")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Performance trade-off analysis")
+        print(Fore.CYAN + Style.BRIGHT + "  ├─ Resource utilization comparison")
+        print(Fore.CYAN + Style.BRIGHT + "  └─ Model selection recommendations")
+        
+        # Configuration options with descriptions
+        print(Fore.YELLOW + Style.BRIGHT + "\nComparison Configuration Options:")
+        print(Fore.WHITE + Style.BRIGHT + "1. Quick Comparison " + Fore.GREEN + Style.BRIGHT + "(10 trials/model, ~30-60 minutes)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Standard Comparison " + Fore.GREEN + Style.BRIGHT + "(50 trials/model, ~2-4 hours)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Thorough Comparison " + Fore.GREEN + Style.BRIGHT + "(100 trials/model, ~4-8 hours)")
+        print(Fore.WHITE + Style.BRIGHT + "4. Custom Configuration " + Fore.GREEN + Style.BRIGHT + "(Full parameter control)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and Return to HPO Menu")
+        
+        # Input handling with retry logic
+        choice = None
+        while not choice:
+            try:
+                choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect configuration (0-4): ").strip()
+                
+                # If empty input, retry
+                if not choice:
+                    continue
+                    
+                if choice not in ['0', '1', '2', '3', '4']:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-4.")
+                    choice = None
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.YELLOW + Style.BRIGHT + "\nModel comparison cancelled by user")
+                return
+        
+        if choice == "0":
+            print(Fore.YELLOW + Style.BRIGHT + "\nModel comparison cancelled")
+            return
+        
+        # Set parameters based on choice with configurations
+        trial_configs = {
+            '1': {
+                'trials': 10, 
+                'epochs': 5, 
+                'timeout': 60, 
+                'name': 'Quick',
+                'description': 'Fast comparison for initial assessment',
+                'cv_folds': 3,
+                'color': Fore.GREEN
+            },
+            '2': {
+                'trials': 50, 
+                'epochs': 20, 
+                'timeout': 120, 
+                'name': 'Standard',
+                'description': 'Balanced comparison for reliable results',
+                'cv_folds': 5,
+                'color': Fore.CYAN
+            }, 
+            '3': {
+                'trials': 100, 
+                'epochs': 25, 
+                'timeout': 180, 
+                'name': 'Thorough',
+                'description': 'Comprehensive comparison for production use',
+                'cv_folds': 5,
+                'color': Fore.MAGENTA
+            },
+            '4': None  # Custom configuration
+        }
+        
+        if choice in trial_configs and trial_configs[choice] is not None:
+            trial_config = trial_configs[choice]
+            n_trials = trial_config['trials']
+            trial_epochs = trial_config['epochs']
+            timeout_minutes = trial_config['timeout']
+            config_name = trial_config['name']
+            config_description = trial_config['description']
+            cv_folds = trial_config['cv_folds']
+            config_color = trial_config['color']
+        elif choice == '4':
+            # Custom configuration with validation
+            print(Fore.WHITE + Style.BRIGHT + "Custom Comparison Configuration")
+            print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+            print(Fore.WHITE + Style.BRIGHT + "Set parameters for your custom model comparison.")
+            print(Fore.WHITE + Style.BRIGHT + "Press Enter to use default values shown in parentheses.")
+            print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+            
+            try:
+                n_trials_input = input(Fore.YELLOW + Style.BRIGHT + f"Trials per model (default 50): ").strip()
+                n_trials = int(n_trials_input) if n_trials_input else 50
+                
+                trial_epochs_input = input(Fore.YELLOW + Style.BRIGHT + f"Epochs per trial (default 20): ").strip()
+                trial_epochs = int(trial_epochs_input) if trial_epochs_input else 20
+                
+                timeout_input = input(Fore.YELLOW + Style.BRIGHT + f"Timeout in minutes (default 120): ").strip()
+                timeout_minutes = int(timeout_input) if timeout_input else 120
+                
+                cv_folds_input = input(Fore.YELLOW + Style.BRIGHT + f"Cross-validation folds (default 5): ").strip()
+                cv_folds = int(cv_folds_input) if cv_folds_input else 5
+                
+                config_name = "Custom"
+                config_description = "User-defined comparison parameters"
+                config_color = Fore.BLUE
+                
+            except ValueError as ve:
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid input value: {str(ve)}")
+                print(Fore.YELLOW + Style.BRIGHT + "\nUsing standard configuration as fallback.")
+                n_trials, trial_epochs, timeout_minutes, cv_folds, config_name = 50, 20, 120, 5, "Standard"
+                config_description = "Fallback configuration after input error"
+                config_color = Fore.YELLOW
+        else:
+            print(Fore.YELLOW + Style.BRIGHT + "\nInvalid choice selected. Using standard configuration.")
+            n_trials, trial_epochs, timeout_minutes, cv_folds, config_name = 50, 20, 120, 5, "Standard"
+            config_description = "Fallback configuration"
+            config_color = Fore.YELLOW
+        
+        # Calculate total resources and display configuration summary
+        total_trials = n_trials * len(available_models)
+        estimated_hours = (total_trials * trial_epochs * 0.5) / 60  # Rough estimate
+        
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(config_color + Style.BRIGHT + f"{config_name} MODEL COMPARISON CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(config_color + Style.BRIGHT + "Configuration Summary:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset Mode: {config_name}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Description: {config_description}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Models to Compare: {len(available_models)} architectures")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Trials per Model: {n_trials}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Total Optimization Trials: {total_trials}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Epochs per Trial: {trial_epochs}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Cross-Validation Folds: {cv_folds}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Maximum Timeout: {timeout_minutes} minutes")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Estimated Duration: {estimated_hours:.1f} hours")
+        print(Fore.YELLOW + Style.BRIGHT + "\nCurrent Context:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Active Preset: {preset_name}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Current Model: {model_type}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Configuration Source: {config_source}")
+        
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        # Confirmation with resource requirements
+        confirm = None
+        while not confirm:
+            try:
+                confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart model comparison with this configuration? (Y/n): ").strip().lower()
+                if not confirm:
+                    continue
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.YELLOW + Style.BRIGHT + "\nModel comparison cancelled by user")
+                return
+        
+        if confirm not in ('', 'y', 'yes'):
+            print(Fore.YELLOW + Style.BRIGHT + "\nModel comparison cancelled")
+            return
+        
+        # Progress display
+        #print("\033c", end="")
+        #show_banner()
+        
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.GREEN + Style.BRIGHT + "HPO MODEL COMPARISON INITIATED")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.GREEN + Style.BRIGHT + "Comparison Parameters:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Configuration: {config_name} Mode")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Models: {len(available_models)} architectures")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Trials per Model: {n_trials}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Total Trials: {total_trials}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Epochs per Trial: {trial_epochs}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Cross-Validation: {cv_folds}-fold")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Timeout: {timeout_minutes} minutes")
+        print(Fore.YELLOW + Style.BRIGHT + f"\nExpected Completion: {estimated_hours:.1f} hours")
+        print(Fore.CYAN + Style.BRIGHT + "\nProcess Overview:")
+        print(Fore.WHITE + Style.BRIGHT + "  1. Optimizing SimpleAutoencoder architecture")
+        print(Fore.WHITE + Style.BRIGHT + "  2. Optimizing EnhancedAutoencoder architecture")
+        print(Fore.WHITE + Style.BRIGHT + "  3. Optimizing AutoencoderEnsemble architecture")
+        print(Fore.WHITE + Style.BRIGHT + "  4. Generating comparative analysis")
+        print(Fore.WHITE + Style.BRIGHT + "  5. Creating visualization reports")
+        print(Fore.MAGENTA + Style.BRIGHT + "\nMonitoring:")
+        print(Fore.WHITE + Style.BRIGHT + "  ├─ Progress bars for each model optimization")
+        print(Fore.WHITE + Style.BRIGHT + "  ├─ Real-time performance metrics")
+        print(Fore.WHITE + Style.BRIGHT + "  ├─ Resource utilization tracking")
+        print(Fore.WHITE + Style.BRIGHT + "  └─ Intermediate result saving")
+        
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        # Create comparison configuration
+        comparison_config = deepcopy(config) if config else {}
+        
+        # HPO configuration for model comparison
+        hpo_config = comparison_config.setdefault('hyperparameter_optimization', {})
+        hpo_config.update({
+            'enabled': True,
+            'n_trials': n_trials,
+            'timeout': timeout_minutes * 60,
+            'strategy': 'optuna',
+            'trial_epochs': trial_epochs,
+            'trial_patience': max(5, trial_epochs // 4),
+            'model_search': {
+                'enabled': True,
+                'model_types': available_models,
+                'search_all_models': True,
+                'comparison_mode': True,
+                'save_individual_studies': True
+            },
+            'cross_validation': {
+                'enabled': True,
+                'folds': cv_folds,
+                'shuffle': True,
+                'random_state': 42,
+                'stratified': True
+            },
+            'early_stopping': {
+                'enabled': True,
+                'patience': max(10, n_trials // 10),
+                'min_trials': max(5, n_trials // 5),
+                'improvement_threshold': 0.001
+            },
+            'sampling': {
+                'sampler': 'TPESampler',
+                'n_startup_trials': max(5, n_trials // 10),
+                'n_ei_candidates': 24
+            },
+            'pruning': {
+                'pruner': 'HyperbandPruner',
+                'min_resource': 1,
+                'max_resource': trial_epochs,
+                'reduction_factor': 3
+            },
+            'generate_plots': True,
+            'save_study': True,
+            'comparison_analysis': True,
+            'study_name': f"model_comparison_{config_name.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            'model_comparison': True
+        })
+        
+        # Data configuration for fair comparison
+        data_config = comparison_config.setdefault('data', {})
+        data_config.update({
+            'comparison_mode': True,
+            'consistent_splits': True,
+            'random_state': 42
+        })
+        
+        # System configuration for resource management
+        system_config = comparison_config.setdefault('system', {})
+        system_config.update({
+            'model_comparison': True,
+            'resource_management': {
+                'max_concurrent_trials': 2,
+                'memory_monitoring': True,
+                'gpu_utilization_optimization': True
+            }
+        })
+        
+        # Add metadata for tracking and analysis
+        metadata_config = comparison_config.setdefault('metadata', {})
+        metadata_config.update({
+            'comparison_type': 'hpo_model_comparison',
+            'configuration_mode': config_name,
+            'start_time': datetime.now().isoformat(),
+            'models_compared': available_models,
+            'total_trials': total_trials,
+            'preset_used': preset_name
+        })
+        
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.WHITE + Style.BRIGHT + "Comparison Configuration Applied")
+        #print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Mode: {config_name} Comparison")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Models: {', '.join(available_models)}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Trials per Model: {n_trials}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Total Trials: {total_trials}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Cross-Validation: {cv_folds}-fold")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Study Name: {hpo_config['study_name']}")
+        print(Fore.GREEN + Style.BRIGHT + "\nStarting comprehensive model comparison...")
+        
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        # Small delay to ensure user sees the configuration
+        time.sleep(3)
+        
+        # Run the model comparison
+        result = run_hyperparameter_optimization_interactive(
+            config=comparison_config,
+            non_interactive=True
+        )
+        
+        # Result handling with comparison-specific feedback
+        if result:
+            _handle_hpo_result(result, f"{config_name} Model Comparison HPO")
+            
+            # Additional comparison-specific analysis if successful
+            if result.get('success', False):
+                print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+                print(Fore.GREEN + Style.BRIGHT + "MODEL COMPARISON COMPLETE")
+                print(Fore.CYAN + Style.BRIGHT + "-"*40)
+                print(Fore.GREEN + Style.BRIGHT + "Model Comparison Completed Successfully!")
+                print(Fore.WHITE + Style.BRIGHT + "\nComparison Summary:")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Configuration: {config_name} Mode")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Models Compared: {len(available_models)}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Total Trials: {result.get('total_trials', 'N/A')}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Best Performing Model: {result.get('best_model', 'N/A')}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Best Score: {result.get('best_score', 'N/A'):.4f}")
+                print(Fore.WHITE + Style.BRIGHT + f"  └─ Duration: {result.get('duration', 'N/A')}")
+                print(Fore.GREEN + Style.BRIGHT + "\nDetailed comparison report and visualizations have been generated.")
+                
+                print(Fore.CYAN + Style.BRIGHT + "-"*40)
+                
+                # Display model comparison summary if available
+                if 'model_comparison' in result:
+                    _display_model_comparison_summary(result, available_models)
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+                print(Fore.YELLOW + Style.BRIGHT + "Model Comparison Completed with Notes")
+                print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+                print(Fore.WHITE + Style.BRIGHT + "The comparison completed but encountered some issues.")
+                print(Fore.WHITE + Style.BRIGHT + "Check the detailed results above for more information.")
+                print(Fore.YELLOW + Style.BRIGHT + "\nPartial results may still be available for analysis.")
+                print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        else:
+            print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.RED + Style.BRIGHT + "Model Comparison Failed to Return Results")
+            print(Fore.RED + Style.BRIGHT + "-"*40)
+            print(Fore.WHITE + Style.BRIGHT + "The comparison may have encountered an unexpected issue.")
+            print(Fore.WHITE + Style.BRIGHT + "Check the logs for detailed error information.")
+            print(Fore.RED + Style.BRIGHT + "-"*40)
+    
+    except KeyboardInterrupt:
+        print(Fore.YELLOW + Style.BRIGHT + "\nModel comparison interrupted by user")
+        return
+    except Exception as e:
+        logger.error(f"HPO model comparison error: {e}", exc_info=True)
+        message = (
+            f"Model comparison failed: {str(e)}\n"
+            f"Context:\n"
+            f"- Current Preset: {preset_name if 'preset_name' in locals() else 'Unknown'}\n"
+            f"- Current Model: {model_type if 'model_type' in locals() else 'Unknown'}\n"
+            f"- Config Source: {config_source if 'config_source' in locals() else 'Unknown'}\n"
+            f"- Models to Compare: {len(available_models) if 'available_models' in locals() else 0}\n"
+            f"- Comparison Type: HPO Model Comparison\n\n"
+            f"This could be due to:\n"
+            f"- System resource exhaustion\n"
+            f"- Configuration conflicts between models\n"
+            f"- Missing model dependencies\n"
+            f"- Data compatibility issues\n"
+            f"- Optimization algorithm failures\n\n"
+            f"Please check the logs for detailed information."
+        )
+        print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.RED + Style.BRIGHT + "MODEL COMPARISON ERROR")
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        print(Fore.WHITE + Style.BRIGHT + message)
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+
+def _display_model_comparison_summary(result: Dict[str, Any], models: List[str]) -> None:
+    """Display summary of model comparison results"""
+    try:
+        study = result.get('study')
+        if not study or not hasattr(study, 'trials'):
+            print(Fore.YELLOW + Style.BRIGHT + "No detailed comparison data available.")
+            return
+        
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+        print("MODEL COMPARISON SUMMARY")
+        print("="*40)
+        
+        # Analyze trials by model type
+        model_results = {}
+        
+        for trial in study.trials:
+            if trial.state.name == 'COMPLETE' and trial.params:
+                model_type = trial.params.get('model_type', 'Unknown')
+                if model_type not in model_results:
+                    model_results[model_type] = {
+                        'trials': [],
+                        'best_value': float('inf'),
+                        'worst_value': float('-inf'),
+                        'avg_value': 0
+                    }
+                
+                model_results[model_type]['trials'].append(trial.value)
+                if trial.value < model_results[model_type]['best_value']:
+                    model_results[model_type]['best_value'] = trial.value
+                if trial.value > model_results[model_type]['worst_value']:
+                    model_results[model_type]['worst_value'] = trial.value
+        
+        # Calculate averages and display results
+        for model_type, data in model_results.items():
+            if data['trials']:
+                data['avg_value'] = sum(data['trials']) / len(data['trials'])
+                data['std_value'] = np.std(data['trials']) if len(data['trials']) > 1 else 0
+        
+        # Sort models by performance (best average)
+        sorted_models = sorted(model_results.items(), key=lambda x: x[1]['avg_value'])
+        
+        print(f"Model Performance Ranking:")
+        for i, (model_type, data) in enumerate(sorted_models, 1):
+            trials_count = len(data['trials'])
+            print(f"\n{i}. {model_type}")
+            print(f"   Completed Trials: {trials_count}")
+            print(f"   Best Value: {data['best_value']:.6f}")
+            print(f"   Average Value: {data['avg_value']:.6f}")
+            if data['std_value'] > 0:
+                print(f"   Std Deviation: ±{data['std_value']:.6f}")
+            
+            # Performance assessment
+            if i == 1:
+                print(Fore.GREEN + "   Status: BEST PERFORMER" + Style.RESET_ALL)
+            elif i == len(sorted_models):
+                print(Fore.RED + "   Status: Needs Improvement" + Style.RESET_ALL)
+            else:
+                print(Fore.YELLOW + "   Status: Good Performance" + Style.RESET_ALL)
+        
+        # Overall recommendations
+        if sorted_models:
+            best_model = sorted_models[0][0]
+            best_value = sorted_models[0][1]['best_value']
+            
+            print(f"\n" + Fore.GREEN + Style.BRIGHT + "RECOMMENDATION:")
+            print(f"Use {best_model} with best objective value: {best_value:.6f}")
+            print(Style.RESET_ALL)
+            
+            # Performance gap analysis
+            if len(sorted_models) > 1:
+                second_best = sorted_models[1][1]['avg_value']
+                performance_gap = ((second_best - sorted_models[0][1]['avg_value']) / second_best * 100)
+                print(f"Performance advantage: {performance_gap:.1f}% better than second-best")
+    
+    except Exception as e:
+        logger.error(f"Error displaying comparison summary: {e}", exc_info=True)
+        print(Fore.RED + Style.BRIGHT + f"Could not display detailed comparison: {str(e)}")
+
 def run_hyperparameter_optimization_interactive(
     use_real_data: Optional[bool] = None,
     use_current_config: bool = False,
@@ -52453,30 +54255,106 @@ def run_hyperparameter_optimization_interactive(
 ) -> Optional[Dict[str, Any]]:
     """Interactive HPO setup with express, preset, and custom configuration options."""
     try:
-        # clear screen and show banner
+        # Clear screen and show banner
         print("\033c", end="")
-        show_banner()
+        banner_config = show_banner(return_config=True)
         
-        print("\n" + "="*80)
-        print("INTERACTIVE HYPERPARAMETER OPTIMIZATION SETUP")
-        print("="*80)
+        # Use the config returned from show_banner or fallback
+        if config is None and banner_config is not None:
+            config = banner_config
+        elif config is None:
+            config = get_current_config()
         
+        # Extract configuration context for display
+        hpo_config = config.get('hyperparameter_optimization', {})
+        data_config = config.get('data', {})
+        model_config = config.get('model', {})
+        training_config = config.get('training', {})
+        
+        # Context extraction using multiple fallbacks
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Extract config source with fallbacks
+        if "runtime" in config and isinstance(config["runtime"], dict):
+            config_source = config["runtime"].get("config_source", "Unknown")
+        elif "metadata" in config and isinstance(config["metadata"], dict):
+            config_source = config["metadata"].get("config_source", "Unknown")
+        
+        # HPO-specific context
+        hpo_strategy = hpo_config.get('strategy', 'optuna')
+        hpo_trials = hpo_config.get('n_trials', 50)
+        hpo_timeout = hpo_config.get('timeout', 3600)
+        data_path = data_config.get('data_path', 'Default')
+        
+        # header with context display
+        print(Fore.MAGENTA + Style.BRIGHT + "INTERACTIVE HYPERPARAMETER OPTIMIZATION SETUP")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
+        
+        # Display current context
+        print(Fore.YELLOW + Style.BRIGHT + "Current Configuration Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ HPO Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_strategy}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Default Trials: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_trials}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Data Source: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
+        
+        # Configuration loading logic with feedback
         if config:
             base_config = config.copy()
-            print("Using provided configuration as base")
+            print(Fore.GREEN + Style.BRIGHT + "\nUsing provided configuration as base:")
+            print(Fore.YELLOW + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
         elif use_current_config:
             try:
                 base_config = get_current_config() if 'get_current_config' in globals() else {}
-                print("Using current system configuration")
+                print(Fore.GREEN + Style.BRIGHT + "\nUsing current system configuration:")
+                print(Fore.YELLOW + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
             except Exception as e:
                 logger.warning(f"Failed to load current config: {e}")
                 base_config = {}
+                print(Fore.RED + Style.BRIGHT + "\nFailed to load current config, using defaults:")
+                print(Fore.YELLOW + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
         else:
             base_config = {}
+            print(Fore.CYAN + Style.BRIGHT + "\nStarting with fresh configuration template:")
+            print(Fore.YELLOW + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
         
+        # Preset application with feedback
         if preset:
             try:
-                # Use existing PRESET_CONFIGS instead of non-existent HPO_PRESET_CONFIGS
                 if preset in PRESET_CONFIGS:
                     preset_config = PRESET_CONFIGS[preset].copy()
                     
@@ -52489,76 +54367,106 @@ def run_hyperparameter_optimization_interactive(
                         else:
                             base_config[section] = values
                     
-                    print(f"Applied preset configuration: {preset}")
-                    
                     # Extract and display HPO settings from the preset
                     hpo_settings = preset_config.get('hyperparameter_optimization', {})
-                    if hpo_settings:
-                        print(f"  - HPO enabled: {hpo_settings.get('enabled', False)}")
-                        print(f"  - Strategy: {hpo_settings.get('strategy', 'optuna')}")
-                        print(f"  - Trials: {hpo_settings.get('n_trials', 50)}")
-                        print(f"  - Sampler: {hpo_settings.get('sampler', 'TPESampler')}")
-                        print(f"  - Pruner: {hpo_settings.get('pruner', 'MedianPruner')}")
+                    print(Fore.GREEN + Style.BRIGHT + f"\nSuccessfully applied preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nHPO Configuration:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Enabled: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_settings.get('enabled', False)}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_settings.get('strategy', 'optuna')}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_settings.get('n_trials', 50)}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_settings.get('sampler', 'TPESampler')}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_settings.get('pruner', 'MedianPruner')}")
                     
                 else:
-                    print(f"Preset '{preset}' not found in PRESET_CONFIGS, using base configuration")
                     available_presets = list(PRESET_CONFIGS.keys())
-                    print(f"Available presets: {', '.join(available_presets)}")
+                    print(Fore.RED + Style.BRIGHT + f"\nPreset '{preset}' not found in PRESET_CONFIGS.")
+                    print(Fore.GREEN + Style.BRIGHT + f"Available presets: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(available_presets)}")
                     
             except Exception as e:
                 logger.warning(f"Failed to apply preset '{preset}': {e}")
+                print(Fore.RED + Style.BRIGHT + f"\nError applying preset '{preset}': {str(e)}")
         
+        # Handle non-interactive mode with feedback
         if non_interactive or use_current_config:
-            print("\nNon-interactive mode - using configured defaults")
+            print(Fore.GREEN + Style.BRIGHT + f"\nNon-interactive Mode - Using Configured Defaults.")
+            print(Fore.YELLOW + Style.BRIGHT + f"\nConfiguration Summary:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ HPO Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_settings.get('strategy', 'optuna')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_trials}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_timeout}s")
+            
             return _launch_hpo_with_config(base_config, **kwargs)
         
-        print("\nThis interactive setup will guide you through:")
-        print("   - HPO strategy and optimization goals")
-        print("   - Study configuration (trials, timeout, sampling)")
-        print("   - Model types and search space")
-        print("   - Data source and cross-validation")
-        print("   - System resources and performance")
-        print("   - Result analysis and visualization")
+        # quick start options with context-aware descriptions
+        print(Fore.YELLOW + Style.BRIGHT + "\nQuick Start Options:")
+        print(Fore.WHITE + Style.BRIGHT + "1. Express HPO " + Fore.GREEN + Style.BRIGHT + f"(Recommended for {model_type} - Quick Optimization)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Custom HPO Configuration " + Fore.GREEN + Style.BRIGHT + "(Full Control & Advanced Options)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Use HPO Preset Configuration " + Fore.GREEN + Style.BRIGHT + f"(Available: {len(PRESET_CONFIGS)} presets)")
+        print(Fore.WHITE + Style.BRIGHT + "4. Launch Existing Study " + Fore.GREEN + Style.BRIGHT + "(Continue Previous Optimization)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and Return to Previous Menu")
         
-        print("\nQuick Start Options:")
-        print("1. Express HPO (recommended for quick optimization)")
-        print("2. Custom HPO Configuration (full control)")
-        print("3. Use HPO Preset Configuration")
-        print("4. Launch existing study (continue optimization)")
-        print("0. Cancel and return to previous menu")
+        # input handling with retry logic
+        choice = None
+        while not choice:
+            try:
+                choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-4): ").strip()
+                
+                # If empty input, retry
+                if not choice:
+                    continue
+                    
+                if choice not in ['1', '2', '3', '4', '0']:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-4.")
+                    choice = None
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nHPO setup interrupted by user!")
+                return None
         
-        while True:
-            choice = input("\nSelect option (0-4): ").strip()
-            if choice in ['1', '2', '3', '4', '0']:
-                break
-            print("Invalid choice. Please select 0-4.")
-        
+        # option handling with context display
         if choice == '1':
-            print("\nEXPRESS HPO SETUP")
-            print("-" * 40)
             return _interactive_hpo_express_setup(base_config, use_real_data, **kwargs)
+            
         elif choice == '2':
-            print("\nCUSTOM HPO CONFIGURATION")
-            print("-" * 40)
             return _interactive_hpo_custom_setup(base_config, use_real_data, **kwargs)
+            
         elif choice == '3':
-            print("\nHPO PRESET SELECTION")
-            print("-" * 40)
             return _interactive_hpo_preset_setup(base_config, use_real_data, **kwargs)
+            
         elif choice == '4':
-            print("\nCONTINUE EXISTING STUDY")
-            print("-" * 40)
             return _interactive_hpo_continue_setup(base_config, **kwargs)
+            
         elif choice == '0':
-            print("HPO setup cancelled by user")
+            print(Fore.RED + Style.BRIGHT + "\nHPO setup cancelled by user!")
             return None
             
     except KeyboardInterrupt:
-        print("\n\nHPO setup interrupted by user!")
+        print(Fore.RED + Style.BRIGHT + "\nHPO setup interrupted by user!")
         return None
     except Exception as e:
-        logger.error(f"Interactive HPO setup failed: {e}")
-        print(f"\nHPO setup failed: {str(e)}")
+        logger.error(f"Interactive HPO setup failed: {e}", exc_info=True)
+        message = (
+            f"Interactive HPO setup failed: {str(e)}\n"
+            f"Context:\n"
+            f"- Model: {model_type if 'model_type' in locals() else 'Unknown'}\n"
+            f"- Preset: {preset_name if 'preset_name' in locals() else 'Unknown'}\n"
+            f"- Use Real Data: {use_real_data}\n"
+            f"- Use Current Config: {use_current_config}\n\n"
+            f"This could be due to:\n"
+            f"- Configuration file issues\n"
+            f"- Missing dependencies\n"
+            f"- System resource constraints\n"
+            f"- Invalid parameter combinations"
+        )
+        
+        print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.RED + Style.BRIGHT + "HPO MENU ERROR")
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        print(Fore.WHITE + Style.BRIGHT + message)
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        
         return None
 
 def _interactive_hpo_express_setup(
@@ -52568,76 +54476,168 @@ def _interactive_hpo_express_setup(
 ) -> Optional[Dict[str, Any]]:
     """Express HPO setup with smart defaults and minimal user input."""
     try:
-        # clear screen and show banner
+        # Clear screen and show banner
         print("\033c", end="")
-        show_banner()
+        banner_config = show_banner(return_config=True)
         
-        print("Setting up hyperparameter optimization with smart defaults...")
+        # Use the config returned from show_banner for context if available
+        if base_config is None and banner_config is not None:
+            base_config = banner_config
+        
+        # Extract configuration context for display
+        hpo_config = base_config.get('hyperparameter_optimization', {}) if base_config else {}
+        data_config = base_config.get('data', {}) if base_config else {}
+        model_config = base_config.get('model', {}) if base_config else {}
+        
+        # Context extraction using multiple fallbacks
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        if base_config:
+            # Method 1: Check presets section
+            presets_section = base_config.get("presets", {})
+            if isinstance(presets_section, dict):
+                preset_name = presets_section.get("current_preset", "Custom/Default")
+            
+            # Method 2: Check metadata for preset_used
+            if preset_name in ["Custom/Default", None, ""]:
+                metadata = base_config.get("metadata", {})
+                if isinstance(metadata, dict):
+                    preset_name = metadata.get("preset_used", "Custom/Default")
+            
+            # Method 3: Check legacy _preset_name field
+            if preset_name in ["Custom/Default", None, ""]:
+                preset_name = base_config.get("_preset_name", "Custom/Default")
+            
+            # Method 4: Check runtime information
+            if preset_name in ["Custom/Default", None, ""]:
+                runtime = base_config.get("runtime", {})
+                if isinstance(runtime, dict):
+                    preset_name = runtime.get("active_preset", "Custom/Default")
+            
+            # Clean up preset name display
+            if preset_name in ["Custom/Default", None, "", "none"]:
+                preset_name = "Custom/Default"
+            elif isinstance(preset_name, str):
+                preset_name = preset_name.title()
+            
+            # Extract model type with error handling
+            if isinstance(model_config, dict):
+                model_type = model_config.get('model_type', 'Unknown')
+            
+            # Extract config source with fallbacks
+            if "runtime" in base_config and isinstance(base_config["runtime"], dict):
+                config_source = base_config["runtime"].get("config_source", "Unknown")
+            elif "metadata" in base_config and isinstance(base_config["metadata"], dict):
+                config_source = base_config["metadata"].get("config_source", "Unknown")
+        
+        # Header with context display
+        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS HPO SETUP")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.YELLOW + Style.BRIGHT + "Express Setup Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Setup: " + Fore.YELLOW + Style.BRIGHT + "Express (Smart Defaults)")
+        
+        print(Fore.WHITE + Style.BRIGHT + "\nSetting up hyperparameter optimization with smart defaults...")
         
         # Data source selection
         if use_real_data is None:
-            print("\nDATA SOURCE")
-            print("1. Real network data (recommended for production)")
-            print("2. Synthetic data (good for testing and development)")
-            print("0. Cancel and return to previous menu")
+            print(Fore.YELLOW + Style.BRIGHT + "\nDATA SOURCE SELECTION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(Recommended for production)")
+            print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(Good for testing and development)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
-            while True:
-                data_choice = input("Select data source (0-2): ").strip()
-                if data_choice in ['1', '2', '0']:
-                    break
-                print("Invalid choice. Please select 0-2.")
+            # Input handling with retry logic
+            data_choice = None
+            while not data_choice:
+                try:
+                    data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): ").strip()
+                    if not data_choice:
+                        continue
+                    if data_choice not in ['1', '2', '0']:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                        data_choice = None
+                        continue
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
+                    return None
             
             if data_choice == '0':
-                print("Data selection cancelled")
+                print(Fore.YELLOW + Style.BRIGHT + "\nData selection cancelled")
                 return None
                 
             use_real_data = data_choice == '1'
         
-        # Optimization goal
-        print("\nOPTIMIZATION GOAL")
-        print("1. Quick exploration (50 trials, ~30 minutes)")
-        print("2. Balanced optimization (100 trials, ~1 hour)")
-        print("3. Thorough search (200 trials, ~2-3 hours)")
-        print("0. Cancel and return to previous menu")
+        # Optimization goal with descriptions
+        print(Fore.YELLOW + Style.BRIGHT + "\nOPTIMIZATION GOAL")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "1. Quick exploration " + Fore.GREEN + Style.BRIGHT + "(50 trials, ~30 minutes)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Balanced optimization " + Fore.GREEN + Style.BRIGHT + "(100 trials, ~1 hour)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Thorough search " + Fore.GREEN + Style.BRIGHT + "(200 trials, ~2-3 hours)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        while True:
-            goal_choice = input("Select optimization goal (0-3): ").strip()
-            if goal_choice in ['1', '2', '3', '0']:
-                break
-            print("Invalid choice. Please select 0-3.")
+        # Input handling with retry logic
+        goal_choice = None
+        while not goal_choice:
+            try:
+                goal_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect optimization goal (0-3): ").strip()
+                if not goal_choice:
+                    continue
+                if goal_choice not in ['1', '2', '3', '0']:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                    goal_choice = None
+                    continue
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nOptimization goal selection cancelled")
+                return None
         
         if goal_choice == '0':
-            print("Optimization goal selection cancelled")
+            print(Fore.YELLOW + Style.BRIGHT + "\nOptimization goal selection cancelled")
             return None
         
         # Set parameters based on goal
         goal_configs = {
-            '1': {'n_trials': 50, 'trial_epochs': 15, 'timeout_minutes': 30},
-            '2': {'n_trials': 100, 'trial_epochs': 20, 'timeout_minutes': 60},
-            '3': {'n_trials': 200, 'trial_epochs': 25, 'timeout_minutes': 180}
+            '1': {'n_trials': 50, 'trial_epochs': 15, 'timeout_minutes': 30, 'name': 'Quick Exploration'},
+            '2': {'n_trials': 100, 'trial_epochs': 20, 'timeout_minutes': 60, 'name': 'Balanced Optimization'},
+            '3': {'n_trials': 200, 'trial_epochs': 25, 'timeout_minutes': 180, 'name': 'Thorough Search'}
         }
         
         goal_config = goal_configs[goal_choice]
         n_trials = goal_config['n_trials']
         trial_epochs = goal_config['trial_epochs']
         timeout_minutes = goal_config['timeout_minutes']
+        goal_name = goal_config['name']
         
-        # Model types selection
-        print("\nMODEL TYPES TO OPTIMIZE")
-        print("1. All models (comprehensive search)")
-        print("2. Enhanced + Ensemble (best performance)")
-        print("3. Simple + Enhanced (balanced)")
-        print("4. Enhanced only (recommended)")
-        print("0. Cancel and return to previous menu")
+        # Model types selection with descriptions
+        print(Fore.YELLOW + Style.BRIGHT + "\nMODEL TYPES TO OPTIMIZE")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "1. All models " + Fore.GREEN + Style.BRIGHT + "(Comprehensive search)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Enhanced + Ensemble " + Fore.GREEN + Style.BRIGHT + "(Best performance)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Simple + Enhanced " + Fore.GREEN + Style.BRIGHT + "(Balanced approach)")
+        print(Fore.WHITE + Style.BRIGHT + "4. Enhanced only " + Fore.GREEN + Style.BRIGHT + "(Recommended default)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        while True:
-            model_choice = input("Select model types (0-4): ").strip()
-            if model_choice in ['1', '2', '3', '4', '0']:
-                break
-            print("Invalid choice. Please select 0-4.")
+        # Input handling with retry logic
+        model_choice = None
+        while not model_choice:
+            try:
+                model_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect model types (0-4): ").strip()
+                if not model_choice:
+                    continue
+                if model_choice not in ['1', '2', '3', '4', '0']:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-4.")
+                    model_choice = None
+                    continue
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
+                return None
         
         if model_choice == '0':
-            print("Model selection cancelled")
+            print(Fore.YELLOW + Style.BRIGHT + "\nModel selection cancelled")
             return None
         
         model_type_configs = {
@@ -52649,40 +54649,51 @@ def _interactive_hpo_express_setup(
         
         model_types = model_type_configs[model_choice]
         
-        # Cross-validation setup
-        print("\nVALIDATION STRATEGY")
-        print("1. 3-fold CV (faster)")
-        print("2. 5-fold CV (more robust)")
-        print("3. Single split (fastest)")
-        print("0. Cancel and return to previous menu")
+        # Cross-validation setup with descriptions
+        print(Fore.YELLOW + Style.BRIGHT + "\nVALIDATION STRATEGY")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "1. 3-fold CV " + Fore.GREEN + Style.BRIGHT + "(Faster validation)")
+        print(Fore.WHITE + Style.BRIGHT + "2. 5-fold CV " + Fore.GREEN + Style.BRIGHT + "(More robust results)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Single split " + Fore.GREEN + Style.BRIGHT + "(Fastest option)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        while True:
-            cv_choice = input("Select validation strategy (0-3): ").strip()
-            if cv_choice in ['1', '2', '3', '0']:
-                break
-            print("Invalid choice. Please select 0-3.")
+        # Input handling with retry logic
+        cv_choice = None
+        while not cv_choice:
+            try:
+                cv_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect validation strategy (0-3): ").strip()
+                if not cv_choice:
+                    continue
+                if cv_choice not in ['1', '2', '3', '0']:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                    cv_choice = None
+                    continue
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nValidation strategy selection cancelled")
+                return None
         
         if cv_choice == '0':
-            print("Validation strategy selection cancelled")
+            print(Fore.YELLOW + Style.BRIGHT + "\nValidation strategy selection cancelled")
             return None
         
         cv_configs = {
-            '1': {'cv_folds': 3},
-            '2': {'cv_folds': 5},
-            '3': {'cv_folds': 1}  # Single split
+            '1': {'cv_folds': 3, 'name': '3-fold Cross Validation'},
+            '2': {'cv_folds': 5, 'name': '5-fold Cross Validation'},
+            '3': {'cv_folds': 1, 'name': 'Single Split Validation'}
         }
         
         cv_config = cv_configs[cv_choice]
         cv_folds = cv_config['cv_folds']
+        cv_name = cv_config['name']
         
-        # Build comprehensive configuration using existing PRESET_CONFIGS
-        final_config = base_config.copy()
+        # Build configuration using existing PRESET_CONFIGS
+        final_config = base_config.copy() if base_config else {}
         
         # If no base_config was provided, use default preset as foundation
         if not base_config:
             if 'default' in PRESET_CONFIGS:
                 final_config = deepcopy(PRESET_CONFIGS['default'])
-                print("Using default preset as foundation for express HPO")
+                print(Fore.GREEN + Style.BRIGHT + "\nUsing default preset as foundation for express HPO")
             else:
                 logger.warning("No default preset available, creating minimal config")
                 final_config = {}
@@ -52783,59 +54794,102 @@ def _interactive_hpo_express_setup(
             'last_modified': datetime.now().isoformat(),
             'setup_method': 'express_hpo',
             'express_configuration': {
-                'goal': ['quick', 'balanced', 'thorough'][int(goal_choice)-1],
+                'goal': goal_name.lower().replace(' ', '_'),
                 'data_source': 'real' if use_real_data else 'synthetic',
                 'model_types': model_types,
-                'validation_strategy': f"{cv_folds}_fold_cv" if cv_folds > 1 else "single_split",
+                'validation_strategy': cv_name.lower().replace(' ', '_'),
                 'estimated_duration_minutes': timeout_minutes
             }
         })
         
-        # Display configuration summary
-        print("\nEXPRESS HPO CONFIGURATION SUMMARY")
-        print("-" * 50)
-        print(f"Data Source: {'Real Data' if use_real_data else 'Synthetic Data'}")
-        print(f"Optimization Goal: {['Quick', 'Balanced', 'Thorough'][int(goal_choice)-1]}")
-        print(f"Trials: {n_trials}")
-        print(f"Timeout: {timeout_minutes} minutes")
-        print(f"Trial Epochs: {trial_epochs}")
-        print(f"Model Types: {', '.join(model_types)}")
-        print(f"Cross-Validation: {cv_folds} folds" if cv_folds > 1 else "Single split validation")
-        print(f"Sampler: {hpo_config.get('sampler', 'TPESampler')}")
-        print(f"Pruner: {hpo_config.get('pruner', 'MedianPruner')}")
-        print(f"Expected Duration: ~{_estimate_hpo_time(n_trials, trial_epochs, len(model_types), cv_folds) if '_estimate_hpo_time' in globals() else 'Unknown'}")
+        # Configuration summary display
+        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS HPO CONFIGURATION SUMMARY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + "Configuration Details:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.YELLOW + Style.BRIGHT + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimization Goal: " + Fore.YELLOW + Style.BRIGHT + f"{goal_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Number of Trials: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{timeout_minutes} minutes")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trial Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{trial_epochs}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Types: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(model_types)}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Validation: " + Fore.YELLOW + Style.BRIGHT + f"{cv_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('sampler', 'TPESampler')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('pruner', 'MedianPruner')}")
         
-        # Confirm configuration
-        confirm = input("\nStart hyperparameter optimization with these settings? (Y/n/c to cancel): ").strip().lower()
+        # Estimate duration if function exists
+        estimated_time = None
+        if '_estimate_hpo_time' in globals():
+            estimated_time = _estimate_hpo_time(n_trials, trial_epochs, len(model_types), cv_folds)
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Expected Duration: " + Fore.YELLOW + Style.BRIGHT + f"~{estimated_time}")
+        
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        # Confirmation with options
+        confirm = None
+        while not confirm:
+            try:
+                confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart hyperparameter optimization with these settings? (Y/n/c to cancel): ").strip().lower()
+                if not confirm:
+                    continue
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nHPO setup interrupted")
+                return None
+        
         if confirm in ('', 'y', 'yes'):
-            print("\nLaunching hyperparameter optimization...")
+            print(Fore.GREEN + Style.BRIGHT + "\nLaunching hyperparameter optimization...")
             return _launch_hpo_with_config(final_config, **kwargs)
         elif confirm in ('c', 'cancel'):
-            print("HPO cancelled")
+            print(Fore.YELLOW + Style.BRIGHT + "\nHPO cancelled")
             return None
         else:
-            print("Would you like to:")
-            print("1. Try again with different settings")
-            print("0. Return to previous menu")
+            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to:")
+            print(Fore.WHITE + Style.BRIGHT + "1. Try again with different settings")
+            print(Fore.RED + Style.BRIGHT + "0. Return to previous menu")
             
-            while True:
-                retry_choice = input("Select option (0-1): ").strip()
-                if retry_choice in ['1', '0']:
-                    break
-                print("Invalid choice. Please select 0-1.")
+            retry_choice = None
+            while not retry_choice:
+                try:
+                    retry_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-1): ").strip()
+                    if not retry_choice:
+                        continue
+                    if retry_choice not in ['1', '0']:
+                        print(Fore.RED + Style.BRIGHT + "Invalid choice. Please select 0-1.")
+                        retry_choice = None
+                        continue
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
+                    return None
             
             if retry_choice == '1':
                 return _interactive_hpo_express_setup(base_config, use_real_data, **kwargs)
             else:
-                print("Returning to previous menu")
+                print(Fore.YELLOW + Style.BRIGHT + "\nReturning to previous menu")
                 return None
                 
     except KeyboardInterrupt:
-        print("\nExpress HPO setup interrupted")
+        print(Fore.RED + Style.BRIGHT + "\nExpress HPO setup interrupted")
         return None
     except Exception as e:
-        logger.error(f"Express HPO setup failed: {e}")
-        print(f"Express HPO setup failed: {str(e)}")
+        logger.error(f"Express HPO setup failed: {e}", exc_info=True)
+        message = (
+            f"Express HPO setup failed: {str(e)}\n"
+            f"Context:\n"
+            f"  - Preset: {preset_name if 'preset_name' in locals() else 'Unknown'}\n"
+            f"  - Model: {model_type if 'model_type' in locals() else 'Unknown'}\n"
+            f"  - Use Real Data: {use_real_data}\n\n"
+            f"This could be due to:\n"
+            f"  - Configuration conflicts\n"
+            f"  - Missing dependencies\n"
+            f"  - System resource issues\n"
+            f"  - Invalid parameter combinations"
+        )
+        
+        print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.RED + Style.BRIGHT + "EXPRESS HPO SETUP ERROR")
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        print(Fore.WHITE + Style.BRIGHT + message)
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        
         return None
 
 def _interactive_hpo_preset_setup(
@@ -52843,16 +54897,76 @@ def _interactive_hpo_preset_setup(
     use_real_data: Optional[bool], 
     **kwargs
 ) -> Optional[Dict[str, Any]]:
-    """HPO preset selection using existing PRESET_CONFIGS with their hyperparameter_optimization sections."""
+    """HPO preset selection using existing PRESET_CONFIGS with context integration."""
     try:
-        # clear screen and show banner
+        # Clear screen and show banner with config retrieval
         print("\033c", end="")
-        show_banner()
+        banner_config = show_banner(return_config=True)
         
-        print("Select a preset configuration optimized for hyperparameter optimization...")
+        # Use the config returned from show_banner or fallback
+        if base_config is None and banner_config is not None:
+            base_config = banner_config
+        elif base_config is None:
+            base_config = get_current_config()
+        
+        # Extract configuration context for display
+        current_hpo_config = base_config.get('hyperparameter_optimization', {})
+        data_config = base_config.get('data', {})
+        model_config = base_config.get('model', {})
+        
+        # Context extraction using multiple fallbacks
+        current_preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = base_config.get("presets", {})
+        if isinstance(presets_section, dict):
+            current_preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if current_preset_name in ["Custom/Default", None, ""]:
+            metadata = base_config.get("metadata", {})
+            if isinstance(metadata, dict):
+                current_preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if current_preset_name in ["Custom/Default", None, ""]:
+            current_preset_name = base_config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if current_preset_name in ["Custom/Default", None, ""]:
+            runtime = base_config.get("runtime", {})
+            if isinstance(runtime, dict):
+                current_preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if current_preset_name in ["Custom/Default", None, "", "none"]:
+            current_preset_name = "Custom/Default"
+        elif isinstance(current_preset_name, str):
+            current_preset_name = current_preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Header with context display
+        print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION PRESET SELECTION")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        
+        # Display current context
+        print(Fore.YELLOW + Style.BRIGHT + "Current Configuration Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.YELLOW + Style.BRIGHT + f"{data_config.get('data_path', 'Default')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ HPO Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{current_hpo_config.get('strategy', 'optuna')}")
+        
+        print(Fore.CYAN + Style.BRIGHT + "\nSelect a preset configuration optimized for hyperparameter optimization...")
         
         # Get available presets and their HPO configurations from PRESET_CONFIGS
         available_presets = []
+        hpo_enabled_presets = []
+        
         for preset_name, preset_config in PRESET_CONFIGS.items():
             hpo_config = preset_config.get('hyperparameter_optimization', {})
             metadata = preset_config.get('metadata', {})
@@ -52864,63 +54978,85 @@ def _interactive_hpo_preset_setup(
                 'enabled': hpo_config.get('enabled', False),
                 'n_trials': hpo_config.get('n_trials', 50),
                 'timeout_minutes': hpo_config.get('timeout', 3600) // 60 if hpo_config.get('timeout') else 60,
+                'strategy': hpo_config.get('strategy', 'optuna'),
                 'sampler': hpo_config.get('sampler', 'TPESampler'),
                 'pruner': hpo_config.get('pruner', 'MedianPruner'),
                 'recommended_hardware': metadata.get('recommended_hardware', {}),
                 'compatibility': metadata.get('compatibility', []),
-                'preset_data': preset_config
+                'preset_data': preset_config,
+                'model_type': preset_config.get('model', {}).get('model_type', 'Unknown')
             }
             
             available_presets.append(preset_info)
+            if preset_info['enabled']:
+                hpo_enabled_presets.append(preset_info)
         
         if not available_presets:
-            print("No presets available! Using express setup instead.")
+            print(Fore.RED + Style.BRIGHT + "\nNo presets available! Using express setup instead.")
             return _interactive_hpo_express_setup(base_config, use_real_data, **kwargs)
         
-        # Display preset options with enhanced information
-        print("\nAvailable HPO Presets:")
-        print("-" * 75)
+        available_presets_count = len(available_presets)
+        hpo_enabled_presets_count = len(hpo_enabled_presets)
+        
+        # Preset display with context-aware formatting
+        print(Fore.YELLOW + Style.BRIGHT + f"\nTotal Presets Available: " + Fore.GREEN + Style.BRIGHT + f"{available_presets_count}")
+        print(Fore.YELLOW + Style.BRIGHT + f"HPO-enabled Presets Available: " + Fore.GREEN + Style.BRIGHT + f"{hpo_enabled_presets_count}")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
         
         for i, preset in enumerate(available_presets, 1):
-            print(f"{i}. {preset['name'].upper()}")
-            print(f"   Description: {preset['description']}")
-            print(f"   HPO Default: {'Enabled' if preset['enabled'] else 'Disabled (can be enabled)'}")
-            print(f"   Trials: {preset['n_trials']}")
-            print(f"   Timeout: {preset['timeout_minutes']} minutes")
-            print(f"   Sampler: {preset['sampler']}")
-            print(f"   Pruner: {preset['pruner']}")
+            # Color coding based on HPO status and compatibility
+            status_color = Fore.GREEN if preset['enabled'] else Fore.YELLOW
+            compatibility_status = "PASS" if not preset['compatibility'] or model_type in preset['compatibility'] else "FAIL"
+            compatibility_color = Fore.GREEN if compatibility_status == "PASS" else Fore.YELLOW
             
-            # Hardware requirements
+            print(f"{Fore.WHITE + Style.BRIGHT}{i}. {preset['name'].upper()}{Style.RESET_ALL}")
+            print(f"   {Fore.CYAN}Description:{Style.RESET_ALL} {preset['description']}")
+            print(f"   {status_color}HPO Default: {'ENABLED' if preset['enabled'] else 'DISABLED (can be enabled)'}{Style.RESET_ALL}")
+            print(f"   {Fore.CYAN}Trials:{Style.RESET_ALL} {preset['n_trials']} | {Fore.CYAN}Timeout:{Style.RESET_ALL} {preset['timeout_minutes']}min")
+            print(f"   {Fore.CYAN}Strategy:{Style.RESET_ALL} {preset['strategy']} | {Fore.CYAN}Sampler:{Style.RESET_ALL} {preset['sampler']}")
+            print(f"   {Fore.CYAN}Model Type:{Style.RESET_ALL} {preset['model_type']}")
+            print(f"   {compatibility_color}Compatibility: {compatibility_status} {', '.join(preset['compatibility']) if preset['compatibility'] else 'All models'}{Style.RESET_ALL}")
+            
+            # Hardware requirements with color coding
             hw_req = preset['recommended_hardware']
             if hw_req:
-                print(f"   Hardware: {hw_req.get('cpu_cores', 'N/A')} cores, "
+                hw_color = Fore.GREEN if hw_req.get('ram_gb', 0) <= 16 else Fore.YELLOW
+                print(f"   {hw_color}Hardware: {hw_req.get('cpu_cores', 'N/A')} cores, "
                       f"{hw_req.get('ram_gb', 'N/A')}GB RAM, "
-                      f"{hw_req.get('gpu_memory_gb', 'N/A')}GB GPU")
-            
-            compatible_models = ', '.join(preset['compatibility']) if preset['compatibility'] else 'All models'
-            print(f"   Compatible Models: {compatible_models}")
+                      f"{hw_req.get('gpu_memory_gb', 'N/A')}GB GPU{Style.RESET_ALL}")
             print()
         
-        print("0. Cancel and return to previous menu")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        # Get user selection
-        while True:
+        # Input handling with retry logic
+        choice = None
+        while not choice:
             try:
-                choice = int(input("Select preset (0-{}): ".format(len(available_presets))))
-                if 0 <= choice <= len(available_presets):
-                    break
-                print(f"Invalid choice. Please select 0-{len(available_presets)}.")
-            except ValueError:
-                print("Please enter a valid number.")
+                choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect preset (0-{len(available_presets)}): ").strip()
+                
+                # If empty input, retry
+                if not choice:
+                    continue
+                    
+                if choice == '0':
+                    print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled")
+                    return None
+                    
+                if not choice.isdigit() or not (1 <= int(choice) <= len(available_presets)):
+                    print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Please select 0-{len(available_presets)}.")
+                    choice = None
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nPreset selection interrupted by user!")
+                return None
         
-        if choice == 0:
-            print("Preset selection cancelled")
-            return None
-        
-        selected_preset = available_presets[choice - 1]
+        selected_preset = available_presets[int(choice) - 1]
         preset_name = selected_preset['name']
         
-        print(f"\nSelected preset: {preset_name.upper()}")
+        # Selection confirmation
+        print(Fore.GREEN + Style.BRIGHT + f"\nSelected preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name.upper()}")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
         
         # Load the full preset configuration from PRESET_CONFIGS
         final_config = deepcopy(PRESET_CONFIGS[preset_name])
@@ -52931,16 +55067,28 @@ def _interactive_hpo_preset_setup(
         
         # Data source selection if not specified
         if use_real_data is None:
-            print("\nDATA SOURCE")
-            print("1. Real network data")
-            print("2. Synthetic data")
-            print("0. Cancel")
+            print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SOURCE SELECTION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(Recommended for production)")
+            print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(Recommended for testing)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel")
             
-            while True:
-                data_choice = input("Select data source (0-2): ").strip()
-                if data_choice in ['1', '2', '0']:
-                    break
-                print("Invalid choice. Please select 0-2.")
+            data_choice = None
+            while not data_choice:
+                try:
+                    data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): ").strip()
+                    
+                    if not data_choice:
+                        continue
+                        
+                    if data_choice not in ['1', '2', '0']:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                        data_choice = None
+                        continue
+                        
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nData source selection interrupted!")
+                    return None
             
             if data_choice == '0':
                 return None
@@ -52957,7 +55105,8 @@ def _interactive_hpo_preset_setup(
         
         # Update study name to include preset and timestamp
         original_study_name = hpo_config.get('study_name', 'autoencoder_hpo')
-        hpo_config['study_name'] = f"{preset_name}_{original_study_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        hpo_config['study_name'] = f"{preset_name}_{original_study_name}_{timestamp}"
         
         # Ensure timeout is in both formats for compatibility
         if 'timeout' in hpo_config and 'timeout_seconds' not in hpo_config:
@@ -52978,107 +55127,153 @@ def _interactive_hpo_preset_setup(
             'setup_method': 'preset_hpo',
             'hpo_preset_used': preset_name,
             'hpo_enabled_at': datetime.now().isoformat(),
-            'original_hpo_enabled': selected_preset['enabled']
+            'original_hpo_enabled': selected_preset['enabled'],
+            'preset_compatibility': selected_preset['compatibility'],
+            'preset_hardware_recommendations': selected_preset['recommended_hardware']
         })
         
-        # Display final configuration summary
-        print(f"\nHPO PRESET CONFIGURATION SUMMARY")
-        print("-" * 55)
-        print(f"Preset: {preset_name.upper()}")
-        print(f"Description: {selected_preset['description']}")
-        print(f"Data Source: {'Real Data' if use_real_data else 'Synthetic Data'}")
-        print(f"HPO Enabled: {'Yes (default)' if selected_preset['enabled'] else 'Yes (enabled for this session)'}")
-        print(f"Trials: {hpo_config.get('n_trials', 50)}")
-        print(f"Timeout: {hpo_config.get('timeout', 3600) // 60 if hpo_config.get('timeout') else 60} minutes")
-        print(f"Sampler: {hpo_config.get('sampler', 'TPESampler')}")
-        print(f"Pruner: {hpo_config.get('pruner', 'MedianPruner')}")
-        print(f"Compatible Models: {', '.join(final_config.get('metadata', {}).get('compatibility', ['Unknown']))}")
-        print(f"Study Name: {hpo_config['study_name']}")
-        
-        # Show hardware recommendations
+        # Configuration summary
+        print(Fore.MAGENTA + Style.BRIGHT + f"\nHPO PRESET CONFIGURATION SUMMARY")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name.upper()}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{selected_preset['description']}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.YELLOW + Style.BRIGHT + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ HPO Status: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled (default)' if selected_preset['enabled'] else 'Enabled (activated for this session)'}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('n_trials', 50)}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('timeout', 3600) // 60 if hpo_config.get('timeout') else 60} minutes")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('strategy', 'optuna')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('sampler', 'TPESampler')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('pruner', 'MedianPruner')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Study Name: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config['study_name']}")
+
+        # Show hardware recommendations with color coding
         hw_req = selected_preset['recommended_hardware']
         if hw_req:
-            print(f"Recommended Hardware:")
-            print(f"  - CPU Cores: {hw_req.get('cpu_cores', 'N/A')}")
-            print(f"  - RAM: {hw_req.get('ram_gb', 'N/A')}GB")
-            print(f"  - GPU Memory: {hw_req.get('gpu_memory_gb', 'N/A')}GB")
+            hw_color = Fore.GREEN if hw_req.get('ram_gb', 0) <= 16 else Fore.YELLOW
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Recommended Hardware:")
+            print(Fore.GREEN + Style.BRIGHT + f"      ├─ CPU Cores: " + hw_color + Style.BRIGHT + f"{hw_req.get('cpu_cores', 'N/A')}")
+            print(Fore.GREEN + Style.BRIGHT + f"      ├─ RAM: " + hw_color + Style.BRIGHT + f"{hw_req.get('ram_gb', 'N/A')}GB")
+            print(Fore.GREEN + Style.BRIGHT + f"      └─ GPU Memory: " + hw_color + Style.BRIGHT + f"{hw_req.get('gpu_memory_gb', 'N/A')}GB")
         
-        # Optional customization
-        print(f"\nCustomization Options:")
-        print("1. Use preset as-is (recommended)")
-        print("2. Adjust trial count")
-        print("3. Adjust timeout")
-        print("4. Modify sampler/pruner")
-        print("5. Advanced settings")
-        print("0. Cancel")
+        # Customization options
+        print(Fore.YELLOW + Style.BRIGHT + f"\nCustomization Options:")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "1. Use preset as-is " + Fore.GREEN + Style.BRIGHT + "(Recommended)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Adjust trial count " + Fore.GREEN + Style.BRIGHT + f"(Current: {hpo_config.get('n_trials', 50)})")
+        print(Fore.WHITE + Style.BRIGHT + "3. Adjust timeout " + Fore.GREEN + Style.BRIGHT + f"(Current: {hpo_config.get('timeout', 3600) // 60 if hpo_config.get('timeout') else 60} min)")
+        print(Fore.WHITE + Style.BRIGHT + "4. Modify sampler/pruner " + Fore.GREEN + Style.BRIGHT + "(Advanced)")
+        print(Fore.WHITE + Style.BRIGHT + "5. Advanced custom setup " + Fore.GREEN + Style.BRIGHT + "(Full Control)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel")
         
-        while True:
-            custom_choice = input("Select option (0-5): ").strip()
-            if custom_choice in ['1', '2', '3', '4', '5', '0']:
-                break
-            print("Invalid choice. Please select 0-5.")
+        custom_choice = None
+        while not custom_choice:
+            try:
+                custom_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-5): ").strip()
+                
+                if not custom_choice:
+                    continue
+                    
+                if custom_choice not in ['1', '2', '3', '4', '5', '0']:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
+                    custom_choice = None
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nCustomization interrupted!")
+                return None
         
         if custom_choice == '0':
             return None
         elif custom_choice == '2':
+            # Trial adjustment with validation
             while True:
                 try:
-                    new_trials = int(input(f"Enter number of trials (current: {hpo_config.get('n_trials', 50)}): "))
+                    current_trials = hpo_config.get('n_trials', 50)
+                    new_trials_input = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of trials (current: {current_trials}, recommended 10-200): ").strip()
+                    
+                    if not new_trials_input:
+                        print(Fore.GREEN + Style.BRIGHT + "\nKeeping current trial count.")
+                        break
+                        
+                    new_trials = int(new_trials_input)
                     if new_trials > 0:
                         hpo_config['n_trials'] = new_trials
-                        print(f"Updated trials to {new_trials}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUpdated trials to {new_trials}")
                         break
-                    print("Please enter a positive number.")
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
                 except ValueError:
-                    print("Please enter a valid number.")
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
         elif custom_choice == '3':
+            # Timeout adjustment
             while True:
                 try:
-                    new_timeout_minutes = int(input(f"Enter timeout in minutes (current: {hpo_config.get('timeout', 3600) // 60 if hpo_config.get('timeout') else 60}): "))
+                    current_timeout_minutes = hpo_config.get('timeout', 3600) // 60 if hpo_config.get('timeout') else 60
+                    new_timeout_input = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter timeout in minutes (current: {current_timeout_minutes}, recommended 30-480): ").strip()
+                    
+                    if not new_timeout_input:
+                        print(Fore.GREEN + Style.BRIGHT + "\nKeeping current timeout.")
+                        break
+                        
+                    new_timeout_minutes = int(new_timeout_input)
                     if new_timeout_minutes > 0:
                         hpo_config['timeout'] = new_timeout_minutes * 60
                         hpo_config['timeout_seconds'] = new_timeout_minutes * 60
-                        print(f"Updated timeout to {new_timeout_minutes} minutes")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUpdated timeout to {new_timeout_minutes} minutes")
                         break
-                    print("Please enter a positive number.")
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
                 except ValueError:
-                    print("Please enter a valid number.")
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
         elif custom_choice == '4':
             # Sampler selection
-            print("\nAvailable Samplers:")
-            samplers = ['TPESampler', 'RandomSampler', 'CmaEsSampler']
-            for i, sampler in enumerate(samplers, 1):
-                print(f"{i}. {sampler}")
+            print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Samplers:")
+            samplers = [
+                ('TPESampler', 'Tree-structured Parzen Estimator (Recommended)'),
+                ('RandomSampler', 'Random Sampling (Fast)'),
+                ('CmaEsSampler', 'CMA-ES (Advanced)')
+            ]
+            for i, (sampler, desc) in enumerate(samplers, 1):
+                print(f"{Fore.WHITE + Style.BRIGHT}{i}. {sampler}{Style.RESET_ALL} - {desc}")
             
-            sampler_choice = input(f"Select sampler (1-{len(samplers)}, Enter for current): ").strip()
+            sampler_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect sampler (1-{len(samplers)}, Enter for current): ").strip()
             if sampler_choice and sampler_choice.isdigit() and 1 <= int(sampler_choice) <= len(samplers):
-                hpo_config['sampler'] = samplers[int(sampler_choice) - 1]
-                print(f"Updated sampler to {hpo_config['sampler']}")
+                new_sampler = samplers[int(sampler_choice) - 1][0]
+                hpo_config['sampler'] = new_sampler
+                print(Fore.GREEN + Style.BRIGHT + f"\nUpdated sampler to {new_sampler}")
             
             # Pruner selection
-            print("\nAvailable Pruners:")
-            pruners = ['MedianPruner', 'HyperbandPruner', 'NopPruner']
-            for i, pruner in enumerate(pruners, 1):
-                print(f"{i}. {pruner}")
+            print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Pruners:")
+            pruners = [
+                ('MedianPruner', 'Median Pruner (Recommended)'),
+                ('HyperbandPruner', 'Hyperband (Aggressive)'),
+                ('NopPruner', 'No Pruning (Debug)')
+            ]
+            for i, (pruner, desc) in enumerate(pruners, 1):
+                print(f"{Fore.WHITE + Style.BRIGHT}{i}. {pruner}{Style.RESET_ALL} - {desc}")
             
-            pruner_choice = input(f"Select pruner (1-{len(pruners)}, Enter for current): ").strip()
+            pruner_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect pruner (1-{len(pruners)}, Enter for current): ").strip()
             if pruner_choice and pruner_choice.isdigit() and 1 <= int(pruner_choice) <= len(pruners):
-                hpo_config['pruner'] = pruners[int(pruner_choice) - 1]
-                print(f"Updated pruner to {hpo_config['pruner']}")
+                new_pruner = pruners[int(pruner_choice) - 1][0]
+                hpo_config['pruner'] = new_pruner
+                print(Fore.GREEN + Style.BRIGHT + f"\nUpdated pruner to {new_pruner}")
         elif custom_choice == '5':
-            print("\nSwitching to advanced custom setup...")
+            print(Fore.YELLOW + Style.BRIGHT + "\nSwitching to advanced custom setup...")
             return _interactive_hpo_custom_setup(final_config, use_real_data, **kwargs)
         
         # Final confirmation
-        confirm = input("\nLaunch hyperparameter optimization with this preset? (Y/n): ").strip().lower()
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-" * 40)
+        confirm = input(Fore.YELLOW + Style.BRIGHT + "Launch hyperparameter optimization with this preset? (Y/n): ").strip().lower()
+        
         if confirm in ('', 'y', 'yes'):
-            print(f"\nLaunching HPO with {preset_name} preset...")
+            print(Fore.GREEN + Style.BRIGHT + f"\nLaunching HPO with {preset_name} preset...")
             
             # Ensure system configuration is HPO-friendly
             system_config = final_config.setdefault('system', {})
             system_config.update({
                 'non_interactive': True,
-                'verbose': True
+                'verbose': True,
+                'hpo_optimized': True
             })
             
             # Ensure training configuration is optimized for HPO
@@ -53086,20 +55281,47 @@ def _interactive_hpo_preset_setup(
             training_config.update({
                 'num_workers': 0,  # Safer for HPO
                 'pin_memory': False,  # Disabled for HPO stability
-                'persistent_workers': False
+                'persistent_workers': False,
+                'hpo_mode': True
+            })
+            
+            # Update runtime information
+            runtime_config = final_config.setdefault('runtime', {})
+            runtime_config.update({
+                'setup_method': 'preset_hpo',
+                'active_preset': preset_name,
+                'hpo_launch_time': datetime.now().isoformat()
             })
             
             return _launch_hpo_with_config(final_config, **kwargs)
         else:
-            print("HPO launch cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nHPO launch cancelled")
             return None
             
     except KeyboardInterrupt:
-        print("\nHPO preset setup interrupted")
+        print(Fore.RED + Style.BRIGHT + "\nHPO preset setup interrupted by user!")
         return None
     except Exception as e:
-        logger.error(f"HPO preset setup failed: {e}")
-        print(f"HPO preset setup failed: {str(e)}")
+        logger.error(f"HPO preset setup failed: {e}", exc_info=True)
+        message = (
+            f"HPO preset setup failed: {str(e)}\n"
+            f"Context:\n"
+            f"- Current Preset: {current_preset_name if 'current_preset_name' in locals() else 'Unknown'}\n"
+            f"- Model Type: {model_type if 'model_type' in locals() else 'Unknown'}\n"
+            f"- Use Real Data: {use_real_data}\n\n"
+            f"This could be due to:\n"
+            f"- Preset configuration issues\n"
+            f"- Missing preset definitions\n"
+            f"- Configuration merge conflicts\n"
+            f"- System resource constraints"
+        )
+        
+        print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.RED + Style.BRIGHT + "HPO PRESET SETUP ERROR")
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        print(Fore.WHITE + Style.BRIGHT + message)
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        
         return None
 
 def _interactive_hpo_custom_setup(
@@ -53107,168 +55329,310 @@ def _interactive_hpo_custom_setup(
     use_real_data: Optional[bool],
     **kwargs
 ) -> Optional[Dict[str, Any]]:
-    """Full custom HPO configuration with all available options and preset integration."""
+    """Full custom HPO configuration with context integration and error handling."""
     try:
-        # clear screen and show banner
+        # Clear screen and show banner with config retrieval
         print("\033c", end="")
-        show_banner()
+        banner_config = show_banner(return_config=True)
         
-        print("Custom hyperparameter optimization configuration")
-        print("Press Enter for defaults shown in parentheses")
-        print("Enter 'c' at any time to cancel and return to previous menu")
+        # Use the config returned from show_banner or fallback
+        if base_config is None and banner_config is not None:
+            base_config = banner_config
+        elif base_config is None:
+            base_config = get_current_config()
+        
+        # Extract configuration context for display
+        current_hpo_config = base_config.get('hyperparameter_optimization', {})
+        data_config = base_config.get('data', {})
+        model_config = base_config.get('model', {})
+        
+        # Context extraction using multiple fallbacks
+        current_preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = base_config.get("presets", {})
+        if isinstance(presets_section, dict):
+            current_preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if current_preset_name in ["Custom/Default", None, ""]:
+            metadata = base_config.get("metadata", {})
+            if isinstance(metadata, dict):
+                current_preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if current_preset_name in ["Custom/Default", None, ""]:
+            current_preset_name = base_config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if current_preset_name in ["Custom/Default", None, ""]:
+            runtime = base_config.get("runtime", {})
+            if isinstance(runtime, dict):
+                current_preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if current_preset_name in ["Custom/Default", None, "", "none"]:
+            current_preset_name = "Custom/Default"
+        elif isinstance(current_preset_name, str):
+            current_preset_name = current_preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Header with context display
+        print(Fore.MAGENTA + Style.BRIGHT + "CUSTOM HYPERPARAMETER OPTIMIZATION CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        
+        # Display current context
+        print(Fore.YELLOW + Style.BRIGHT + "Current Configuration Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.YELLOW + Style.BRIGHT + f"{data_config.get('data_path', 'Default')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ HPO Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{current_hpo_config.get('strategy', 'optuna')}")
+        
+        print(Fore.CYAN + Style.BRIGHT + "\nFull custom HPO configuration with all available options")
+        print(Fore.YELLOW + Style.BRIGHT + "Press Enter for defaults shown in parentheses")
+        print(Fore.RED + Style.BRIGHT + "Enter 'c' at any time to cancel and return to previous menu\n")
         
         # Deep copy base config to avoid mutations
         final_config = deepcopy(base_config) if base_config else {}
         
-        # If no base config, use default preset as foundation like other functions
+        # If no base config, use default preset as foundation
         if not final_config:
             if 'default' in PRESET_CONFIGS:
                 final_config = deepcopy(PRESET_CONFIGS['default'])
-                print("Using default preset as foundation for custom HPO")
+                print(Fore.GREEN + Style.BRIGHT + "\nUsing default preset as foundation for custom HPO")
             else:
                 logger.warning("No default preset available for custom HPO")
                 final_config = {}
         
-        print("\n" + "="*60)
-        print("OPTIMIZATION STRATEGY")
-        print("="*60)
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "OPTIMIZATION STRATEGY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        # Study configuration
-        study_name = input("Study name (auto-generated): ").strip()
-        if study_name.lower() == 'c':
-            print("Study configuration cancelled")
-            return None
-        if not study_name:
-            study_name = f"custom_hpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Study configuration with input handling
+        study_name = None
+        while not study_name:
+            try:
+                study_name_input = input(Fore.YELLOW + Style.BRIGHT + "Study name (auto-generated): ").strip()
+                if study_name_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStudy configuration cancelled")
+                    return None
+                if not study_name_input:
+                    study_name = f"custom_hpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing auto-generated study name: {study_name}")
+                else:
+                    study_name = study_name_input
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nStudy configuration interrupted!")
+                return None
         
-        print("\nOptimization direction:")
-        print("1. Minimize (lower values are better)")
-        print("2. Maximize (higher values are better)")
-        print("0. Cancel and return to previous menu")
+        print(Fore.YELLOW + Style.BRIGHT + "\nOptimization direction:")
+        print(Fore.WHITE + Style.BRIGHT + "1. Minimize " + Fore.GREEN + Style.BRIGHT + "(lower values are better - e.g., loss)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Maximize " + Fore.GREEN + Style.BRIGHT + "(higher values are better - e.g., accuracy)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        while True:
-            direction_choice = input("Select direction (0-2, default=1): ").strip()
-            if direction_choice in ['1', '2', '0', '']:
-                break
-            print("Invalid choice. Please select 0-2.")
+        direction_choice = None
+        while not direction_choice:
+            try:
+                direction_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect direction (0-2, default=1): ").strip()
+                
+                if not direction_choice:
+                    direction_choice = '1'
+                    break
+                    
+                if direction_choice == '0':
+                    print(Fore.RED + Style.BRIGHT + "\nDirection selection cancelled")
+                    return None
+                    
+                if direction_choice not in ['1', '2']:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                    direction_choice = None
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nDirection selection interrupted!")
+                return None
         
-        if direction_choice == '0':
-            print("Direction selection cancelled")
-            return None
+        direction = 'minimize' if direction_choice == '1' else 'maximize'
         
-        direction = 'minimize' if direction_choice in ['1', ''] else 'maximize'
+        # trial configuration with validation
+        n_trials = None
+        while n_trials is None:
+            try:
+                n_trials_input = input(Fore.YELLOW + Style.BRIGHT + "Number of trials (100): ").strip()
+                if n_trials_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nTrial configuration cancelled")
+                    return None
+                n_trials = int(n_trials_input) if n_trials_input else 100
+                if n_trials <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    n_trials = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nTrial configuration interrupted!")
+                return None
         
-        n_trials = input("Number of trials (100): ").strip()
-        if n_trials.lower() == 'c':
-            print("Trial configuration cancelled")
-            return None
-        n_trials = int(n_trials) if n_trials else 100
+        timeout_minutes = None
+        while timeout_minutes is None:
+            try:
+                timeout_input = input(Fore.YELLOW + Style.BRIGHT + "Timeout in minutes (0 for no timeout): ").strip()
+                if timeout_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nTimeout configuration cancelled")
+                    return None
+                timeout_minutes = int(timeout_input) if timeout_input else 0
+                if timeout_minutes < 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a non-negative number.")
+                    timeout_minutes = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nTimeout configuration interrupted!")
+                return None
         
-        timeout_minutes = input("Timeout in minutes (0 for no timeout): ").strip()
-        if timeout_minutes.lower() == 'c':
-            print("Timeout configuration cancelled")
-            return None
-        timeout_minutes = int(timeout_minutes) if timeout_minutes else 0
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "SAMPLING AND PRUNING")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        print("\n" + "="*60)
-        print("SAMPLING AND PRUNING")
-        print("="*60)
+        print(Fore.YELLOW + Style.BRIGHT + "Sampling strategy:")
+        samplers = [
+            ('TPESampler', 'Tree-structured Parzen Estimator (Recommended for most cases)'),
+            ('RandomSampler', 'Random sampling (Good baseline, fast)'),
+            ('CmaEsSampler', 'Covariance Matrix Adaptation (Advanced, mathematical)'),
+            ('GridSampler', 'Grid search (Systematic, exhaustive)')
+        ]
+        for i, (sampler, desc) in enumerate(samplers, 1):
+            print(f"{Fore.WHITE + Style.BRIGHT}{i}. {sampler}{Style.RESET_ALL} - {Fore.GREEN + Style.BRIGHT}{desc}{Style.RESET_ALL}")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        print("\nSampling strategy:")
-        samplers = ['TPESampler', 'RandomSampler', 'CmaEsSampler', 'GridSampler']
-        for i, sampler in enumerate(samplers, 1):
-            descriptions = {
-                'TPESampler': 'Tree-structured Parzen Estimator (recommended)',
-                'RandomSampler': 'Random sampling (baseline)',
-                'CmaEsSampler': 'Covariance Matrix Adaptation',
-                'GridSampler': 'Grid search (systematic)'
-            }
-            print(f"{i}. {sampler} - {descriptions[sampler]}")
-        print("0. Cancel and return to previous menu")
+        sampler_choice = None
+        while not sampler_choice:
+            try:
+                sampler_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect sampler (0-{len(samplers)}, default=1): ").strip()
+                
+                if not sampler_choice:
+                    sampler_choice = '1'
+                    break
+                    
+                if sampler_choice == '0':
+                    print(Fore.RED + Style.BRIGHT + "\nSampler selection cancelled")
+                    return None
+                    
+                if not sampler_choice.isdigit() or not (1 <= int(sampler_choice) <= len(samplers)):
+                    print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Please select 0-{len(samplers)}.")
+                    sampler_choice = None
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSampler selection interrupted!")
+                return None
         
-        while True:
-            sampler_choice = input(f"Select sampler (0-{len(samplers)}, default=1): ").strip()
-            if sampler_choice in [str(i) for i in range(len(samplers)+1)] or sampler_choice == '':
-                break
-            print(f"Invalid choice. Please select 0-{len(samplers)}.")
+        sampler_idx = int(sampler_choice) - 1
+        sampler_type = samplers[sampler_idx][0]
         
-        if sampler_choice == '0':
-            print("Sampler selection cancelled")
-            return None
+        print(Fore.YELLOW + Style.BRIGHT + "\nPruning strategy:")
+        pruners = [
+            ('MedianPruner', 'Prune trials below median performance (Balanced)'),
+            ('HyperbandPruner', 'Successive halving algorithm (Aggressive)'),
+            ('NopPruner', 'No pruning - complete all trials (Debug/Comprehensive)')
+        ]
+        for i, (pruner, desc) in enumerate(pruners, 1):
+            print(f"{Fore.WHITE + Style.BRIGHT}{i}. {pruner}{Style.RESET_ALL} - {Fore.GREEN + Style.BRIGHT}{desc}{Style.RESET_ALL}")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        sampler_idx = int(sampler_choice) - 1 if sampler_choice else 0
-        sampler_type = samplers[sampler_idx]
+        pruner_choice = None
+        while not pruner_choice:
+            try:
+                pruner_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect pruner (0-{len(pruners)}, default=1): ").strip()
+                
+                if not pruner_choice:
+                    pruner_choice = '1'
+                    break
+                    
+                if pruner_choice == '0':
+                    print(Fore.RED + Style.BRIGHT + "\nPruner selection cancelled")
+                    return None
+                    
+                if not pruner_choice.isdigit() or not (1 <= int(pruner_choice) <= len(pruners)):
+                    print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Please select 0-{len(pruners)}.")
+                    pruner_choice = None
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nPruner selection interrupted!")
+                return None
         
-        print("\nPruning strategy:")
-        pruners = ['MedianPruner', 'HyperbandPruner', 'NopPruner']
-        for i, pruner in enumerate(pruners, 1):
-            descriptions = {
-                'MedianPruner': 'Prune trials below median performance',
-                'HyperbandPruner': 'Successive halving algorithm',
-                'NopPruner': 'No pruning (complete all trials)'
-            }
-            print(f"{i}. {pruner} - {descriptions[pruner]}")
-        print("0. Cancel and return to previous menu")
+        pruner_idx = int(pruner_choice) - 1
+        pruner_type = pruners[pruner_idx][0]
         
-        while True:
-            pruner_choice = input(f"Select pruner (0-{len(pruners)}, default=1): ").strip()
-            if pruner_choice in [str(i) for i in range(len(pruners)+1)] or pruner_choice == '':
-                break
-            print(f"Invalid choice. Please select 0-{len(pruners)}.")
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "MODEL SELECTION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        if pruner_choice == '0':
-            print("Pruner selection cancelled")
-            return None
-        
-        pruner_idx = int(pruner_choice) - 1 if pruner_choice else 0
-        pruner_type = pruners[pruner_idx]
-        
-        print("\n" + "="*60)
-        print("MODEL SELECTION")
-        print("="*60)
-        
-        print("\nModel types to optimize:")
+        print(Fore.YELLOW + Style.BRIGHT + "Model types to optimize:")
         available_models = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
         selected_models = []
         
         for i, model in enumerate(available_models, 1):
             descriptions = {
-                'SimpleAutoencoder': 'Fast, lightweight model',
-                'EnhancedAutoencoder': 'Advanced features, good balance',
-                'AutoencoderEnsemble': 'Best performance, more complex'
+                'SimpleAutoencoder': 'Fast, lightweight model for quick iterations',
+                'EnhancedAutoencoder': 'Advanced features, good balance of performance and speed',
+                'AutoencoderEnsemble': 'Best performance, more complex and resource-intensive'
             }
-            include = input(f"{i}. Include {model}? ({descriptions[model]}) (Y/n): ").strip().lower()
-            if include == 'c':
-                print("Model selection cancelled")
-                return None
+            while True:
+                try:
+                    include = input(Fore.YELLOW + Style.BRIGHT + f"\n{i}. Include {model}? ({descriptions[model]}) (Y/n): ").strip().lower()
+                    if include == 'c':
+                        print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
+                        return None
+                    if include in ('', 'y', 'yes', 'n', 'no'):
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter Y or N")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nModel selection interrupted!")
+                    return None
+            
             if include in ('', 'y', 'yes'):
                 selected_models.append(model)
+                print(Fore.GREEN + Style.BRIGHT + f"\n   Added {model}")
         
         if not selected_models:
-            print("No models selected, using EnhancedAutoencoder")
+            print(Fore.YELLOW + Style.BRIGHT + "\nNo models selected, using EnhancedAutoencoder as default")
             selected_models = ['EnhancedAutoencoder']
         
         search_all_models = len(selected_models) >= 3
         
-        print("\n" + "="*60)
-        print("DATA CONFIGURATION")
-        print("="*60)
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "DATA CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         if use_real_data is None:
-            print("\nData source:")
-            print("1. Real network data")
-            print("2. Synthetic data")
-            print("0. Cancel and return to previous menu")
+            print(Fore.YELLOW + Style.BRIGHT + "\nData source:")
+            print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(Recommended for production)")
+            print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(Recommended for testing/development)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
-            while True:
-                data_choice = input("Select data source (0-2): ").strip()
-                if data_choice in ['1', '2', '0']:
-                    break
-                print("Invalid choice. Please select 0-2.")
-            
-            if data_choice == '0':
-                print("Data selection cancelled")
-                return None
+            data_choice = None
+            while not data_choice:
+                try:
+                    data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): ").strip()
+                    
+                    if data_choice == '0':
+                        print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
+                        return None
+                        
+                    if data_choice not in ['1', '2']:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                        data_choice = None
+                        continue
+                        
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nData selection interrupted!")
+                    return None
                 
             use_real_data = data_choice == '1'
         
@@ -53279,249 +55643,529 @@ def _interactive_hpo_custom_setup(
         features = 78
         
         if use_real_data:
-            print("\nReal data configuration:")
-            data_path = input("Data file path (optional): ").strip()
-            if data_path.lower() == 'c':
-                print("Data configuration cancelled")
+            print(Fore.YELLOW + Style.BRIGHT + "\nReal data configuration:")
+            try:
+                data_path_input = input(Fore.YELLOW + Style.BRIGHT + "Data file path (optional): ").strip()
+                if data_path_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nData configuration cancelled")
+                    return None
+                data_path = data_path_input if data_path_input else None
+                
+                artifacts_input = input(Fore.YELLOW + Style.BRIGHT + "Artifacts path (optional): ").strip()
+                if artifacts_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nData configuration cancelled")
+                    return None
+                artifacts_path = artifacts_input if artifacts_input else None
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nData configuration interrupted!")
                 return None
-            if not data_path:
-                data_path = None
-            
-            artifacts_path = input("Artifacts path (optional): ").strip()
-            if artifacts_path.lower() == 'c':
-                print("Data configuration cancelled")
-                return None
-            if not artifacts_path:
-                artifacts_path = None
         else:
-            print("\nSynthetic data configuration:")
-            normal_input = input("Normal samples (10000): ").strip()
-            if normal_input.lower() == 'c':
-                print("Data configuration cancelled")
+            print(Fore.YELLOW + Style.BRIGHT + "\nSynthetic data configuration:")
+            try:
+                normal_input = input(Fore.YELLOW + Style.BRIGHT + "Normal samples (10000): ").strip()
+                if normal_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nData configuration cancelled")
+                    return None
+                normal_samples = int(normal_input) if normal_input else 10000
+                
+                attack_input = input(Fore.YELLOW + Style.BRIGHT + "Attack samples (2000): ").strip()
+                if attack_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nData configuration cancelled")
+                    return None
+                attack_samples = int(attack_input) if attack_input else 2000
+                
+                features_input = input(Fore.YELLOW + Style.BRIGHT + "Number of features (78): ").strip()
+                if features_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nData configuration cancelled")
+                    return None
+                features = int(features_input) if features_input else 78
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nData configuration interrupted!")
                 return None
-            normal_samples = int(normal_input) if normal_input else 10000
-            
-            attack_input = input("Attack samples (2000): ").strip()
-            if attack_input.lower() == 'c':
-                print("Data configuration cancelled")
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nInvalid input. Using default values.")
+        
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "VALIDATION STRATEGY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        # Cross-validation configuration with input handling
+        cv_folds = None
+        while cv_folds is None:
+            try:
+                cv_folds_input = input(Fore.YELLOW + Style.BRIGHT + "Cross-validation folds (3): ").strip()
+                if cv_folds_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nValidation configuration cancelled")
+                    return None
+                cv_folds = int(cv_folds_input) if cv_folds_input else 3
+                if cv_folds <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    cv_folds = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nValidation configuration interrupted!")
                 return None
-            attack_samples = int(attack_input) if attack_input else 2000
-            
-            features_input = input("Number of features (78): ").strip()
-            if features_input.lower() == 'c':
-                print("Data configuration cancelled")
+        
+        cv_shuffle = None
+        while cv_shuffle is None:
+            try:
+                cv_shuffle_input = input(Fore.YELLOW + Style.BRIGHT + "Shuffle CV splits? (Y/n): ").strip().lower()
+                if cv_shuffle_input == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nValidation configuration cancelled")
+                    return None
+                cv_shuffle = cv_shuffle_input in ('', 'y', 'yes')
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nValidation configuration interrupted!")
                 return None
-            features = int(features_input) if features_input else 78
         
-        print("\n" + "="*60)
-        print("VALIDATION STRATEGY")
-        print("="*60)
+        cv_random_state = None
+        while cv_random_state is None:
+            try:
+                cv_random_state_input = input(Fore.YELLOW + Style.BRIGHT + "CV random state (42): ").strip()
+                if cv_random_state_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nValidation configuration cancelled")
+                    return None
+                cv_random_state = int(cv_random_state_input) if cv_random_state_input else 42
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nValidation configuration interrupted!")
+                return None
         
-        cv_folds = input("Cross-validation folds (3): ").strip()
-        if cv_folds.lower() == 'c':
-            print("Validation configuration cancelled")
-            return None
-        cv_folds = int(cv_folds) if cv_folds else 3
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "TRIAL CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "="*40)
         
-        cv_shuffle = input("Shuffle CV splits? (Y/n): ").strip().lower()
-        if cv_shuffle == 'c':
-            print("Validation configuration cancelled")
-            return None
-        cv_shuffle = cv_shuffle in ('', 'y', 'yes')
+        # Trial configuration with input handling
+        trial_epochs = None
+        while trial_epochs is None:
+            try:
+                trial_epochs_input = input(Fore.YELLOW + Style.BRIGHT + "Epochs per trial (20): ").strip()
+                if trial_epochs_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nTrial configuration cancelled")
+                    return None
+                trial_epochs = int(trial_epochs_input) if trial_epochs_input else 20
+                if trial_epochs <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    trial_epochs = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nTrial configuration interrupted!")
+                return None
         
-        cv_random_state = input("CV random state (42): ").strip()
-        if cv_random_state.lower() == 'c':
-            print("Validation configuration cancelled")
-            return None
-        cv_random_state = int(cv_random_state) if cv_random_state else 42
+        trial_patience = None
+        while trial_patience is None:
+            try:
+                trial_patience_input = input(Fore.YELLOW + Style.BRIGHT + "Early stopping patience per trial (5): ").strip()
+                if trial_patience_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nTrial configuration cancelled")
+                    return None
+                trial_patience = int(trial_patience_input) if trial_patience_input else 5
+                if trial_patience < 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a non-negative number.")
+                    trial_patience = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nTrial configuration interrupted!")
+                return None
         
-        print("\n" + "="*60)
-        print("TRIAL CONFIGURATION")
-        print("="*60)
+        trial_batch_size = None
+        while trial_batch_size is None:
+            try:
+                trial_batch_size_input = input(Fore.YELLOW + Style.BRIGHT + "Batch size for trials (64): ").strip()
+                if trial_batch_size_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nTrial configuration cancelled")
+                    return None
+                trial_batch_size = int(trial_batch_size_input) if trial_batch_size_input else 64
+                if trial_batch_size <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    trial_batch_size = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nTrial configuration interrupted!")
+                return None
         
-        trial_epochs = input("Epochs per trial (20): ").strip()
-        if trial_epochs.lower() == 'c':
-            print("Trial configuration cancelled")
-            return None
-        trial_epochs = int(trial_epochs) if trial_epochs else 20
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "SEARCH SPACE CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        trial_patience = input("Early stopping patience per trial (5): ").strip()
-        if trial_patience.lower() == 'c':
-            print("Trial configuration cancelled")
-            return None
-        trial_patience = int(trial_patience) if trial_patience else 5
+        print(Fore.YELLOW + Style.BRIGHT + "Define hyperparameter search ranges:")
         
-        trial_batch_size = input("Batch size for trials (64): ").strip()
-        if trial_batch_size.lower() == 'c':
-            print("Trial configuration cancelled")
-            return None
-        trial_batch_size = int(trial_batch_size) if trial_batch_size else 64
+        # Learning rate range with input handling
+        lr_min = None
+        while lr_min is None:
+            try:
+                lr_min_input = input(Fore.YELLOW + Style.BRIGHT + "Learning rate minimum (1e-5): ").strip()
+                if lr_min_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                lr_min = float(lr_min_input) if lr_min_input else 1e-5
+                if lr_min <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    lr_min = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        print("\n" + "="*60)
-        print("SEARCH SPACE CONFIGURATION")
-        print("="*60)
+        lr_max = None
+        while lr_max is None:
+            try:
+                lr_max_input = input(Fore.YELLOW + Style.BRIGHT + "Learning rate maximum (1e-2): ").strip()
+                if lr_max_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                lr_max = float(lr_max_input) if lr_max_input else 1e-2
+                if lr_max <= lr_min:
+                    print(Fore.RED + Style.BRIGHT + f"\nMaximum must be greater than minimum ({lr_min})")
+                    lr_max = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        print("\nDefine hyperparameter search ranges:")
+        # Batch size options with input handling
+        batch_sizes = None
+        while batch_sizes is None:
+            try:
+                batch_sizes_input = input(Fore.YELLOW + Style.BRIGHT + "Batch sizes (comma-separated, e.g., 32,64,128): ").strip()
+                if batch_sizes_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                if batch_sizes_input:
+                    batch_sizes = [int(x.strip()) for x in batch_sizes_input.split(',')]
+                    if any(bs <= 0 for bs in batch_sizes):
+                        print(Fore.RED + Style.BRIGHT + "\nAll batch sizes must be positive numbers.")
+                        batch_sizes = None
+                else:
+                    batch_sizes = [32, 64, 128]
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter valid numbers separated by commas.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        # Learning rate range
-        lr_min_input = input("Learning rate minimum (1e-5): ").strip()
-        if lr_min_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        lr_min = float(lr_min_input) if lr_min_input else 1e-5
+        # Encoding dimension range with input handling
+        encoding_dim_min = None
+        while encoding_dim_min is None:
+            try:
+                encoding_dim_min_input = input(Fore.YELLOW + Style.BRIGHT + "Encoding dimension minimum (4): ").strip()
+                if encoding_dim_min_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                encoding_dim_min = int(encoding_dim_min_input) if encoding_dim_min_input else 4
+                if encoding_dim_min <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    encoding_dim_min = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        lr_max_input = input("Learning rate maximum (1e-2): ").strip()
-        if lr_max_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        lr_max = float(lr_max_input) if lr_max_input else 1e-2
+        encoding_dim_max = None
+        while encoding_dim_max is None:
+            try:
+                encoding_dim_max_input = input(Fore.YELLOW + Style.BRIGHT + "Encoding dimension maximum (32): ").strip()
+                if encoding_dim_max_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                encoding_dim_max = int(encoding_dim_max_input) if encoding_dim_max_input else 32
+                if encoding_dim_max <= encoding_dim_min:
+                    print(Fore.RED + Style.BRIGHT + f"\nMaximum must be greater than minimum ({encoding_dim_min})")
+                    encoding_dim_max = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        # Batch size options
-        batch_sizes_input = input("Batch sizes (comma-separated, e.g., 32,64,128): ").strip()
-        if batch_sizes_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        if batch_sizes_input:
-            batch_sizes = [int(x.strip()) for x in batch_sizes_input.split(',')]
-        else:
-            batch_sizes = [32, 64, 128]
+        # Dropout rate range with input handling
+        dropout_min = None
+        while dropout_min is None:
+            try:
+                dropout_min_input = input(Fore.YELLOW + Style.BRIGHT + "Dropout rate minimum (0.0): ").strip()
+                if dropout_min_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                dropout_min = float(dropout_min_input) if dropout_min_input else 0.0
+                if dropout_min < 0 or dropout_min > 1:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a value between 0 and 1.")
+                    dropout_min = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        # Encoding dimension range
-        encoding_dim_min_input = input("Encoding dimension minimum (4): ").strip()
-        if encoding_dim_min_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        encoding_dim_min = int(encoding_dim_min_input) if encoding_dim_min_input else 4
+        dropout_max = None
+        while dropout_max is None:
+            try:
+                dropout_max_input = input(Fore.YELLOW + Style.BRIGHT + "Dropout rate maximum (0.5): ").strip()
+                if dropout_max_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                dropout_max = float(dropout_max_input) if dropout_max_input else 0.5
+                if dropout_max < dropout_min or dropout_max > 1:
+                    print(Fore.RED + Style.BRIGHT + f"\nMaximum must be between {dropout_min} and 1")
+                    dropout_max = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        encoding_dim_max_input = input("Encoding dimension maximum (32): ").strip()
-        if encoding_dim_max_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        encoding_dim_max = int(encoding_dim_max_input) if encoding_dim_max_input else 32
+        # Weight decay range with input handling
+        weight_decay_min = None
+        while weight_decay_min is None:
+            try:
+                weight_decay_min_input = input(Fore.YELLOW + Style.BRIGHT + "Weight decay minimum (1e-6): ").strip()
+                if weight_decay_min_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                weight_decay_min = float(weight_decay_min_input) if weight_decay_min_input else 1e-6
+                if weight_decay_min <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    weight_decay_min = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        # Dropout rate range
-        dropout_min_input = input("Dropout rate minimum (0.0): ").strip()
-        if dropout_min_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        dropout_min = float(dropout_min_input) if dropout_min_input else 0.0
+        weight_decay_max = None
+        while weight_decay_max is None:
+            try:
+                weight_decay_max_input = input(Fore.YELLOW + Style.BRIGHT + "Weight decay maximum (1e-2): ").strip()
+                if weight_decay_max_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSearch space configuration cancelled")
+                    return None
+                weight_decay_max = float(weight_decay_max_input) if weight_decay_max_input else 1e-2
+                if weight_decay_max <= weight_decay_min:
+                    print(Fore.RED + Style.BRIGHT + f"\nMaximum must be greater than minimum ({weight_decay_min})")
+                    weight_decay_max = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSearch space configuration interrupted!")
+                return None
         
-        dropout_max_input = input("Dropout rate maximum (0.5): ").strip()
-        if dropout_max_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        dropout_max = float(dropout_max_input) if dropout_max_input else 0.5
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "SYSTEM CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        # Weight decay range
-        weight_decay_min_input = input("Weight decay minimum (1e-6): ").strip()
-        if weight_decay_min_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        weight_decay_min = float(weight_decay_min_input) if weight_decay_min_input else 1e-6
+        # System configuration with input handling
+        device = None
+        while device is None:
+            try:
+                device_input = input(Fore.YELLOW + Style.BRIGHT + "Device (auto/cpu/cuda): ").strip()
+                if device_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSystem configuration cancelled")
+                    return None
+                device = device_input if device_input else 'auto'
+                if device not in ['auto', 'cpu', 'cuda']:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter 'auto', 'cpu', or 'cuda'")
+                    device = None
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSystem configuration interrupted!")
+                return None
         
-        weight_decay_max_input = input("Weight decay maximum (1e-2): ").strip()
-        if weight_decay_max_input.lower() == 'c':
-            print("Search space configuration cancelled")
-            return None
-        weight_decay_max = float(weight_decay_max_input) if weight_decay_max_input else 1e-2
+        random_seed = None
+        while random_seed is None:
+            try:
+                random_seed_input = input(Fore.YELLOW + Style.BRIGHT + "Random seed (42): ").strip()
+                if random_seed_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSystem configuration cancelled")
+                    return None
+                random_seed = int(random_seed_input) if random_seed_input else 42
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSystem configuration interrupted!")
+                return None
         
-        print("\n" + "="*60)
-        print("SYSTEM CONFIGURATION")
-        print("="*60)
+        num_workers = None
+        while num_workers is None:
+            try:
+                num_workers_input = input(Fore.YELLOW + Style.BRIGHT + "Number of workers (0 recommended for HPO): ").strip()
+                if num_workers_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nSystem configuration cancelled")
+                    return None
+                num_workers = int(num_workers_input) if num_workers_input else 0
+                if num_workers < 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a non-negative number.")
+                    num_workers = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nSystem configuration interrupted!")
+                return None
         
-        device = input("Device (auto/cpu/cuda): ").strip()
-        if device.lower() == 'c':
-            print("System configuration cancelled")
-            return None
-        device = device if device else 'auto'
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "EARLY STOPPING AND PRUNING")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        random_seed = input("Random seed (42): ").strip()
-        if random_seed.lower() == 'c':
-            print("System configuration cancelled")
-            return None
-        random_seed = int(random_seed) if random_seed else 42
+        # Early stopping configuration with input handling
+        early_stopping_patience = None
+        while early_stopping_patience is None:
+            try:
+                early_stopping_patience_input = input(Fore.YELLOW + Style.BRIGHT + "HPO early stopping patience (10): ").strip()
+                if early_stopping_patience_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nEarly stopping configuration cancelled")
+                    return None
+                early_stopping_patience = int(early_stopping_patience_input) if early_stopping_patience_input else 10
+                if early_stopping_patience < 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a non-negative number.")
+                    early_stopping_patience = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nEarly stopping configuration interrupted!")
+                return None
         
-        num_workers = input("Number of workers (0 recommended for HPO): ").strip()
-        if num_workers.lower() == 'c':
-            print("System configuration cancelled")
-            return None
-        num_workers = int(num_workers) if num_workers else 0
+        early_stopping_min_trials = None
+        while early_stopping_min_trials is None:
+            try:
+                early_stopping_min_trials_input = input(Fore.YELLOW + Style.BRIGHT + "Minimum trials before early stopping (20): ").strip()
+                if early_stopping_min_trials_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nEarly stopping configuration cancelled")
+                    return None
+                early_stopping_min_trials = int(early_stopping_min_trials_input) if early_stopping_min_trials_input else 20
+                if early_stopping_min_trials < 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a non-negative number.")
+                    early_stopping_min_trials = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nEarly stopping configuration interrupted!")
+                return None
         
-        print("\n" + "="*60)
-        print("EARLY STOPPING AND PRUNING")
-        print("="*60)
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "OUTPUT AND STORAGE")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        early_stopping_patience = input("HPO early stopping patience (10): ").strip()
-        if early_stopping_patience.lower() == 'c':
-            print("Early stopping configuration cancelled")
-            return None
-        early_stopping_patience = int(early_stopping_patience) if early_stopping_patience else 10
+        # Output configuration with enhanced input handling
+        verbose = None
+        while verbose is None:
+            try:
+                verbose_input = input(Fore.YELLOW + Style.BRIGHT + "Verbose output? (Y/n): ").strip().lower()
+                if verbose_input == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nOutput configuration cancelled")
+                    return None
+                verbose = verbose_input in ('', 'y', 'yes')
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nOutput configuration interrupted!")
+                return None
         
-        early_stopping_min_trials = input("Minimum trials before early stopping (20): ").strip()
-        if early_stopping_min_trials.lower() == 'c':
-            print("Early stopping configuration cancelled")
-            return None
-        early_stopping_min_trials = int(early_stopping_min_trials) if early_stopping_min_trials else 20
+        save_study = None
+        while save_study is None:
+            try:
+                save_study_input = input(Fore.YELLOW + Style.BRIGHT + "Save study results? (Y/n): ").strip().lower()
+                if save_study_input == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStorage configuration cancelled")
+                    return None
+                save_study = save_study_input in ('', 'y', 'yes')
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nStorage configuration interrupted!")
+                return None
         
-        print("\n" + "="*60)
-        print("OUTPUT AND STORAGE")
-        print("="*60)
+        generate_plots = None
+        while generate_plots is None:
+            try:
+                generate_plots_input = input(Fore.YELLOW + Style.BRIGHT + "Generate optimization plots? (Y/n): ").strip().lower()
+                if generate_plots_input == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nPlotting configuration cancelled")
+                    return None
+                generate_plots = generate_plots_input in ('', 'y', 'yes')
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nPlotting configuration interrupted!")
+                return None
         
-        verbose = input("Verbose output? (Y/n): ").strip().lower()
-        if verbose == 'c':
-            print("Output configuration cancelled")
-            return None
-        verbose = verbose in ('', 'y', 'yes')
+        study_dir = None
+        while study_dir is None:
+            try:
+                study_dir_input = input(Fore.YELLOW + Style.BRIGHT + f"Study directory ({DEFAULT_MODEL_DIR / 'hpo_studies'}): ").strip()
+                if study_dir_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nDirectory configuration cancelled")
+                    return None
+                study_dir = Path(study_dir_input) if study_dir_input else DEFAULT_MODEL_DIR / "hpo_studies"
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nDirectory configuration interrupted!")
+                return None
         
-        save_study = input("Save study results? (Y/n): ").strip().lower()
-        if save_study == 'c':
-            print("Storage configuration cancelled")
-            return None
-        save_study = save_study in ('', 'y', 'yes')
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "ADVANCED OPTIONS")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        generate_plots = input("Generate optimization plots? (Y/n): ").strip().lower()
-        if generate_plots == 'c':
-            print("Plotting configuration cancelled")
-            return None
-        generate_plots = generate_plots in ('', 'y', 'yes')
+        # Advanced options with input handling
+        storage_url = None
+        while storage_url is None:
+            try:
+                storage_url_input = input(Fore.YELLOW + Style.BRIGHT + "Database storage URL (optional): ").strip()
+                if storage_url_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStorage configuration cancelled")
+                    return None
+                storage_url = storage_url_input if storage_url_input else None
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nStorage configuration interrupted!")
+                return None
         
-        study_dir = input(f"Study directory ({DEFAULT_MODEL_DIR / 'hpo_studies'}): ").strip()
-        if study_dir.lower() == 'c':
-            print("Directory configuration cancelled")
-            return None
-        study_dir = Path(study_dir) if study_dir else DEFAULT_MODEL_DIR / "hpo_studies"
+        load_if_exists = None
+        while load_if_exists is None:
+            try:
+                load_if_exists_input = input(Fore.YELLOW + Style.BRIGHT + "Load existing study if found? (y/N): ").strip().lower()
+                if load_if_exists_input == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStudy loading configuration cancelled")
+                    return None
+                load_if_exists = load_if_exists_input in ('y', 'yes')
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nStudy loading configuration interrupted!")
+                return None
         
-        print("\n" + "="*60)
-        print("ADVANCED OPTIONS")
-        print("="*60)
+        parallel_jobs = None
+        while parallel_jobs is None:
+            try:
+                parallel_jobs_input = input(Fore.YELLOW + Style.BRIGHT + "Parallel jobs (1): ").strip()
+                if parallel_jobs_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nParallel configuration cancelled")
+                    return None
+                parallel_jobs = int(parallel_jobs_input) if parallel_jobs_input else 1
+                if parallel_jobs < 1:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    parallel_jobs = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nParallel configuration interrupted!")
+                return None
         
-        storage_url = input("Database storage URL (optional): ").strip()
-        if storage_url.lower() == 'c':
-            print("Storage configuration cancelled")
-            return None
-        if not storage_url:
-            storage_url = None
+        memory_limit = None
+        while memory_limit is None:
+            try:
+                memory_limit_input = input(Fore.YELLOW + Style.BRIGHT + "Memory limit (optional, e.g., '8GB'): ").strip()
+                if memory_limit_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nMemory configuration cancelled")
+                    return None
+                memory_limit = memory_limit_input if memory_limit_input else None
+                break
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nMemory configuration interrupted!")
+                return None
         
-        load_if_exists = input("Load existing study if found? (y/N): ").strip().lower()
-        if load_if_exists == 'c':
-            print("Study loading configuration cancelled")
-            return None
-        load_if_exists = load_if_exists in ('y', 'yes')
-        
-        parallel_jobs = input("Parallel jobs (1): ").strip()
-        if parallel_jobs.lower() == 'c':
-            print("Parallel configuration cancelled")
-            return None
-        parallel_jobs = int(parallel_jobs) if parallel_jobs else 1
-        
-        memory_limit = input("Memory limit (optional, e.g., '8GB'): ").strip()
-        if memory_limit.lower() == 'c':
-            print("Memory configuration cancelled")
-            return None
-        if not memory_limit:
-            memory_limit = None
-        
-        # Build comprehensive HPO configuration using preset structure
+        # Build HPO configuration using preset structure
         hpo_config = final_config.setdefault('hyperparameter_optimization', {})
         
         # Update with custom settings while preserving preset structure
@@ -53557,7 +56201,7 @@ def _interactive_hpo_custom_setup(
                 'random_state': cv_random_state
             },
             
-            # Comprehensive optimization space
+            # optimization space
             'optimization_space': {
                 'learning_rate': {'type': 'float', 'low': lr_min, 'high': lr_max, 'log': True},
                 'batch_size': {'type': 'categorical', 'choices': batch_sizes},
@@ -53570,14 +56214,15 @@ def _interactive_hpo_custom_setup(
             'early_stopping': {
                 'enabled': True,
                 'patience': early_stopping_patience,
-                'min_improvement': 1e-4
+                'min_improvement': 1e-4,
+                'min_trials': early_stopping_min_trials
             },
             
             # Advanced settings
             'cleanup_trials': True,
             'generate_plots': generate_plots,
             
-            # Detailed search space for compatibility
+            # search space for compatibility
             'search_space': {
                 'encoding_dim_min': encoding_dim_min,
                 'encoding_dim_max': encoding_dim_max,
@@ -53671,7 +56316,8 @@ def _interactive_hpo_custom_setup(
             'non_interactive': True,
             'verbose': verbose,
             'parallel_processing': parallel_jobs > 1,
-            'max_workers': parallel_jobs
+            'max_workers': parallel_jobs,
+            'memory_limit': memory_limit
         })
         
         # Update metadata to reflect custom setup
@@ -53691,108 +56337,383 @@ def _interactive_hpo_custom_setup(
             }
         })
         
-        # Display comprehensive configuration review
-        print("\n" + "="*70)
-        print("CUSTOM HPO CONFIGURATION REVIEW")
-        print("="*70)
+        # HPO Configuration Review
+        print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM HPO CONFIGURATIONS SUMMARY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        print(f"Study: {study_name}")
-        print(f"Optimization: {direction} over {n_trials} trials")
+        # Study Configuration Section
+        print(Fore.MAGENTA + Style.BRIGHT + "Study Configuration:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Study Name: " + Fore.YELLOW + Style.BRIGHT + f"{study_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimization: " + Fore.YELLOW + Style.BRIGHT + f"{direction.upper()} over {n_trials} trials")
         if timeout_minutes > 0:
-            print(f"Timeout: {timeout_minutes} minutes")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{timeout_minutes} minutes ({timeout_minutes * 60} seconds)")
         else:
-            print("Timeout: No limit")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"No limit - run all {n_trials} trials")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Objective Metric: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_config.get('objective_metric', 'validation_loss')}")
         
-        print(f"Sampling: {sampler_type}")
-        print(f"Pruning: {pruner_type}")
+        # Optimization Strategy Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nOptimization Strategy:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{sampler_type}")
+        sampler_desc = {
+            'TPESampler': 'Tree-structured Parzen Estimator (Recommended)',
+            'RandomSampler': 'Random Sampling (Baseline)',
+            'CmaEsSampler': 'Covariance Matrix Adaptation (Advanced)',
+            'GridSampler': 'Grid Search (Exhaustive)'
+        }
+        print(Fore.GREEN + Style.BRIGHT + f"  │  └─ " + Fore.CYAN + Style.BRIGHT + f"{sampler_desc.get(sampler_type, 'Custom')}")
         
-        print(f"Models: {', '.join(selected_models)}")
-        print(f"Data: {'Real Data' if use_real_data else 'Synthetic Data'}")
-        if not use_real_data:
-            print(f"   Samples: {normal_samples} normal, {attack_samples} attack")
-            print(f"   Features: {features}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{pruner_type}")
+        pruner_desc = {
+            'MedianPruner': 'Median-based Pruning (Balanced)',
+            'HyperbandPruner': 'Successive Halving (Aggressive)',
+            'NopPruner': 'No Pruning (Complete All Trials)'
+        }
+        print(Fore.GREEN + Style.BRIGHT + f"  │  └─ " + Fore.CYAN + Style.BRIGHT + f"{pruner_desc.get(pruner_type, 'Custom')}")
         
-        print(f"Validation: {cv_folds} folds cross-validation")
-        print(f"Trial Configuration: {trial_epochs} epochs, patience {trial_patience}")
-        print(f"System: Device {device}, {num_workers} workers")
+        # Early stopping details
+        if pruner_type != 'NopPruner':
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Early Stopping: " + Fore.YELLOW + Style.BRIGHT + f"Enabled (patience: {early_stopping_patience})")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Min Trials: " + Fore.YELLOW + Style.BRIGHT + f"{early_stopping_min_trials} before early stopping")
+        else:
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Early Stopping: " + Fore.YELLOW + Style.BRIGHT + f"Disabled (No Pruning)")
         
-        print(f"Search Space:")
-        print(f"   Learning Rate: {lr_min:.2e} to {lr_max:.2e}")
-        print(f"   Batch Sizes: {batch_sizes}")
-        print(f"   Encoding Dim: {encoding_dim_min} to {encoding_dim_max}")
-        print(f"   Dropout: {dropout_min} to {dropout_max}")
-        print(f"   Weight Decay: {weight_decay_min:.2e} to {weight_decay_max:.2e}")
+        # Model Configuration Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nModel Configuration:")
+        model_descriptions = {
+            'SimpleAutoencoder': 'Fast & Lightweight',
+            'EnhancedAutoencoder': 'Balanced Performance',
+            'AutoencoderEnsemble': 'High Performance'
+        }
         
-        estimated_time = _estimate_hpo_time(n_trials, trial_epochs, len(selected_models), cv_folds)
-        print(f"Estimated Duration: ~{estimated_time}")
+        if len(selected_models) == 1:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Single Model: " + Fore.YELLOW + Style.BRIGHT + f"{selected_models[0]}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Type: " + Fore.CYAN + Style.BRIGHT + f"{model_descriptions.get(selected_models[0], 'Custom')}")
+        else:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Multi-Model Search: " + Fore.YELLOW + Style.BRIGHT + f"Enabled")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Models: " + Fore.YELLOW + Style.BRIGHT + f"{len(selected_models)} models")
+            for i, model in enumerate(selected_models, 1):
+                status = "✓" if model in selected_models else "✗"
+                print(Fore.GREEN + Style.BRIGHT + f"  │  {i}. {status} {model}" + 
+                      Fore.CYAN + Style.BRIGHT + f" - {model_descriptions.get(model, 'Custom')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Search Strategy: " + 
+                  Fore.YELLOW + Style.BRIGHT + f"{'Comprehensive' if search_all_models else 'Targeted'}")
         
-        if storage_url:
-            print(f"Database Storage: {storage_url}")
-        if load_if_exists:
-            print("Will load existing study if found")
-        if parallel_jobs > 1:
-            print(f"Parallel Jobs: {parallel_jobs}")
+        # Data Configuration Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nData Configuration:")
+        if use_real_data:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"Real Network Data")
+            if data_path:
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
+            if artifacts_path:
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Artifacts Path: " + Fore.YELLOW + Style.BRIGHT + f"{artifacts_path}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Type: " + Fore.CYAN + Style.BRIGHT + f"Production-ready dataset")
+        else:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"Synthetic Data")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples:,}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples:,}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Type: " + Fore.CYAN + Style.BRIGHT + f"Generated test dataset")
+        
+        # Validation Strategy Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nValidation Strategy:")
+        if cv_folds > 1:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Method: " + Fore.YELLOW + Style.BRIGHT + f"{cv_folds}-Fold Cross-Validation")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Shuffle: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled' if cv_shuffle else 'Disabled'}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Random State: " + Fore.YELLOW + Style.BRIGHT + f"{cv_random_state}")
+            robustness = "High" if cv_folds >= 5 else "Medium" if cv_folds >= 3 else "Basic"
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Robustness: " + Fore.CYAN + Style.BRIGHT + f"{robustness}")
+        else:
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Method: " + Fore.YELLOW + Style.BRIGHT + f"Single Split Validation")
+        
+        # Trial Configuration Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nTrial Configuration:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs per Trial: " + Fore.YELLOW + Style.BRIGHT + f"{trial_epochs}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Early Stopping: " + Fore.YELLOW + Style.BRIGHT + f"Patience {trial_patience}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.YELLOW + Style.BRIGHT + f"{trial_batch_size}")
+        
+        # Calculate trial complexity
+        trial_complexity = "Low"
+        if trial_epochs > 50:
+            trial_complexity = "Very High"
+        elif trial_epochs > 30:
+            trial_complexity = "High"
+        elif trial_epochs > 15:
+            trial_complexity = "Medium"
+        
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Complexity: " + Fore.CYAN + Style.BRIGHT + f"{trial_complexity}")
+        
+        # Search Space Configuration Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nSearch Space Configuration:")
+        
+        # Learning Rate
+        lr_range = f"{lr_min:.2e} to {lr_max:.2e}"
+        lr_log = " (log scale)" if hpo_config['optimization_space']['learning_rate'].get('log', True) else ""
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.YELLOW + Style.BRIGHT + f"{lr_range}{lr_log}")
+        
+        # Batch Sizes
+        batch_size_str = ", ".join(map(str, batch_sizes))
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Batch Sizes: " + Fore.YELLOW + Style.BRIGHT + f"[{batch_size_str}]")
+        
+        # Encoding Dimension
+        encoding_range = f"{encoding_dim_min} to {encoding_dim_max}"
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Encoding Dim: " + Fore.YELLOW + Style.BRIGHT + f"{encoding_range}")
+        
+        # Dropout Rate
+        dropout_range = f"{dropout_min} to {dropout_max}"
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Dropout Rate: " + Fore.YELLOW + Style.BRIGHT + f"{dropout_range}")
+        
+        # Weight Decay
+        wd_range = f"{weight_decay_min:.2e} to {weight_decay_max:.2e}"
+        wd_log = " (log scale)" if hpo_config['optimization_space']['weight_decay'].get('log', True) else ""
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Weight Decay: " + Fore.YELLOW + Style.BRIGHT + f"{wd_range}{wd_log}")
+        
+        # Calculate search space size
+        param_combinations = len(batch_sizes) * (encoding_dim_max - encoding_dim_min + 1)
+        search_space_size = "Small" if param_combinations < 50 else "Medium" if param_combinations < 200 else "Large"
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Search Space: " + Fore.CYAN + Style.BRIGHT + f"{search_space_size} ({param_combinations}+ combinations)")
+        
+        # System Configuration Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nSystem Configuration:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{device.upper()}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Workers: " + Fore.YELLOW + Style.BRIGHT + f"{num_workers}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Random Seed: " + Fore.YELLOW + Style.BRIGHT + f"{random_seed}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parallel Jobs: " + Fore.YELLOW + Style.BRIGHT + f"{parallel_jobs}")
+        
         if memory_limit:
-            print(f"Memory Limit: {memory_limit}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Memory Limit: " + Fore.YELLOW + Style.BRIGHT + f"{memory_limit}")
         
-        print("="*70)
+        # System capability assessment
+        capability = "Balanced"
+        if parallel_jobs > 4:
+            capability = "High Performance"
+        elif parallel_jobs == 1:
+            capability = "Single-threaded"
         
-        confirm = input("\nStart hyperparameter optimization with this configuration? (Y/n/c to cancel): ").strip().lower()
-        if confirm in ('', 'y', 'yes'):
-            print("\nLaunching comprehensive hyperparameter optimization...")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Capability: " + Fore.CYAN + Style.BRIGHT + f"{capability}")
+        
+        # Storage and Output Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nStorage and Output:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Study Storage: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled' if save_study else 'Disabled'}")
+        if save_study and storage_url:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Database: " + Fore.YELLOW + Style.BRIGHT + f"{storage_url}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Load Existing: " + Fore.YELLOW + Style.BRIGHT + f"{'Yes' if load_if_exists else 'No'}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Generate Plots: " + Fore.YELLOW + Style.BRIGHT + f"{'Yes' if generate_plots else 'No'}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Verbose Output: " + Fore.YELLOW + Style.BRIGHT + f"{'Yes' if verbose else 'No'}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Study Directory: " + Fore.YELLOW + Style.BRIGHT + f"{study_dir}")
+        
+        # Performance and Resource Estimation Section
+        print(Fore.MAGENTA + Style.BRIGHT + "\nPerformance and Resource Estimation:")
+        
+        # Calculate estimated duration
+        estimated_time = _estimate_hpo_time(n_trials, trial_epochs, len(selected_models), cv_folds)
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Estimated Duration: " + Fore.YELLOW + Style.BRIGHT + f"~{estimated_time}")
+        
+        # Calculate resource requirements
+        total_training_ops = n_trials * trial_epochs * cv_folds * len(selected_models)
+        resource_level = "Light" if total_training_ops < 1000 else "Moderate" if total_training_ops < 5000 else "Heavy"
+        
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Training Ops: " + Fore.YELLOW + Style.BRIGHT + f"{total_training_ops:,}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Resource Level: " + Fore.CYAN + Style.BRIGHT + f"{resource_level}")
+        
+        # Success probability estimation
+        success_prob = "High" if n_trials >= 100 and cv_folds >= 3 else "Medium" if n_trials >= 50 else "Exploratory"
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Success Probability: " + Fore.CYAN + Style.BRIGHT + f"{success_prob}")
+        
+        # Configuration Summary Flags
+        print(Fore.MAGENTA + Style.BRIGHT + "\nConfiguration Summary Flags:")
+        
+        flags = []
+        if n_trials >= 100:
+            flags.append("Comprehensive Search")
+        elif n_trials <= 30:
+            flags.append("Quick Exploration")
             
-            # Ensure HPO-friendly system settings
-            system_config.update({
-                'non_interactive': True,
-                'verbose': verbose
-            })
+        if cv_folds >= 5:
+            flags.append("Robust Validation")
             
-            return _launch_hpo_with_config(final_config, **kwargs)
-        elif confirm in ('c', 'cancel'):
-            print("HPO cancelled")
-            return None
-        else:
-            print("Would you like to:")
-            print("1. Try again with different settings")
-            print("2. Switch to preset configuration")
-            print("3. Switch to express setup")
-            print("0. Return to previous menu")
+        if len(selected_models) > 1:
+            flags.append("Multi-Model")
             
-            while True:
-                retry_choice = input("Select option (0-3): ").strip()
-                if retry_choice in ['1', '2', '3', '0']:
-                    break
-                print("Invalid choice. Please select 0-3.")
+        if timeout_minutes == 0:
+            flags.append("No Time Limit")
             
-            if retry_choice == '1':
-                return _interactive_hpo_custom_setup(base_config, use_real_data, **kwargs)
-            elif retry_choice == '2':
-                return _interactive_hpo_preset_setup(base_config, use_real_data, **kwargs)
-            elif retry_choice == '3':
-                return _interactive_hpo_express_setup(base_config, use_real_data, **kwargs)
-            else:
-                print("Returning to previous menu")
+        if parallel_jobs > 1:
+            flags.append(f"Parallel ({parallel_jobs}x)")
+            
+        if not use_real_data:
+            flags.append("Synthetic Data")
+            
+        if not flags:
+            flags.append("Balanced Configuration")
+            
+        flags_display = " - ".join(flags)
+        print(Fore.CYAN + Style.BRIGHT + f"  {flags_display}")
+        
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        
+        # confirmation with options
+        confirm = None
+        while not confirm:
+            try:
+                confirm_input = input(Fore.YELLOW + Style.BRIGHT + "\nStart hyperparameter optimization with this configuration? (Y/n/c to cancel): ").strip().lower()
+                
+                if confirm_input in ('', 'y', 'yes'):
+                    print(Fore.GREEN + Style.BRIGHT + "\nLaunching comprehensive hyperparameter optimization...")
+                    
+                    # Ensure HPO-friendly system settings
+                    system_config.update({
+                        'non_interactive': True,
+                        'verbose': verbose,
+                        'hpo_optimized': True
+                    })
+                    
+                    # Update runtime information
+                    runtime_config = final_config.setdefault('runtime', {})
+                    runtime_config.update({
+                        'setup_method': 'custom_hpo',
+                        'active_preset': 'Custom Configuration',
+                        'hpo_launch_time': datetime.now().isoformat()
+                    })
+                    
+                    return _launch_hpo_with_config(final_config, **kwargs)
+                elif confirm_input in ('c', 'cancel'):
+                    print(Fore.RED + Style.BRIGHT + "HPO cancelled")
+                    return None
+                elif confirm_input in ('n', 'no'):
+                    print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to:")
+                    print(Fore.WHITE + Style.BRIGHT + "1. Try again with different settings")
+                    print(Fore.WHITE + Style.BRIGHT + "2. Switch to preset configuration")
+                    print(Fore.WHITE + Style.BRIGHT + "3. Switch to express setup")
+                    print(Fore.RED + Style.BRIGHT + "0. Return to previous menu")
+                    
+                    retry_choice = None
+                    while not retry_choice:
+                        try:
+                            retry_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-3): ").strip()
+                            
+                            if retry_choice not in ['1', '2', '3', '0']:
+                                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                                retry_choice = None
+                                continue
+                                
+                        except (EOFError, KeyboardInterrupt):
+                            print(Fore.RED + Style.BRIGHT + "\nOption selection interrupted!")
+                            return None
+                    
+                    if retry_choice == '1':
+                        return _interactive_hpo_custom_setup(base_config, use_real_data, **kwargs)
+                    elif retry_choice == '2':
+                        return _interactive_hpo_preset_setup(base_config, use_real_data, **kwargs)
+                    elif retry_choice == '3':
+                        return _interactive_hpo_express_setup(base_config, use_real_data, **kwargs)
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nReturning to previous menu")
+                        return None
+                else:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter Y, N, or C")
+                    confirm = None
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nConfirmation interrupted!")
                 return None
                 
     except KeyboardInterrupt:
-        print("\nCustom HPO setup interrupted")
+        print(Fore.RED + Style.BRIGHT + "\nCustom HPO setup interrupted by user!")
         return None
     except Exception as e:
-        logger.error(f"Custom HPO setup failed: {e}")
-        print(f"Custom HPO setup failed: {str(e)}")
+        logger.error(f"Custom HPO setup failed: {e}", exc_info=True)
+        message = (
+            f"Custom HPO setup failed: {str(e)}\n"
+            f"Context:\n"
+            f"- Current Preset: {current_preset_name if 'current_preset_name' in locals() else 'Unknown'}\n"
+            f"- Model Type: {model_type if 'model_type' in locals() else 'Unknown'}\n"
+            f"- Use Real Data: {use_real_data}\n\n"
+            f"This could be due to:\n"
+            f"- Invalid input parameters\n"
+            f"- Configuration merge conflicts\n"
+            f"- System resource constraints\n"
+            f"- Data configuration issues"
+        )
+        
+        print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.RED + Style.BRIGHT + "CUSTOM HPO SETUP ERROR")
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + message)
+        print(Fore.RED + Style.BRIGHT + "-"*40)
+        
         return None
 
 def _interactive_hpo_continue_setup(
     base_config: Dict[str, Any],
     **kwargs
 ) -> Optional[Dict[str, Any]]:
-    """Setup to continue an existing HPO study with enhanced integration and error handling."""
+    """Setup to continue an existing HPO study with context integration and error handling."""
     try:
-        # clear screen and show banner
+        # Clear screen and show banner with config retrieval
         print("\033c", end="")
-        show_banner()
+        banner_config = show_banner(return_config=True)
         
-        print("Continue existing hyperparameter optimization study")
+        # Use the config returned from show_banner or fallback
+        if base_config is None and banner_config is not None:
+            base_config = banner_config
+        elif base_config is None:
+            base_config = get_current_config()
+        
+        # Extract configuration context for display
+        current_hpo_config = base_config.get('hyperparameter_optimization', {})
+        data_config = base_config.get('data', {})
+        model_config = base_config.get('model', {})
+        
+        # Context extraction using multiple fallbacks
+        current_preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = base_config.get("presets", {})
+        if isinstance(presets_section, dict):
+            current_preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if current_preset_name in ["Custom/Default", None, ""]:
+            metadata = base_config.get("metadata", {})
+            if isinstance(metadata, dict):
+                current_preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if current_preset_name in ["Custom/Default", None, ""]:
+            current_preset_name = base_config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if current_preset_name in ["Custom/Default", None, ""]:
+            runtime = base_config.get("runtime", {})
+            if isinstance(runtime, dict):
+                current_preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if current_preset_name in ["Custom/Default", None, "", "none"]:
+            current_preset_name = "Custom/Default"
+        elif isinstance(current_preset_name, str):
+            current_preset_name = current_preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Header with context display
+        print(Fore.MAGENTA + Style.BRIGHT + "CONTINUE EXISTING HPO STUDY")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        
+        # Display current context
+        print(Fore.YELLOW + Style.BRIGHT + "Current Configuration Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.YELLOW + Style.BRIGHT + f"{data_config.get('data_path', 'Default')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ HPO Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{current_hpo_config.get('strategy', 'optuna')}")
+        
+        print(Fore.CYAN + Style.BRIGHT + "\nContinue existing hyperparameter optimization study")
+        print(Fore.YELLOW + Style.BRIGHT + "Press Enter for defaults shown in parentheses")
+        print(Fore.RED + Style.BRIGHT + "Enter 'c' at any time to cancel and return to previous menu\n")
         
         # Look for existing studies in multiple locations
         study_base_dir = Path(DEFAULT_MODEL_DIR) / "hpo_studies"
@@ -53800,24 +56721,26 @@ def _interactive_hpo_continue_setup(
             Path("studies"),
             Path("optuna_studies"),
             Path("hpo"),
-            CONFIG_DIR / "studies"
+            CONFIG_DIR / "studies",
+            Path.cwd() / "hpo_studies"
         ]
         
         # Check primary directory
         if not study_base_dir.exists():
-            print(f"Primary study directory not found at {study_base_dir}")
+            print(Fore.YELLOW + Style.BRIGHT + f"\nPrimary study directory not found at {study_base_dir}")
             
             # Check alternative directories
             found_dir = None
             for alt_dir in alternative_dirs:
-                if alt_dir.exists() and list(alt_dir.glob("*.db")) or list(alt_dir.glob("*.pkl")):
+                if alt_dir.exists() and (list(alt_dir.glob("*.db")) or list(alt_dir.glob("*_study.pkl"))):
                     found_dir = alt_dir
-                    print(f"Found studies in alternative directory: {found_dir}")
+                    print(Fore.GREEN + Style.BRIGHT + f"\nFound studies in alternative directory: {found_dir}")
                     study_base_dir = found_dir
                     break
             
             if not found_dir:
-                print("No study directories found. Switching to express setup...")
+                print(Fore.RED + Style.BRIGHT + "\nNo study directories found.")
+                print(Fore.YELLOW + Style.BRIGHT + "\nSwitching to express setup...")
                 return _interactive_hpo_express_setup(base_config, None, **kwargs)
         
         # Find study files (both database and pickle formats)
@@ -53828,11 +56751,12 @@ def _interactive_hpo_continue_setup(
         all_study_files = study_db_files + study_pkl_files
         
         if not all_study_files:
-            print("No existing studies found")
-            print("Switching to express setup...")
+            print(Fore.RED + Style.BRIGHT + "\nNo existing studies found")
+            print(Fore.YELLOW + Style.BRIGHT + "\nSwitching to express setup...")
             return _interactive_hpo_express_setup(base_config, None, **kwargs)
         
-        print(f"\nFound {len(all_study_files)} existing study files:")
+        print(Fore.GREEN + Style.BRIGHT + f"\nFound {len(all_study_files)} existing study files:")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
         
         studies_info = []
         
@@ -53925,20 +56849,30 @@ def _interactive_hpo_continue_setup(
                 
                 studies_info.append(study_info)
                 
-                # Display study information
-                print(f"{i}. {study_info['name']} ({study_info['file_type'].upper()})")
+                # Display study information with color coding
+                status_color = Fore.GREEN if study_info['accessible'] else Fore.RED
+                status_icon = "OK" if study_info['accessible'] else "ERROR"
+                
+                print(f"{Fore.WHITE + Style.BRIGHT}{i}. {study_info['name']} {status_color}({study_info['file_type'].upper()}) {status_icon}{Style.RESET_ALL}")
+                
                 if study_info['accessible']:
-                    print(f"   Trials: {study_info['complete']}/{study_info['trials']} complete, {study_info['pruned']} pruned, {study_info['failed']} failed")
-                    print(f"   Best value: {study_info['best_value']}")
+                    completion_rate = (study_info['complete'] / study_info['trials']) * 100 if study_info['trials'] > 0 else 0
+                    completion_color = Fore.GREEN if completion_rate > 75 else Fore.YELLOW if completion_rate > 50 else Fore.RED
+                    
+                    print(f"   {Fore.CYAN}Trials:{Style.RESET_ALL} {study_info['complete']}/{study_info['trials']} complete "
+                          f"({completion_color}{completion_rate:.1f}%{Style.RESET_ALL}), "
+                          f"{study_info['pruned']} pruned, {study_info['failed']} failed")
+                    print(f"   {Fore.CYAN}Best Value:{Style.RESET_ALL} {Fore.YELLOW + Style.BRIGHT}{study_info['best_value']}{Style.RESET_ALL}")
                     
                     if 'multiple_studies' in study_info:
-                        print(f"   Multiple studies in database: {len(study_info['multiple_studies'])}")
+                        print(f"   {Fore.YELLOW}Multiple studies in database: {len(study_info['multiple_studies'])}{Style.RESET_ALL}")
                     
-                    print(f"   Last modified: {study_info['last_modified'].strftime('%Y-%m-%d %H:%M:%S')}")
+                    print(f"   {Fore.CYAN}Last Modified:{Style.RESET_ALL} {study_info['last_modified'].strftime('%Y-%m-%d %H:%M:%S')}")
                     if study_info['file_size_mb'] > 0:
-                        print(f"   File size: {study_info['file_size_mb']:.1f} MB")
+                        size_color = Fore.GREEN if study_info['file_size_mb'] < 10 else Fore.YELLOW if study_info['file_size_mb'] < 50 else Fore.RED
+                        print(f"   {Fore.CYAN}File Size:{Style.RESET_ALL} {size_color}{study_info['file_size_mb']:.1f} MB{Style.RESET_ALL}")
                 else:
-                    print(f"   Error: {study_info['error']}")
+                    print(f"   {Fore.RED}Error: {study_info['error']}{Style.RESET_ALL}")
                 
                 print()
                 
@@ -53951,118 +56885,175 @@ def _interactive_hpo_continue_setup(
                     'accessible': False
                 }
                 studies_info.append(study_info)
-                print(f"{i}. {study_file.name} (Error: {e})")
+                print(f"{Fore.WHITE + Style.BRIGHT}{i}. {study_file.name} {Fore.RED}(Error: {e}){Style.RESET_ALL}")
                 print()
         
         # Filter accessible studies
         accessible_studies = [s for s in studies_info if s['accessible']]
         
         if not accessible_studies:
-            print("No accessible studies found. All studies have errors.")
-            print("Available options:")
-            print("1. Try to repair database files")
-            print("2. Switch to express setup")
-            print("0. Cancel")
+            print(Fore.RED + Style.BRIGHT + "\nNo accessible studies found. All studies have errors.")
+            print(Fore.YELLOW + Style.BRIGHT + "\nAvailable options:")
+            print(Fore.WHITE + Style.BRIGHT + "1. Try to repair database files")
+            print(Fore.WHITE + Style.BRIGHT + "2. Switch to express setup")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
-            while True:
-                choice = input("Select option (0-2): ").strip()
-                if choice in ['1', '2', '0']:
-                    break
-                print("Invalid choice. Please select 0-2.")
-            
-            if choice == '0':
-                return None
-            elif choice == '1':
-                print("Database repair not implemented. Switching to express setup...")
+            choice = None
+            while not choice:
+                try:
+                    choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): ").strip()
+                    
+                    if choice == '0':
+                        print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                        return None
+                    elif choice == '1':
+                        print(Fore.YELLOW + Style.BRIGHT + "\nDatabase repair not implemented. Switching to express setup...")
+                    elif choice == '2':
+                        return _interactive_hpo_express_setup(base_config, None, **kwargs)
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                        choice = None
+                        continue
+                        
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nOption selection interrupted!")
+                    return None
             
             return _interactive_hpo_express_setup(base_config, None, **kwargs)
         
-        print(f"{len(studies_info)+1}. Back to express setup")
-        print("0. Cancel")
+        print(Fore.WHITE + Style.BRIGHT + f"{len(studies_info)+1}. Back to express setup")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
-        # Get user selection
-        while True:
+        # Input handling with retry logic
+        selected_study_info = None
+        while selected_study_info is None:
             try:
-                choice = input(f"\nSelect study to continue (1-{len(studies_info)}, {len(studies_info)+1} for express setup, 0 to cancel): ").strip()
+                choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect study to continue (1-{len(studies_info)}, {len(studies_info)+1} for express setup, 0 to cancel): ").strip()
+                
+                if choice.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                    return None
+                    
+                if not choice:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid choice.")
+                    continue
+                
                 choice_num = int(choice)
                 
                 if choice_num == 0:
-                    print("Continue study cancelled")
+                    print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
                     return None
                 elif choice_num == len(studies_info) + 1:
                     return _interactive_hpo_express_setup(base_config, None, **kwargs)
                 elif 1 <= choice_num <= len(studies_info):
                     selected_study_info = studies_info[choice_num-1]
-                    break
+                    if not selected_study_info['accessible']:
+                        print(Fore.RED + Style.BRIGHT + f"\nCannot continue study due to error: {selected_study_info['error']}")
+                        selected_study_info = None
+                        continue
                 else:
-                    print(f"Invalid choice. Please select 0-{len(studies_info)+1}.")
+                    print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Please select 0-{len(studies_info)+1}.")
+                    
             except ValueError:
-                print(f"Invalid input. Please enter a number 0-{len(studies_info)+1}.")
-        
-        if not selected_study_info['accessible']:
-            print(f"Cannot continue study due to error: {selected_study_info['error']}")
-            return None
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid input. Please enter a number 0-{len(studies_info)+1}.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nStudy selection interrupted!")
+                return None
         
         study = selected_study_info['study']
         study_name = selected_study_info['name']
         file_type = selected_study_info['file_type']
         
-        print(f"\nSelected study: {study_name} ({file_type})")
-        print(f"Current status: {selected_study_info['complete']} completed trials out of {selected_study_info['trials']} total")
+        print(Fore.GREEN + Style.BRIGHT + f"\nSelected study: {study_name} ({file_type})")
+        print(Fore.CYAN + Style.BRIGHT + f"Current status: {selected_study_info['complete']} completed trials out of {selected_study_info['trials']} total")
         
         # Display study configuration if available
         try:
             if hasattr(study, 'user_attrs'):
                 config_info = study.user_attrs.get('configuration', {})
                 if config_info:
-                    print(f"\nOriginal study configuration:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nOriginal study configuration:")
                     if 'sampler_type' in config_info:
-                        print(f"   Sampler: {config_info['sampler_type']}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{config_info['sampler_type']}")
                     if 'pruner_type' in config_info:
-                        print(f"   Pruner: {config_info['pruner_type']}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{config_info['pruner_type']}")
                     if 'model_types' in config_info:
-                        print(f"   Models: {', '.join(config_info['model_types'])}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Models: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(config_info['model_types'])}")
         except Exception:
             pass
         
-        # Enhanced configuration for continuing
-        print(f"\n" + "="*50)
-        print("CONTINUATION CONFIGURATION")
-        print("="*50)
+        # Continuation configuration
+        print(Fore.MAGENTA + Style.BRIGHT + "CONTINUATION CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
         
-        additional_trials = input("Additional trials to run (50): ").strip()
-        if additional_trials.lower() == 'c':
-            print("Study continuation cancelled")
-            return None
-        additional_trials = int(additional_trials) if additional_trials else 50
+        # Additional trials with input handling
+        additional_trials = None
+        while additional_trials is None:
+            try:
+                additional_trials_input = input(Fore.YELLOW + Style.BRIGHT + "Additional trials to run (50): ").strip()
+                if additional_trials_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                    return None
+                additional_trials = int(additional_trials_input) if additional_trials_input else 50
+                if additional_trials <= 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a positive number.")
+                    additional_trials = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nTrial configuration interrupted!")
+                return None
         
-        additional_timeout = input("Additional timeout in minutes (60, 0 for no limit): ").strip()
-        if additional_timeout.lower() == 'c':
-            print("Study continuation cancelled")
-            return None
-        additional_timeout = int(additional_timeout) if additional_timeout else 60
+        # Additional timeout with input handling
+        additional_timeout = None
+        while additional_timeout is None:
+            try:
+                additional_timeout_input = input(Fore.YELLOW + Style.BRIGHT + "Additional timeout in minutes (60, 0 for no limit): ").strip()
+                if additional_timeout_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                    return None
+                additional_timeout = int(additional_timeout_input) if additional_timeout_input else 60
+                if additional_timeout < 0:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a non-negative number.")
+                    additional_timeout = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nTimeout configuration interrupted!")
+                return None
         
-        # Advanced options
-        print("\nAdvanced continuation options:")
-        print("1. Continue with same configuration")
-        print("2. Modify search space")
-        print("3. Change pruning strategy")
-        print("4. Add new model types")
+        # Advanced options with input handling
+        print(Fore.YELLOW + Style.BRIGHT + "\nAdvanced continuation options:")
+        print(Fore.WHITE + Style.BRIGHT + "1. Continue with same configuration " + Fore.GREEN + Style.BRIGHT + "(Recommended)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Modify search space " + Fore.GREEN + Style.BRIGHT + "(Expand parameter ranges)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Change pruning strategy " + Fore.GREEN + Style.BRIGHT + "(Adjust optimization behavior)")
+        print(Fore.WHITE + Style.BRIGHT + "4. Add new model types " + Fore.GREEN + Style.BRIGHT + "(Include additional architectures)")
         
-        advanced_choice = input("Select option (1-4, default=1): ").strip()
-        if advanced_choice.lower() == 'c':
-            print("Study continuation cancelled")
-            return None
-        advanced_choice = int(advanced_choice) if advanced_choice in ['2', '3', '4'] else 1
+        advanced_choice = None
+        while advanced_choice is None:
+            try:
+                advanced_choice_input = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (1-4, default=1): ").strip()
+                if advanced_choice_input.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                    return None
+                advanced_choice = int(advanced_choice_input) if advanced_choice_input in ['2', '3', '4'] else 1
+                if advanced_choice not in [1, 2, 3, 4]:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 1-4.")
+                    advanced_choice = None
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nAdvanced option selection interrupted!")
+                return None
         
-        # Build comprehensive configuration for continuation
+        # Build configuration for continuation
         final_config = deepcopy(base_config) if base_config else {}
         
         # If no base config, try to extract from study or use default
         if not final_config:
             if 'default' in PRESET_CONFIGS:
                 final_config = deepcopy(PRESET_CONFIGS['default'])
-                print("Using default preset as base for continuation")
+                print(Fore.GREEN + Style.BRIGHT + "\nUsing default preset as base for continuation")
             else:
                 logger.warning("No base config available for continuation")
                 final_config = {}
@@ -54094,8 +57085,8 @@ def _interactive_hpo_continue_setup(
         
         # Apply advanced modifications based on user choice
         if advanced_choice == 2:  # Modify search space
-            print("\nModifying search space...")
-            print("Current optimization space will be expanded")
+            print(Fore.YELLOW + Style.BRIGHT + "\nModifying search space...")
+            print(Fore.GREEN + Style.BRIGHT + "Current optimization space will be expanded")
             
             # Get existing optimization space from study if available
             existing_space = {}
@@ -54120,28 +57111,42 @@ def _interactive_hpo_continue_setup(
                     expanded_space[key] = value
             
             hpo_config['optimization_space'] = expanded_space
-            print("   Search space expanded with broader ranges")
+            print(Fore.GREEN + Style.BRIGHT + "\nSearch space expanded with broader ranges")
             
         elif advanced_choice == 3:  # Change pruning strategy
-            print("\nChanging pruning strategy...")
-            print("1. MedianPruner (aggressive)")
-            print("2. HyperbandPruner (successive halving)")
-            print("3. NopPruner (no pruning)")
+            print(Fore.YELLOW + Style.BRIGHT + "\nChanging pruning strategy...")
+            print(Fore.WHITE + Style.BRIGHT + "1. MedianPruner " + Fore.GREEN + Style.BRIGHT + "(Aggressive pruning)")
+            print(Fore.WHITE + Style.BRIGHT + "2. HyperbandPruner " + Fore.GREEN + Style.BRIGHT + "(Successive halving)")
+            print(Fore.WHITE + Style.BRIGHT + "3. NopPruner " + Fore.GREEN + Style.BRIGHT + "(No pruning - complete all trials)")
             
-            pruner_choice = input("Select pruner (1-3): ").strip()
-            if pruner_choice == '1':
+            pruner_choice = None
+            while pruner_choice is None:
+                try:
+                    pruner_choice_input = input(Fore.YELLOW + Style.BRIGHT + "\nSelect pruner (1-3): ").strip()
+                    if pruner_choice_input.lower() == 'c':
+                        print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                        return None
+                    pruner_choice = int(pruner_choice_input)
+                    if pruner_choice not in [1, 2, 3]:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 1-3.")
+                        pruner_choice = None
+                except ValueError:
+                    print(Fore.RED + Style.BRIGHT + "\nPlease enter a valid number.")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nPruner selection interrupted!")
+                    return None
+            
+            if pruner_choice == 1:
                 hpo_config['pruner'] = 'MedianPruner'
-            elif pruner_choice == '2':
+            elif pruner_choice == 2:
                 hpo_config['pruner'] = 'HyperbandPruner'
-            elif pruner_choice == '3':
+            elif pruner_choice == 3:
                 hpo_config['pruner'] = 'NopPruner'
-            else:
-                hpo_config['pruner'] = 'MedianPruner'
             
-            print(f"   Pruner set to {hpo_config['pruner']}")
+            print(Fore.GREEN + Style.BRIGHT + f"\nPruner set to {hpo_config['pruner']}")
             
         elif advanced_choice == 4:  # Add new model types
-            print("\nAdding new model types...")
+            print(Fore.YELLOW + Style.BRIGHT + "\nAdding new model types...")
             available_models = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
             
             # Try to get existing models from study
@@ -54153,13 +57158,24 @@ def _interactive_hpo_continue_setup(
                 pass
             
             if existing_models:
-                print(f"Current models: {', '.join(existing_models)}")
+                print(Fore.CYAN + Style.BRIGHT + f"Current models: {', '.join(existing_models)}")
             
             new_models = []
             for model in available_models:
                 if model not in existing_models:
-                    include = input(f"Add {model}? (y/N): ").strip().lower()
-                    if include == 'y':
+                    include = None
+                    while include is None:
+                        try:
+                            include_input = input(Fore.YELLOW + Style.BRIGHT + f"\nAdd {model}? (y/N): ").strip().lower()
+                            if include_input == 'c':
+                                print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                                return None
+                            include = include_input in ('y', 'yes')
+                        except (EOFError, KeyboardInterrupt):
+                            print(Fore.RED + Style.BRIGHT + "\nModel selection interrupted!")
+                            return None
+                    
+                    if include:
                         new_models.append(model)
             
             if new_models:
@@ -54169,9 +57185,9 @@ def _interactive_hpo_continue_setup(
                     'model_types': all_models,
                     'search_all_models': len(all_models) >= 3
                 }
-                print(f"   Added models: {', '.join(new_models)}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nAdded models: {', '.join(new_models)}")
             else:
-                print("   No new models added")
+                print(Fore.YELLOW + Style.BRIGHT + "\nNo new models added")
         
         # Try to extract and preserve original study configuration
         try:
@@ -54186,10 +57202,10 @@ def _interactive_hpo_continue_setup(
                             if key not in section_config:
                                 section_config[key] = value
                 
-                print("   Preserved original study configuration")
+                print(Fore.GREEN + Style.BRIGHT + "\nPreserved original study configuration")
         except Exception as e:
-            print(f"   Could not extract original study configuration: {e}")
-            print("   Using default configuration for missing settings")
+            print(Fore.YELLOW + Style.BRIGHT + f"\nCould not extract original study configuration: {e}")
+            print(Fore.YELLOW + Style.BRIGHT + "\nUsing default configuration for missing settings")
         
         # System configuration for continuation
         system_config = final_config.setdefault('system', {})
@@ -54197,7 +57213,8 @@ def _interactive_hpo_continue_setup(
             'non_interactive': True,
             'verbose': True,
             'random_seed': 42,
-            'reproducible': True
+            'reproducible': True,
+            'hpo_optimized': True
         })
         
         # Update metadata to reflect continuation
@@ -54217,19 +57234,35 @@ def _interactive_hpo_continue_setup(
             }
         })
         
-        # Display continuation summary
-        print(f"\n" + "="*60)
-        print("CONTINUATION SUMMARY")
-        print("="*60)
-        print(f"Study: {study_name}")
-        print(f"File Type: {file_type.upper()}")
-        print(f"Current Progress: {selected_study_info['complete']} completed trials")
-        print(f"Additional Trials: {additional_trials}")
-        print(f"Additional Timeout: {additional_timeout} minutes" if additional_timeout > 0 else "Additional Timeout: No limit")
-        print(f"Advanced Modifications: {'Yes' if advanced_choice > 1 else 'No'}")
+        # Update runtime information
+        runtime_config = final_config.setdefault('runtime', {})
+        runtime_config.update({
+            'setup_method': 'continue_hpo',
+            'active_preset': 'Continued Study',
+            'hpo_launch_time': datetime.now().isoformat(),
+            'original_study': study_name
+        })
+        
+        # Continuation Summary
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "CONTINUATION SUMMARY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        print(Fore.MAGENTA + Style.BRIGHT + "\nStudy Continuation Details:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Study: " + Fore.YELLOW + Style.BRIGHT + f"{study_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ File Type: " + Fore.YELLOW + Style.BRIGHT + f"{file_type.upper()}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Progress: " + Fore.YELLOW + Style.BRIGHT + f"{selected_study_info['complete']} completed trials")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Additional Trials: " + Fore.YELLOW + Style.BRIGHT + f"{additional_trials}")
+        
+        if additional_timeout > 0:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Additional Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{additional_timeout} minutes")
+        else:
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Additional Timeout: " + Fore.YELLOW + Style.BRIGHT + f"No limit")
+        
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Advanced Modifications: " + Fore.YELLOW + Style.BRIGHT + f"{'Yes' if advanced_choice > 1 else 'No'}")
         
         if selected_study_info['best_value'] != "No completed trials" and selected_study_info['best_value'] != "No trials":
-            print(f"Current Best Value: {selected_study_info['best_value']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Current Best Value: " + Fore.YELLOW + Style.BRIGHT + f"{selected_study_info['best_value']}")
         
         # Estimate additional time
         try:
@@ -54238,61 +57271,101 @@ def _interactive_hpo_continue_setup(
             cv_folds = hpo_config.get('cross_validation', {}).get('folds', 3)
             
             estimated_time = _estimate_hpo_time(additional_trials, trial_epochs, model_count, cv_folds)
-            print(f"Estimated Additional Time: ~{estimated_time}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Estimated Additional Time: " + Fore.YELLOW + Style.BRIGHT + f"~{estimated_time}")
         except Exception:
             pass
         
-        print("="*60)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         
-        # Final confirmation
-        confirm = input("\nContinue hyperparameter optimization with these settings? (Y/n/c to cancel): ").strip().lower()
-        if confirm in ('', 'y', 'yes'):
-            print(f"\nContinuing hyperparameter optimization study: {study_name}...")
-            
-            # Additional setup for continuation
-            hpo_config.update({
-                'continuation_mode': True,
-                'original_trials': selected_study_info['trials'],
-                'original_completed': selected_study_info['complete']
-            })
-            
-            return _launch_hpo_with_config(final_config, **kwargs)
-        elif confirm in ('c', 'cancel'):
-            print("Study continuation cancelled")
-            return None
-        else:
-            print("Would you like to:")
-            print("1. Try with different settings")
-            print("2. Switch to express setup")
-            print("0. Return to previous menu")
-            
-            while True:
-                retry_choice = input("Select option (0-2): ").strip()
-                if retry_choice in ['1', '2', '0']:
-                    break
-                print("Invalid choice. Please select 0-2.")
-            
-            if retry_choice == '1':
-                return _interactive_hpo_continue_setup(base_config, **kwargs)
-            elif retry_choice == '2':
-                return _interactive_hpo_express_setup(base_config, None, **kwargs)
-            else:
-                print("Returning to previous menu")
+        # Confirmation with options
+        confirm = None
+        while not confirm:
+            try:
+                confirm_input = input(Fore.YELLOW + Style.BRIGHT + "\nContinue hyperparameter optimization with these settings? (Y/n/c to cancel): ").strip().lower()
+                
+                if confirm_input in ('', 'y', 'yes'):
+                    print(Fore.GREEN + Style.BRIGHT + f"\nContinuing hyperparameter optimization study: {study_name}...")
+                    
+                    # Additional setup for continuation
+                    hpo_config.update({
+                        'continuation_mode': True,
+                        'original_trials': selected_study_info['trials'],
+                        'original_completed': selected_study_info['complete']
+                    })
+                    
+                    return _launch_hpo_with_config(final_config, **kwargs)
+                elif confirm_input in ('c', 'cancel'):
+                    print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                    return None
+                elif confirm_input in ('n', 'no'):
+                    print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to:")
+                    print(Fore.WHITE + Style.BRIGHT + "1. Try with different settings")
+                    print(Fore.WHITE + Style.BRIGHT + "2. Switch to express setup")
+                    print(Fore.RED + Style.BRIGHT + "0. Return to previous menu")
+                    
+                    retry_choice = None
+                    while not retry_choice:
+                        try:
+                            retry_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): ").strip()
+                            
+                            if retry_choice not in ['1', '2', '0']:
+                                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                                retry_choice = None
+                                continue
+                                
+                        except (EOFError, KeyboardInterrupt):
+                            print(Fore.RED + Style.BRIGHT + "\nOption selection interrupted!")
+                            return None
+                    
+                    if retry_choice == '1':
+                        return _interactive_hpo_continue_setup(base_config, **kwargs)
+                    elif retry_choice == '2':
+                        return _interactive_hpo_express_setup(base_config, None, **kwargs)
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nReturning to previous menu")
+                        return None
+                else:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter Y/n/c.")
+                    confirm = None
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nConfirmation interrupted!")
                 return None
                 
     except KeyboardInterrupt:
-        print("\nStudy continuation setup interrupted")
+        print(Fore.RED + Style.BRIGHT + "\nStudy continuation setup interrupted")
         return None
     except Exception as e:
         logger.error(f"Study continuation setup failed: {e}")
-        print(f"Study continuation setup failed: {str(e)}")
+        print(Fore.RED + Style.BRIGHT + f"\nStudy continuation setup failed: {str(e)}")
         
-        # Fallback to express setup
-        print("Falling back to express setup...")
-        try:
-            return _interactive_hpo_express_setup(base_config, None, **kwargs)
-        except Exception:
-            return None
+        # Error recovery with user options
+        print(Fore.YELLOW + Style.BRIGHT + "\nError recovery options:")
+        print(Fore.WHITE + Style.BRIGHT + "1. Retry continuation setup")
+        print(Fore.WHITE + Style.BRIGHT + "2. Switch to express setup")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to main menu")
+        
+        recovery_choice = None
+        while not recovery_choice:
+            try:
+                recovery_choice_input = input(Fore.YELLOW + Style.BRIGHT + "\nSelect recovery option (0-2): ").strip()
+                
+                if recovery_choice_input == '0':
+                    print(Fore.RED + Style.BRIGHT + "\nStudy continuation cancelled")
+                    return None
+                elif recovery_choice_input == '1':
+                    print(Fore.YELLOW + Style.BRIGHT + "\nRetrying continuation setup...")
+                    return _interactive_hpo_continue_setup(base_config, **kwargs)
+                elif recovery_choice_input == '2':
+                    print(Fore.YELLOW + Style.BRIGHT + "\nSwitching to express setup...")
+                    return _interactive_hpo_express_setup(base_config, None, **kwargs)
+                else:
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                    recovery_choice = None
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nRecovery option selection interrupted!")
+                return None
 
 def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
     """Launch hyperparameter optimization with comprehensive configuration support and error handling."""
@@ -56458,13 +59531,13 @@ def print_main_menu(config: Optional[Dict[str, Any]] = None):
             config_source = config["metadata"].get("config_source", "Unknown")
     
     # menu header with context
-    print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-    print(Fore.CYAN + Style.BRIGHT + "MAIN APPLICATION MENU")
-    print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-    print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
-    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-    print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
+    #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+    print(Fore.MAGENTA + Style.BRIGHT + "MAIN APPLICATION MENU")
+    print(Fore.CYAN + Style.BRIGHT + "-"*40)
+    print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
+    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+    print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
     
     # Print menu options with descriptions
     print(Fore.YELLOW + Style.BRIGHT + "\nCore Functions:")
@@ -56489,7 +59562,7 @@ def interactive_main():
             pass
     
     # Small delay to ensure all output is complete
-    time.sleep(0.2)
+    time.sleep(1)
     
     while True:
         # Clear screen and show banner
@@ -56796,9 +59869,14 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
         banner_config = show_banner(return_config=True)
         
         # Use the config returned from show_banner or fallback
-        if banner_config is not None:
+        # if banner_config is not None:
+        #     config = banner_config
+        # elif config is None:
+        #     config = get_current_config()
+        
+        if config is None and banner_config is not None:
             config = banner_config
-        elif config is None:
+        else:
             config = get_current_config()
         
         # Extract configuration sections with error handling
@@ -56856,16 +59934,16 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
         data_path_config = data_config.get('data_path', 'Default')
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "MODEL TRAINING MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Active Training Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Epochs: " + Fore.CYAN + Style.BRIGHT + f"{epoch_count}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.CYAN + Style.BRIGHT + f"{batch_count}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Data Path: " + Fore.CYAN + Style.BRIGHT + f"{data_path_config}")
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "MODEL TRAINING MENU")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Active Training Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{epoch_count}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.YELLOW + Style.BRIGHT + f"{batch_count}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Data Path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path_config}")
         
         # Menu options with context-aware descriptions
         print(Fore.YELLOW + Style.BRIGHT + "\nCore Training Operations:")
@@ -57113,419 +60191,7 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                 print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
                 break
 
-def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
-    """Menu for hyperparameter optimization options with context display and error handling."""
-    while True:
-        # Clear screen and show banner
-        print("\033c", end="")
-        banner_config = show_banner(return_config=True)
-        
-        # Use the config returned from show_banner or fallback
-        if banner_config is not None:
-            config = banner_config
-        elif config is None:
-            config = get_current_config()
-        
-        # Extract configuration sections with error handling
-        hpo_config = config.get('hyperparameter_optimization', {})
-        data_config = config.get('data', {})
-        system_config = config.get('system', {})
-        model_config = config.get('model', {})
-        training_config = config.get('training', {})
-        
-        # Context extraction using multiple fallbacks
-        preset_name = "Custom/Default"
-        model_type = "Unknown"
-        config_source = "Unknown"
-        
-        # Method 1: Check presets section
-        presets_section = config.get("presets", {})
-        if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "Custom/Default")
-        
-        # Method 2: Check metadata for preset_used
-        if preset_name in ["Custom/Default", None, ""]:
-            metadata = config.get("metadata", {})
-            if isinstance(metadata, dict):
-                preset_name = metadata.get("preset_used", "Custom/Default")
-        
-        # Method 3: Check legacy _preset_name field
-        if preset_name in ["Custom/Default", None, ""]:
-            preset_name = config.get("_preset_name", "Custom/Default")
-        
-        # Method 4: Check runtime information
-        if preset_name in ["Custom/Default", None, ""]:
-            runtime = config.get("runtime", {})
-            if isinstance(runtime, dict):
-                preset_name = runtime.get("active_preset", "Custom/Default")
-        
-        # Clean up preset name display
-        if preset_name in ["Custom/Default", None, "", "none"]:
-            preset_name = "Custom/Default"
-        elif isinstance(preset_name, str):
-            preset_name = preset_name.title()
-        
-        # Extract model type with error handling
-        if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'Unknown')
-        
-        # Extract config source with fallbacks
-        if "runtime" in config and isinstance(config["runtime"], dict):
-            config_source = config["runtime"].get("config_source", "Unknown")
-        elif "metadata" in config and isinstance(config["metadata"], dict):
-            config_source = config["metadata"].get("config_source", "Unknown")
-        
-        hpo_data_path = data_config.get('data_path', 'Default')
-        preset_count = len(PRESET_CONFIGS) if 'PRESET_CONFIGS' in globals() else 'Unknown'
-        hpo_preset_count = len([p for p in PRESET_CONFIGS.values() if p.get('hyperparameter_optimization', {}).get('enabled', False)]) if 'PRESET_CONFIGS' in globals() else 'Unknown'
-        hpo_epoch_count = training_config.get('epochs', 'Default')
-        hpo_batch_count = training_config.get('batch_size', 'Default')
-        hpo_normal_samples_count = data_config.get('normal_samples', 10000)
-        hpo_trials_count = hpo_config.get('n_trials', 50)
-        hpo_strategy = hpo_config.get('strategy', 'optuna')
-        
-        # Menu display with context
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.YELLOW + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION MENU")
-        print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        print(Fore.YELLOW + Style.BRIGHT + f"Active HPO Context:")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Strategy: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_strategy}")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_trials_count}")
-        print(Fore.GREEN + Style.BRIGHT + f"  └─ Data: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_data_path}")
-        
-        # Menu options with context-aware display
-        print(Fore.YELLOW + Style.BRIGHT + "\nOptimization Options:")
-        print(Fore.WHITE + Style.BRIGHT + "1. Express HPO (Quick Setup) " + Fore.GREEN + Style.BRIGHT + f"(Trials: {hpo_trials_count})")
-        print(Fore.WHITE + Style.BRIGHT + "2. HPO with Current Configuration " + Fore.GREEN + Style.BRIGHT + f"(Preset: {preset_name})")
-        print(Fore.WHITE + Style.BRIGHT + "3. HPO with Synthetic Data " + Fore.GREEN + Style.BRIGHT + f"(Samples: {hpo_normal_samples_count})")
-        print(Fore.WHITE + Style.BRIGHT + "4. HPO with Real Data " + Fore.GREEN + Style.BRIGHT + f"(Source: {hpo_data_path})")
-        print(Fore.WHITE + Style.BRIGHT + "5. Custom HPO Configuration " + Fore.GREEN + Style.BRIGHT + "(Full Interactive Setup)")
-        print(Fore.WHITE + Style.BRIGHT + "6. Select HPO Preset " + Fore.GREEN + Style.BRIGHT + f"(Available: {hpo_preset_count})")
-        print(Fore.WHITE + Style.BRIGHT + "7. Continue Existing Study " + Fore.GREEN + Style.BRIGHT + "(Resume Previous HPO)")
-        print(Fore.WHITE + Style.BRIGHT + "8. Quick HPO Test " + Fore.GREEN + Style.BRIGHT + "(10 Trials, 5 Epochs)")
-        print(Fore.WHITE + Style.BRIGHT + "9. HPO Model Comparison " + Fore.GREEN + Style.BRIGHT + "(Compare All Model Types)")
-        print(Fore.RED + Style.BRIGHT + "0. Back to Main Menu")
-        
-        # Input handling with retry logic
-        choice = None
-        while not choice:
-            try:
-                choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-9): ").strip()
-                
-                # If empty input, retry
-                if not choice:
-                    continue
-                    
-            except (EOFError, KeyboardInterrupt):
-                print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
-                return
-        
-        try:
-            if choice == "1":
-                try:
-                    result = run_hyperparameter_optimization_interactive(
-                        use_current_config=False,
-                        preset="express_hpo" if "express_hpo" in PRESET_CONFIGS else None,
-                        config=config
-                    )
-                    _handle_hpo_result(result, "Express HPO")
-                    
-                except Exception as e:
-                    message = (
-                        f"Error encountered during Express HPO: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Model: {model_type}\n"
-                        f"- Preset: {preset_name}\n"
-                        f"- Trials: {hpo_trials_count}\n\n"
-                        f"This could be due to:\n"
-                        f"- Invalid HPO configuration\n"
-                        f"- Missing optimization dependencies\n"
-                        f"- System resource constraints\n"
-                        f"- Data loading issues"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="EXPRESS HPO ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "2":
-                try:
-                    result = run_hyperparameter_optimization_interactive(
-                        use_current_config=True,
-                        config=config
-                    )
-                    _handle_hpo_result(result, "Current Configuration HPO")
-                    
-                except Exception as e:
-                    message = (
-                        f"Error encountered during Current Configuration HPO: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Model: {model_type}\n"
-                        f"- Preset: {preset_name}\n"
-                        f"- Config Source: {config_source}\n\n"
-                        f"Please check:\n"
-                        f"- Current configuration validity\n"
-                        f"- Model compatibility with HPO\n"
-                        f"- Configuration file integrity"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CURRENT CONFIG HPO ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "3":
-                try:
-                    result = run_hyperparameter_optimization_interactive(
-                        use_real_data=False,
-                        config=config
-                    )
-                    _handle_hpo_result(result, "Synthetic Data HPO")
-                    
-                except Exception as e:
-                    message = (
-                        f"Error encountered during Synthetic Data HPO: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Model: {model_type}\n"
-                        f"- Synthetic Samples: {hpo_normal_samples_count}\n\n"
-                        f"Please verify:\n"
-                        f"- Data generation configuration\n"
-                        f"- Model compatibility with synthetic data\n"
-                        f"- System memory availability"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="SYNTHETIC DATA HPO ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "4":
-                try:
-                    result = run_hyperparameter_optimization_interactive(
-                        use_real_data=True,
-                        config=config
-                    )
-                    _handle_hpo_result(result, "Real Data HPO")
-                    
-                except Exception as e:
-                    message = (
-                        f"Error encountered during Real Data HPO: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Data Path: {hpo_data_path}\n"
-                        f"- Model: {model_type}\n\n"
-                        f"Please verify:\n"
-                        f"- Data file exists and is accessible\n"
-                        f"- Data format is compatible\n"
-                        f"- Sufficient disk space\n"
-                        f"- Data preprocessing requirements"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="REAL DATA HPO ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "5":
-                try:
-                    result = run_hyperparameter_optimization_interactive(
-                        use_current_config=False,
-                        config=config
-                    )
-                    _handle_hpo_result(result, "Custom HPO")
-                    
-                except Exception as e:
-                    message = (
-                        f"Error encountered during Custom HPO setup: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Model: {model_type}\n"
-                        f"- Preset: {preset_name}\n\n"
-                        f"Please check:\n"
-                        f"- Parameter validation rules\n"
-                        f"- Configuration file permissions\n"
-                        f"- Interactive input handling"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CUSTOM HPO ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "6":
-                try:
-                    _hpo_preset_selection_menu(config)
-                except Exception as e:
-                    message = (
-                        f"Error encountered during HPO preset selection: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Available Presets: {hpo_preset_count}\n"
-                        f"- Current Preset: {preset_name}\n\n"
-                        f"Please verify:\n"
-                        f"- HPO preset configuration files\n"
-                        f"- Preset validation logic\n"
-                        f"- Configuration loading mechanisms"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="HPO PRESET SELECTION ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "7":
-                try:
-                    result = run_hyperparameter_optimization_interactive(
-                        use_current_config=False,
-                        config=config,
-                        non_interactive=False
-                    )
-                    _handle_hpo_result(result, "Continued Study HPO")
-                    
-                except Exception as e:
-                    message = (
-                        f"Error encountered while continuing existing study: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Model: {model_type}\n"
-                        f"- Strategy: {hpo_strategy}\n\n"
-                        f"Please check:\n"
-                        f"- Existing study files exist\n"
-                        f"- Study database accessibility\n"
-                        f"- Study compatibility with current configuration"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONTINUE STUDY ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "8":
-                try:
-                    _run_quick_hpo_test(config)
-                except Exception as e:
-                    message = (
-                        f"Error encountered during quick HPO test: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Model: {model_type}\n"
-                        f"- Test Type: 10 trials, 5 epochs\n\n"
-                        f"This may indicate:\n"
-                        f"- Basic HPO functionality issues\n"
-                        f"- Model initialization problems\n"
-                        f"- Resource allocation failures"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="QUICK HPO TEST ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "9":
-                try:
-                    _run_hpo_model_comparison(config)
-                except Exception as e:
-                    message = (
-                        f"Error encountered during HPO model comparison: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Model: {model_type}\n"
-                        f"- Comparison Type: Multi-model HPO\n\n"
-                        f"Please ensure:\n"
-                        f"- Multiple models are configured\n"
-                        f"- Comparison data is available\n"
-                        f"- Sufficient system resources"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="HPO MODEL COMPARISON ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
-                    
-            elif choice == "0":
-                return
-            else:
-                print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 0-9.")
-        
-        except KeyboardInterrupt:
-            print(Fore.YELLOW + Style.BRIGHT + "\nHPO operation interrupted by user")
-        except Exception as e:
-            logger.error(f"HPO menu error: {e}", exc_info=True)
-            message = (
-                f"Unexpected error in HPO menu: {str(e)}\n"
-                f"Context:\n"
-                f"- Selected Option: {choice}\n"
-                f"- Current Preset: {preset_name}\n"
-                f"- Model Type: {model_type}\n"
-                f"- Config Source: {config_source}\n\n"
-                f"This could indicate:\n"
-                f"- System resource exhaustion\n"
-                f"- HPO configuration corruption\n"
-                f"- Dependency conflicts\n"
-                f"- Optimization algorithm issues\n\n"
-                f"Please check the logs for detailed information."
-            )
-            console.print(
-                Panel.fit(
-                    f"{message}",
-                    title="HPO MENU ERROR",
-                    style="bold red",
-                    border_style="red",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
-        
-        # Only continue if not exiting
-        if choice != "0":
-            try:
-                input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
-            except (EOFError, KeyboardInterrupt):
-                print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
-                break
+
 
 def configuration_menu():
     """Menu for configuration management options with context display and error handling."""
@@ -62538,649 +65204,7 @@ def show_system_info():
             console.print(f"[bold red]Original error: {e}[/bold red]")
             console.print("[bold red]System is in critical failure state[/bold red]")
 
-def _handle_hpo_result(result: Optional[Dict[str, Any]], hpo_type: str) -> None:
-    """Handle and display HPO results with appropriate formatting"""
-    try:
-        if result is None:
-            console.print(
-                Panel.fit(
-                    "[bold yellow]HPO operation was cancelled by user.[/bold yellow]",
-                    title="HPO CANCELLED",
-                    style="bold yellow",
-                    border_style="yellow",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
-            return
-        
-        success = result.get('success', False)
-        
-        if success:
-            n_completed = result.get('n_trials_completed', 0)
-            best_value = result.get('best_value', 'N/A')
-            total_time = result.get('total_time_minutes', 0)
-            
-            # Format best_value properly
-            if isinstance(best_value, (int, float)) and best_value != float('inf'):
-                best_value_str = f"{best_value:.6f}"
-            else:
-                best_value_str = str(best_value)
-            
-            message = (
-                f"{hpo_type} completed successfully!\n\n"
-                f"Results Summary:\n"
-                f"- Trials Completed: {n_completed}\n"
-                f"- Best Objective Value: {best_value_str}\n"
-                f"- Total Time: {total_time:.1f} minutes\n\n"
-                "Detailed results and visualizations have been generated.\n"
-                "Check the study directory for complete analysis."
-            )
-            
-            console.print(
-                Panel.fit(
-                    f"[bold green]{message}[/bold green]",
-                    title="HPO SUCCESS",
-                    style="bold green",
-                    border_style="green",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
-            
-            # Show artifacts if available
-            artifacts = []
-            if result.get('saved_files'):
-                artifacts.extend([f"Study Files: {len(result['saved_files'])} files"])
-            if result.get('plots'):
-                artifacts.extend([f"Visualizations: {len(result['plots'])} plots"])
-            if result.get('final_model_training', {}).get('success'):
-                artifacts.append("Final Model: Trained successfully")
-            
-            if artifacts:
-                print(Fore.CYAN + Style.BRIGHT + "\nGenerated Artifacts:")
-                for artifact in artifacts:
-                    print(Fore.WHITE + f"  - {artifact}")
-        else:
-            error = result.get('error', 'Unknown error')
-            error_type = result.get('error_type', 'UnknownError')
-            n_completed = result.get('n_trials_completed', 0)
-            
-            message = (
-                f"{hpo_type} encountered issues.\n\n"
-                f"Error: {error}\n"
-                f"Type: {error_type}\n"
-            )
-            
-            if n_completed > 0:
-                message += f"\nPartial Results:\n• {n_completed} trials completed\n"
-                best_value = result.get('best_value')
-                if best_value and best_value != float('inf'):
-                    # Format best_value properly for partial results too
-                    if isinstance(best_value, (int, float)):
-                        best_value_str = f"{best_value:.6f}"
-                    else:
-                        best_value_str = str(best_value)
-                    message += f"- Best value found: {best_value_str}\n"
-                message += "\nSome optimization progress was made despite the error."
-            
-            console.print(
-                Panel.fit(
-                    f"[bold red]{message}[/bold red]",
-                    title="HPO ERROR",
-                    style="bold red",
-                    border_style="red",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
-            
-            # Show recommendations if available
-            recommendations = result.get('recommendations', [])
-            if recommendations:
-                print(Fore.YELLOW + Style.BRIGHT + "\nRecommendations:")
-                for i, rec in enumerate(recommendations, 1):
-                    print(Fore.WHITE + f"  {i}. {rec}")
-    
-    except Exception as e:
-        logger.error(f"Error handling HPO result: {e}", exc_info=True)
-        console.print(
-            Panel.fit(
-                f"[bold red]Error processing HPO results: {str(e)}[/bold red]",
-                title="RESULT PROCESSING ERROR",
-                style="bold red",
-                border_style="red",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
 
-def _hpo_preset_selection_menu(config: Dict[str, Any]) -> None:
-    """Interactive menu for selecting HPO presets"""
-    while True:
-        try:
-            # Clear screen and show enhanced banner with configuration
-            print("\033c", end="")
-            config = show_banner(return_config=True)
-            
-            # Use the config returned from show_banner or fallback
-            if config is None:
-                config = get_current_config()
-            
-            # Get current configuration sections for enhanced display
-            hpo_config = config.get('hyperparameter_optimization', {})
-            presets_config = config.get('presets', {})
-            model_config = config.get('model', {})
-            
-            # Enhanced context display using configuration from banner
-            model_type = model_config.get('model_type', 'Unknown')
-            current_preset = "Custom/Default"
-            if 'presets' in config and isinstance(config['presets'], dict):
-                current_preset = config['presets'].get('current_preset', 'Custom/Default')
-            
-            # Get available HPO-enabled presets
-            hpo_presets = {}
-            for name, preset_config in PRESET_CONFIGS.items():
-                hpo_config = preset_config.get('hyperparameter_optimization', {})
-                if hpo_config.get('enabled', False) or 'hyperparameter_optimization' in preset_config:
-                    hpo_presets[name] = {
-                        'config': preset_config,
-                        'hpo_config': hpo_config,
-                        'description': preset_config.get('metadata', {}).get('description', f'{name.title()} preset'),
-                        'trials': hpo_config.get('n_trials', 50),
-                        'strategy': hpo_config.get('strategy', 'optuna'),
-                        'model_type': preset_config.get('model', {}).get('model_type', 'Unknown')
-                    }
-            
-            # Enhanced header display
-            print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
-            print(Fore.CYAN + Style.BRIGHT + "HPO PRESET SELECTION MENU")
-            print(Fore.YELLOW + Style.BRIGHT + "="*40)
-            print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.CYAN + Style.BRIGHT + f"{current_preset}")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model Type: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-            print(Fore.WHITE + Style.BRIGHT + f"  └─ Available HPO Presets: " + Fore.CYAN + Style.BRIGHT + f"{len(hpo_presets)}")
-            print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-            
-            if not hpo_presets:
-                console.print(
-                    Panel.fit(
-                        "[bold yellow]No HPO-enabled presets found.\nUsing express setup instead.[/bold yellow]",
-                        title="NO HPO PRESETS",
-                        style="bold yellow",
-                        border_style="yellow",
-                        padding=(1, 2),
-                        box=box.ROUNDED
-                    )
-                )
-                
-                confirm = input(Fore.YELLOW + Style.BRIGHT + "\nProceed with express setup instead? (Y/n): ").strip().lower()
-                if confirm not in ('', 'y', 'yes'):
-                    print(Fore.RED + Style.BRIGHT + "Express setup cancelled.")
-                    continue
-                
-                result = run_hyperparameter_optimization_interactive(
-                    use_current_config=False,
-                    config=config
-                )
-                _handle_hpo_result(result, "Express HPO")
-                return
-            
-            # Enhanced preset listing with context-aware display
-            print(Fore.YELLOW + Style.BRIGHT + "\nAvailable HPO Presets:")
-            print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-            
-            preset_list = list(hpo_presets.items())
-            for i, (name, info) in enumerate(preset_list, 1):
-                # Color code based on strategy
-                strategy_color = Fore.GREEN if info['strategy'] == 'optuna' else Fore.CYAN
-                
-                print(Fore.CYAN + Style.BRIGHT + f"{i}. {name.upper()}")
-                print(Fore.WHITE + Style.BRIGHT + f"   Description: " + Fore.GREEN + Style.BRIGHT + f"{info['description']}")
-                print(Fore.WHITE + Style.BRIGHT + f"   Trials: " + Fore.CYAN + Style.BRIGHT + f"{info['trials']}")
-                print(Fore.WHITE + Style.BRIGHT + f"   Strategy: " + strategy_color + Style.BRIGHT + f"{info['strategy'].upper()}")
-                print(Fore.WHITE + Style.BRIGHT + f"   Model: " + Fore.YELLOW + Style.BRIGHT + f"{info['model_type']}")
-                
-                # Show additional preset info if available
-                metadata = info['config'].get('metadata', {})
-                if 'recommended_for' in metadata:
-                    print(Fore.WHITE + Style.BRIGHT + f"   Recommended for: " + Fore.MAGENTA + Style.BRIGHT + f"{metadata['recommended_for']}")
-                
-                # Show optimization focus if available
-                hpo_config = info['hpo_config']
-                if 'optimization_focus' in hpo_config:
-                    focus = hpo_config['optimization_focus']
-                    focus_color = Fore.GREEN if focus == 'accuracy' else Fore.CYAN
-                    print(Fore.WHITE + Style.BRIGHT + f"   Focus: " + focus_color + Style.BRIGHT + f"{focus.title()}")
-                
-                print()
-            
-            print(Fore.RED + Style.BRIGHT + "0. Back to HPO Menu")
-            
-            choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect preset (0-{len(preset_list)}): ").strip()
-            
-            try:
-                choice_num = int(choice)
-                
-                if choice_num == 0:
-                    return
-                elif 1 <= choice_num <= len(preset_list):
-                    selected_name, selected_info = preset_list[choice_num - 1]
-                    
-                    # Enhanced confirmation with preset details
-                    print(Fore.GREEN + Style.BRIGHT + f"\nSelected preset: {selected_name.upper()}")
-                    print(Fore.GREEN + Style.BRIGHT + f"Description: {selected_info['description']}")
-                    print(Fore.GREEN + Style.BRIGHT + f"Trials: {selected_info['trials']}")
-                    print(Fore.GREEN + Style.BRIGHT + f"Strategy: {selected_info['strategy']}")
-                    print(Fore.GREEN + Style.BRIGHT + f"Model: {selected_info['model_type']}")
-                    
-                    confirm = input(Fore.YELLOW + Style.BRIGHT + "\nProceed with this preset? (Y/n): ").strip().lower()
-                    if confirm not in ('', 'y', 'yes'):
-                        print(Fore.RED + Style.BRIGHT + "Preset selection cancelled.")
-                        continue
-                    
-                    result = run_hyperparameter_optimization_interactive(
-                        preset=selected_name,
-                        config=selected_info['config']
-                    )
-                    _handle_hpo_result(result, f"{selected_name.title()} Preset HPO")
-                    
-                else:
-                    print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 0-{len(preset_list)}.")
-            
-            except ValueError:
-                print(Fore.RED + Style.BRIGHT + f"Invalid input '{choice}'. Please enter a valid number.")
-        
-        except KeyboardInterrupt:
-            print(Fore.YELLOW + Style.BRIGHT + "\nHPO preset selection interrupted by user")
-            break
-        except Exception as e:
-            logger.error(f"HPO preset selection error: {e}", exc_info=True)
-            # Enhanced error message with context
-            message = (
-                f"Error encountered during HPO preset selection: {str(e)}\n\n"
-                f"Context:\n"
-                f"- Current Preset: {current_preset}\n"
-                f"- Model Type: {model_type}\n"
-                f"- Available Presets: {len(hpo_presets)}\n\n"
-                f"This could be due to:\n"
-                f"- Configuration file issues\n"
-                f"- Preset definition problems\n"
-                f"- Missing dependencies\n"
-                f"- System resource constraints\n\n"
-                f"Please check the logs for detailed information."
-            )
-            console.print(
-                Panel.fit(
-                    f"[bold red]{message}[/bold red]",
-                    title="HPO PRESET SELECTION ERROR",
-                    style="bold red",
-                    border_style="red",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
-        
-        # Only continue if we're not returning to previous menu
-        if choice != "0":
-            try:
-                input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
-            except (EOFError, KeyboardInterrupt):
-                print(Fore.RED + Style.BRIGHT + "\nReturning to HPO menu...")
-                break
-
-def _run_quick_hpo_test(config: Dict[str, Any]) -> None:
-    """Run a quick HPO test with minimal parameters"""
-    try:
-        # clear screen and show banner
-        console.clear()
-        show_banner()
-        
-        message = (
-            "Quick HPO Test runs a fast hyperparameter\n"
-            "optimization for testing purposes.\n\n"
-            "Configuration:\n"
-            "- 10 optimization trials\n"
-            "- 5 epochs per trial\n"
-            "- Single model type\n"
-            "- 3-fold cross-validation\n"
-            "- Synthetic data\n"
-            "- Estimated time: 5-15 minutes\n\n"
-            "Perfect for: System testing, configuration\n"
-            "validation, quick experiments\n"
-        )
-        console.print(
-            Panel.fit(
-                f"[bold blue]{message}[/bold blue]",
-                title="QUICK HPO TEST",
-                subtitle="Fast optimization for testing",
-                style="bold blue",
-                border_style="blue",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-        
-        confirm = input(Fore.YELLOW + Style.BRIGHT + "Start quick HPO test? (Y/n): ").strip().lower()
-        if confirm not in ('', 'y', 'yes'):
-            print(Fore.RED + Style.BRIGHT + "Quick test cancelled.")
-            return
-        
-        console.print(
-            Panel.fit(
-                "[bold green]Starting Quick HPO Test...\nThis should complete in 5-15 minutes.[/bold green]",
-                title="QUICK HPO TEST IN PROGRESS",
-                style="bold green",
-                border_style="green",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-        
-        # Create quick test configuration
-        quick_config = deepcopy(config) if config else {}
-        
-        hpo_config = quick_config.setdefault('hyperparameter_optimization', {})
-        hpo_config.update({
-            'enabled': True,
-            'n_trials': 10,
-            'timeout': 900,  # 15 minutes max
-            'strategy': 'optuna',
-            'trial_epochs': 5,
-            'trial_patience': 3,
-            'model_search': {
-                'enabled': False,
-                'model_types': ['EnhancedAutoencoder']
-            },
-            'cross_validation': {
-                'enabled': True,
-                'folds': 3,
-                'shuffle': True
-            },
-            'early_stopping': {
-                'enabled': True,
-                'patience': 5,
-                'min_trials': 5
-            },
-            'generate_plots': True,
-            'study_name': f"quick_hpo_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        })
-        
-        # Ensure synthetic data
-        data_config = quick_config.setdefault('data', {})
-        data_config.update({
-            'use_real_data': False,
-            'normal_samples': 5000,
-            'attack_samples': 1000,
-            'features': 20
-        })
-        
-        result = run_hyperparameter_optimization_interactive(
-            use_real_data=False,
-            config=quick_config,
-            non_interactive=True
-        )
-        
-        _handle_hpo_result(result, "Quick HPO Test")
-    
-    except Exception as e:
-        logger.error(f"Quick HPO test error: {e}", exc_info=True)
-        console.print(
-            Panel.fit(
-                f"[bold red]Quick HPO test failed: {str(e)}[/bold red]",
-                title="QUICK TEST ERROR",
-                style="bold red",
-                border_style="red",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-
-def _run_hpo_model_comparison(config: Dict[str, Any]) -> None:
-    """Run HPO comparing all available model types"""
-    try:
-        # clear screen
-        console.clear()
-        
-        available_models = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
-        
-        message = (
-            f"HPO Model Comparison optimizes all {len(available_models)} model architectures\n"
-            "and provides detailed performance analysis.\n\n"
-            "Models to compare:\n"
-            f"{chr(10).join('  - ' + model for model in available_models)}\n\n"
-            "This comprehensive comparison will:\n"
-            "- Optimize each model type independently\n"
-            "- Compare performance across architectures\n"
-            "- Identify best model for your data\n"
-            "- Generate comparative visualizations\n\n"
-            "Estimated time: 1-3 hours depending on configuration\n"
-        )
-        console.print(
-            Panel.fit(
-                f"[bold purple]{message}[/bold purple]",
-                title="HPO MODEL COMPARISON",
-                subtitle="Compare all model architectures",
-                style="bold purple",
-                border_style="purple",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-        # small delay to ensure panel is rendered before proceeding
-        time.sleep(3)
-        
-        # clear screen and show banner
-        console.clear()
-        show_banner()
-        
-        # Configuration options
-        print(Fore.YELLOW + Style.BRIGHT + "\nComparison Configuration:")
-        print(Fore.WHITE + Style.BRIGHT + "1. Quick Comparison (10 trials per model)")
-        print(Fore.WHITE + Style.BRIGHT + "2. Standard Comparison (50 trials per model)")
-        print(Fore.WHITE + Style.BRIGHT + "3. Thorough Comparison (100 trials per model)")
-        print(Fore.WHITE + Style.BRIGHT + "4. Custom Configuration")
-        print(Fore.RED + Style.BRIGHT + "0. Cancel")
-        
-        choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect configuration (0-4): ").strip()
-        
-        if choice == "0":
-            print(Fore.RED + Style.BRIGHT + "Model comparison cancelled.")
-            return
-        
-        # Set parameters based on choice
-        trial_configs = {
-            '1': {'trials': 10, 'epochs': 5, 'timeout': 60, 'name': 'Quick'},
-            '2': {'trials': 50, 'epochs': 20, 'timeout': 120, 'name': 'Standard'}, 
-            '3': {'trials': 100, 'epochs': 25, 'timeout': 180, 'name': 'Thorough'},
-            '4': None  # Custom configuration
-        }
-        
-        if choice in trial_configs and trial_configs[choice] is not None:
-            trial_config = trial_configs[choice]
-            n_trials = trial_config['trials']
-            trial_epochs = trial_config['epochs']
-            timeout_minutes = trial_config['timeout']
-            config_name = trial_config['name']
-        elif choice == '4':
-            # Custom configuration
-            try:
-                n_trials = int(input(Fore.YELLOW + Style.BRIGHT + "Trials per model (50): ") or "50")
-                trial_epochs = int(input(Fore.YELLOW + Style.BRIGHT + "Epochs per trial (20): ") or "20")
-                timeout_minutes = int(input(Fore.YELLOW + Style.BRIGHT + "Timeout in minutes (120): ") or "120")
-                config_name = "Custom"
-            except ValueError:
-                print(Fore.RED + Style.BRIGHT + "Invalid input. Using default values.")
-                n_trials, trial_epochs, timeout_minutes, config_name = 50, 20, 120, "Default"
-        else:
-            print(Fore.RED + Style.BRIGHT + "Invalid choice. Using standard configuration.")
-            n_trials, trial_epochs, timeout_minutes, config_name = 50, 20, 120, "Standard"
-        
-        # Confirm configuration
-        total_trials = n_trials * len(available_models)
-        estimated_hours = (total_trials * trial_epochs * 0.5) / 60  # Rough estimate
-        
-        print(Fore.YELLOW + Style.BRIGHT + f"\n{config_name} Model Comparison Configuration:")
-        print(Fore.CYAN + Style.BRIGHT + f"  - Models: {len(available_models)} architectures")
-        print(Fore.CYAN + Style.BRIGHT + f"  - Trials per model: {n_trials}")
-        print(Fore.CYAN + Style.BRIGHT + f"  - Total trials: {total_trials}")
-        print(Fore.CYAN + Style.BRIGHT + f"  - Epochs per trial: {trial_epochs}")
-        print(Fore.CYAN + Style.BRIGHT + f"  - Timeout: {timeout_minutes} minutes")
-        print(Fore.CYAN + Style.BRIGHT + f"  - Estimated time: {estimated_hours:.1f} hours")
-        
-        confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart model comparison? (Y/n): ").strip().lower()
-        if confirm not in ('', 'y', 'yes'):
-            print(Fore.RED + Style.BRIGHT + "Model comparison cancelled.")
-            return
-        
-        print("\033c", end="")
-        show_banner()
-        
-        console.print(
-            Panel.fit(
-                f"[bold green]Starting {config_name} HPO Model Comparison...\n"
-                f"Comparing {len(available_models)} model architectures\n"
-                f"Total trials: {total_trials}\n"
-                f"Estimated completion: {estimated_hours:.1f} hours[/bold green]",
-                title="HPO MODEL COMPARISON IN PROGRESS",
-                style="bold green",
-                border_style="green",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-        
-        # Create comparison configuration
-        comparison_config = deepcopy(config) if config else {}
-        
-        hpo_config = comparison_config.setdefault('hyperparameter_optimization', {})
-        hpo_config.update({
-            'enabled': True,
-            'n_trials': n_trials,
-            'timeout': timeout_minutes * 60,
-            'strategy': 'optuna',
-            'trial_epochs': trial_epochs,
-            'trial_patience': max(5, trial_epochs // 4),
-            'model_search': {
-                'enabled': True,
-                'model_types': available_models,
-                'search_all_models': True
-            },
-            'cross_validation': {
-                'enabled': True,
-                'folds': 5,  # More folds for better comparison
-                'shuffle': True
-            },
-            'early_stopping': {
-                'enabled': True,
-                'patience': max(10, n_trials // 10),
-                'min_trials': 20
-            },
-            'generate_plots': True,
-            'study_name': f"model_comparison_{config_name.lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        })
-        
-        result = run_hyperparameter_optimization_interactive(
-            config=comparison_config,
-            non_interactive=True
-        )
-        
-        _handle_hpo_result(result, f"{config_name} Model Comparison HPO")
-        
-        # Additional comparison analysis if successful
-        if result and result.get('success', False):
-            _display_model_comparison_summary(result, available_models)
-    
-    except Exception as e:
-        logger.error(f"HPO model comparison error: {e}", exc_info=True)
-        console.print(
-            Panel.fit(
-                f"[bold red]Model comparison failed: {str(e)}[/bold red]",
-                title="MODEL COMPARISON ERROR",
-                style="bold red",
-                border_style="red",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-
-def _display_model_comparison_summary(result: Dict[str, Any], models: List[str]) -> None:
-    """Display summary of model comparison results"""
-    try:
-        study = result.get('study')
-        if not study or not hasattr(study, 'trials'):
-            print(Fore.YELLOW + Style.BRIGHT + "No detailed comparison data available.")
-            return
-        
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
-        print("MODEL COMPARISON SUMMARY")
-        print("="*40)
-        
-        # Analyze trials by model type
-        model_results = {}
-        
-        for trial in study.trials:
-            if trial.state.name == 'COMPLETE' and trial.params:
-                model_type = trial.params.get('model_type', 'Unknown')
-                if model_type not in model_results:
-                    model_results[model_type] = {
-                        'trials': [],
-                        'best_value': float('inf'),
-                        'worst_value': float('-inf'),
-                        'avg_value': 0
-                    }
-                
-                model_results[model_type]['trials'].append(trial.value)
-                if trial.value < model_results[model_type]['best_value']:
-                    model_results[model_type]['best_value'] = trial.value
-                if trial.value > model_results[model_type]['worst_value']:
-                    model_results[model_type]['worst_value'] = trial.value
-        
-        # Calculate averages and display results
-        for model_type, data in model_results.items():
-            if data['trials']:
-                data['avg_value'] = sum(data['trials']) / len(data['trials'])
-                data['std_value'] = np.std(data['trials']) if len(data['trials']) > 1 else 0
-        
-        # Sort models by performance (best average)
-        sorted_models = sorted(model_results.items(), key=lambda x: x[1]['avg_value'])
-        
-        print(f"Model Performance Ranking:")
-        for i, (model_type, data) in enumerate(sorted_models, 1):
-            trials_count = len(data['trials'])
-            print(f"\n{i}. {model_type}")
-            print(f"   Completed Trials: {trials_count}")
-            print(f"   Best Value: {data['best_value']:.6f}")
-            print(f"   Average Value: {data['avg_value']:.6f}")
-            if data['std_value'] > 0:
-                print(f"   Std Deviation: ±{data['std_value']:.6f}")
-            
-            # Performance assessment
-            if i == 1:
-                print(Fore.GREEN + "   Status: BEST PERFORMER" + Style.RESET_ALL)
-            elif i == len(sorted_models):
-                print(Fore.RED + "   Status: Needs Improvement" + Style.RESET_ALL)
-            else:
-                print(Fore.YELLOW + "   Status: Good Performance" + Style.RESET_ALL)
-        
-        # Overall recommendations
-        if sorted_models:
-            best_model = sorted_models[0][0]
-            best_value = sorted_models[0][1]['best_value']
-            
-            print(f"\n" + Fore.GREEN + Style.BRIGHT + "RECOMMENDATION:")
-            print(f"Use {best_model} with best objective value: {best_value:.6f}")
-            print(Style.RESET_ALL)
-            
-            # Performance gap analysis
-            if len(sorted_models) > 1:
-                second_best = sorted_models[1][1]['avg_value']
-                performance_gap = ((second_best - sorted_models[0][1]['avg_value']) / second_best * 100)
-                print(f"Performance advantage: {performance_gap:.1f}% better than second-best")
-    
-    except Exception as e:
-        logger.error(f"Error displaying comparison summary: {e}", exc_info=True)
-        print(Fore.RED + Style.BRIGHT + f"Could not display detailed comparison: {str(e)}")
 
 # Helper functions for configuration management
 def select_preset_config():
