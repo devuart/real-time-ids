@@ -444,6 +444,11 @@ CACHE_DIR.mkdir(exist_ok=True)
 CHECKPOINTS_DIR = Path("checkpoints") / f"checkpoints_v{VERSION_INFO['torch']}"
 CHECKPOINTS_DIR.mkdir(exist_ok=True)
 
+RESULTS_DIR = Path("results")
+RESULTS_DIR.mkdir(exist_ok=True)
+RESULTS_FILE_NAME = "training_results.json"
+RESULTS_FILE = RESULTS_DIR / RESULTS_FILE_NAME
+
 def configure_device(device_type='auto'):
     """
     Configure device settings based on preference and availability.
@@ -911,8 +916,9 @@ def loading_screen(
                 if supports_color and banner_width > 60:
                     console.print(Panel.fit(
                         f"[bold cyan]Running {check_type_info}[/bold cyan]\n"
-                        "[dim]Please wait while we validate your system...[/dim]",
+                        "[bold cyan]Please wait while we validate your system...[/bold cyan]",
                         border_style="cyan",
+                        style="bold cyan",
                         padding=(0, 2),
                         width=min(banner_width, console_width - 4)
                     ))
@@ -923,7 +929,7 @@ def loading_screen(
                 console.print(f"\nRunning {check_type_info}\n")
             
             # Thread-safe system checks execution
-            console.print("Executing system checks..." if not supports_color else "[dim]Executing system checks...[/dim]")
+            console.print("Executing system checks..." if not supports_color else "[bold cyan]Executing system checks...[/bold cyan]")
             
             # Use thread-safe timing measurement
             checks_start = time.perf_counter()
@@ -1137,7 +1143,8 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                     console.print(fail_table)
                 else:
                     # Simple fallback display
-                    console.print("Failed Non-Critical Checks:")
+                    #console.print("Failed Non-Critical Checks:")
+                    print(Fore.YELLOW + Style.BRIGHT + "Failed Non-Critical Checks:")
                     for check in failed_checks:
                         console.print(f"  - {check['name']}: {check['message']} ({check['level']})")
                 
@@ -1145,7 +1152,8 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                 
             except Exception as table_error:
                 # Ultra-safe fallback
-                console.print("Some non-critical checks failed:")
+                #console.print("Some non-critical checks failed:")
+                print(Fore.YELLOW + Style.BRIGHT + "Some non-critical checks failed:")
                 for check in failed_checks:
                     console.print(f"  {check['name']}: {check['message']}")
                 console.print()
@@ -1166,7 +1174,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             f"- Informational failures: {informational_failed}\n"
             f"- Total execution time: {elapsed_time:.2f}s\n\n"
             f"The system can continue with reduced functionality.\n"
-            f"Continue anyway? (Y/n)"
+            #f"Continue anyway? (Y/n)"
         )
         
         try:
@@ -1191,7 +1199,9 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
         
         for attempt in range(max_attempts):
             try:
-                response = input("\nYour choice: ").strip().lower()
+                #response = input("\nYour choice: ").strip().lower()
+                #response = input(Fore.YELLOW + Style.BRIGHT + "\nYour choice: ").strip().lower()
+                response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (Y/n/q): ").strip().lower()
                 
                 # Default to yes
                 if response in ['y', 'yes', '']:
@@ -1202,7 +1212,8 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                     break
                 else:
                     if attempt < max_attempts - 1:
-                        console.print("Please enter 'y' for yes or 'n' for no.")
+                        #console.print("Please enter 'y' for yes or 'n' for no.")
+                        print(Fore.YELLOW + Style.BRIGHT + "Please enter 'y' for yes or 'n' for no or 'q' for quit.")
                     
             except (EOFError, KeyboardInterrupt):
                 user_choice = False
@@ -1211,12 +1222,14 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                 if logger:
                     logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
                 if attempt < max_attempts - 1:
-                    console.print("Input error, please try again.")
+                    #console.print("Input error, please try again.")
+                    print(Fore.RED + Style.BRIGHT + "Input error, please try again.")
         
         # Default to continue if no valid choice after max attempts
         if user_choice is None:
             user_choice = True
-            console.print("Using default choice: continue")
+            #console.print("Using default choice: continue")
+            print(Fore.CYAN + Style.BRIGHT + "Using default choice: continue")
         
         # Handle user choice with safe output
         if user_choice is False:
@@ -1229,21 +1242,28 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                 
                 if supports_color and banner_width > 60:
                     console.print(Panel.fit(
-                        f"[bold red]{cancel_message}[/bold red]",
+                        #f"[bold red]{cancel_message}[/bold red]",
+                        f"{cancel_message}",
                         border_style="red",
-                        title="Cancelled",
+                        title="CANCELLED",
+                        style="bold red",
                         padding=(1, 3),
                         width=min(banner_width, console_width - 4)
                     ))
                 else:
-                    console.print(f"\nCANCELLED:\n{cancel_message}")
+                    #console.print(f"\nCANCELLED:\n{cancel_message}")
+                    print(Fore.RED + Style.BRIGHT + f"\nCANCELLED:\n{cancel_message}")
             except Exception:
-                console.print(f"\nCANCELLED:\n{cancel_message}")
+                #console.print(f"\nCANCELLED:\n{cancel_message}")
+                print(Fore.RED + Style.BRIGHT + f"\nCANCELLED:\n{cancel_message}")
             
             if logger:
                 logger.warning("User chose to quit after seeing failed checks")
                 logger.info(f"Failed checks summary: {len(failed_checks)} non-critical failures")
-            console.print("Exiting system initialization...")
+            
+            #console.print("Exiting system initialization...")
+            print(Fore.RED + Style.BRIGHT + "Exiting system initialization...")
+            
             # give user time to read the message
             time.sleep(2)
             sys.exit(0)
@@ -1260,16 +1280,20 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             
             if supports_color and banner_width > 60:
                 console.print(Panel.fit(
-                    f"[bold green]{continue_message}[/bold green]",
+                    #f"[bold green]{continue_message}[/bold green]",
+                    f"{continue_message}",
                     border_style="green",
-                    title="Continuing",
+                    title="CONTINUING",
+                    style="bold green",
                     padding=(1, 2),
                     width=min(banner_width, console_width - 4)
                 ))
             else:
-                console.print(f"\nCONTINUING:\n{continue_message}")
+                #console.print(f"\nCONTINUING:\n{continue_message}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nCONTINUING:\n{continue_message}")
         except Exception:
-            console.print(f"\nCONTINUING:\n{continue_message}")
+            #console.print(f"\nCONTINUING:\n{continue_message}")
+            print(Fore.GREEN + Style.BRIGHT + f"\nCONTINUING:\n{continue_message}")
         
         if logger:
             logger.info("User chose to continue despite failed checks")
@@ -1283,7 +1307,10 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
     except Exception as decision_error:
         if logger:
             logger.error(f"Error in user decision handling: {decision_error}")
-        console.print(f"Error in user input - continuing with warnings: {decision_error}")
+        
+        #console.print(f"Error in user input - continuing with warnings: {decision_error}")
+        print(Fore.RED + Style.BRIGHT + f"Error in user input - continuing with warnings: {decision_error}")
+        
         # Default to continue on error
         return True
     
@@ -1343,16 +1370,21 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         try:
             if supports_color and banner_width > 60:
                 console.print(Panel.fit(
-                    f"[bold green]{success_message}[/]",
+                    #f"[bold green]{success_message}[/]",
+                    f"{success_message}",
                     border_style="green",
-                    title="[bold green][SUCCESS][/]",
+                    style="bold green",
+                    #title="[bold green]SUCCESS[/]",
+                    title="SUCCESS",
                     padding=(1, 3),
                     width=min(banner_width, console_width - 4)
                 ))
             else:
-                console.print(f"\nSUCCESS:\n{success_message}")
+                #console.print(f"\nSUCCESS:\n{success_message}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nSUCCESS:\n{success_message}")
         except Exception:
-            console.print(f"\nSUCCESS:\n{success_message}")
+            #console.print(f"\nSUCCESS:\n{success_message}")
+            print(Fore.GREEN + Style.BRIGHT + f"\nSUCCESS:\n{success_message}")
         
         # Handle user choice with safe input
         user_choice = None
@@ -1360,7 +1392,8 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         
         for attempt in range(max_attempts):
             try:
-                response = input("\nYour choice: ").strip().lower()
+                #response = input("\nYour choice: ").strip().lower()
+                response = input(Fore.YELLOW + Style.BRIGHT + "\nYour choice: ").strip().lower()
                 
                 # Default to yes (continue)
                 if response in ['y', 'yes', '']:
@@ -1371,7 +1404,8 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
                     break
                 else:
                     if attempt < max_attempts - 1:
-                        console.print("Please enter 'y' for yes or 'n' for no.")
+                        #console.print("Please enter 'y' for yes or 'n' for no.")
+                        print(Fore.YELLOW + Style.BRIGHT + "Please enter 'y' for yes or 'n' for no.")
                     
             except (EOFError, KeyboardInterrupt):
                 user_choice = False
@@ -1380,12 +1414,14 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
                 if logger:
                     logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
                 if attempt < max_attempts - 1:
-                    console.print("Input error, please try again.")
+                    #console.print("Input error, please try again.")
+                    print(Fore.RED + Style.BRIGHT + "Input error, please try again.")
         
         # Default to continue if no valid choice after max attempts
         if user_choice is None:
             user_choice = True
-            console.print("Using default choice: continue")
+            #console.print("Using default choice: continue")
+            print(Fore.CYAN + Style.BRIGHT + "Using default choice: continue")
         
         # Handle user choice
         if user_choice is False:
@@ -1398,21 +1434,27 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
                 
                 if supports_color and banner_width > 60:
                     console.print(Panel.fit(
-                        f"[bold yellow]{quit_message}[/bold yellow]",
-                        border_style="yellow",
-                        title="Quit",
+                        #f"[bold yellow]{quit_message}[/bold yellow]",
+                        f"{quit_message}",
+                        border_style="red",
+                        style="bold red",
+                        title="QUIT",
                         padding=(1, 3),
                         width=min(banner_width, console_width - 4)
                     ))
                 else:
-                    console.print(f"\nQUIT:\n{quit_message}")
+                    #console.print(f"\nQUIT:\n{quit_message}")
+                    print(Fore.RED + Style.BRIGHT + f"\nQUIT:\n{quit_message}")
             except Exception:
-                console.print(f"\nQUIT:\n{quit_message}")
+                #console.print(f"\nQUIT:\n{quit_message}")
+                print(Fore.RED + Style.BRIGHT + f"\nQUIT:\n{quit_message}")
             
             if logger:
                 logger.debug("User chose to quit after successful system checks")
             
-            console.print("Exiting system initialization...")
+            #console.print("Exiting system initialization...")
+            print(Fore.RED + Style.BRIGHT + "Exiting system initialization...")
+            
             time.sleep(2)
             sys.exit(0)
         
@@ -1425,16 +1467,20 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
             
             if supports_color and banner_width > 60:
                 console.print(Panel.fit(
-                    f"[bold green]{continue_message}[/bold green]",
+                    #f"[bold green]{continue_message}[/bold green]",
+                    f"{continue_message}",
                     border_style="green",
-                    title="Proceeding",
+                    title="PROCEEDING",
+                    style="bold green",
                     padding=(1, 2),
                     width=min(banner_width, console_width - 4)
                 ))
             else:
-                console.print(f"\nPROCEEDING:\n{continue_message}")
+                #console.print(f"\nPROCEEDING:\n{continue_message}")
+                print(Fore.GREEN + Style.BRIGHT + f"\nPROCEEDING:\n{continue_message}")
         except Exception:
-            console.print(f"\nPROCEEDING:\n{continue_message}")
+            #console.print(f"\nPROCEEDING:\n{continue_message}")
+            print(Fore.GREEN + Style.BRIGHT + f"\nPROCEEDING:\n{continue_message}")
         
         if logger:
             logger.debug(f"All system checks passed successfully in {elapsed_time:.2f}s - user chose to continue")
@@ -1450,7 +1496,10 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
     except Exception as success_error:
         if logger:
             logger.error(f"Error in success scenario: {success_error}")
-        console.print("All checks passed - continuing...")
+        
+        #console.print("All checks passed - continuing...")
+        print(Fore.GREEN + Style.BRIGHT + f"All checks passed - continuing...")
+        
         return True
     
     finally:
@@ -1693,8 +1742,8 @@ def display_check_results(
         table = Table(
             title=f"\n[bold]SYSTEM DIAGNOSTICS REPORT - {report_type}[/bold]",
             box=box.ROUNDED,
-            header_style="bold bright_white",
-            border_style="bright_white",
+            header_style="bold white",
+            border_style="white",
             title_style="bold yellow",
             title_justify="left",
             show_lines=True,
@@ -1749,7 +1798,7 @@ def display_check_results(
                 details_lines = []
                 
                 # Main message
-                details_lines.append(f"[bright_white]{result.message}[/bright_white]")
+                details_lines.append(f"[white]{result.message}[/white]")
                 
                 # Enhanced detail formatting
                 if isinstance(result.details, dict):
@@ -1809,35 +1858,43 @@ def display_check_results(
         # Add summary/error rows if present
         if "system_summary" in results:
             summary = results["system_summary"]
-            summary_style = "bold bright_white on green" if summary.passed else "bold bright_white on red"
+            summary_style = "bold white on green" if summary.passed else "bold white on red"
             checks_run = summary.details.get('total_checks', 0)
             passed_checks = summary.details.get('passed_checks', 0)
             checks_critical = summary.details.get('critical_failures', 0)
             summary_status = summary.details.get('system_status', 'UNKNOWN')
             
             table.add_row(
-                Text("SUMMARY", style="bold bright_white on yellow"),
+                Text("SUMMARY", style="bold white on yellow"),
                 Text("PASS" if summary.passed else "FAIL", style=summary_style),
                 "",
                 Text(
                     f"{passed_checks}/{checks_run} checks passed | "
                     f"{checks_critical} critical failures | "
                     f"Status: {summary_status}",
-                    style="bright_white"
+                    #style="white"
+                    style=summary_style
                 )
             )
         
         if "system_error" in results:
             error = results["system_error"]
+            error_details = error.details.get('error', 'Unknown error')
+            checks_completed = error.details.get('completed_checks', [])
+            error_message = (f"{error.message}\n"
+                             f"[bold yellow]{error_details}[/bold yellow]")
             table.add_row(
                 Text("FATAL ERROR", style="bold white on red"),
                 Text("ERROR", style="bold white on red"),
                 "",
                 Text(
-                    f"{error.message}\n"
-                    f"[red]{error.details.get('error', 'Unknown error')}\n"
-                    f"Completed checks: {', '.join(error.details.get('completed_checks', []))}",
-                    style="bright_white"
+                    #f"{error.message}\n"
+                    #f"[bold yellow]{error.details.get('error', 'Unknown error')}[/bold yellow]\n"
+                    #f"Completed checks: {', '.join(error.details.get('completed_checks', []))}",
+                    #style="white"
+                    f"{error_message}\n"
+                    f"Completed checks: {', '.join(checks_completed)}",
+                    style="bold white on red"
                 )
             )
         
@@ -1886,7 +1943,10 @@ def display_check_results(
     
     except Exception as e:
         error_msg = f"Failed to display check results: {str(e)}"
-        console.print(f"[bold red]{error_msg}[/bold red]")
+        
+        #console.print(f"[bold red]{error_msg}[/bold red]")
+        print(Fore.RED + Style.BRIGHT + f"{error_msg}")
+        
         if logger:
             logger.critical(error_msg, exc_info=True)
 
@@ -3388,6 +3448,7 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
         'tensorboard': base_dir / "tensorboard",
         'cache': base_dir / "cache",
         'exports': base_dir / "exports",
+        'results': base_dir / "results",
         'checkpoints': base_dir / "checkpoints" / f"checkpoints_v{VERSION_INFO['torch']}"
     }
     
@@ -3418,7 +3479,7 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
         dirs = setup_directories(logger)
         
         # Assign to global variables if needed
-        global LOG_DIR, DEFAULT_MODEL_DIR, DATA_DIR, CONFIG_DIR, REPORTS_DIR, TB_DIR, CACHE_DIR, EXPORTS_DIR, CHECKPOINTS_DIR
+        global LOG_DIR, DEFAULT_MODEL_DIR, DATA_DIR, CONFIG_DIR, REPORTS_DIR, TB_DIR, CACHE_DIR, EXPORTS_DIR, CHECKPOINTS_DIR, RESULTS_DIR
         LOG_DIR = dirs['logs']
         DEFAULT_MODEL_DIR = dirs['models']
         DATA_DIR = dirs['data']
@@ -3428,6 +3489,7 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
         CACHE_DIR = dirs['cache']
         EXPORTS_DIR = dirs['exports']
         CHECKPOINTS_DIR = dirs['checkpoints']
+        RESULTS_DIR = dirs['results']
         
         if logger:
             logger.info("Directory configuration completed successfully")
@@ -4193,7 +4255,7 @@ def display_configuration_details(config_result: CheckResult) -> None:
         config_result: CheckResult from check_configuration_system()
     """
     if not isinstance(config_result.details, dict):
-        console.print("[yellow]No detailed configuration information available[/yellow]")
+        console.print("\n[bold yellow]No detailed configuration information available[/bold yellow]")
         return
     
     try:
@@ -4201,17 +4263,17 @@ def display_configuration_details(config_result: CheckResult) -> None:
         
         # Main configuration overview table
         overview_table = Table(
-            title="[bold yellow]Configuration System Overview[/bold yellow]",
+            title="\n[bold yellow]Configuration System Overview[/bold yellow]",
             title_justify="left",
             box=box.ROUNDED,
-            header_style="bold bright_white",
+            header_style="bold magenta",
             border_style="cyan",
             show_lines=True,
             width=min(100, console.width - 4)
         )
         
         overview_table.add_column("Property", style="bold yellow", width=20)
-        overview_table.add_column("Value", style="bright_white", width=30)
+        overview_table.add_column("Value", style="bold magenta", width=30)
         overview_table.add_column("Status", style="bold green", width=15, justify="center")
         
         # Add overview rows
@@ -4260,7 +4322,7 @@ def display_configuration_details(config_result: CheckResult) -> None:
                 title="[bold yellow]Configuration Sections Detail[/bold yellow]",
                 title_justify="left",
                 box=box.ROUNDED,
-                header_style="bold bright_white",
+                header_style="bold magenta",
                 border_style="cyan",
                 show_lines=True,
                 expand=True,
@@ -4268,9 +4330,9 @@ def display_configuration_details(config_result: CheckResult) -> None:
             )
             
             sections_table.add_column("Section", style="bold yellow", width=15)
-            sections_table.add_column("Parameters", style="bright_white", width=12, justify="center")
+            sections_table.add_column("Parameters", style="bold magenta", width=12, justify="center")
             sections_table.add_column("Status", style="bold green", width=10, justify="center")
-            sections_table.add_column("Key Configuration", style="dim", min_width=50)
+            sections_table.add_column("Key Configuration", style="bold", min_width=50)
             
             for section_name, section_info in details['section_details'].items():
                 # Format key parameters
@@ -4285,20 +4347,20 @@ def display_configuration_details(config_result: CheckResult) -> None:
                         
                         # Color coding for specific values
                         if param == 'current_preset':
-                            key_config_lines.append(f"[bold bright_white]{param}:[/] [green]{value_str}[/]")
+                            key_config_lines.append(f"[bold white]{param}:[/] [bold green]{value_str}[/]")
                         elif param in ['model_type', 'optimizer']:
-                            key_config_lines.append(f"[bold bright_white]{param}:[/] [cyan]{value_str}[/]")
+                            key_config_lines.append(f"[bold white]{param}:[/] [bold cyan]{value_str}[/]")
                         elif param in ['batch_size', 'learning_rate', 'epochs']:
-                            key_config_lines.append(f"[bold bright_white]{param}:[/] [yellow]{value_str}[/]")
+                            key_config_lines.append(f"[bold white]{param}:[/] [bold yellow]{value_str}[/]")
                         elif 'unknown' in str(value) or 'not_set' in str(value):
-                            key_config_lines.append(f"[bold bright_white]{param}:[/] [red]{value_str}[/]")
+                            key_config_lines.append(f"[bold white]{param}:[/] [bold red]{value_str}[/]")
                         else:
-                            key_config_lines.append(f"[bold bright_white]{param}:[/] [dim]{value_str}[/]")
+                            key_config_lines.append(f"[bold white]{param}:[/] [bold blue]{value_str}[/]")
                 
                 elif 'value' in section_info:
-                    key_config_lines.append(f"[dim]Value: {section_info['value']}[/dim]")
+                    key_config_lines.append(f"[bold]Value: {section_info['value']}[/bold]")
                 
-                key_config_text = "\n".join(key_config_lines) if key_config_lines else "[dim]No key parameters[/dim]"
+                key_config_text = "\n".join(key_config_lines) if key_config_lines else "[bold red]No key parameters[/bold red]"
                 
                 sections_table.add_row(
                     Text(section_name.upper(), style="bold yellow"),
@@ -4718,12 +4780,14 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
     """
     if not isinstance(variants_result.details, dict):
         console.print(Panel.fit(
-            "[yellow]No detailed model variants information available[/yellow]\n"
-            f"Details type: {type(variants_result.details)}\n"
-            f"Check status: {'PASSED' if variants_result.passed else 'FAILED'}\n"
-            f"Message: {variants_result.message}",
-            title="[bold yellow]Model Variants Details[/bold yellow]",
-            border_style="yellow"
+            "[bold yellow]No detailed model variants information available[/bold yellow]\n"
+            f"Details type: [bold yellow]{type(variants_result.details)}[/bold yellow]\n"
+            #f"Check status: {'PASSED' if variants_result.passed else 'FAILED'}\n"
+            f"Check status: [bold green]PASSED[/bold green]" if variants_result.passed else "[bold red]FAILED[/bold red]\n"
+            f"Message: [bold yellow]{variants_result.message}[/bold yellow]",
+            title="Model Variants Details",
+            border_style="red",
+            style="bold red"
         ))
         return
     
@@ -4786,68 +4850,69 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
         
         # Main enhanced model variants overview table
         overview_table = Table(
-            title="[bold cyan]Model Variants System Overview[/bold cyan]",
+            title="\n[bold cyan]Model Variants System Overview[/bold cyan]",
             title_justify="left",
             box=box.DOUBLE_EDGE,
-            header_style="bold bright_magenta",
-            border_style="bright_cyan",
+            header_style="bold magenta",
+            border_style="cyan",
             show_lines=True,
             width=min(110, console.width - 4)
         )
         
         overview_table.add_column("Category", style="bold yellow", width=18)
-        overview_table.add_column("Count", style="bright_white", width=12, justify="center")
+        overview_table.add_column("Count", style="bold white", width=12, justify="center")
         overview_table.add_column("Status", style="bold green", width=15, justify="center")
-        overview_table.add_column("Details", style="dim", width=45)
+        overview_table.add_column("Details", style="bold", width=45)
         
         # Add comprehensive overview rows
         overview_table.add_row(
             "Total Variants",
             str(total_variants),
             "REGISTERED",
-            f"[dim]{', '.join(map(str, details.get('variant_names', [])))}[/dim]" if details.get('variant_names') else "[dim]No variants registered[/dim]"
+            f"[bold green]{', '.join(map(str, details.get('variant_names', [])))}[/bold green]" if details.get('variant_names') else "[bold red]No variants registered[/bold red]"
         )
         
         overview_table.add_row(
             "Available Variants",
             str(available_variants),
-            "[bold green]READY[/bold green]" if available_variants > 0 else "[yellow]NONE[/yellow]",
-            f"[green]{', '.join(map(str, available_names))}[/green]" if available_names else "[dim]No available variants[/dim]"
+            "[bold green]READY[/bold green]" if available_variants > 0 else "[bold red]NONE[/bold red]",
+            f"[bold green]{', '.join(map(str, available_names))}[/bold green]" if available_names else "[bold red]No available variants[/bold red]"
         )
         
         overview_table.add_row(
             "Warning Variants",
             str(warning_variants),
-            "[bold yellow]WARNING[/bold yellow]" if warning_variants > 0 else "[dim]NONE[/dim]",
-            f"[yellow]{', '.join(map(str, warning_names))}[/yellow]" if warning_names else "[dim]No warnings[/dim]"
+            "[bold yellow]WARNING[/bold yellow]" if warning_variants > 0 else "[bold green]NONE[/bold green]",
+            f"[bold yellow]{', '.join(map(str, warning_names))}[/bold yellow]" if warning_names else "[bold green]No warnings[/bold green]"
         )
         
         overview_table.add_row(
             "Failed Variants",
             str(failed_variants),
-            "[bold red]FAILED[/bold red]" if failed_variants > 0 else "[dim]NONE[/dim]",
-            f"[red]{', '.join(map(str, failed_names))}[/red]" if failed_names else "[dim]No failures[/dim]"
+            "[bold red]FAILED[/bold red]" if failed_variants > 0 else "[bold green]NONE[/bold green]",
+            f"[bold red]{', '.join(map(str, failed_names))}[/bold red]" if failed_names else "[bold green]No failures[/bold green]"
         )
         
         overview_table.add_row(
             "Success Rate",
             f"{success_rate:.1f}%",
-            "[bold green]EXCELLENT[/bold green]" if success_rate >= 80 else "[green]GOOD[/green]" if success_rate >= 60 else "[yellow]FAIR[/yellow]" if success_rate > 0 else "[red]POOR[/red]",
-            f"[dim]Operational: {operational_status.replace('_', ' ').title()}[/dim]"
+            "[bold green]EXCELLENT[/bold green]" if success_rate >= 80 else "[bold cyan]GOOD[/bold cyan]" if success_rate >= 60 else "[bold yellow]FAIR[/bold yellow]" if success_rate > 0 else "[bold red]POOR[/bold red]",
+            f"[bold white]Operational:[/bold white] {operational_status.replace('_', ' ').title()}"
         )
         
         overview_table.add_row(
             "Capabilities",
             str(len(capabilities)),
-            "[bold cyan]READY[/bold cyan]" if capabilities else "[dim]NONE[/dim]",
-            f"[cyan]{', '.join(capabilities)}[/cyan]" if capabilities else "[dim]No capabilities detected[/dim]"
+            "[bold green]READY[/bold green]" if capabilities else "[bold red]NONE[/bold red]",
+            f"[bold cyan]{', '.join(capabilities)}[/bold cyan]" if capabilities else "[bold red]No capabilities detected[/bold red]"
         )
         
         overview_table.add_row(
             "Hardware Context",
             "Available" if not hardware_error else "Error",
-            "[bold green]OK[/bold green]" if not hardware_error else "[red]ERROR[/red]",
-            f"[dim]{'System aware' if not hardware_error else f'Hardware error: {hardware_error}'}[/dim]"
+            "[bold green]OK[/bold green]" if not hardware_error else "[bold red]ERROR[/bold red]",
+            #f"[bold cyan]{'System aware' if not hardware_error else f'Hardware error: {hardware_error}'}[/bold cyan]"
+            f"[bold cyan]SYSTEM-AWARE[/bold cyan]" if not hardware_error else f"[bold red]HARDWARE ERROR: {hardware_error}[/bold red]"
         )
         
         console.print(overview_table)
@@ -4859,20 +4924,20 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             variants_table = Table(
                 title="[bold cyan]Model Variants Detailed Analysis[/bold cyan]",
                 title_justify="left",
-                box=box.ROUNDED,
-                header_style="bold bright_magenta",
-                border_style="bright_blue",
+                box=box.DOUBLE_EDGE,
+                header_style="bold magenta",
+                border_style="blue",
                 show_lines=True,
                 expand=True,
-                width=min(130, console.width - 4)
+                width=min(125, console.width - 4)
             )
             
             variants_table.add_column("Variant", style="bold yellow", width=18)
-            variants_table.add_column("Class", style="bright_white", width=20)
-            variants_table.add_column("Status", width=12, justify="center")
-            variants_table.add_column("Configuration", style="dim", width=15)
-            variants_table.add_column("Methods", style="dim", width=15)
-            variants_table.add_column("Details", style="dim", min_width=40)
+            variants_table.add_column("Class", style="bold magenta", width=20)
+            variants_table.add_column("Status", width=12, justify="left")
+            variants_table.add_column("Configuration", style="bold", width=15)
+            variants_table.add_column("Methods", style="bold", width=10)
+            variants_table.add_column("Details", style="bold", min_width=40)
             
             for variant_name, variant_info in variant_details.items():
                 if not isinstance(variant_info, dict):
@@ -4884,23 +4949,23 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
                 # Description
                 description = variant_info.get('description', '')
                 if description and isinstance(description, str):
-                    detail_lines.append(f"[bold white]Desc:[/] [dim]{description[:60]}{'...' if len(description) > 60 else ''}[/dim]")
+                    detail_lines.append(f"[bold white]Desc:[/] [bold yellow]{description[:60]}{'...' if len(description) > 60 else ''}[/bold yellow]")
                 
                 # Model features
                 model_features = variant_info.get('model_features', [])
                 if model_features:
-                    detail_lines.append(f"[bold white]Features:[/] [cyan]{', '.join(model_features[:3])}[/cyan]")
+                    detail_lines.append(f"[bold white]Features:[/] [bold cyan]{', '.join(model_features[:3])}[/bold cyan]")
                 
                 # Device awareness
                 if variant_info.get('device_aware'):
-                    detail_lines.append(f"[bold white]Device:[/] [green]Aware[/green]")
+                    detail_lines.append(f"[bold white]Device:[/] [bold green]Aware[/bold green]")
                 
                 # Error information
                 analysis_error = variant_info.get('analysis_error')
                 if analysis_error:
-                    detail_lines.append(f"[red]Error: {str(analysis_error)[:50]}...[/red]")
+                    detail_lines.append(f"[bold red]Error: {str(analysis_error)[:50]}...[/bold red]")
                 
-                details_text = "\n".join(detail_lines) if detail_lines else "[dim]Standard implementation[/dim]"
+                details_text = "\n".join(detail_lines) if detail_lines else "[bold blue]Standard implementation[/bold blue]"
                 
                 # Enhanced status styling
                 status = variant_info.get('status', 'unknown')
@@ -4922,21 +4987,21 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
                 # Configuration information
                 config_params = variant_info.get('config_parameters', 'unknown')
                 if config_params == 'error':
-                    config_text = "[red]Error[/red]"
+                    config_text = "[bold red]ERROR[/bold red]"
                 elif config_params == 'none':
-                    config_text = "[dim]None[/dim]"
+                    config_text = "[bold]NONE[/bold]"
                 elif isinstance(config_params, (int, float)):
-                    config_text = f"[cyan]{config_params}[/cyan]"
+                    config_text = f"[bold cyan]{config_params}[/bold cyan]"
                 else:
-                    config_text = f"[yellow]{str(config_params)}[/yellow]"
+                    config_text = f"[bold yellow]{str(config_params)}[/bold yellow]"
                 
                 # Methods information
                 supported_methods = variant_info.get('supported_methods', {})
                 if isinstance(supported_methods, dict):
                     available_methods = [method for method, available in supported_methods.items() if available]
-                    methods_text = f"[green]{len(available_methods)}[/green]" if available_methods else "[dim]0[/dim]"
+                    methods_text = f"[bold green]{len(available_methods)}[/bold green]" if available_methods else "[bold red]0[/bold red]"
                 else:
-                    methods_text = "[yellow]Unknown[/yellow]"
+                    methods_text = "[bold yellow]Unknown[/bold yellow]"
                 
                 # Safe extraction of class name
                 class_name = variant_info.get('class_name', 'Unknown')
@@ -4959,14 +5024,15 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             rec_table = Table(
                 title="[bold green]Model Variants Recommendations[/bold green]",
                 title_justify="left",
-                box=box.SQUARE,
-                header_style="bold bright_green",
+                #box=box.SQUARE,
+                box=box.DOUBLE_EDGE,
+                header_style="bold white",
                 border_style="green",
                 width=min(100, console.width - 4)
             )
             
             rec_table.add_column("Category", style="bold yellow", width=20)
-            rec_table.add_column("Suggested Models", style="bright_white")
+            rec_table.add_column("Suggested Models", style="bold cyan")
             
             primary_models = recommendations.get('primary_models', [])
             fallback_models = recommendations.get('fallback_models', [])
@@ -4974,13 +5040,13 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             emergency_fallback = recommendations.get('emergency_fallback')
             
             if primary_models:
-                rec_table.add_row("Primary Models", ", ".join(map(str, primary_models)))
+                rec_table.add_row("Primary Models", ", ".join(map(str, primary_models)), style="bold green")
             if fallback_models:
-                rec_table.add_row("Fallback Models", ", ".join(map(str, fallback_models)))
+                rec_table.add_row("Fallback Models", ", ".join(map(str, fallback_models)), style="bold yellow")
             if models_to_avoid:
-                rec_table.add_row("Avoid Models", ", ".join(map(str, models_to_avoid)))
+                rec_table.add_row("Avoid Models", ", ".join(map(str, models_to_avoid)), style="bold red")
             if emergency_fallback:
-                rec_table.add_row("Emergency Fallback", str(emergency_fallback))
+                rec_table.add_row("Emergency Fallback", str(emergency_fallback), style="bold magenta")
             
             if primary_models or fallback_models or models_to_avoid:
                 console.print(rec_table)
@@ -4995,12 +5061,13 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             border_color = "red"
         
         status_panel = Panel.fit(
-            f"[bold]Operational Status:[/bold] {operational_status.replace('_', ' ').title()}\n"
-            f"[bold]Available Models:[/bold] {available_variants}\n"
-            f"[bold]Models with Warnings:[/bold] {warning_variants}\n"
-            f"[bold]Failed Models:[/bold] {failed_variants}\n"
-            f"[bold]Overall Success Rate:[/bold] {success_rate:.1f}%",
-            title="[bold blue]System Summary[/bold blue]",
+            f"Operational Status: {operational_status.replace('_', ' ').title()}\n"
+            f"Available Models: {available_variants}\n"
+            f"Models with Warnings: {warning_variants}\n"
+            f"Failed Models: {failed_variants}\n"
+            f"Overall Success Rate: {success_rate:.1f}%",
+            title="MODEL SUMMARY",
+            style=f"bold {border_color}",
             border_style=border_color
         )
         
@@ -5009,24 +5076,37 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
     except Exception as e:
         console.print(
             Panel.fit(
-                f"[bold red]Error displaying enhanced model variants details:[/bold red]\n"
+                f"Error displaying enhanced model variants details:\n"
                 f"Error: {str(e)}\n"
                 f"Error Type: {type(e).__name__}\n"
-                f"Check Status: {'PASSED' if variants_result.passed else 'FAILED'}\n"
+                #f"Check Status: {'PASSED' if variants_result.passed else 'FAILED'}\n"
+                f"Check status: [bold green]PASSED[/bold green]" if variants_result.passed else "[bold red]FAILED[/bold red]\n"
                 f"Message: {variants_result.message}",
-                title="[bold red]Enhanced Display Rendering Error[/bold red]",
-                border_style="red"
+                title="Enhanced Display Rendering Error",
+                border_style="red",
+                style="bold red"
             )
         )
         
         # Comprehensive fallback display
         try:
-            console.print("\n[bold yellow]Comprehensive Fallback Display:[/bold yellow]")
+            #console.print("\n[bold yellow]Comprehensive Fallback Display:[/bold yellow]")
+            print(Fore.YELLOW + Style.BRIGHT + "\nComprehensive Fallback Display:")
             
             # Basic check information
-            console.print(f"[cyan]Check Result:[/cyan] {'PASSED' if variants_result.passed else 'FAILED'}")
-            console.print(f"[cyan]Message:[/cyan] {variants_result.message}")
-            console.print(f"[cyan]Level:[/cyan] {variants_result.level}")
+            #console.print(f"[cyan]Check Result:[/cyan] {'PASSED' if variants_result.passed else 'FAILED'}")
+            #console.print(f"[cyan]Message:[/cyan] {variants_result.message}")
+            #console.print(f"[cyan]Level:[/cyan] {variants_result.level}")
+            
+            variants_result_status = 'PASSED' if variants_result.passed else 'FAILED'
+            if variants_result_status == 'PASSED':
+                status_color = Fore.GREEN + Style.BRIGHT
+            else:
+                status_color = Fore.RED + Style.BRIGHT
+            
+            print(Fore.YELLOW + Style.BRIGHT + "Check Result: " + f"{status_color}" + f"{variants_result_status}")
+            print(Fore.YELLOW + Style.BRIGHT + "Message: " + f"{status_color}" + f"{variants_result.message}")
+            print(Fore.YELLOW + Style.BRIGHT + "Level: " + f"{status_color}" + f"{variants_result.level}")
             
             if isinstance(variants_result.details, dict):
                 details = variants_result.details
@@ -5045,40 +5125,65 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
                 
                 if isinstance(available_names, list):
                     available_count = len(available_names)
+                    available_count_status = f"{Fore.GREEN + Style.BRIGHT}{available_count}{Style.RESET_ALL}" if available_count > 0 else f"{Fore.RED + Style.BRIGHT}{available_count}{Style.RESET_ALL}"
                 if isinstance(warning_names, list):
                     warning_count = len(warning_names)
+                    warning_count_status = f"{Fore.YELLOW + Style.BRIGHT}{warning_count}{Style.RESET_ALL}" if warning_count > 0 else f"{Fore.GREEN + Style.BRIGHT}{warning_count}{Style.RESET_ALL}"
                 if isinstance(failed_names, list):
                     failed_count = len(failed_names)
+                    failed_count_status = f"{Fore.RED + Style.BRIGHT}{failed_count}{Style.RESET_ALL}" if failed_count > 0 else f"{Fore.GREEN + Style.BRIGHT}{failed_count}{Style.RESET_ALL}"
                 
                 success_rate = details.get('initialization_summary', {}).get('success_rate', 0)
-                operational_status = details.get('initialization_summary', {}).get('operational_status', 'unknown')
+                success_rate_status = f"{Fore.GREEN + Style.BRIGHT}{success_rate:.1f}%{Style.RESET_ALL}" if success_rate >= 80 else f"{Fore.YELLOW + Style.BRIGHT}{success_rate:.1f}%{Style.RESET_ALL}" if success_rate >= 60 else f"{Fore.RED + Style.BRIGHT}{success_rate:.1f}%{Style.RESET_ALL}"
                 
-                console.print(f"[cyan]Variants:[/cyan] {available_count} available, {warning_count} warnings, {failed_count} failed (of {total_variants} total)")
-                console.print(f"[cyan]Success Rate:[/cyan] {success_rate:.1f}%")
-                console.print(f"[cyan]Operational Status:[/cyan] {operational_status.replace('_', ' ').title()}")
+                operational_status = details.get('initialization_summary', {}).get('operational_status', 'unknown')
+                operational_status_details = operational_status.replace('_', '').title()
+                
+                if operational_status_details == 'Fully Operational':
+                    operational_status = f"{Fore.GREEN + Style.BRIGHT}{operational_status_details}{Style.RESET_ALL}"
+                elif operational_status_details == 'Partial':
+                    operational_status = f"{Fore.YELLOW + Style.BRIGHT}{operational_status_details}{Style.RESET_ALL}"
+                else:
+                    operational_status = f"{Fore.RED + Style.BRIGHT}{operational_status_details}{Style.RESET_ALL}"
+                
+                # console.print(f"[cyan]Variants:[/cyan] {available_count} available, {warning_count} warnings, {failed_count} failed (of {total_variants} total)")
+                # console.print(f"[cyan]Success Rate:[/cyan] {success_rate:.1f}%")
+                # console.print(f"[cyan]Operational Status:[/cyan] {operational_status.replace('_', ' ').title()}")
+                
+                print(Fore.YELLOW + Style.BRIGHT + f"Variants: {available_count_status} available, {warning_count_status} warnings, {failed_count_status} failed (of {total_variants} total)")
+                print(Fore.YELLOW + Style.BRIGHT + f"Success Rate: {success_rate_status}")
+                print(Fore.YELLOW + Style.BRIGHT + f"Operational Status: {operational_status}")
                 
                 # Display variant names safely
                 if available_names:
                     safe_names = [str(name) for name in available_names if name is not None]
-                    console.print(f"[green]Available:[/green] {', '.join(safe_names)}")
+                    #console.print(f"[green]Available:[/green] {', '.join(safe_names)}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"Available: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(safe_names)}")
                 if warning_names:
                     safe_names = [str(name) for name in warning_names if name is not None]
-                    console.print(f"[yellow]Warnings:[/yellow] {', '.join(safe_names)}")
+                    #console.print(f"[yellow]Warnings:[/yellow] {', '.join(safe_names)}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"Warnings: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(safe_names)}")
                 if failed_names:
                     safe_names = [str(name) for name in failed_names if name is not None]
-                    console.print(f"[red]Failed:[/red] {', '.join(safe_names)}")
+                    #console.print(f"[red]Failed:[/red] {', '.join(safe_names)}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"Failed: " + Fore.RED + Style.BRIGHT + f"{', '.join(safe_names)}")
                 
                 # Capabilities
                 capabilities = details.get('capabilities', [])
                 if capabilities:
-                    console.print(f"[cyan]Capabilities:[/cyan] {', '.join(capabilities)}")
+                    #console.print(f"[cyan]Capabilities:[/cyan] {', '.join(capabilities)}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"Capabilities: " + Fore.CYAN + Style.BRIGHT + f"{', '.join(capabilities)}")
                 
             else:
-                console.print("[yellow]Details format not recognized for fallback display[/yellow]")
+                #console.print("[yellow]Details format not recognized for fallback display[/yellow]")
+                print(Fore.YELLOW + Style.BRIGHT + "Details format not recognized for fallback display")
                 
         except Exception as fallback_error:
-            console.print(f"[red]Comprehensive fallback display also failed: {fallback_error}[/red]")
-            console.print(f"[red]Original display error: {str(e)}[/red]")
+            #console.print(f"[red]Comprehensive fallback display also failed: {fallback_error}[/red]")
+            print(Fore.RED + Style.BRIGHT + f"Comprehensive fallback display also failed: " + Fore.YELLOW + Style.BRIGHT + f"{str(fallback_error)}")
+            
+            #console.print(f"[red]Original display error: {str(e)}[/red]")
+            print(Fore.RED + Style.BRIGHT + f"Original display error: " + Fore.YELLOW + Style.BRIGHT + f"{str(e)}")
 
 # System and environment configuration
 def configure_system() -> Dict[str, Any]:
@@ -6554,7 +6659,7 @@ STABILITY_PRESET = {
     'system': {
         'model_dir': str(DEFAULT_MODEL_DIR / "stability"), 'log_dir': str(LOG_DIR / "stability"),
         'config_dir': str(CONFIG_DIR / "stability"), 'data_dir': str(DATA_DIR / "stability"),
-        'checkpoint_dir': str(Path(CHECKPOINTS_DIR / "stability")),
+        'checkpoint_dir': str(Path(CHECKPOINTS_DIR / "stability")), 'tensorboard_dir': str(TB_DIR / "stability"), 'results_dir': str(RESULTS_DIR / "stability"),
         'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
         'parallel_processing': False, 'max_workers': 2, 'export_onnx': True, 'non_interactive': False,
         'cuda_optimizations': False,
@@ -6695,7 +6800,7 @@ PERFORMANCE_PRESET = {
     'system': {
         'model_dir': str(DEFAULT_MODEL_DIR / "performance"), 'log_dir': str(LOG_DIR / "performance"),
         'config_dir': str(CONFIG_DIR / "performance"), 'data_dir': str(DATA_DIR / "performance"),
-        'checkpoint_dir': str(CHECKPOINTS_DIR / "performance"),
+        'checkpoint_dir': str(CHECKPOINTS_DIR / "performance"), 'tensorboard_dir': str(TB_DIR / "performance"), 'results_dir': str(RESULTS_DIR / "performance"),
         'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
         'parallel_processing': True, 'max_workers': max(4, os.cpu_count() or 4),
         'export_onnx': True, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
@@ -6835,7 +6940,7 @@ BASELINE_PRESET = {
     'system': {
         'model_dir': str(DEFAULT_MODEL_DIR / "baseline"), 'log_dir': str(LOG_DIR / "baseline"),
         'config_dir': str(CONFIG_DIR / "baseline"), 'data_dir': str(DATA_DIR / "baseline"),
-        'checkpoint_dir': str(CHECKPOINTS_DIR / "baseline"),
+        'checkpoint_dir': str(CHECKPOINTS_DIR / "baseline"), 'tensorboard_dir': str(TB_DIR / "baseline"), 'results_dir': str(RESULTS_DIR / "baseline"),
         'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
         'parallel_processing': True, 'max_workers': min(4, os.cpu_count() or 1),
         'export_onnx': True, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
@@ -6968,7 +7073,7 @@ DEBUG_PRESET = {
     'system': {
         'model_dir': str(DEFAULT_MODEL_DIR / "debug"), 'log_dir': str(LOG_DIR / "debug"),
         'config_dir': str(CONFIG_DIR / "debug"), 'data_dir': str(DATA_DIR / "debug"),
-        'checkpoint_dir': str(CHECKPOINTS_DIR / "debug"),
+        'checkpoint_dir': str(CHECKPOINTS_DIR / "debug"), 'tensorboard_dir': str(TB_DIR / "debug"), 'results_dir': str(RESULTS_DIR / "debug"),
         'debug': True, 'verbose': True, 'random_seed': 42, 'reproducible': False,
         'parallel_processing': False, 'max_workers': 1, 'export_onnx': False, 'non_interactive': False,
         'cuda_optimizations': False,
@@ -7099,7 +7204,7 @@ LIGHTWEIGHT_PRESET = {
     'system': {
         'model_dir': str(DEFAULT_MODEL_DIR / "lightweight"), 'log_dir': str(LOG_DIR / "lightweight"),
         'config_dir': str(CONFIG_DIR / "lightweight"), 'data_dir': str(DATA_DIR / "lightweight"),
-        'checkpoint_dir': str(CHECKPOINTS_DIR / "lightweight"),
+        'checkpoint_dir': str(CHECKPOINTS_DIR / "lightweight"), 'tensorboard_dir': str(TB_DIR / "lightweight"), 'results_dir': str(RESULTS_DIR / "lightweight"),
         'debug': False, 'verbose': False, 'random_seed': 42, 'reproducible': True,
         'parallel_processing': False, 'max_workers': 1, 'export_onnx': True, 'non_interactive': False,
         'cuda_optimizations': False,
@@ -7239,7 +7344,7 @@ ADVANCED_PRESET = {
     'system': {
         'model_dir': str(DEFAULT_MODEL_DIR / "advanced"), 'log_dir': str(LOG_DIR / "advanced"),
         'config_dir': str(CONFIG_DIR / "advanced"), 'data_dir': str(DATA_DIR / "advanced"),
-        'checkpoint_dir': str(CHECKPOINTS_DIR / "advanced"),
+        'checkpoint_dir': str(CHECKPOINTS_DIR / "advanced"), 'tensorboard_dir': str(TB_DIR / "advanced"), 'results_dir': str(RESULTS_DIR / "advanced"),
         'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
         'parallel_processing': True, 'max_workers': max(8, os.cpu_count() or 8),
         'export_onnx': True, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
@@ -7389,7 +7494,7 @@ DEFAULT_PRESET = {
     },
     'system': {
         'model_dir': str(DEFAULT_MODEL_DIR), 'log_dir': str(LOG_DIR), 'config_dir': str(CONFIG_DIR),
-        'data_dir': str(DATA_DIR), 'checkpoint_dir': str(CHECKPOINTS_DIR),
+        'data_dir': str(DATA_DIR), 'checkpoint_dir': str(CHECKPOINTS_DIR), 'tensorboard_dir': str(TB_DIR), 'results_dir': str(RESULTS_DIR),
         'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
         'parallel_processing': True, 'max_workers': min(4, os.cpu_count() or 1),
         'export_onnx': False, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
@@ -16921,9 +17026,9 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
     init_table = Table(
         title=f"\n[bold]DEEP LEARNING SYSTEM INITIALIZATION[/bold]",
         box=box.DOUBLE_EDGE,
-        header_style="bold bright_yellow",
-        border_style="bright_cyan",
-        title_style="bold bright_green",
+        header_style="bold yellow",
+        border_style="bold cyan",
+        title_style="bold green",
         title_justify="left",
         show_lines=True,
         expand=True,
@@ -16932,8 +17037,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
     
     init_table.add_column("Step", style="bold cyan", width=28, no_wrap=True)
     init_table.add_column("Status", width=8, justify="left")
-    init_table.add_column("Duration", width=8, justify="left", style="dim")
-    init_table.add_column("Details", style="dim", min_width=60)
+    init_table.add_column("Duration", width=8, justify="left", style="bold magenta")
+    init_table.add_column("Details", style="bold", min_width=60)
     init_table.add_column("Health", width=10, justify="left", style="bold")
     
     initialization_steps = []
@@ -17713,14 +17818,16 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         
         # Add comprehensive summary row
         summary_status = "SUCCESS" if overall_health >= 80 else "PARTIAL" if overall_health >= 60 else "WARNING"
-        summary_style = "bold green" if overall_health >= 80 else "bold yellow" if overall_health >= 60 else "bold red"
+        summary_style = "bold white on green" if overall_health >= 80 else "bold white on yellow" if overall_health >= 60 else "bold white on red"
         
         init_table.add_row(
-            Text("SYSTEM INITIALIZATION", style="bold bright_white on black"),
-            Text(summary_status, style=f"bold white on {'green' if overall_health >= 80 else 'yellow' if overall_health >= 60 else 'red'}"),
-            Text(f"{initialization_time:.2f}s", style="bold white"),
-            Text(f"Overall system health: {overall_health:.1f}% | Ready for deep learning operations", style="bright_white"),
-            f"[bold {'green' if overall_health >= 80 else 'yellow' if overall_health >= 60 else 'red'}]{overall_health:.0f}%[/]"
+            Text("SYSTEM INITIALIZATION", style="bold white on yellow"),
+            #Text(summary_status, style=f"bold white on {'green' if overall_health >= 80 else 'yellow' if overall_health >= 60 else 'red'}"),
+            Text(summary_status, style=summary_style),
+            Text(f"{initialization_time:.2f}s", style="bold white on yellow"),
+            #Text(f"Overall system health: {overall_health:.1f}% | Ready for deep learning operations", style="bold white on green"),
+            Text(f"Overall system health: {overall_health:.1f}% | Ready for deep learning operations", style=summary_style),
+            f"[bold white on {'green' if overall_health >= 80 else 'yellow' if overall_health >= 60 else 'red'}]{overall_health:.0f}%[/]"
         )
         
         # Display the comprehensive initialization table
@@ -17745,23 +17852,26 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     f"Duration: {overall_duration}\n"
                     f"Model Variants Available: {model_variants_available}\n"
                     f"Hardware: {hardware}\n\n"
-                    f"Continue to system? (Y/n)"
+                    #f"Continue to system? (Y/n)"
                 )
                 
                 try:
                     if supports_color and banner_width > 60:
-                        panel_title = f"[SUCCESS]"
                         console.print(Panel.fit(
-                            f"[bold green]{success_message}[/]",
+                            #f"[bold green]{success_message}[/]",
+                            f"{success_message}",
                             border_style="green",
-                            title=panel_title,
+                            title="SUCCESS",
+                            style="bold green",
                             padding=(1, 3),
                             width=min(banner_width, console_width - 4)
                         ))
                     else:
-                        console.print(f"\nSUCCESS:\n{success_message}")
+                        #console.print(f"\nSUCCESS:\n{success_message}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nSUCCESS:\n{success_message}")
                 except Exception:
-                    console.print(f"\nSUCCESS:\n{success_message}")
+                    #console.print(f"\nSUCCESS:\n{success_message}")
+                    print(Fore.GREEN + Style.BRIGHT + f"\nSUCCESS:\n{success_message}")
                 
                 # Handle user choice with safe input
                 user_choice = None
@@ -17769,7 +17879,9 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 
                 for attempt in range(max_attempts):
                     try:
-                        response = input("\nYour choice: ").strip().lower()
+                        #response = input("\nYour choice: ").strip().lower()
+                        #response = input(Fore.YELLOW + Style.BRIGHT + "\nYour choice: ").strip().lower()
+                        response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue to system? (Y/n/q): ").strip().lower()
                         
                         if response in ['y', 'yes', '']:
                             user_choice = True
@@ -17779,7 +17891,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                             break
                         else:
                             if attempt < max_attempts - 1:
-                                console.print("Please enter 'y' for yes or 'n' for no.")
+                                #console.print("Please enter 'y' for yes or 'n' for no.")
+                                print(Fore.YELLOW + Style.BRIGHT + "Please enter 'y' for yes or 'n' for no or 'q' for quit.")
                             
                     except (EOFError, KeyboardInterrupt):
                         user_choice = False
@@ -17788,12 +17901,14 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         if logger:
                             logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
                         if attempt < max_attempts - 1:
-                            console.print("Input error, please try again.")
+                            #console.print("Input error, please try again.")
+                            print(Fore.RED + Style.BRIGHT + "Input error, please try again.")
                 
                 # Default to continue if no valid choice after max attempts
                 if user_choice is None:
                     user_choice = True
-                    console.print("Using default choice: continue")
+                    #console.print("Using default choice: continue")
+                    print(Fore.CYAN + Style.BRIGHT + "Using default choice: continue")
                 
                 # Handle user choice
                 if user_choice is False:
@@ -17806,21 +17921,27 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         
                         if supports_color and banner_width > 60:
                             console.print(Panel.fit(
-                                f"[bold yellow]{quit_message}[/bold yellow]",
-                                border_style="yellow",
-                                title="Quit",
+                                #f"[bold yellow]{quit_message}[/bold yellow]",
+                                f"{quit_message}",
+                                border_style="red",
+                                style="bold red",
+                                title="QUIT",
                                 padding=(1, 3),
                                 width=min(banner_width, console_width - 4)
                             ))
                         else:
-                            console.print(f"\nQUIT:\n{quit_message}")
+                            #console.print(f"\nQUIT:\n{quit_message}")
+                            print(Fore.RED + Style.BRIGHT + f"\nQUIT:\n{quit_message}")
                     except Exception:
-                        console.print(f"\nQUIT:\n{quit_message}")
+                        #console.print(f"\nQUIT:\n{quit_message}")
+                        print(Fore.RED + Style.BRIGHT + f"\nQUIT:\n{quit_message}")
                     
                     if logger:
                         logger.info("User chose to quit after successful system initialization")
                     
-                    console.print("Exiting system initialization...")
+                    #console.print("Exiting system initialization...")
+                    print(Fore.RED + Style.BRIGHT + "Exiting system initialization...")
+                    
                     time.sleep(2)
                     sys.exit(0)
                 
@@ -17833,16 +17954,20 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     
                     if supports_color and banner_width > 60:
                         console.print(Panel.fit(
-                            f"[bold green]{continue_message}[/bold green]",
+                            #f"[bold green]{continue_message}[/bold green]",
+                            f"{continue_message}",
                             border_style="green",
-                            title="Proceeding",
+                            title="PROCEEDING",
+                            style="bold green",
                             padding=(1, 2),
                             width=min(banner_width, console_width - 4)
                         ))
                     else:
-                        console.print(f"\nPROCEEDING:\n{continue_message}")
+                        #console.print(f"\nPROCEEDING:\n{continue_message}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nPROCEEDING:\n{continue_message}")
                 except Exception:
-                    console.print(f"\nPROCEEDING:\n{continue_message}")
+                    #console.print(f"\nPROCEEDING:\n{continue_message}")
+                    print(Fore.GREEN + Style.BRIGHT + f"\nPROCEEDING:\n{continue_message}")
                 
                 if logger:
                     logger.info(f"All systems initialized successfully (health: {overall_health:.1f}%) - user chose to continue")
@@ -17858,22 +17983,27 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     f"Duration: {initialization_time:.2f} seconds\n"
                     f"Errors: {len(system_state.get('errors_encountered', []))}\n"
                     f"Warnings: {len(system_state.get('warnings_issued', []))}\n\n"
-                    f"Continue with reduced functionality? (Y/n)"
+                    #f"Continue with reduced functionality? (Y/n)"
                 )
                 
                 try:
                     if supports_color and banner_width > 60:
                         console.print(Panel.fit(
-                            f"[bold yellow]{warning_message}[/bold yellow]",
+                            #f"[bold yellow]{warning_message}[/bold yellow]",
+                            f"{warning_message}",
                             border_style="yellow",
-                            title="[WARN] Initialization Completed with Issues",
+                            title="WARNING",
+                            subtitle="Issues Detected",
+                            style="bold yellow",
                             padding=(1, 3),
                             width=min(banner_width, console_width - 4)
                         ))
                     else:
-                        console.print(f"\nWARNING:\n{warning_message}")
+                        #console.print(f"\nWARNING:\n{warning_message}")
+                        print(Fore.YELLOW + Style.BRIGHT + f"\nWARNING:\n{warning_message}")
                 except Exception:
-                    console.print(f"\nWARNING:\n{warning_message}")
+                    #console.print(f"\nWARNING:\n{warning_message}")
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nWARNING:\n{warning_message}")
                 
                 # User choice with timeout
                 user_choice = None
@@ -17881,7 +18011,9 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 
                 for attempt in range(max_attempts):
                     try:
-                        response = input("\nYour choice: ").strip().lower()
+                        #response = input("\nYour choice: ").strip().lower()
+                        #response = input(Fore.YELLOW + Style.BRIGHT + "\nYour choice: ").strip().lower()
+                        response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue with reduced functionality? (Y/n/q): ").strip().lower()
                         
                         if response in ['y', 'yes', '']:
                             user_choice = True
@@ -17891,7 +18023,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                             break
                         else:
                             if attempt < max_attempts - 1:
-                                console.print("Please enter 'y' for yes or 'n' for no.")
+                                #console.print("Please enter 'y' for yes or 'n' for no.")
+                                print(Fore.YELLOW + Style.BRIGHT + "Please enter 'y' for yes or 'n' for no or 'q' for quit.")
                             
                     except (EOFError, KeyboardInterrupt):
                         user_choice = False
@@ -17900,12 +18033,14 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         if logger:
                             logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
                         if attempt < max_attempts - 1:
-                            console.print("Input error, please try again.")
+                            #console.print("Input error, please try again.")
+                            print(Fore.RED + Style.BRIGHT + "Input error, please try again.")
                 
                 # Default to continue if no valid choice
                 if user_choice is None:
                     user_choice = True
-                    console.print("Using default choice: continue")
+                    #console.print("Using default choice: continue")
+                    print(Fore.CYAN + Style.BRIGHT + "Using default choice: continue")
                 
                 if not user_choice:
                     try:
@@ -17917,20 +18052,27 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         
                         if supports_color and banner_width > 60:
                             console.print(Panel.fit(
-                                f"[bold red]{cancel_message}[/bold red]",
+                                #f"[bold red]{cancel_message}[/bold red]",
+                                f"{cancel_message}",
                                 border_style="red",
-                                title="Cancelled",
+                                title="CANCELLED",
+                                style="bold red",
                                 padding=(1, 3),
                                 width=min(banner_width, console_width - 4)
                             ))
                         else:
-                            console.print(f"\nCANCELLED:\n{cancel_message}")
+                            #console.print(f"\nCANCELLED:\n{cancel_message}")
+                            print(Fore.RED + Style.BRIGHT + f"\nCANCELLED:\n{cancel_message}")
                     except Exception:
-                        console.print(f"\nCANCELLED:\n{cancel_message}")
+                        #console.print(f"\nCANCELLED:\n{cancel_message}")
+                        print(Fore.RED + Style.BRIGHT + f"\nCANCELLED:\n{cancel_message}")
                     
                     if logger:
                         logger.warning("User chose to exit after seeing initialization warnings")
-                    console.print("Exiting system initialization...")
+                    
+                    #console.print("Exiting system initialization...")
+                    print(Fore.RED + Style.BRIGHT + "Exiting system initialization...")
+                    
                     time.sleep(2)
                     sys.exit(0)
                 
@@ -17944,16 +18086,20 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     
                     if supports_color and banner_width > 60:
                         console.print(Panel.fit(
-                            f"[bold green]{continue_message}[/bold green]",
+                            #f"[bold green]{continue_message}[/bold green]",
+                            f"{continue_message}",
                             border_style="green",
-                            title="Continuing",
+                            title="CONTINUING",
+                            style="bold green",
                             padding=(1, 2),
                             width=min(banner_width, console_width - 4)
                         ))
                     else:
-                        console.print(f"\nCONTINUING:\n{continue_message}")
+                        #console.print(f"\nCONTINUING:\n{continue_message}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nCONTINUING:\n{continue_message}")
                 except Exception:
-                    console.print(f"\nCONTINUING:\n{continue_message}")
+                    #console.print(f"\nCONTINUING:\n{continue_message}")
+                    print(Fore.GREEN + Style.BRIGHT + f"\nCONTINUING:\n{continue_message}")
                 
                 if logger:
                     logger.info(f"User chose to continue despite {overall_health:.1f}% health score")
@@ -17969,22 +18115,27 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     f"Total errors: {len(system_state.get('errors_encountered', []))}\n"
                     f"Warnings: {len(system_state.get('warnings_issued', []))}\n\n"
                     f"It is strongly recommended to resolve these issues before continuing.\n\n"
-                    f"Continue anyway? (y/N)"
+                    #f"Continue anyway? (y/N)"
                 )
                 
                 try:
                     if supports_color and banner_width > 60:
                         console.print(Panel.fit(
-                            f"[bold red]{critical_message}[/bold red]",
+                            #f"[bold red]{critical_message}[/bold red]",
+                            f"{critical_message}",
                             border_style="red",
-                            title="[WARNING] Critical Issues Detected",
+                            title="WARNING",
+                            subtitle="Critical Issues Detected",
+                            style="bold red",
                             padding=(1, 3),
                             width=min(banner_width, console_width - 4)
                         ))
                     else:
-                        console.print(f"\nCRITICAL ISSUES:\n{critical_message}")
+                        #console.print(f"\nCRITICAL ISSUES:\n{critical_message}")
+                        print(Fore.RED + Style.BRIGHT + f"\nCRITICAL ISSUES:\n{critical_message}")
                 except Exception:
-                    console.print(f"\nCRITICAL ISSUES:\n{critical_message}")
+                    #console.print(f"\nCRITICAL ISSUES:\n{critical_message}")
+                    print(Fore.RED + Style.BRIGHT + f"\nCRITICAL ISSUES:\n{critical_message}")
                 
                 # User choice with default to No
                 user_choice = None
@@ -17992,7 +18143,9 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 
                 for attempt in range(max_attempts):
                     try:
-                        response = input("\nYour choice: ").strip().lower()
+                        #response = input("\nYour choice: ").strip().lower()
+                        #response = input(Fore.YELLOW + Style.BRIGHT + "\nYour choice: ").strip().lower()
+                        response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N/q): ").strip().lower()
                         
                         if response in ['y', 'yes']:
                             user_choice = True
@@ -18002,7 +18155,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                             break
                         else:
                             if attempt < max_attempts - 1:
-                                console.print("Please enter 'y' for yes or 'n' for no. Default is 'n'.")
+                                #console.print("Please enter 'y' for yes or 'n' for no. Default is 'n'.")
+                                print(Fore.YELLOW + Style.BRIGHT + "Please enter 'y' for yes or 'n' for no or 'q' for quit. Default is 'n'.")
                             
                     except (EOFError, KeyboardInterrupt):
                         user_choice = False
@@ -18011,12 +18165,14 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         if logger:
                             logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
                         if attempt < max_attempts - 1:
-                            console.print("Input error, please try again.")
+                            #console.print("Input error, please try again.")
+                            print(Fore.RED + Style.BRIGHT + "Input error, please try again.")
                 
                 # Default to quit if no valid choice
                 if user_choice is None:
                     user_choice = False
-                    console.print("Using default choice: quit")
+                    #console.print("Using default choice: quit")
+                    print(Fore.RED + Style.BRIGHT + "Using default choice: quit")
                 
                 if not user_choice:
                     try:
@@ -18029,16 +18185,20 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         
                         if supports_color and banner_width > 60:
                             console.print(Panel.fit(
-                                f"[bold red]{quit_message}[/bold red]",
+                                #f"[bold red]{quit_message}[/bold red]",
+                                f"{quit_message}",
                                 border_style="red",
-                                title="Terminated",
+                                title="TERMINATED",
+                                style="bold red",
                                 padding=(1, 3),
                                 width=min(banner_width, console_width - 4)
                             ))
                         else:
-                            console.print(f"\nTERMINATED:\n{quit_message}")
+                            #console.print(f"\nTERMINATED:\n{quit_message}")
+                            print(Fore.RED + Style.BRIGHT + f"\nTERMINATED:\n{quit_message}")
                     except Exception:
-                        console.print(f"\nTERMINATED:\n{quit_message}")
+                        #console.print(f"\nTERMINATED:\n{quit_message}")
+                        print(Fore.RED + Style.BRIGHT + f"\nTERMINATED:\n{quit_message}")
                     
                     if logger:
                         logger.critical("User chose to exit due to critical initialization issues")
@@ -18046,7 +18206,9 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         for error in system_state.get('errors_encountered', []):
                             logger.error(f"  - {error}")
                     
-                    console.print("Exiting due to critical system issues...")
+                    #console.print("Exiting due to critical system issues...")
+                    print(Fore.RED + Style.BRIGHT + "Exiting due to critical system issues...")
+                    
                     time.sleep(3)
                     sys.exit(1)
                 
@@ -18061,16 +18223,21 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     
                     if supports_color and banner_width > 60:
                         console.print(Panel.fit(
-                            f"[bold yellow]{risky_continue_message}[/bold yellow]",
+                            #f"[bold yellow]{risky_continue_message}[/bold yellow]",
+                            f"{risky_continue_message}",
                             border_style="red",
-                            title="Proceeding with Risks",
+                            title="PROCEEDING",
+                            subtitle="With Caution",
+                            style="bold yellow",
                             padding=(1, 2),
                             width=min(banner_width, console_width - 4)
                         ))
                     else:
-                        console.print(f"\nPROCEEDING:\n{risky_continue_message}")
+                        #console.print(f"\nPROCEEDING:\n{risky_continue_message}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nPROCEEDING:\n{risky_continue_message}")
                 except Exception:
-                    console.print(f"\nPROCEEDING:\n{risky_continue_message}")
+                    #console.print(f"\nPROCEEDING:\n{risky_continue_message}")
+                    print(Fore.GREEN + Style.BRIGHT + f"\nPROCEEDING:\n{risky_continue_message}")
                 
                 if logger:
                     logger.warning(f"User chose to continue despite critical issues (health: {overall_health:.1f}%)")
@@ -18078,10 +18245,14 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         
         except Exception as prompt_error:
             # If prompt handling fails, continue with warning
-            console.print(f"Error in user prompt handling: {prompt_error}")
+            #console.print(f"Error in user prompt handling: {prompt_error}")
+            print(Fore.RED + Style.BRIGHT + f"Error in user prompt handling: {prompt_error}")
+            
             if logger:
                 logger.error(f"Error in initialization prompt: {prompt_error}")
-            console.print("Continuing with system initialization...")
+            
+            #console.print("Continuing with system initialization...")
+            print(Fore.GREEN + Style.BRIGHT + "Continuing with system initialization...")
         
         # Clean up input buffer
         try:
@@ -28281,55 +28452,55 @@ def display_model_initialization_summary(
         try:
             # Model type specific titles and colors
             if model_type == 'SimpleAutoencoder':
-                title_color = "bright_green"
+                title_color = "bold green"
                 border_color = "green"
                 title = "SimpleAutoencoder Initialization Complete"
             elif model_type == 'EnhancedAutoencoder':
-                title_color = "bright_cyan"
+                title_color = "bold cyan"
                 border_color = "cyan"
                 title = "EnhancedAutoencoder Initialization Complete"
             else:  # AutoencoderEnsemble
-                title_color = "bright_magenta"
+                title_color = "bold magenta"
                 border_color = "magenta"
                 title = "AutoencoderEnsemble Initialization Complete"
             
             # Create main model information table
             model_table = Table(
-                title=f"[bold {title_color}]{title}[/bold {title_color}]",
+                title=f"[{title_color}]{title}[/{title_color}]",
                 box=box.ROUNDED,
-                header_style="bold bright_white",
+                header_style="bold white",
                 border_style=border_color,
-                title_style=f"bold {title_color}",
+                title_style=f"{title_color}",
                 title_justify="left",
                 show_lines=True,
                 expand=False
             )
             
             model_table.add_column("Attribute", style="bold cyan", width=20)
-            model_table.add_column("Value", style="bright_white", width=35)
-            model_table.add_column("Details", style="dim white", width=25)
+            model_table.add_column("Value", style="bold white", width=35)
+            model_table.add_column("Details", style="bold white", width=25)
             
             # Format memory usage
             if memory_mb > 1000:
-                memory_text = f"{memory_mb/1024:.2f} GB"
-                memory_style = "bold red" if memory_mb > 5000 else "yellow"
+                memory_text = f"{memory_mb/1024:.3f} GB"
+                memory_style = "bold red" if memory_mb > 5000 else "bold yellow"
             else:
                 memory_text = f"{memory_mb:.3f} MB"
-                memory_style = "green" if memory_mb < 500 else "yellow"
+                memory_style = "bold green" if memory_mb < 500 else "bold yellow"
             
             # Format parameter count
             if total_params > 1_000_000:
                 param_display = f"{total_params/1_000_000:.1f}M"
-                param_style = "bold red" if total_params > 100_000_000 else "yellow"
+                param_style = "bold red" if total_params > 100_000_000 else "bold yellow"
             elif total_params > 1_000:
                 param_display = f"{total_params/1_000:.1f}K"
-                param_style = "green"
+                param_style = "bold green"
             else:
                 param_display = f"{total_params:,}"
-                param_style = "bright_green"
+                param_style = "bold green"
             
             # Device status
-            device_style = "bright_green" if "cuda" in str(device).lower() else "yellow"
+            device_style = "bold green" if "cuda" in str(device).lower() else "bold yellow"
             device_text = str(device).upper()
             if torch.cuda.is_available() and "cpu" in device_text.lower():
                 device_detail = "GPU available but using CPU"
@@ -28339,7 +28510,7 @@ def display_model_initialization_summary(
                 device_detail = "CPU only"
             
             # Mixed precision status
-            mp_style = "bright_green" if mixed_precision else "dim white"
+            mp_style = "bold green" if mixed_precision else "bold yellow"
             mp_text = "Enabled" if mixed_precision else "Disabled"
             mp_detail = "FP16 acceleration" if mixed_precision else "FP32 precision"
             
@@ -28351,7 +28522,7 @@ def display_model_initialization_summary(
             # Add basic rows to table
             model_table.add_row(
                 "Model Type", 
-                Text(model_type, style="bold bright_white"), 
+                Text(model_type, style="bold white"), 
                 "Architecture class"
             )
             
@@ -28363,7 +28534,7 @@ def display_model_initialization_summary(
                 
                 model_table.add_row(
                     "Ensemble Size", 
-                    Text(f"{num_models} models", style="bold bright_white"), 
+                    Text(f"{num_models} models", style="bold white"), 
                     f"Diversity: {diversity}"
                 )
                 
@@ -28374,13 +28545,13 @@ def display_model_initialization_summary(
                 
                 model_table.add_row(
                     "Model Distribution", 
-                    Text(dist_text, style="bright_white"), 
+                    Text(dist_text, style="bold white"), 
                     "Mixed architectures"
                 )
             
             model_table.add_row(
                 "Architecture", 
-                Text(arch_text, style="bright_white"), 
+                Text(arch_text, style="bold white"), 
                 "Layer dimensions"
             )
             
@@ -28424,7 +28595,7 @@ def display_model_initialization_summary(
                 
                 model_table.add_row(
                     "Enhanced Features", 
-                    Text(features_text, style="bright_cyan"), 
+                    Text(features_text, style="bold cyan"), 
                     features_detail
                 )
             
@@ -28434,11 +28605,11 @@ def display_model_initialization_summary(
                 lr = training_config.get('learning_rate', 'Unknown')
                 training_text = optimizer
                 training_detail = f"LR: {lr}"
-                training_style = "bright_white"
+                training_style = "bold white"
             else:
                 training_text = "Not configured"
                 training_detail = "Training components not set up"
-                training_style = "dim white"
+                training_style = "bold white"
             
             model_table.add_row(
                 "Training Setup", 
@@ -28448,7 +28619,7 @@ def display_model_initialization_summary(
             
             model_table.add_row(
                 "Preset Used", 
-                Text(detected_preset_name, style="bright_yellow" if detected_preset_name else "dim white"),
+                Text(detected_preset_name, style="bold yellow" if detected_preset_name else "bold white"),
                 "Configuration source"
             )
             
@@ -28462,59 +28633,61 @@ def display_model_initialization_summary(
                 
                 # Performance status
                 if total_params > 100_000_000:
-                    status_items.append("[bold red][WARNING][/bold red] Very large model - may require significant memory and training time")
+                    status_items.append("[bold red]-WARNING-[/bold red] Very large model - may require significant memory and training time")
                 elif total_params > 10_000_000:
-                    status_items.append("[yellow][NOTICE][/yellow] Large model - monitor memory usage during training")
+                    status_items.append("[bold yellow]-NOTICE-[/bold yellow] Large model - monitor memory usage during training")
                 else:
-                    status_items.append("[green][OK][/green] Model size is reasonable for most hardware configurations")
+                    status_items.append("[bold green]-OK-[/bold green] Model size is reasonable for most hardware configurations")
                 
                 # Device optimization
                 if torch.cuda.is_available() and "cpu" in str(device).lower():
-                    status_items.append("[yellow][OPTIMIZE][/yellow] GPU available but using CPU - consider GPU acceleration for better performance")
+                    status_items.append("[bold yellow]-OPTIMIZE-[/bold yellow] GPU available but using CPU - consider GPU acceleration for better performance")
                 elif "cuda" in str(device).lower():
-                    status_items.append("[green][OPTIMIZED][/green] Using GPU acceleration for optimal performance")
+                    status_items.append("[bold green]-OPTIMIZED-[/bold green] Using GPU acceleration for optimal performance")
                 
                 # Mixed precision
                 if mixed_precision:
-                    status_items.append("[green][OPTIMIZED][/green] Mixed precision enabled - up to 50% faster training on compatible hardware")
+                    status_items.append("[bold green]-OPTIMIZED-[/bold green] Mixed precision enabled - up to 50% faster training on compatible hardware")
                 elif torch.cuda.is_available():
-                    status_items.append("[yellow][OPTIMIZE][/yellow] Mixed precision available but disabled - enable for faster training")
+                    status_items.append("[bold yellow]-OPTIMIZE-[/bold yellow] Mixed precision available but disabled - enable for faster training")
                 
                 # Model-specific recommendations
                 if model_type == 'AutoencoderEnsemble':
                     num_models = ensemble_info.get('num_models', 0) if ensemble_info else 0
                     if num_models > 5:
-                        status_items.append("[yellow][NOTICE][/yellow] Large ensemble - excellent robustness but higher computational cost")
+                        status_items.append("[bold yellow]-NOTICE-[/bold yellow] Large ensemble - excellent robustness but higher computational cost")
                     elif num_models >= 3:
-                        status_items.append("[green][BALANCED][/green] Good ensemble size balancing robustness vs performance")
+                        status_items.append("[bold green]-BALANCED-[/bold green] Good ensemble size balancing robustness vs performance")
                     else:
-                        status_items.append("[cyan][INFO][/cyan] Small ensemble - faster inference but potentially less robust")
+                        status_items.append("[bold cyan]-INFO-[/bold cyan] Small ensemble - faster inference but potentially less robust")
                 elif model_type == 'EnhancedAutoencoder':
                     if enhanced_features and enhanced_features.get('use_attention', False):
-                        status_items.append("[green][ADVANCED][/green] Attention mechanisms enabled for enhanced feature learning")
+                        status_items.append("[bold green][ADVANCED][/bold green] Attention mechanisms enabled for enhanced feature learning")
                     if enhanced_features and enhanced_features.get('residual_blocks', False):
-                        status_items.append("[green][ADVANCED][/green] Residual connections enabled for better gradient flow")
+                        status_items.append("[bold green]-ADVANCED-[/bold green] Residual connections enabled for better gradient flow")
                 else:  # SimpleAutoencoder
-                    status_items.append("[green][SIMPLE][/green] Lightweight architecture - ideal for prototyping and resource-constrained environments")
+                    status_items.append("[bold green]-SIMPLE-[/bold green] Lightweight architecture - ideal for prototyping and resource-constrained environments")
                 
                 # Training configuration status
                 if training_config:
-                    status_items.append("[green][CONFIGURED][/green] Training components initialized and ready")
+                    status_items.append("[bold green]-CONFIGURED-[/bold green] Training components initialized and ready")
                 else:
-                    status_items.append("[cyan][INFO][/cyan] Training components not configured - call setup methods before training")
+                    status_items.append("[bold cyan]-INFO-[/bold cyan] Training components not configured - call setup methods before training")
                 
                 # Architecture depth warnings
                 if len(hidden_dims) > 8:
-                    status_items.append("[yellow][WARNING][/yellow] Very deep architecture may be difficult to train - consider gradient clipping")
+                    status_items.append("[bold yellow]-WARNING-[/bold yellow] Very deep architecture may be difficult to train - consider gradient clipping")
                 elif len(hidden_dims) > 5:
-                    status_items.append("[cyan][INFO][/cyan] Deep architecture detected - monitor for vanishing gradient issues")
+                    status_items.append("[bold cyan]-INFO-[/bold cyan] Deep architecture detected - monitor for vanishing gradient issues")
                 
                 if status_items:
                     status_text = "\n".join(status_items)
                     status_panel = Panel.fit(
                         status_text,
-                        title="[bold bright_yellow]Initialization Status & Recommendations[/bold bright_yellow]",
-                        border_style="bright_yellow",
+                        #title="[bold yellow]Initialization Status & Recommendations[/bold yellow]",
+                        title="Initialization Status & Recommendations",
+                        border_style="bold yellow",
+                        style="bold yellow",
                         title_align="left",
                         padding=(1, 2)
                     )
@@ -28526,38 +28699,40 @@ def display_model_initialization_summary(
                 if model_type == 'AutoencoderEnsemble':
                     quick_ref = [
                         "[bold cyan]Ensemble Quick Reference:[/bold cyan]",
-                        f"Model summary: [green]ensemble.get_model_summary()[/green]",
-                        f"Configuration: [green]ensemble.get_config()[/green]",
-                        f"Forward pass: [green]output = ensemble(input_tensor)[/green]",
-                        f"Individual models: [green]ensemble.models[i](input_tensor)[/green]",
-                        f"Save ensemble: [green]ensemble.save_model('path.pth')[/green]"
+                        f"Model summary: [bold green]ensemble.get_model_summary()[/bold green]",
+                        f"Configuration: [bold green]ensemble.get_config()[/bold green]",
+                        f"Forward pass: [bold green]output = ensemble(input_tensor)[/bold green]",
+                        f"Individual models: [bold green]ensemble.models[i](input_tensor)[/bold green]",
+                        f"Save ensemble: [bold green]ensemble.save_model('path.pth')[/bold green]"
                     ]
                 elif model_type == 'EnhancedAutoencoder':
                     quick_ref = [
                         "[bold cyan]Enhanced Model Quick Reference:[/bold cyan]",
-                        f"Model summary: [green]model.get_model_summary()[/green]",
-                        f"Configuration: [green]model.get_config()[/green]",
-                        f"Forward pass: [green]output = model(input_tensor)[/green]",
-                        f"Encode only: [green]encoded = model.encode(input_tensor)[/green]",
-                        f"Decode only: [green]decoded = model.decode(encoded)[/green]",
-                        f"Save model: [green]model.save_model('path.pth')[/green]"
+                        f"Model summary: [bold green]model.get_model_summary()[/bold green]",
+                        f"Configuration: [bold green]model.get_config()[/bold green]",
+                        f"Forward pass: [bold green]output = model(input_tensor)[/bold green]",
+                        f"Encode only: [bold green]encoded = model.encode(input_tensor)[/bold green]",
+                        f"Decode only: [bold green]decoded = model.decode(encoded)[/bold green]",
+                        f"Save model: [bold green]model.save_model('path.pth')[/bold green]"
                     ]
                 else:  # SimpleAutoencoder
                     quick_ref = [
                         "[bold cyan]Simple Model Quick Reference:[/bold cyan]",
-                        f"Model summary: [green]model.get_model_summary()[/green]",
-                        f"Configuration: [green]model.get_config()[/green]",
-                        f"Forward pass: [green]output = model(input_tensor)[/green]",
-                        f"Encode: [green]encoded = model.encode(input_tensor)[/green]",
-                        f"Decode: [green]decoded = model.decode(encoded)[/green]",
-                        f"Save model: [green]model.save_model('path.pth')[/green]"
+                        f"Model summary: [bold green]model.get_model_summary()[/bold green]",
+                        f"Configuration: [bold green]model.get_config()[/bold green]",
+                        f"Forward pass: [bold green]output = model(input_tensor)[/bold green]",
+                        f"Encode: [bold green]encoded = model.encode(input_tensor)[/bold green]",
+                        f"Decode: [bold green]decoded = model.decode(encoded)[/bold green]",
+                        f"Save model: [bold green]model.save_model('path.pth')[/bold green]"
                     ]
                 
                 quick_ref_text = "\n".join(quick_ref)
                 quick_ref_panel = Panel.fit(
                     quick_ref_text,
-                    title="[bold bright_cyan]Usage Guide[/bold bright_cyan]",
-                    border_style="dim cyan",
+                    #title="[bold cyan]Usage Guide[/bold cyan]",
+                    title="Usage Guide",
+                    border_style="bold cyan",
+                    style="bold cyan",
                     title_align="left",
                     padding=(0, 2)
                 )
@@ -28569,13 +28744,13 @@ def display_model_initialization_summary(
                 optimization_tips = []
                 
                 if not mixed_precision and torch.cuda.is_available():
-                    optimization_tips.append("Enable mixed precision: [green]config['training']['mixed_precision'] = True[/green]")
+                    optimization_tips.append("Enable mixed precision: [bold green]config['training']['mixed_precision'] = True[/bold green]")
                 
                 if "cpu" in str(device).lower() and torch.cuda.is_available():
-                    optimization_tips.append("Use GPU acceleration: [green]config['hardware']['device'] = 'cuda'[/green]")
+                    optimization_tips.append("Use GPU acceleration: [bold green]config['hardware']['device'] = 'cuda'[/bold green]")
                 
                 if total_params > 1_000_000:
-                    optimization_tips.append("Consider gradient clipping: [green]config['training']['gradient_clip'] = 1.0[/green]")
+                    optimization_tips.append("Consider gradient clipping: [bold green]config['training']['gradient_clip'] = 1.0[/bold green]")
                 
                 if model_type == 'AutoencoderEnsemble' and ensemble_info:
                     num_models = ensemble_info.get('num_models', 0)
@@ -28583,17 +28758,19 @@ def display_model_initialization_summary(
                         optimization_tips.append("For faster inference, consider reducing ensemble size")
                 
                 optimization_tips.extend([
-                    "Monitor training: [green]config['monitoring']['tensorboard_logging'] = True[/green]",
-                    "Enable early stopping: [green]config['training']['early_stopping'] = True[/green]",
-                    "Use learning rate scheduling: [green]config['training']['scheduler'] = 'ReduceLROnPlateau'[/green]"
+                    "Monitor training: [bold green]config['monitoring']['tensorboard_logging'] = True[/bold green]",
+                    "Enable early stopping: [bold green]config['training']['early_stopping'] = True[/bold green]",
+                    "Use learning rate scheduling: [bold green]config['training']['scheduler'] = 'ReduceLROnPlateau'[/bold green]"
                 ])
                 
                 if optimization_tips:
                     opt_text = "\n".join(optimization_tips)
                     opt_panel = Panel.fit(
                         opt_text,
-                        title="[bold bright_green]Performance Optimization Tips[/bold bright_green]",
+                        #title="[bold green]Performance Optimization Tips[/bold green]",
+                        title="Performance Optimization Tips",
                         border_style="green",
+                        style="bold green",
                         title_align="left",
                         padding=(0, 2)
                     )
@@ -28816,7 +28993,7 @@ def _structure_kwargs_into_config_sections(kwargs: Dict[str, Any]) -> Dict[str, 
             'optimization_recommendations'
         ],
         'system': [
-            'model_dir', 'log_dir', 'config_dir', 'data_dir', 'checkpoint_dir',
+            'model_dir', 'log_dir', 'config_dir', 'data_dir', 'checkpoint_dir', 'results_dir',
             'debug', 'verbose', 'random_seed', 'reproducible', 'parallel_processing',
             'max_workers', 'export_onnx', 'non_interactive', 'cuda_optimizations',
             'onnx_export', 'distributed_training', 'python_executable',
@@ -29005,6 +29182,7 @@ def _initialize_autoencoder_config(
     config_dir: Optional[str] = None,
     data_dir: Optional[str] = None,
     checkpoint_dir: Optional[str] = None,
+    results_dir: Optional[str] = None,
     debug: Optional[bool] = None,
     verbose: Optional[bool] = None,
     random_seed: Optional[int] = None,
@@ -29682,6 +29860,7 @@ class SimpleAutoencoder(nn.Module):
         config_dir: Optional[str] = None,
         data_dir: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        results_dir: Optional[str] = None,
         debug: Optional[bool] = None,
         verbose: Optional[bool] = None,
         random_seed: Optional[int] = None,
@@ -29890,6 +30069,7 @@ class SimpleAutoencoder(nn.Module):
             config_dir=config_dir,
             data_dir=data_dir,
             checkpoint_dir=checkpoint_dir,
+            results_dir=results_dir,
             debug=debug,
             verbose=verbose,
             random_seed=random_seed,
@@ -30514,6 +30694,7 @@ class EnhancedAutoencoder(nn.Module):
         config_dir: Optional[str] = None,
         data_dir: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        results_dir: Optional[str] = None,
         debug: Optional[bool] = None,
         verbose: Optional[bool] = None,
         random_seed: Optional[int] = None,
@@ -30722,6 +30903,7 @@ class EnhancedAutoencoder(nn.Module):
             config_dir=config_dir,
             data_dir=data_dir,
             checkpoint_dir=checkpoint_dir,
+            results_dir=results_dir,
             debug=debug,
             verbose=verbose,
             random_seed=random_seed,
@@ -31593,6 +31775,7 @@ class AutoencoderEnsemble(nn.Module):
         config_dir: Optional[str] = None,
         data_dir: Optional[str] = None,
         checkpoint_dir: Optional[str] = None,
+        results_dir: Optional[str] = None,
         debug: Optional[bool] = None,
         verbose: Optional[bool] = None,
         random_seed: Optional[int] = None,
@@ -31801,6 +31984,7 @@ class AutoencoderEnsemble(nn.Module):
             config_dir=config_dir,
             data_dir=data_dir,
             checkpoint_dir=checkpoint_dir,
+            results_dir=results_dir,
             debug=debug,
             verbose=verbose,
             random_seed=random_seed,
@@ -34715,7 +34899,7 @@ def generate_synthetic_data(
         # Calculate total stages for progress tracking
         total_stages = 10  # Configuration, Setup, Normal Data, Attack Data, Correlation, Noise, Scaling, Splitting, Validation, Finalization
         
-        with alive_bar(total_stages, title='Synthetic Data Generation', unit='stages') as main_bar:
+        with alive_bar(total_stages, title='Synthetic Data Generation\t', unit='stages') as main_bar:
             
             # STAGE 1: Configuration and Validation
             progress_data['current_stage'] = "Configuration"
@@ -36296,7 +36480,7 @@ def create_dataloaders(
         # Calculate total stages for progress tracking
         total_stages = 12  # Configuration, Data Validation, System Optimization, Transforms, Datasets, Samplers, Collate, Training DL, Validation DL, Test DL, CV DL, Finalization
         
-        with alive_bar(total_stages, title='DataLoader Creation\t', unit='stages') as main_bar:
+        with alive_bar(total_stages, title='DataLoader Creation\t\t', unit='stages') as main_bar:
             
             # STAGE 1: Configuration and Setup
             progress_data['current_stage'] = "Configuration"
@@ -41007,6 +41191,7 @@ def train_model(
     config_dir: Optional[Union[str, Path]] = None,
     data_dir: Optional[Union[str, Path]] = None,
     checkpoint_dir: Optional[Union[str, Path]] = None,
+    results_dir: Optional[str] = None,
     random_seed: Optional[int] = None,
     reproducible: Optional[bool] = None,
     parallel_processing: Optional[bool] = None,
@@ -41268,9 +41453,17 @@ def train_model(
     enable_security_metrics = security_config.setdefault('enable_security_metrics', SECURITY_METRICS)
     
     # System defaults
+    config_dir = Path(system_config.setdefault('config_dir', CONFIG_DIR))
+    if config_dir is None:
+        config_dir = Path(__file__).resolve().parent / "config"
+    #config_dir = Path(config_dir)
+    
     model_dir = Path(system_config.setdefault('model_dir', DEFAULT_MODEL_DIR))
     log_dir = Path(system_config.setdefault('log_dir', LOG_DIR))
-    tensorboard_dir = Path(system_config.setdefault('tensorboard_dir', TB_DIR))
+    tensorboard_dir = Path(monitoring_config.setdefault('tensorboard_dir', TB_DIR)) or Path(system_config.setdefault('tensorboard_dir', TB_DIR))
+    checkpoint_dir = Path(system_config.setdefault('checkpoint_dir', CHECKPOINTS_DIR))
+    data_dir = Path(system_config.setdefault('data_dir', DATA_DIR))
+    results_dir = Path(system_config.setdefault('results_dir', RESULTS_DIR))
     device = system_config.setdefault('device', 'auto')
     random_seed = system_config.setdefault('random_seed', RANDOM_STATE)
     reproducible = system_config.setdefault('reproducible', True)
@@ -41358,6 +41551,9 @@ def train_model(
         model_dir.mkdir(parents=True, exist_ok=True)
         log_dir.mkdir(parents=True, exist_ok=True)
         tensorboard_dir.mkdir(parents=True, exist_ok=True)
+        config_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        results_dir.mkdir(parents=True, exist_ok=True)
         
         # Setup experiment tracking
         timestamp = start_time.strftime("%Y%m%d_%H%M%S")
@@ -41867,7 +42063,8 @@ def train_model(
                 
                 # Periodic checkpointing
                 if save_checkpoints and epoch % checkpoint_frequency == 0 and epoch > 0:
-                    checkpoint_path = model_dir / f"checkpoint_epoch_{epoch+1}.pth"
+                    #checkpoint_path = model_dir / f"checkpoint_epoch_{epoch+1}.pth"
+                    checkpoint_path = checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pth"
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': model.state_dict(),
@@ -42136,8 +42333,22 @@ def train_model(
                 logger.error(f"Failed to save training history: {e}")
         
         # Save configuration used
+        # try:
+        #     config_path = config_dir / "training_config.json"
+        #     with open(config_path, "w") as f:
+        #         json.dump(config, f, indent=2, default=str)
+        #     saved_artifacts['config_path'] = str(config_path)
+        #     logger.info(f"Training configuration saved: {config_path}")
+        # except Exception as e:
+        #     logger.error(f"Failed to save config: {e}")
+        
+        # Save configuration used
         try:
-            config_path = config_dir / "training_config.json"
+            save_dir = config_dir if config_dir is not None else model_dir
+            if isinstance(save_dir, str):
+                save_dir = Path(save_dir)
+            
+            config_path = save_dir / "training_config.json"
             with open(config_path, "w") as f:
                 json.dump(config, f, indent=2, default=str)
             saved_artifacts['config_path'] = str(config_path)
@@ -42191,7 +42402,11 @@ def train_model(
         
         # Save final results summary
         try:
-            results_path = model_dir / "training_results.json"
+            #results_path = model_dir / "training_results.json"
+            #results_dir = Path(__file__).resolve().parent / "results"
+            #results_path = results_dir / "training_results.json"
+            #results_path.mkdir(parents=True, exist_ok=True)
+            results_path = results_dir / "training_results.json"
             with open(results_path, "w") as f:
                 json.dump(final_results, f, indent=2, default=str)
             saved_artifacts['results_path'] = str(results_path)
@@ -42218,7 +42433,7 @@ def train_model(
         logger.info(f"Anomaly Threshold: {threshold:.6f}")
         logger.info(f"Anomaly Detection Rate: {training_stats.get('final_evaluation', {}).get('anomaly_rate', 0)*100:.1f}%")
         logger.info(f"Model Parameters: {total_params:,}")
-        logger.info(f"Model Size: {model_size_mb:.2f} MB")
+        logger.info(f"Model Size: {model_size_mb:.3f} MB")
         logger.info(f"Device: {device}")
         logger.info(f"Mixed Precision: {mixed_precision}")
         logger.info(f"Factory Pattern: Enabled")
@@ -42524,28 +42739,32 @@ def train_model_interactive(
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
-        print(Fore.CYAN + Style.BRIGHT + "INTERACTIVE AUTOENCODER TRAINING SETUP")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "INTERACTIVE AUTOENCODER TRAINING SETUP")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"\nActive Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
         
         if config:
             base_config = config.copy()
-            print(Fore.GREEN + Style.BRIGHT + "\nUsing provided configuration as base")
+            print(Fore.GREEN + Style.BRIGHT + "\nUsing provided configuration as base:")
+            print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
         elif use_current_config:
             try:
                 base_config = get_current_config() if 'get_current_config' in globals() else {}
-                print(Fore.GREEN + Style.BRIGHT + "\nUsing current system configuration")
+                print(Fore.GREEN + Style.BRIGHT + "\nUsing current system configuration:")
+                print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
             except Exception as e:
                 logger.warning(f"Failed to load current config: {e}")
                 console.print(
                     Panel.fit(
-                        f"[bold yellow]Warning: Failed to load current config, using defaults: {str(e)}[/bold yellow]",
-                        style="bold yellow",
-                        border_style="yellow",
+                        #f"[bold yellow]Warning: Failed to load current config, using defaults: {str(e)}[/bold yellow]",
+                        f"Failed to load current config, using defaults: {str(e)}",
+                        title="WARNING",
+                        style="bold red",
+                        border_style="red",
                         padding=(1, 1),
                         box=box.ROUNDED
                     )
@@ -42553,7 +42772,8 @@ def train_model_interactive(
                 base_config = {}
         else:
             base_config = {}
-            print(Fore.YELLOW + Style.BRIGHT + "\nUsing default configuration")
+            print(Fore.YELLOW + Style.BRIGHT + "\nUsing default configuration:")
+            print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
         
         if preset:
             try:
@@ -42564,16 +42784,20 @@ def train_model_interactive(
                             base_config[section] = values
                         elif isinstance(values, dict):
                             base_config[section].update(values)
-                    print(Fore.GREEN + Style.BRIGHT + f"Applied preset configuration: {preset}")
+                    print(Fore.GREEN + Style.BRIGHT + f"\nApplied preset configuration: {preset}")
+                    print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
                 else:
-                    print(Fore.RED + Style.BRIGHT + f"Preset '{preset}' not found, using base configuration")
+                    print(Fore.RED + Style.BRIGHT + f"\nPreset '{preset}' not found, using base configuration:")
+                    print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
             except Exception as e:
                 logger.warning(f"Failed to apply preset '{preset}': {e}")
                 console.print(
                     Panel.fit(
-                        f"[bold yellow]Warning: Failed to apply preset '{preset}': {str(e)}[/bold yellow]",
-                        style="bold yellow",
-                        border_style="yellow",
+                        #f"[bold yellow]Warning: Failed to apply preset '{preset}': {str(e)}[/bold yellow]",
+                        f"Failed to apply preset '{preset}': {str(e)}",
+                        title="WARNING",
+                        style="bold red",
+                        border_style="red",
                         padding=(1, 1),
                         box=box.ROUNDED
                     )
@@ -42600,29 +42824,29 @@ def train_model_interactive(
             hidden_dims = model_config.get('hidden_dims', HIDDEN_LAYER_SIZES)
             
             # Configuration display
-            print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-            print(Fore.GREEN + Style.BRIGHT + "CONFIGURATION SUMMARY")
-            print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+            # print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+            # print(Fore.GREEN + Style.BRIGHT + "CONFIGURATION SUMMARY")
+            # print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
             
             # Core configuration
             print(Fore.YELLOW + Style.BRIGHT + "\nCore Configuration:")
-            print(Fore.CYAN + Style.BRIGHT + f"  1. Data Source: " + Fore.GREEN + f"{'Real Data' if use_real_data_final else 'Synthetic Data'}")
-            print(Fore.CYAN + Style.BRIGHT + f"  2. Model Type: " + Fore.GREEN + f"{model_type}")
-            print(Fore.CYAN + Style.BRIGHT + f"  3. Training: " + Fore.GREEN + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
-            print(Fore.CYAN + Style.BRIGHT + f"  4. Batch Size: " + Fore.GREEN + f"{batch_size}")
-            print(Fore.CYAN + Style.BRIGHT + f"  5. Learning Rate: " + Fore.GREEN + f"{learning_rate}")
-            print(Fore.CYAN + Style.BRIGHT + f"  6. Mixed Precision: " + Fore.GREEN + f"{'Enabled' if mixed_precision else 'Disabled'}")
-            print(Fore.CYAN + Style.BRIGHT + f"  7. Device: " + Fore.GREEN + f"{'GPU' if torch.cuda.is_available() else 'CPU'} ({device_config})")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.GREEN + f"{'Real Data' if use_real_data_final else 'Synthetic Data'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + f"{model_type}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + f"{batch_size}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + f"{learning_rate}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + f"{'Enabled' if mixed_precision else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Device: " + Fore.GREEN + f"{'GPU' if torch.cuda.is_available() else 'CPU'} ({device_config})")
             
             # Architecture details
             print(Fore.YELLOW + Style.BRIGHT + "\nArchitecture Details:")
-            print(Fore.CYAN + Style.BRIGHT + f"  8. Encoding Dim: " + Fore.GREEN + f"{encoding_dim}")
-            print(Fore.CYAN + Style.BRIGHT + f"  9. Hidden Dims: " + Fore.GREEN + f"{hidden_dims}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Encoding Dim: " + Fore.GREEN + f"{encoding_dim}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Hidden Dims: " + Fore.GREEN + f"{hidden_dims}")
             if model_type == 'AutoencoderEnsemble':
                 num_models = model_config.get('num_models', 3)
                 diversity_factor = model_config.get('diversity_factor', 0.3)
-                print(Fore.CYAN + Style.BRIGHT + f"  10. Ensemble Size: " + Fore.GREEN + f"{num_models}")
-                print(Fore.CYAN + Style.BRIGHT + f"  11. Diversity Factor: " + Fore.GREEN + f"{diversity_factor}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Ensemble Size: " + Fore.GREEN + f"{num_models}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Diversity Factor: " + Fore.GREEN + f"{diversity_factor}")
             elif model_type == 'EnhancedAutoencoder':
                 features = []
                 if model_config.get('use_attention', True):
@@ -42632,35 +42856,35 @@ def train_model_interactive(
                 if model_config.get('skip_connection', True):
                     features.append("Skip Connections")
                 if features:
-                    print(Fore.CYAN + Style.BRIGHT + f"  12. Enhanced Features: " + Fore.GREEN + f"{', '.join(features)}")
-                print(Fore.CYAN + Style.BRIGHT + f"  13. Legacy Mode: " + Fore.GREEN + f"{model_config.get('legacy_mode', False)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Enhanced Features: " + Fore.GREEN + f"{', '.join(features)}")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Legacy Mode: " + Fore.GREEN + f"{model_config.get('legacy_mode', False)}")
             
             # Data configuration
             if use_real_data_final:
                 data_path = data_config.get('data_path', 'Default')
                 artifacts_path = data_config.get('artifacts_path', 'Default')
                 print(Fore.YELLOW + Style.BRIGHT + "\nReal Data Configuration:")
-                print(Fore.CYAN + Style.BRIGHT + f"  14. Data Path: " + Fore.GREEN + f"{data_path}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data Path: " + Fore.GREEN + f"{data_path}")
                 if artifacts_path != 'Default':
-                    print(Fore.CYAN + Style.BRIGHT + f"  15. Artifacts Path: " + Fore.GREEN + f"{artifacts_path}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Artifacts Path: " + Fore.GREEN + f"{artifacts_path}")
             else:
                 normal_samples = data_config.get('normal_samples', NORMAL_SAMPLES)
                 attack_samples = data_config.get('attack_samples', ATTACK_SAMPLES)
                 features = data_config.get('features', FEATURES)
                 print(Fore.YELLOW + Style.BRIGHT + "\nSynthetic Data Configuration:")
-                print(Fore.CYAN + Style.BRIGHT + f"  16. Normal Samples: " + Fore.GREEN + f"{normal_samples:,}")
-                print(Fore.CYAN + Style.BRIGHT + f"  17. Attack Samples: " + Fore.GREEN + f"{attack_samples:,}")
-                print(Fore.CYAN + Style.BRIGHT + f"  18. Features: " + Fore.GREEN + f"{features}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.GREEN + f"{normal_samples:,}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.GREEN + f"{attack_samples:,}")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Features: " + Fore.GREEN + f"{features}")
             
             # System configuration
             model_dir = system_config.get('model_dir', DEFAULT_MODEL_DIR)
             reproducible = system_config.get('reproducible', True)
             random_seed = system_config.get('random_seed', RANDOM_STATE)
             print(Fore.YELLOW + Style.BRIGHT + "\nSystem Configuration:")
-            print(Fore.CYAN + Style.BRIGHT + f"  19. Model Directory: " + Fore.GREEN + f"{model_dir}")
-            print(Fore.CYAN + Style.BRIGHT + f"  20. Reproducible: " + Fore.GREEN + f"{reproducible}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Directory: " + Fore.GREEN + f"{model_dir}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Reproducible: " + Fore.GREEN + f"{reproducible}")
             if reproducible:
-                print(Fore.CYAN + Style.BRIGHT + f"  21. Random Seed: " + Fore.GREEN + f"{random_seed}")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Random Seed: " + Fore.GREEN + f"{random_seed}")
             
             # Monitoring configuration
             monitoring_config = base_config.get('monitoring', {})
@@ -42668,9 +42892,9 @@ def train_model_interactive(
             save_checkpoints = monitoring_config.get('save_checkpoints', True)
             verbose_mode = monitoring_config.get('verbose', True)
             print(Fore.YELLOW + Style.BRIGHT + "\nMonitoring Configuration:")
-            print(Fore.CYAN + Style.BRIGHT + f"  22. TensorBoard Logging: " + Fore.GREEN + f"{'Enabled' if tensorboard_logging else 'Disabled'}")
-            print(Fore.CYAN + Style.BRIGHT + f"  23. Save Checkpoints: " + Fore.GREEN + f"{'Enabled' if save_checkpoints else 'Disabled'}")
-            print(Fore.CYAN + Style.BRIGHT + f"  24. Verbose Output: " + Fore.GREEN + f"{'Enabled' if verbose_mode else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ TensorBoard Logging: " + Fore.GREEN + f"{'Enabled' if tensorboard_logging else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Save Checkpoints: " + Fore.GREEN + f"{'Enabled' if save_checkpoints else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Verbose Output: " + Fore.GREEN + f"{'Enabled' if verbose_mode else 'Disabled'}")
             
             # Export configuration
             export_config = base_config.get('export', {})
@@ -42679,10 +42903,10 @@ def train_model_interactive(
             save_training_history = export_config.get('save_training_history', True)
             export_onnx = export_config.get('export_onnx', False)
             print(Fore.YELLOW + Style.BRIGHT + "\nExport Configuration:")
-            print(Fore.CYAN + Style.BRIGHT + f"  25. Save Model: " + Fore.GREEN + f"{'Enabled' if save_model else 'Disabled'}")
-            print(Fore.CYAN + Style.BRIGHT + f"  26. Save Metadata: " + Fore.GREEN + f"{'Enabled' if save_metadata else 'Disabled'}")
-            print(Fore.CYAN + Style.BRIGHT + f"  27. Save Training History: " + Fore.GREEN + f"{'Enabled' if save_training_history else 'Disabled'}")
-            print(Fore.CYAN + Style.BRIGHT + f"  28. Export ONNX: " + Fore.GREEN + f"{'Enabled' if export_onnx else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Save Model: " + Fore.GREEN + f"{'Enabled' if save_model else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Save Metadata: " + Fore.GREEN + f"{'Enabled' if save_metadata else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Save Training History: " + Fore.GREEN + f"{'Enabled' if save_training_history else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Export ONNX: " + Fore.GREEN + f"{'Enabled' if export_onnx else 'Disabled'}")
             
             # Security configuration
             security_config = base_config.get('security', {})
@@ -42690,32 +42914,32 @@ def train_model_interactive(
             threshold_method = security_config.get('anomaly_threshold_strategy', 'percentile')
             adaptive_threshold = security_config.get('adaptive_threshold', True)
             print(Fore.YELLOW + Style.BRIGHT + "\nSecurity Configuration:")
-            print(Fore.CYAN + Style.BRIGHT + f"  29. Anomaly Threshold: " + Fore.GREEN + f"{percentile}th percentile")
-            print(Fore.CYAN + Style.BRIGHT + f"  30. Threshold Method: " + Fore.GREEN + f"{threshold_method}")
-            print(Fore.CYAN + Style.BRIGHT + f"  31. Adaptive Threshold: " + Fore.GREEN + f"{'Enabled' if adaptive_threshold else 'Disabled'}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Anomaly Threshold: " + Fore.GREEN + f"{percentile}th percentile")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Threshold Method: " + Fore.GREEN + f"{threshold_method}")
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Adaptive Threshold: " + Fore.GREEN + f"{'Enabled' if adaptive_threshold else 'Disabled'}")
             
             # Confirmation prompt
-            print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
-            confirm = input(Fore.YELLOW + Style.BRIGHT + "Start training with these settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
+            print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+            confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with these settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
             
             if confirm in ('', 'y', 'yes'):
                 print(Fore.GREEN + Style.BRIGHT + "\nLaunching training with configured defaults...")
                 return _launch_training_with_config(config=base_config, **kwargs)
             elif confirm in ('c', 'cancel'):
-                print(Fore.RED + Style.BRIGHT + "Training cancelled by user")
+                print(Fore.RED + Style.BRIGHT + "\nTraining cancelled by user")
                 return None
             else:
                 # Fallback options
                 console.print(
                     Panel.fit(
-                        "[bold yellow]Would you like to switch setup mode?[/bold yellow]",
+                        "Would you like to switch setup mode?",
                         style="bold yellow",
                         border_style="yellow",
                         padding=(1, 2),
                         box=box.ROUNDED
                     )
                 )
-                print(Fore.WHITE + Style.BRIGHT + "1. Switch to interactive setup")
+                print(Fore.WHITE + Style.BRIGHT + "\n1. Switch to interactive setup")
                 print(Fore.WHITE + Style.BRIGHT + "2. Try again with current settings")
                 print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
                 
@@ -42724,7 +42948,7 @@ def train_model_interactive(
                         choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): " + Style.RESET_ALL).strip()
                         if choice in ['1', '2', '0']:
                             break
-                        print(Fore.RED + Style.BRIGHT + "Invalid choice. Please select 0-2.")
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
                     except (EOFError, KeyboardInterrupt):
                         print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                         return None
@@ -42744,21 +42968,11 @@ def train_model_interactive(
                         **kwargs
                     )
                 else:
-                    print(Fore.RED + Style.BRIGHT + "Cancelled by user")
+                    print(Fore.RED + Style.BRIGHT + "\nCancelled by user")
                     return None
         
         # Interactive mode continues
-        console.print(
-            Panel.fit(
-                "[bold cyan]This interactive setup will guide you through configuration options[/bold cyan]",
-                style="bold cyan",
-                border_style="cyan",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-        
-        print(Fore.YELLOW + Style.BRIGHT + "Setup includes:")
+        print(Fore.YELLOW + Style.BRIGHT + "\nSetup includes:")
         print(Fore.GREEN + Style.BRIGHT + "  ├─ Data source selection (real/synthetic)")
         print(Fore.GREEN + Style.BRIGHT + "  ├─ Model architecture configuration") 
         print(Fore.GREEN + Style.BRIGHT + "  ├─ Training parameters setup")
@@ -42776,7 +42990,7 @@ def train_model_interactive(
                 choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-3): " + Style.RESET_ALL).strip()
                 if choice in ['1', '2', '3', '0']:
                     break
-                print(Fore.RED + Style.BRIGHT + "Invalid choice. Please select 0-3.")
+                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
                 return None
@@ -42817,7 +43031,7 @@ def train_model_interactive(
         )
         console.print(
             Panel.fit(
-                f"[bold red]{message}[/bold red]",
+                f"{message}",
                 title="TRAINING SETUP ERROR",
                 style="bold red",
                 border_style="red",
@@ -42832,75 +43046,149 @@ def _interactive_express_setup(
     use_real_data: Optional[bool],
     **kwargs
 ) -> Optional[Dict[str, Any]]:
+    """
+    Interactive express setup for quick model training configuration.
+    
+    Provides a streamlined setup process with smart defaults while maintaining
+    full compatibility with the centralized configuration system.
+    """
     try:
-        print("Setting up training with smart defaults...")
+        # Clear screen and show banner
+        print("\033c", end="")
+        banner_config = show_banner(return_config=True)
         
+        # Use the config returned from show_banner or fallback
+        if base_config is None and banner_config is not None:
+            base_config = banner_config
+        else:
+            base_config = base_config or {}
+        
+        # Extract context for display
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        
+        # Extract preset name with multiple fallbacks
+        presets_section = base_config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Extract model type
+        model_section = base_config.get("model", {})
+        if isinstance(model_section, dict):
+            model_type = model_section.get("model_type", "Unknown")
+            current_model_type = model_type
+        
+        # Clear screen and show context
+        #print("\033c", end="")
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS SETUP - QUICK CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        # Extract context from base_config for consistent display
+        #preset_name = base_config.get('presets', {}).get('current_preset', 'Custom/Default')
+        #current_model_type = base_config.get('model', {}).get('model_type', 'Unknown')
+        #current_model_type = model_type
+        
+        print(Fore.YELLOW + Style.BRIGHT + f"\nBase Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + f"Express Setup")
+        
+        #print(Fore.GREEN + Style.BRIGHT + "\nSetting up training with smart defaults...")
+        
+        # Data Source Selection
         if use_real_data is None:
-            print("\nDATA SOURCE")
-            print("1. Real network data (recommended for production)")
-            print("2. Synthetic data (good for testing)")
-            print("0. Cancel and return to previous menu")
+            print(Fore.YELLOW + Style.BRIGHT + "\nDATA SOURCE SELECTION")
+            #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
+            print(Fore.WHITE + Style.BRIGHT + "\n1. Real network data " + Fore.GREEN + Style.BRIGHT + "(recommended for production)")
+            print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(good for testing and development)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
             while True:
-                data_choice = input("Select data source (0-2): ").strip()
-                if data_choice in ['1', '2', '0']:
-                    break
-                print("Invalid choice. Please select 0-2.")
+                try:
+                    data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): " + Style.RESET_ALL).strip()
+                    if data_choice in ['1', '2', '0']:
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
+                    return None
             
             if data_choice == '0':
-                print("Data selection cancelled")
+                print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
                 return None
                 
             use_real_data = data_choice == '1'
+            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if use_real_data else 'Synthetic Data'}")
         
-        print("\nMODEL ARCHITECTURE")
-        print("1. EnhancedAutoencoder (recommended - advanced features)")
-        print("2. SimpleAutoencoder (fast and lightweight)")  
-        print("3. AutoencoderEnsemble (best accuracy, slower)")
-        print("0. Cancel and return to previous menu")
+        # Model Architecture Selection
+        print(Fore.YELLOW + Style.BRIGHT + "\nMODEL ARCHITECTURE SELECTION")
+        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "\n1. EnhancedAutoencoder " + Fore.GREEN + Style.BRIGHT + "(recommended - advanced features, good balance)")
+        print(Fore.WHITE + Style.BRIGHT + "2. SimpleAutoencoder " + Fore.GREEN + Style.BRIGHT + "(fast and lightweight, minimal resources)")  
+        print(Fore.WHITE + Style.BRIGHT + "3. AutoencoderEnsemble " + Fore.GREEN + Style.BRIGHT + "(best accuracy, slower, more resources)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
         while True:
-            model_choice = input("Select model type (0-3): ").strip()
-            if model_choice in ['1', '2', '3', '0']:
-                break
-            print("Invalid choice. Please select 0-3.")
+            try:
+                model_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect model type (0-3): " + Style.RESET_ALL).strip()
+                if model_choice in ['1', '2', '3', '0']:
+                    break
+                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
+                return None
         
         if model_choice == '0':
-            print("Model selection cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
             return None
             
         model_types = ['EnhancedAutoencoder', 'SimpleAutoencoder', 'AutoencoderEnsemble']
-        model_type = model_types[int(model_choice)-1] if model_choice else 'EnhancedAutoencoder'
+        model_type = model_types[int(model_choice)-1]
+        print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {model_type}")
         
-        print("\nTRAINING DURATION")
-        print("1. Quick (20 epochs - 2-5 minutes)")
-        print("2. Standard (50 epochs - 5-15 minutes)")
-        print("3. Thorough (100 epochs - 15-30 minutes)")
-        print("0. Cancel and return to previous menu")
+        # Training Duration Selection
+        print(Fore.YELLOW + Style.BRIGHT + "\nTRAINING DURATION SELECTION")
+        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + "\n1. Quick Test " + Fore.GREEN + Style.BRIGHT + "(10 epochs - 1-3 minutes)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Standard " + Fore.GREEN + Style.BRIGHT + "(50 epochs - 5-15 minutes)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Thorough " + Fore.GREEN + Style.BRIGHT + "(100 epochs - 15-30 minutes)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
         while True:
-            duration_choice = input("Select training duration (0-3): ").strip()
-            if duration_choice in ['1', '2', '3', '0']:
-                break
-            print("Invalid choice. Please select 0-3.")
+            try:
+                duration_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect training duration (0-3): " + Style.RESET_ALL).strip()
+                if duration_choice in ['1', '2', '3', '0']:
+                    break
+                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nDuration selection cancelled")
+                return None
         
         if duration_choice == '0':
-            print("Duration selection cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nDuration selection cancelled")
             return None
             
-        #epochs_map = {'1': 20, '2': 50, '3': 100}
         epochs_map = {'1': 10, '2': 50, '3': 100}
         epochs = epochs_map.get(duration_choice, 50)
+        print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {epochs} epochs")
         
-        print("\nPERFORMANCE")
+        # Performance Configuration
+        print(Fore.YELLOW + Style.BRIGHT + "\nPERFORMANCE CONFIGURATION")
+        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
         mixed_precision = torch.cuda.is_available()
         if torch.cuda.is_available():
-            print(f"GPU detected: Using mixed precision for faster training")
+            gpu_name = torch.cuda.get_device_name() if torch.cuda.is_available() else "Unknown"
+            print(Fore.GREEN + Style.BRIGHT + f"\n✓ GPU detected: {gpu_name}")
+            print(Fore.GREEN + Style.BRIGHT + "  Using mixed precision for faster training")
         else:
-            print(f"CPU mode: Standard precision")
+            print(Fore.YELLOW + Style.BRIGHT + "\n[i] CPU mode: Standard precision")
+            print(Fore.YELLOW + Style.BRIGHT + "  Consider using GPU for better performance")
         
+        # Build final configuration with smart defaults
         final_config = base_config.copy()
         
+        # Model Configuration - using same structure as centralized config
         model_config = final_config.setdefault('model', {})
         model_config.update({
             'model_type': model_type,
@@ -42911,28 +43199,25 @@ def _interactive_express_setup(
             'use_layer_norm': False,
             'bias': True,
             'weight_init': 'xavier_uniform',
-            'skip_connection': True
+            'skip_connection': True,
+            # Enhanced features for better performance
+            'use_attention': model_type != 'SimpleAutoencoder',
+            'residual_blocks': model_type != 'SimpleAutoencoder',
+            'legacy_mode': False
         })
         
+        # Model-specific optimizations
         if model_type == 'SimpleAutoencoder':
             model_config.update({
                 'encoding_dim': 16,
                 'hidden_dims': [128, 64],
                 'dropout_rates': [0.2, 0.15],
-                'use_attention': False,
-                'residual_blocks': False,
-                'normalization': 'batch',
-                'legacy_mode': False
             })
         elif model_type == 'EnhancedAutoencoder':
             model_config.update({
                 'encoding_dim': 32,
                 'hidden_dims': [256, 128, 64],
                 'dropout_rates': [0.2, 0.15, 0.1],
-                'use_attention': True,
-                'residual_blocks': True,
-                'legacy_mode': False,
-                'skip_connection': True
             })
         elif model_type == 'AutoencoderEnsemble':
             model_config.update({
@@ -42941,17 +43226,15 @@ def _interactive_express_setup(
                 'dropout_rates': [0.25, 0.2, 0.15],
                 'num_models': 3,
                 'diversity_factor': 0.3,
-                'use_attention': True,
-                'residual_blocks': True,
-                'skip_connection': True
             })
         
+        # Training Configuration - aligned with train_model parameters
         training_config = final_config.setdefault('training', {})
         training_config.update({
             'epochs': epochs,
             'batch_size': 64,
             'learning_rate': 0.001,
-            'patience': min(15, epochs // 3),
+            'patience': min(15, max(5, epochs // 3)),  # Adaptive patience
             'mixed_precision': mixed_precision,
             'optimizer': 'AdamW',
             'scheduler': 'ReduceLROnPlateau',
@@ -42971,6 +43254,7 @@ def _interactive_express_setup(
             'min_lr': 1e-6
         })
         
+        # Data Configuration - consistent with interactive_main context
         data_config = final_config.setdefault('data', {})
         data_config.update({
             'use_real_data': use_real_data,
@@ -42983,47 +43267,19 @@ def _interactive_express_setup(
             'data_normalization': 'standard',
             'anomaly_factor': 0.1,
             'data_preprocessing': True,
-            'synthetic_generation': {},
-            'preprocessing': {}
+            'synthetic_generation': {
+                'complexity': 'medium',
+                'noise_level': 0.05,
+                'correlation_strength': 0.3
+            } if not use_real_data else {},
+            'preprocessing': {
+                'enabled': True,
+                'feature_scaling': True,
+                'outlier_handling': 'clip'
+            }
         })
         
-        hardware_config = final_config.setdefault('hardware', {})
-        hardware_config.update({
-            'device': 'auto',
-            'cuda_optimizations': torch.cuda.is_available(),
-            'memory_management': {'enable_memory_efficient': True},
-            'recommended_gpu_memory': 4.0,
-            'minimum_system_requirements': {},
-            'optimal_system_requirements': {},
-            'performance_optimization': {},
-            'detected_gpu_memory': None,
-            'detected_system_memory': None,
-            'system_performance_class': 'auto',
-            'optimization_recommendations': []
-        })
-        
-        monitoring_config = final_config.setdefault('monitoring', {})
-        monitoring_config.update({
-            'verbose': True,
-            'tensorboard_logging': True,
-            'save_checkpoints': True,
-            'save_best_model': True,
-            'metrics_to_track': ['loss', 'reconstruction_error'],
-            'checkpoint_frequency': max(10, epochs // 5),
-            'log_frequency': 1,
-            'metrics_frequency': 1,
-            'console_logging_level': 'INFO',
-            'save_model_history': True,
-            'early_stopping_metric': 'val_loss',
-            'checkpoint_format': 'pth',
-            'log_model_summary': True,
-            'tensorboard_dir': TB_DIR,
-            'tensorboard': {},
-            'stability_metrics': True,
-            'performance_metrics': True,
-            'profiling_enabled': False
-        })
-        
+        # System Configuration - using same defaults as train_model_interactive
         system_config = final_config.setdefault('system', {})
         system_config.update({
             'reproducible': True,
@@ -43031,9 +43287,10 @@ def _interactive_express_setup(
             'non_interactive': False,
             'model_dir': DEFAULT_MODEL_DIR,
             'log_dir': LOG_DIR,
-            'config_dir': DEFAULT_MODEL_DIR,
-            'data_dir': DEFAULT_MODEL_DIR,
-            'checkpoint_dir': DEFAULT_MODEL_DIR,
+            'config_dir': CONFIG_DIR,
+            'data_dir': DATA_DIR,
+            'checkpoint_dir': CHECKPOINTS_DIR,
+            'results_dir': RESULTS_DIR,
             'debug': False,
             'parallel_processing': False,
             'max_workers': 4,
@@ -43046,6 +43303,48 @@ def _interactive_express_setup(
             'environment_health': 'auto'
         })
         
+        # Hardware Configuration - enhanced detection
+        hardware_config = final_config.setdefault('hardware', {})
+        hardware_config.update({
+            'device': 'auto',
+            'cuda_optimizations': torch.cuda.is_available(),
+            'memory_management': {'enable_memory_efficient': True},
+            'recommended_gpu_memory': 4.0,
+            'minimum_system_requirements': {},
+            'optimal_system_requirements': {},
+            'performance_optimization': {},
+            'detected_gpu_memory': torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else None,
+            'detected_system_memory': psutil.virtual_memory().total / 1e9 if 'psutil' in sys.modules else None,
+            'system_performance_class': 'auto',
+            'optimization_recommendations': []
+        })
+        
+        # Monitoring Configuration - comprehensive logging
+        monitoring_config = final_config.setdefault('monitoring', {})
+        monitoring_config.update({
+            'verbose': True,
+            'debug_mode': False,
+            'tensorboard_logging': True,
+            'save_checkpoints': True,
+            'save_best_model': True,
+            'metrics_to_track': ['loss', 'reconstruction_error', 'learning_rate'],
+            'checkpoint_frequency': max(10, epochs // 5),
+            'log_frequency': 1,
+            'metrics_frequency': 1,
+            'console_logging_level': 'INFO',
+            'save_model_history': True,
+            'early_stopping_metric': 'val_loss',
+            'checkpoint_format': 'pth',
+            'log_model_summary': True,
+            'tensorboard_dir': TB_DIR,
+            'tensorboard': {},
+            'stability_metrics': True,
+            'performance_metrics': True,
+            'profiling_enabled': False,
+            'progress_bar': True
+        })
+        
+        # Export Configuration
         export_config = final_config.setdefault('export', {})
         export_config.update({
             'save_model': True,
@@ -43054,6 +43353,7 @@ def _interactive_express_setup(
             'export_onnx': False
         })
         
+        # Security Configuration - using same structure as main functions
         security_config = final_config.setdefault('security', {})
         security_config.update({
             'percentile': 95.0,
@@ -43064,17 +43364,18 @@ def _interactive_express_setup(
             'false_negative_cost': None,
             'early_warning_threshold': None,
             'confidence_interval': None,
-            'detection_methods': [],
-            'alert_levels': [],
+            'detection_methods': ['reconstruction_error'],
+            'alert_levels': ['low', 'medium', 'high'],
             'threshold_validation': True,
             'robust_detection': True,
             'false_positive_tolerance': None,
             'performance_optimized_detection': True,
             'real_time_monitoring': False,
-            'ensemble_voting': 'average',
+            'ensemble_voting': 'average' if model_type == 'AutoencoderEnsemble' else 'single',
             'uncertainty_threshold': None
         })
         
+        # Advanced Training Configuration
         advanced_config = final_config.setdefault('advanced_training', {})
         advanced_config.update({
             'memory_efficient': True,
@@ -43083,28 +43384,11 @@ def _interactive_express_setup(
             'gradient_checkpointing': False
         })
         
-        validation_config = final_config.setdefault('validation', {})
-        validation_config.update({
-            'cross_validation': {},
-            'metrics': ['loss', 'reconstruction_error'],
-            'validation_frequency': 1,
-            'save_validation_results': True,
-            'detailed_metrics': True,
-            'robustness_testing': False,
-            'performance_benchmarking': False,
-            'confidence_intervals': False
-        })
-        
-        experimental_config = final_config.setdefault('experimental', {})
-        experimental_config.update({
-            'experimental_features': {},
-            'experimental_settings': {}
-        })
-        
+        # Presets Configuration - maintain context
         presets_config = final_config.setdefault('presets', {})
         presets_config.update({
             'available_presets': list(globals().get('PRESET_CONFIGS', {}).keys()),
-            'current_preset': None,
+            'current_preset': 'express_setup',
             'current_override': None,
             'override_rules': {},
             'preset_configs': {},
@@ -43115,109 +43399,153 @@ def _interactive_express_setup(
             'preset_compatibility': {}
         })
         
-        hpo_config = final_config.setdefault('hyperparameter_optimization', {})
-        hpo_config.update({
-            'enabled': False,
-            'strategy': 'optuna',
-            'study_name': None,
-            'direction': 'minimize',
-            'n_trials': 100,
-            'timeout': None,
-            'sampler': 'TPE',
-            'pruner': 'MedianPruner',
-            'objective_metric': 'val_loss',
-            'optimization_space': {},
-            'early_stopping': {},
-            'timeout_seconds': None,
-            'trial_epochs': 10,
-            'trial_patience': 5,
-            'cleanup_trials': True,
-            'generate_plots': True,
-            'search_space': {},
-            'hpo_sampler': {},
-            'hpo_pruner': {},
-            'scoring': {},
-            'storage': {}
-        })
-        
-        metadata_config = final_config.setdefault('metadata', {})
-        metadata_config.update({
-            'description': f'Express setup {model_type} training',
-            'version': '1.0',
-            'config_version': '1.0',
-            'config_type': 'express',
-            'created': datetime.now().isoformat(),
-            'last_modified': datetime.now().isoformat(),
-            'preset_used': None,
-            'recommended_hardware': {},
-            'compatibility': ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble'],
-            'system_info': {},
-            'validation_info': {}
-        })
-        
+        # Runtime Configuration - track express setup
         runtime_config = final_config.setdefault('runtime', {})
         runtime_config.update({
             'config_loaded_at': datetime.now().isoformat(),
-            'config_source': 'interactive_express',
+            'config_source': 'interactive_express_setup',
             'runtime_id': f"express_{int(time.time())}",
             'process_id': os.getpid(),
-            'system_analysis_completed': False,
+            'system_analysis_completed': True,
             'system_performance_score': None,
-            'system_class': 'auto',
-            'optimizations_applied': {},
-            'resource_status': {},
+            'system_class': 'express',
+            'optimizations_applied': {
+                'mixed_precision': mixed_precision,
+                'memory_efficient': True,
+                'adaptive_patience': True
+            },
+            'resource_status': {
+                'gpu_available': torch.cuda.is_available(),
+                'mixed_precision_enabled': mixed_precision
+            },
             'system_warnings': [],
-            'recommendations': [],
-            'configuration_health': {}
+            'recommendations': [
+                "Express setup optimized for quick results",
+                f"Using {model_type} with {epochs} epochs",
+                "Monitor training progress in TensorBoard"
+            ],
+            'configuration_health': {
+                'status': 'healthy',
+                'checks_passed': True,
+                'express_optimized': True
+            }
         })
         
-        print("\nCONFIGURATION SUMMARY")
-        print("-" * 40)
-        print(f"Data Source: {'Real Data' if use_real_data else 'Synthetic Data'}")
-        print(f"Model Type: {model_type}")
-        print(f"Training: {epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
-        print(f"Batch Size: 64")
-        print(f"Learning Rate: 0.001")
-        print(f"Mixed Precision: {'Enabled' if mixed_precision else 'Disabled'}")
-        print(f"Device: {'GPU' if torch.cuda.is_available() else 'CPU'}")
+        # Display comprehensive configuration summary
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS SETUP - CONFIGURATION SUMMARY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        print(f"Architecture Details:")
-        print(f"   Encoding Dim: {model_config['encoding_dim']}")
-        print(f"   Hidden Dims: {model_config['hidden_dims']}")
+        # Core configuration display
+        print(Fore.YELLOW + Style.BRIGHT + "\nCore Configuration:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Source: " + Fore.GREEN + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + f"{model_type}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Duration: " + Fore.GREEN + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + f"64")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + f"0.001")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + f"{'Enabled' if mixed_precision else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Device: " + Fore.GREEN + f"{'GPU' if torch.cuda.is_available() else 'CPU'}")
+        
+        # Architecture details
+        print(Fore.YELLOW + Style.BRIGHT + "\nArchitecture Details:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Encoding Dimension: " + Fore.GREEN + f"{model_config['encoding_dim']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Hidden Layers: " + Fore.GREEN + f"{model_config['hidden_dims']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Dropout Rates: " + Fore.GREEN + f"{model_config['dropout_rates']}")
         if model_type == 'AutoencoderEnsemble':
-            print(f"   Ensemble Size: {model_config['num_models']}")
-            print(f"   Diversity Factor: {model_config['diversity_factor']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Ensemble Size: " + Fore.GREEN + f"{model_config['num_models']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Diversity Factor: " + Fore.GREEN + f"{model_config['diversity_factor']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Attention Mechanism: " + Fore.GREEN + f"{'Enabled' if model_config.get('use_attention', False) else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Residual Blocks: " + Fore.GREEN + f"{'Enabled' if model_config.get('residual_blocks', False) else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Skip Connections: " + Fore.GREEN + f"{'Enabled' if model_config.get('skip_connection', False) else 'Disabled'}")
         
-        confirm = input("\nStart training with these settings? (Y/n/c to cancel): ").strip().lower()
+        # Data configuration
+        if use_real_data:
+            data_path = data_config.get('data_path', 'Default')
+            print(Fore.YELLOW + Style.BRIGHT + "\nReal Data Configuration:")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Path: " + Fore.GREEN + f"{data_path}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preprocessing: " + Fore.GREEN + f"Enabled")
+            print(Fore.WHITE + Style.BRIGHT + f"  └─ Normalization: " + Fore.GREEN + f"Standard")
+        else:
+            print(Fore.YELLOW + Style.BRIGHT + "\nSynthetic Data Configuration:")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.GREEN + f"{data_config.get('normal_samples', 0):,}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.GREEN + f"{data_config.get('attack_samples', 0):,}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Features: " + Fore.GREEN + f"{data_config.get('features', 0)}")
+            print(Fore.WHITE + Style.BRIGHT + f"  └─ Anomaly Factor: " + Fore.GREEN + f"{data_config.get('anomaly_factor', 0)}")
+        
+        # System configuration
+        print(Fore.YELLOW + Style.BRIGHT + "\nSystem Configuration:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Reproducible: " + Fore.GREEN + f"{system_config.get('reproducible', True)}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Workers: " + Fore.GREEN + f"{training_config.get('num_workers', 0)}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ TensorBoard: " + Fore.GREEN + f"{'Enabled' if monitoring_config.get('tensorboard_logging', False) else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Checkpoints: " + Fore.GREEN + f"{'Enabled' if monitoring_config.get('save_checkpoints', False) else 'Disabled'}")
+        
+        # Confirmation with enhanced styling
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*50)
+        try:
+            confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with these express settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print(Fore.RED + Style.BRIGHT + "\nConfiguration cancelled by user")
+            return None
+        
         if confirm in ('', 'y', 'yes'):
-            print("\nLaunching training...")
+            print(Fore.GREEN + Style.BRIGHT + "\nLaunching training with express configuration...")
             return _launch_training_with_config(final_config, **kwargs)
         elif confirm in ('c', 'cancel'):
-            print("Training cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nTraining cancelled")
             return None
         else:
-            print("Would you like to:")
-            print("1. Try again with different settings")
-            print("0. Return to previous menu")
+            # Enhanced fallback options with styling
+            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?\n")
+            print(Fore.WHITE + Style.BRIGHT + "1. Try express setup again with different settings")
+            print(Fore.WHITE + Style.BRIGHT + "2. Switch to custom configuration for full control")
+            print(Fore.RED + Style.BRIGHT + "0. Return to previous menu")
             
             while True:
-                retry_choice = input("Select option (0-1): ").strip()
-                if retry_choice in ['1', '2']:
-                    break
-                print("Invalid choice. Please select 0-1.")
+                try:
+                    retry_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): " + Style.RESET_ALL).strip()
+                    if retry_choice in ['1', '2', '0']:
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
+                    return None
             
             if retry_choice == '1':
+                print(Fore.GREEN + Style.BRIGHT + "\nRestarting express setup...")
                 return _interactive_express_setup(base_config, use_real_data, **kwargs)
+            elif retry_choice == '2':
+                print(Fore.GREEN + Style.BRIGHT + "\nSwitching to custom configuration...")
+                return _interactive_custom_setup(base_config, use_real_data, **kwargs)
             else:
-                print("Returning to previous menu")
+                print(Fore.RED + Style.BRIGHT + "\nReturning to previous menu")
                 return None
             
     except KeyboardInterrupt:
-        print("\nExpress setup interrupted")
+        print(Fore.RED + Style.BRIGHT + "\nExpress setup interrupted by user")
         return None
     except Exception as e:
-        logger.error(f"Express setup failed: {e}")
-        print(f"Express setup failed: {str(e)}")
+        logger.error(f"Express setup failed: {e}", exc_info=True)
+        message = (
+            f"Error encountered during express setup: {str(e)}\n"
+            f"Context:\n"
+            f"- Use Real Data: {use_real_data}\n"
+            f"- Base Config: {bool(base_config)}\n\n"
+            f"This could be due to:\n"
+            f"- Configuration structure issues\n"
+            f"- Missing required parameters\n"
+            f"- System resource constraints\n"
+            f"- Invalid user input handling"
+        )
+        console.print(
+            Panel.fit(
+                f"{message}",
+                title="EXPRESS SETUP ERROR",
+                style="bold red",
+                border_style="red",
+                padding=(1, 2),
+                box=box.ROUNDED
+            )
+        )
         return None
 
 def _interactive_preset_setup(
@@ -43225,182 +43553,424 @@ def _interactive_preset_setup(
     use_real_data: Optional[bool], 
     **kwargs
 ) -> Optional[Dict[str, Any]]:
+    """
+    Interactive preset configuration setup with comprehensive context integration.
+    
+    Provides a streamlined preset selection experience while maintaining full
+    compatibility with the centralized configuration system.
+    """
     try:
-        print("Available preset configurations:")
+        # Clear screen and show banner for consistency
+        print("\033c", end="")
+        banner_config = show_banner(return_config=True)
+        
+        # Use the config returned from show_banner or fallback
+        if base_config is None and banner_config is not None:
+            base_config = banner_config
+        else:
+            base_config = base_config or {}
+        
+        # Extract context for display
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        
+        # Extract preset name with multiple fallbacks
+        presets_section = base_config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+            current_preset = preset_name
+        
+        # Extract model type
+        model_section = base_config.get("model", {})
+        if isinstance(model_section, dict):
+            model_type = model_section.get("model_type", "Unknown")
+            current_model_type = model_type
+        
+        # Clear screen and show context
+        #print("\033c", end="")
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "PRESET CONFIGURATION SETUP")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        
+        # Extract context from base_config for consistent display
+        #current_preset = base_config.get('presets', {}).get('current_preset', 'Custom/Default')
+        #current_model_type = base_config.get('model', {}).get('model_type', 'Unknown')
+        
+        print(Fore.GREEN + Style.BRIGHT + f"\nBase Context:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.CYAN + Style.BRIGHT + f"{current_preset}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Current Model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + f"Preset Selection")
+        
+        print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Preset Configurations:\n")
+        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
         
         available_presets = list(globals().get('PRESET_CONFIGS', {}).keys())
         
         if not available_presets:
-            print("No presets available, switching to express setup")
+            message = (
+                f"No preset configurations available.\n"
+                f"Presets provide pre-configured settings for:\n"
+                f"- Different model architectures\n"
+                f"- Various use cases and scenarios\n"
+                f"- Performance vs accuracy tradeoffs\n"
+                f"- Hardware-specific optimizations\n\n"
+                f"Switching to express setup as fallback..."
+            )
+            console.print(
+                Panel.fit(
+                    f"{message}",
+                    title="NO PRESETS AVAILABLE",
+                    style="bold yellow",
+                    border_style="yellow",
+                    padding=(1, 2),
+                    box=box.ROUNDED
+                )
+            )
             return _interactive_express_setup(base_config, use_real_data, **kwargs)
         
+        # Display available presets with enhanced formatting
         for i, preset_name in enumerate(available_presets, 1):
             preset_config = globals()['PRESET_CONFIGS'][preset_name]
             metadata = preset_config.get('metadata', {})
-            description = metadata.get('description', 'No description')
+            description = metadata.get('description', 'No description available')
             recommended_use = metadata.get('recommended_use', 'General purpose')
-            print(f"{i}. {preset_name}")
-            print(f"   {description}")
-            print(f"   Best for: {recommended_use}")
-            print()
+            model_type = preset_config.get('model', {}).get('model_type', 'Unknown')
+            
+            print(Fore.WHITE + Style.BRIGHT + f"{i}. {preset_name}\n")
+            print(Fore.CYAN + Style.BRIGHT + f"   Model: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
+            print(Fore.CYAN + Style.BRIGHT + f"   Description: " + Fore.MAGENTA + Style.BRIGHT + f"{description}")
+            print(Fore.CYAN + Style.BRIGHT + f"   Best for: " + Fore.YELLOW + Style.BRIGHT + f"{recommended_use}")
+            
+            # Show key configuration highlights
+            training_config = preset_config.get('training', {})
+            epochs = training_config.get('epochs', 'Default')
+            batch_size = training_config.get('batch_size', 'Default')
+            learning_rate = training_config.get('learning_rate', 'Default')
+            
+            print(Fore.CYAN + Style.BRIGHT + f"   Configuration: " + Fore.GREEN + Style.BRIGHT + f"{epochs} epochs, " + Fore.GREEN + Style.BRIGHT + f"batch {batch_size}, " + Fore.GREEN + Style.BRIGHT + f"LR {learning_rate}")
+            print()  # Empty line for spacing
         
-        print(f"{len(available_presets)+1}. Back to main menu")
+        # Enhanced navigation options
+        print(Fore.YELLOW + Style.BRIGHT + "\nNavigation Options:\n")
+        print(Fore.WHITE + Style.BRIGHT + f"{len(available_presets)+1}. " + Fore.GREEN + Style.BRIGHT + "Switch to Express Setup")
+        print(Fore.WHITE + Style.BRIGHT + f"{len(available_presets)+2}. " + Fore.GREEN + Style.BRIGHT + "Switch to Custom Configuration")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
+        # Preset selection with robust error handling
         while True:
             try:
-                choice = input(f"\nSelect preset (1-{len(available_presets)+1}) or 0 to cancel: ").strip()
+                choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect preset (1-{len(available_presets)}) or navigation option: " + Style.RESET_ALL).strip()
+                
+                if not choice:
+                    continue
+                    
                 choice_num = int(choice)
+                
                 if 1 <= choice_num <= len(available_presets):
                     selected_preset = available_presets[choice_num-1]
                     break
                 elif choice_num == 0:
-                    print("Preset selection cancelled")
+                    print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled")
                     return None
-                elif choice_num == len(available_presets)+1:
+                elif choice_num == len(available_presets) + 1:
+                    print(Fore.GREEN + Style.BRIGHT + "\nSwitching to express setup...")
                     return _interactive_express_setup(base_config, use_real_data, **kwargs)
+                elif choice_num == len(available_presets) + 2:
+                    print(Fore.GREEN + Style.BRIGHT + "\nSwitching to custom configuration...")
+                    return _interactive_custom_setup(base_config, use_real_data, **kwargs)
                 else:
-                    print(f"Invalid choice. Please select 1-{len(available_presets)+1} or 0 to cancel.")
+                    print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Please select 1-{len(available_presets)+2} or 0 to cancel.")
+                    
             except ValueError:
-                print(f"Invalid input. Please enter a number 1-{len(available_presets)+1} or 0 to cancel.")
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid input. Please enter a number 1-{len(available_presets)+2} or 0 to cancel.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled")
+                return None
         
+        # Load and display selected preset details
         preset_config = globals()['PRESET_CONFIGS'][selected_preset].copy()
         
-        print(f"\nSelected Preset: {selected_preset}")
-        print("-" * 40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + f"SELECTED PRESET: {selected_preset}")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
+        # Extract preset details for display
         model_config = preset_config.get('model', {})
         training_config = preset_config.get('training', {})
+        data_config = preset_config.get('data', {})
+        metadata = preset_config.get('metadata', {})
         
-        print(f"Model: {model_config.get('model_type', 'N/A')}")
-        print(f"Epochs: {training_config.get('epochs', 'N/A')}")
-        print(f"Batch Size: {training_config.get('batch_size', 'N/A')}")
-        print(f"Learning Rate: {training_config.get('learning_rate', 'N/A')}")
+        model_type = model_config.get('model_type', 'Unknown')
+        epochs = training_config.get('epochs', 'Default')
+        batch_size = training_config.get('batch_size', 'Default')
+        learning_rate = training_config.get('learning_rate', 'Default')
+        description = metadata.get('description', 'No description available')
+        recommended_use = metadata.get('recommended_use', 'General purpose')
         
+        # Display preset overview
+        print(Fore.YELLOW + Style.BRIGHT + "\nPreset Overview:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Description: " + Fore.WHITE + Style.BRIGHT + f"{description}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Recommended Use: " + Fore.GREEN + Style.BRIGHT + f"{recommended_use}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + Style.BRIGHT + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + Style.BRIGHT + f"{batch_size}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Learning Rate: " + Fore.GREEN + Style.BRIGHT + f"{learning_rate}")
+        
+        # Architecture details
         if 'encoding_dim' in model_config:
-            print(f"Architecture:")
-            print(f"   Encoding Dim: {model_config.get('encoding_dim', 'N/A')}")
-            print(f"   Hidden Dims: {model_config.get('hidden_dims', 'N/A')}")
-            if model_config.get('model_type') == 'AutoencoderEnsemble':
-                print(f"   Ensemble Size: {model_config.get('num_models', 'N/A')}")
+            print(Fore.YELLOW + Style.BRIGHT + "\nArchitecture Details:")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Encoding Dimension: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('encoding_dim', 'N/A')}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Hidden Layers: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('hidden_dims', 'N/A')}")
+            
+            if model_type == 'AutoencoderEnsemble':
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Ensemble Size: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('num_models', 'N/A')}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Diversity Factor: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('diversity_factor', 'N/A')}")
+            
+            # Enhanced features
+            enhanced_features = []
+            if model_config.get('use_attention', False):
+                enhanced_features.append("Attention")
+            if model_config.get('residual_blocks', False):
+                enhanced_features.append("Residual Blocks")
+            if model_config.get('skip_connection', False):
+                enhanced_features.append("Skip Connections")
+            
+            if enhanced_features:
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Enhanced Features: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(enhanced_features)}")
+            
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Normalization: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('normalization', 'Default')}")
         
-        print("\nCustomization Options:")
-        print("1. Use preset as-is")
-        print("2. Customize data source only")
-        print("3. Customize training duration")
-        print("4. Customize model architecture")
-        print("5. Full customization")
-        print("0. Cancel and return to previous menu")
+        # Training configuration details
+        print(Fore.YELLOW + Style.BRIGHT + "\nTraining Configuration:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Optimizer: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('optimizer', 'Default')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Scheduler: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('scheduler', 'Default')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Early Stopping: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if training_config.get('early_stopping', True) else 'Disabled'}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if training_config.get('mixed_precision', False) else 'Disabled'}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Validation Split: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('validation_split', 'Default')}")
+        
+        # Customization options with enhanced descriptions
+        print(Fore.YELLOW + Style.BRIGHT + "\nCustomization Options:\n")
+        print(Fore.WHITE + Style.BRIGHT + "1. Use preset as-is " + Fore.GREEN + Style.BRIGHT + "(recommended for first use)")
+        print(Fore.WHITE + Style.BRIGHT + "2. Customize data source only " + Fore.GREEN + Style.BRIGHT + "(keep preset, change data)")
+        print(Fore.WHITE + Style.BRIGHT + "3. Customize training duration " + Fore.GREEN + Style.BRIGHT + "(adjust epochs and patience)")
+        print(Fore.WHITE + Style.BRIGHT + "4. Customize model architecture " + Fore.GREEN + Style.BRIGHT + "(change model type or layers)")
+        print(Fore.WHITE + Style.BRIGHT + "5. Full customization " + Fore.GREEN + Style.BRIGHT + "(complete control)")
+        print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
         while True:
-            custom_choice = input("Select option (0-5): ").strip()
-            if custom_choice in ['1', '2', '3', '4', '5', '0']:
-                break
-            print("Invalid choice. Please select 0-5.")
+            try:
+                custom_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect customization option (0-5): " + Style.RESET_ALL).strip()
+                if custom_choice in ['1', '2', '3', '4', '5', '0']:
+                    break
+                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nCustomization selection cancelled")
+                return None
         
         if custom_choice == '0':
-            print("Preset selection cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled")
             return None
         
+        # Merge configurations using the same pattern as train_model_interactive
         final_config = _merge_configs(base_config, preset_config)
         
+        # Data source customization
         if custom_choice in ['2', '3', '4', '5'] or use_real_data is None:
             if use_real_data is None:
-                print("\nDATA SOURCE")
-                print("1. Real network data")
-                print("2. Synthetic data")
-                print("0. Cancel and return to previous menu")
+                print(Fore.YELLOW + Style.BRIGHT + "\nDATA SOURCE SELECTION\n")
+                #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
+                print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(production use)")
+                print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(testing/development)")
+                print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
                 
                 while True:
-                    data_choice = input("Select data source (0-2): ").strip()
-                    if data_choice in ['1', '2', '0']:
-                        break
-                    print("Invalid choice. Please select 0-2.")
+                    try:
+                        data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): " + Style.RESET_ALL).strip()
+                        if data_choice in ['1', '2', '0']:
+                            break
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                    except (EOFError, KeyboardInterrupt):
+                        print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
+                        return None
                 
                 if data_choice == '0':
-                    print("Data selection cancelled")
+                    print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
                     return None
                     
                 use_real_data = data_choice == '1'
+                print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if use_real_data else 'Synthetic Data'}")
             
             final_config.setdefault('data', {})['use_real_data'] = use_real_data
         
+        # Training duration customization
         if custom_choice in ['3', '4', '5']:
-            print("\nTRAINING DURATION")
+            print(Fore.YELLOW + Style.BRIGHT + "\nTRAINING DURATION CUSTOMIZATION\n")
+            #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
             current_epochs = training_config.get('epochs', 50)
-            print(f"Current: {current_epochs} epochs")
+            estimated_time = _estimate_training_time(current_epochs, model_type)
             
-            new_epochs = input(f"New epochs (default={current_epochs}), 'c' to cancel): ").strip()
-            if new_epochs.lower() == 'c':
-                print("Duration customization cancelled")
-                return None
-            elif new_epochs:
-                try:
-                    final_config.setdefault('training', {})['epochs'] = int(new_epochs)
-                    final_config['training']['patience'] = min(15, int(new_epochs) // 3)
-                except ValueError:
-                    print(f"Invalid input, keeping {current_epochs} epochs")
-        
-        if custom_choice in ['4', '5']:
-            print("\nMODEL ARCHITECTURE")
-            current_model_type = model_config.get('model_type', 'EnhancedAutoencoder')
-            print(f"Current model: {current_model_type}")
+            print(Fore.CYAN + Style.BRIGHT + f"Current: " + Fore.GREEN + Style.BRIGHT + f"{current_epochs} epochs (~{estimated_time} min)")
+            print(Fore.CYAN + Style.BRIGHT + "Quick: 10 epochs | Standard: 50 epochs | Thorough: 100+ epochs")
             
-            print("1. Keep current model type")
-            print("2. SimpleAutoencoder")
-            print("3. EnhancedAutoencoder")
-            print("4. AutoencoderEnsemble")
-            print("0. Cancel and return to previous menu")
-            
-            model_change = input("Select model type (0-4, default=1): ").strip()
-            if model_change == '0':
-                print("Model customization cancelled")
-                return None
-            elif model_change in ['2', '3', '4']:
-                new_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
-                new_model_type = new_types[int(model_change)-2]
-                final_config.setdefault('model', {})['model_type'] = new_model_type
-                print(f"Changed model type to: {new_model_type}")
+            try:
+                new_epochs = input(Fore.YELLOW + Style.BRIGHT + f"\nNew epochs (Enter for {current_epochs}, 'c' to cancel): " + Style.RESET_ALL).strip()
                 
-                _apply_model_type_defaults(final_config, new_model_type)
+                if new_epochs.lower() == 'c':
+                    print(Fore.RED + Style.BRIGHT + "\nDuration customization cancelled")
+                    return None
+                elif new_epochs:
+                    new_epochs_int = int(new_epochs)
+                    final_config.setdefault('training', {})['epochs'] = new_epochs_int
+                    # Adaptive patience based on epochs
+                    final_config['training']['patience'] = min(20, max(5, new_epochs_int // 3))
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUpdated: {new_epochs_int} epochs (~{_estimate_training_time(new_epochs_int, model_type)} min)")
+                else:
+                    print(Fore.GREEN + Style.BRIGHT + f"\nKeeping: {current_epochs} epochs")
+                    
+            except ValueError:
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid input, keeping {current_epochs} epochs")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nDuration customization cancelled")
+                return None
         
+        # Model architecture customization
+        if custom_choice in ['4', '5']:
+            print(Fore.YELLOW + Style.BRIGHT + "\nMODEL ARCHITECTURE CUSTOMIZATION\n")
+            #print(Fore.YELLOW + Style.BRIGHT + "-" * 30)
+            current_model_type = model_config.get('model_type', 'EnhancedAutoencoder')
+            
+            print(Fore.YELLOW + Style.BRIGHT + f"Current model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
+            print(Fore.WHITE + Style.BRIGHT + "1. Keep current model type")
+            print(Fore.WHITE + Style.BRIGHT + "2. SimpleAutoencoder " + Fore.GREEN + Style.BRIGHT + "(fast, lightweight)")
+            print(Fore.WHITE + Style.BRIGHT + "3. EnhancedAutoencoder " + Fore.GREEN + Style.BRIGHT + "(balanced, recommended)")
+            print(Fore.WHITE + Style.BRIGHT + "4. AutoencoderEnsemble " + Fore.GREEN + Style.BRIGHT + "(accurate, slower)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+            
+            try:
+                model_change = input(Fore.YELLOW + Style.BRIGHT + "\nSelect model type (0-4, default=1): " + Style.RESET_ALL).strip()
+                
+                if model_change == '0':
+                    print(Fore.RED + Style.BRIGHT + "\nModel customization cancelled")
+                    return None
+                elif model_change in ['2', '3', '4']:
+                    new_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
+                    new_model_type = new_types[int(model_change)-2]
+                    final_config.setdefault('model', {})['model_type'] = new_model_type
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nChanged model type to: {new_model_type}")
+                    
+                    # Apply model-specific defaults
+                    _apply_model_type_defaults(final_config, new_model_type)
+                else:
+                    print(Fore.GREEN + Style.BRIGHT + f"\nKeeping: {current_model_type}")
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nModel customization cancelled")
+                return None
+        
+        # Full customization fallback
         if custom_choice == '5':
-            print("\nSwitching to full customization mode...")
+            print(Fore.GREEN + Style.BRIGHT + "\nSwitching to full customization mode...")
             return _interactive_custom_setup(final_config, use_real_data, **kwargs)
         
-        print(f"\nReady to train with {selected_preset} preset")
-        if custom_choice != '1':
-            print("   (with your customizations)")
+        # Final confirmation with comprehensive summary
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "FINAL CONFIGURATION SUMMARY")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
-        confirm = input("Start training? (Y/n/c to cancel): ").strip().lower()
+        final_model_type = final_config.get('model', {}).get('model_type', model_type)
+        final_epochs = final_config.get('training', {}).get('epochs', epochs)
+        final_data_source = final_config.get('data', {}).get('use_real_data', use_real_data)
+        
+        print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Preset: " + Fore.GREEN + Style.BRIGHT + f"{selected_preset}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model: " + Fore.GREEN + Style.BRIGHT + f"{final_model_type}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data: " + Fore.GREEN + Style.BRIGHT + f"{'Real' if final_data_source else 'Synthetic'}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.GREEN + Style.BRIGHT + f"{final_epochs}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Estimated Time: " + Fore.GREEN + Style.BRIGHT + f"~{_estimate_training_time(final_epochs, final_model_type)} min")
+        
+        if custom_choice != '1':
+            print(Fore.YELLOW + Style.BRIGHT + f"\nCustomizations Applied:")
+            if custom_choice in ['2', '3', '4', '5']:
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data source customized")
+            if custom_choice in ['3', '4', '5']:
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training duration adjusted")
+            if custom_choice in ['4', '5']:
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model architecture modified")
+        
+        # Enhanced confirmation with fallback options
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*50)
+        try:
+            confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with this configuration? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print(Fore.RED + Style.BRIGHT + "\nTraining confirmation cancelled")
+            return None
+        
         if confirm in ('', 'y', 'yes'):
-            print("\nLaunching training...")
+            print(Fore.GREEN + Style.BRIGHT + "\nLaunching training with preset configuration...")
             return _launch_training_with_config(final_config, **kwargs)
         elif confirm in ('c', 'cancel'):
-            print("Training cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nTraining cancelled")
             return None
         else:
-            print("Would you like to:")
-            print("1. Try again with different settings")
-            print("0. Return to previous menu")
+            # Enhanced fallback options
+            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?\n")
+            print(Fore.WHITE + Style.BRIGHT + "1. Try preset selection again")
+            print(Fore.WHITE + Style.BRIGHT + "2. Switch to express setup")
+            print(Fore.WHITE + Style.BRIGHT + "3. Switch to custom configuration")
+            print(Fore.RED + Style.BRIGHT + "0. Return to previous menu")
             
             while True:
-                retry_choice = input("Select option (0-1): ").strip()
-                if retry_choice in ['1', '0']:
-                    break
-                print("Invalid choice. Please select 0-1.")
+                try:
+                    retry_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-3): " + Style.RESET_ALL).strip()
+                    if retry_choice in ['1', '2', '3', '0']:
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
+                    return None
             
             if retry_choice == '1':
+                print(Fore.GREEN + Style.BRIGHT + "\nRestarting preset selection...")
                 return _interactive_preset_setup(base_config, use_real_data, **kwargs)
+            elif retry_choice == '2':
+                print(Fore.GREEN + Style.BRIGHT + "\nSwitching to express setup...")
+                return _interactive_express_setup(base_config, use_real_data, **kwargs)
+            elif retry_choice == '3':
+                print(Fore.GREEN + Style.BRIGHT + "\nSwitching to custom configuration...")
+                return _interactive_custom_setup(base_config, use_real_data, **kwargs)
             else:
-                print("Returning to previous menu")
+                print(Fore.RED + Style.BRIGHT + "\nReturning to previous menu")
                 return None
             
     except KeyboardInterrupt:
-        print("\nPreset setup interrupted")
+        print(Fore.RED + Style.BRIGHT + "\nPreset setup interrupted by user")
         return None
     except Exception as e:
-        logger.error(f"Preset setup failed: {e}")
-        print(f"Preset setup failed: {str(e)}")
+        logger.error(f"Preset setup failed: {e}", exc_info=True)
+        message = (
+            f"Error encountered during preset setup: {str(e)}\n"
+            f"Context:\n"
+            f"- Base Config: {bool(base_config)}\n"
+            f"- Use Real Data: {use_real_data}\n"
+            f"- Available Presets: {len(available_presets) if 'available_presets' in locals() else 0}\n\n"
+            f"This could be due to:\n"
+            f"- Preset configuration corruption\n"
+            f"- Invalid preset structure\n"
+            f"- Configuration merging issues\n"
+            f"- User input handling problems"
+        )
+        console.print(
+            Panel.fit(
+                f"{message}",
+                title="PRESET SETUP ERROR",
+                style="bold red",
+                border_style="red",
+                padding=(1, 2),
+                box=box.ROUNDED
+            )
+        )
         return None
 
 def _interactive_custom_setup(
@@ -43411,30 +43981,68 @@ def _interactive_custom_setup(
     """Full interactive configuration with all options matching class parameters."""
     
     try:
-        print("Custom configuration with full control")
-        print("Press Enter for defaults shown in parentheses")
-        print("Enter 'c' at any time to cancel and return to previous menu")
+        # Clear screen and show banner for consistency
+        print("\033c", end="")
+        banner_config = show_banner(return_config=True)
+        
+        # Use the config returned from show_banner or fallback
+        if base_config is None and banner_config is not None:
+            base_config = banner_config
+        else:
+            base_config = base_config or {}
+        
+        # Extract context for display
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        
+        # Extract preset name with multiple fallbacks
+        presets_section = base_config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Extract model type
+        model_section = base_config.get("model", {})
+        if isinstance(model_section, dict):
+            model_type = model_section.get("model_type", "Unknown")
+        
+        # Menu header with context matching other functions
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "CUSTOM CONFIGURATION SETUP")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+        print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + "Full Custom Control")
+        
+        print("\nFull interactive configuration with complete control over all parameters.\n")
+        print("Press Enter to accept defaults shown in parentheses.\n")
+        print("Enter 'c' at any prompt to cancel and return to previous menu")
         
         final_config = base_config.copy()
         
-        print("\n" + "="*50)
-        print("DATA CONFIGURATION")
-        print("="*50)
+        # DATA CONFIGURATION SECTION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "DATA CONFIGURATION")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         if use_real_data is None:
-            print("\nData Source:")
-            print("1. Real network data (requires data files)")
-            print("2. Synthetic data (generated automatically)")
-            print("0. Cancel and return to previous menu")
+            print(Fore.GREEN + Style.BRIGHT + "\nData Source Selection:\n")
+            print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.YELLOW + Style.BRIGHT + "(requires data files)")
+            print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.YELLOW + Style.BRIGHT + "(generated automatically)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
             while True:
-                data_choice = input("Select data source (0-2): ").strip()
-                if data_choice in ['1', '2', '0']:
-                    break
-                print("Please select 1, 2, or 0")
+                try:
+                    data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): " + Style.RESET_ALL).strip()
+                    if data_choice in ['1', '2', '0']:
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nPlease select 1, 2, or 0")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
+                    return None
             
             if data_choice == '0':
-                print("Data selection cancelled")
+                print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
                 return None
                 
             use_real_data = data_choice == '1'
@@ -43443,95 +44051,106 @@ def _interactive_custom_setup(
         data_config['use_real_data'] = use_real_data
         
         if not use_real_data:
-            print("\nSynthetic Data Parameters:")
+            print(Fore.GREEN + Style.BRIGHT + "\nSynthetic Data Parameters:")
+            cancel_msg = Fore.RED + Style.BRIGHT + "\nSynthetic data configuration cancelled"
             
-            normal_samples = input("Normal samples (8000): ").strip()
+            normal_samples = input(Fore.YELLOW + Style.BRIGHT + "Normal samples " + Fore.WHITE + Style.BRIGHT + "(8000): " + Style.RESET_ALL).strip()
             if normal_samples.lower() == 'c':
-                print("Synthetic data configuration cancelled")
+                print(cancel_msg)
                 return None
             data_config['normal_samples'] = int(normal_samples) if normal_samples else 8000
             
-            attack_samples = input("Attack samples (2000): ").strip()
+            attack_samples = input(Fore.YELLOW + Style.BRIGHT + "Attack samples " + Fore.WHITE + Style.BRIGHT + "(2000): " + Style.RESET_ALL).strip()
             if attack_samples.lower() == 'c':
-                print("Synthetic data configuration cancelled")
+                print(cancel_msg)
                 return None
             data_config['attack_samples'] = int(attack_samples) if attack_samples else 2000
             
-            features = input("Number of features (20): ").strip()
+            features = input(Fore.YELLOW + Style.BRIGHT + "Number of features " + Fore.WHITE + Style.BRIGHT + "(20): " + Style.RESET_ALL).strip()
             if features.lower() == 'c':
-                print("Synthetic data configuration cancelled")
+                print(cancel_msg)
                 return None
             data_config['features'] = int(features) if features else 20
             
-            anomaly_factor = input("Anomaly factor (0.1): ").strip()
+            anomaly_factor = input(Fore.YELLOW + Style.BRIGHT + "Anomaly factor " + Fore.WHITE + Style.BRIGHT + "(0.1): " + Style.RESET_ALL).strip()
             if anomaly_factor.lower() == 'c':
-                print("Synthetic data configuration cancelled")
+                print(cancel_msg)
                 return None
             data_config['anomaly_factor'] = float(anomaly_factor) if anomaly_factor else 0.1
         else:
-            print("\nReal Data Configuration:")
-            data_path = input("Data file path (optional): ").strip()
+            print(Fore.GREEN + Style.BRIGHT + "\nReal Data Configuration:")
+            cancel_msg = Fore.RED + Style.BRIGHT + "\nReal data configuration cancelled"
+            
+            data_path = input(Fore.YELLOW + Style.BRIGHT + "Data file path " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
             if data_path.lower() == 'c':
-                print("Real data configuration cancelled")
+                print(cancel_msg)
                 return None
             if data_path:
                 data_config['data_path'] = data_path
             
-            artifacts_path = input("Artifacts path (optional): ").strip()
+            artifacts_path = input(Fore.YELLOW + Style.BRIGHT + "Artifacts path " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
             if artifacts_path.lower() == 'c':
-                print("Real data configuration cancelled")
+                print(cancel_msg)
                 return None
             if artifacts_path:
                 data_config['artifacts_path'] = artifacts_path
         
-        random_state = input("Random state (42): ").strip()
+        # Data processing parameters
+        random_state = input(Fore.YELLOW + Style.BRIGHT + "Random state " + Fore.WHITE + Style.BRIGHT + "(42): " + Style.RESET_ALL).strip()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nData configuration cancelled"
+        
         if random_state.lower() == 'c':
-            print("Data configuration cancelled")
+            print(cancel_msg)
             return None
         data_config['random_state'] = int(random_state) if random_state else 42
         
-        test_split = input("Test split ratio (0.2): ").strip()
+        test_split = input(Fore.YELLOW + Style.BRIGHT + "Test split ratio " + Fore.WHITE + Style.BRIGHT + "(0.2): " + Style.RESET_ALL).strip()
         if test_split.lower() == 'c':
-            print("Data configuration cancelled")
+            print(cancel_msg)
             return None
         data_config['test_split'] = float(test_split) if test_split else 0.2
         
-        stratified = input("Use stratified split? (Y/n): ").strip().lower()
+        stratified = input(Fore.YELLOW + Style.BRIGHT + "Use stratified split? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if stratified.lower() == 'c':
-            print("Data configuration cancelled")
+            print(cancel_msg)
             return None
         data_config['stratified_split'] = stratified in ('', 'y', 'yes')
         
-        normalization = input("Data normalization (standard/minmax/none): ").strip()
+        normalization = input(Fore.YELLOW + Style.BRIGHT + "Data normalization " + Fore.WHITE + Style.BRIGHT + "(standard/minmax/none): " + Style.RESET_ALL).strip()
         if normalization.lower() == 'c':
-            print("Data configuration cancelled")
+            print(cancel_msg)
             return None
         data_config['data_normalization'] = normalization if normalization else 'standard'
         
-        preprocessing = input("Enable data preprocessing? (Y/n): ").strip().lower()
+        preprocessing = input(Fore.YELLOW + Style.BRIGHT + "Enable data preprocessing? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if preprocessing.lower() == 'c':
-            print("Data configuration cancelled")
+            print(cancel_msg)
             return None
         data_config['data_preprocessing'] = preprocessing in ('', 'y', 'yes')
+
+        # MODEL ARCHITECTURE SECTION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "MODEL ARCHITECTURE")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
-        print("\n" + "="*50)
-        print("MODEL ARCHITECTURE")
-        print("="*50)
-        
-        print("\nModel Type:")
+        print(Fore.GREEN + Style.BRIGHT + "\nModel Type Selection:")
         model_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
         for i, mtype in enumerate(model_types, 1):
-            print(f"{i}. {mtype}")
-        print(f"{len(model_types)+1}. Cancel and return to previous menu")
+            print(Fore.WHITE + Style.BRIGHT + f"{i}. {mtype}")
+        print(Fore.RED + Style.BRIGHT + f"{len(model_types)+1}. Cancel and return to previous menu")
         
         while True:
-            model_choice = input(f"Select model (1-{len(model_types)+1}): ").strip()
-            if model_choice in [str(i) for i in range(1, len(model_types)+2)]:
-                break
-            print(f"Please select 1-{len(model_types)+1}")
+            try:
+                model_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect model (1-{len(model_types)+1}): " + Style.RESET_ALL).strip()
+                if model_choice in [str(i) for i in range(1, len(model_types)+2)]:
+                    break
+                print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(model_types)+1}")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
+                return None
         
         if model_choice == str(len(model_types)+1):
-            print("Model selection cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
             return None
         
         model_type = model_types[int(model_choice)-1]
@@ -43539,66 +44158,67 @@ def _interactive_custom_setup(
         model_config = final_config.setdefault('model', {})
         model_config['model_type'] = model_type
         
-        print(f"\nArchitecture for {model_type}:")
+        print(Fore.GREEN + Style.BRIGHT + f"\nArchitecture Configuration for {model_type}:")
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nArchitecture configuration cancelled"
         
-        encoding_dim = input("Encoding dimension (16/32/24 for Simple/Enhanced/Ensemble): ").strip()
+        # Encoding dimension with model-specific defaults
+        default_encoding = {
+            'SimpleAutoencoder': 16,
+            'EnhancedAutoencoder': 32, 
+            'AutoencoderEnsemble': 24
+        }
+        encoding_dim = input(Fore.YELLOW + Style.BRIGHT + f"Encoding dimension " + Fore.WHITE + Style.BRIGHT + f"({default_encoding[model_type]}): " + Style.RESET_ALL).strip()
         if encoding_dim.lower() == 'c':
-            print("Architecture configuration cancelled")
+            print(cancel_msg)
             return None
-        if encoding_dim:
-            model_config['encoding_dim'] = int(encoding_dim)
-        elif model_type == 'SimpleAutoencoder':
-            model_config['encoding_dim'] = 16
-        elif model_type == 'EnhancedAutoencoder':
-            model_config['encoding_dim'] = 32
-        elif model_type == 'AutoencoderEnsemble':
-            model_config['encoding_dim'] = 24
+        model_config['encoding_dim'] = int(encoding_dim) if encoding_dim else default_encoding[model_type]
         
-        hidden_dims_input = input("Hidden layers (comma-separated, e.g., 256,128,64): ").strip()
+        # Hidden dimensions with model-specific defaults
+        default_hidden_dims = {
+            'SimpleAutoencoder': [128, 64],
+            'EnhancedAutoencoder': [256, 128, 64],
+            'AutoencoderEnsemble': [192, 96, 48]
+        }
+        hidden_dims_input = input(Fore.YELLOW + Style.BRIGHT + "Hidden layers " + Fore.WHITE + Style.BRIGHT + f"(comma-separated, default: {','.join(map(str, default_hidden_dims[model_type]))}): " + Style.RESET_ALL).strip()
         if hidden_dims_input.lower() == 'c':
-            print("Architecture configuration cancelled")
+            print(cancel_msg)
             return None
         if hidden_dims_input:
             model_config['hidden_dims'] = [int(x.strip()) for x in hidden_dims_input.split(',')]
-        elif model_type == 'SimpleAutoencoder':
-            model_config['hidden_dims'] = [128, 64]
-        elif model_type == 'EnhancedAutoencoder':
-            model_config['hidden_dims'] = [256, 128, 64]
-        elif model_type == 'AutoencoderEnsemble':
-            model_config['hidden_dims'] = [192, 96, 48]
+        else:
+            model_config['hidden_dims'] = default_hidden_dims[model_type]
         
-        dropout_input = input("Dropout rates (comma-separated, e.g., 0.2,0.15,0.1): ").strip()
+        # Dropout rates with intelligent defaults
+        dropout_input = input(Fore.YELLOW + Style.BRIGHT + "Dropout rates " + Fore.WHITE + Style.BRIGHT + "(comma-separated, e.g., 0.2,0.15,0.1): " + Style.RESET_ALL).strip()
         if dropout_input.lower() == 'c':
-            print("Architecture configuration cancelled")
+            print(cancel_msg)
             return None
         if dropout_input:
             model_config['dropout_rates'] = [float(x.strip()) for x in dropout_input.split(',')]
         else:
             hidden_len = len(model_config['hidden_dims'])
-            if hidden_len == 2:
-                model_config['dropout_rates'] = [0.2, 0.15]
-            elif hidden_len == 3:
-                model_config['dropout_rates'] = [0.2, 0.15, 0.1]
-            else:
-                model_config['dropout_rates'] = [0.2 - i*0.05 for i in range(hidden_len)]
+            # Create decreasing dropout rates
+            model_config['dropout_rates'] = [0.2 - i*0.05 for i in range(hidden_len)]
         
-        print("\nNetwork Configuration:")
-        activation = input("Activation function (leaky_relu/relu/gelu/tanh): ").strip()
+        print(Fore.GREEN + Style.BRIGHT + "\nNetwork Configuration:")
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nNetwork configuration cancelled"
+        
+        activation = input(Fore.YELLOW + Style.BRIGHT + "Activation function " + Fore.WHITE + Style.BRIGHT + "(leaky_relu/relu/gelu/tanh): " + Style.RESET_ALL).strip()
         if activation.lower() == 'c':
-            print("Network configuration cancelled")
+            print(cancel_msg)
             return None
         model_config['activation'] = activation if activation else 'leaky_relu'
         
         if model_config['activation'] == 'leaky_relu':
-            activation_param = input("Negative slope for LeakyReLU (0.2): ").strip()
+            activation_param = input(Fore.YELLOW + Style.BRIGHT + "Negative slope for LeakyReLU " + Fore.WHITE + Style.BRIGHT + "(0.2): " + Style.RESET_ALL).strip()
             if activation_param.lower() == 'c':
-                print("Network configuration cancelled")
+                print(cancel_msg)
                 return None
             model_config['activation_param'] = float(activation_param) if activation_param else 0.2
         
-        normalization = input("Normalization (batch/layer/none): ").strip()
+        normalization = input(Fore.YELLOW + Style.BRIGHT + "Normalization " + Fore.WHITE + Style.BRIGHT + "(batch/layer/none): " + Style.RESET_ALL).strip()
         if normalization.lower() == 'c':
-            print("Network configuration cancelled")
+            print(cancel_msg)
             return None
         model_config['normalization'] = normalization if normalization else 'batch'
         
@@ -43612,144 +44232,160 @@ def _interactive_custom_setup(
             model_config['use_batch_norm'] = False
             model_config['use_layer_norm'] = False
         
-        bias = input("Use bias in layers? (Y/n): ").strip().lower()
+        bias = input(Fore.YELLOW + Style.BRIGHT + "Use bias in layers? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if bias.lower() == 'c':
-            print("Network configuration cancelled")
+            print(cancel_msg)
             return None
         model_config['bias'] = bias in ('', 'y', 'yes')
         
-        weight_init = input("Weight initialization (xavier_uniform/xavier_normal/kaiming_uniform): ").strip()
+        weight_init = input(Fore.YELLOW + Style.BRIGHT + "Weight initialization " + Fore.WHITE + Style.BRIGHT + "(xavier_uniform/xavier_normal/kaiming_uniform): " + Style.RESET_ALL).strip()
         if weight_init.lower() == 'c':
-            print("Network configuration cancelled")
+            print(cancel_msg)
             return None
         model_config['weight_init'] = weight_init if weight_init else 'xavier_uniform'
         
+        # Enhanced features for advanced models
         if model_type in ['EnhancedAutoencoder', 'AutoencoderEnsemble']:
-            print("\nEnhanced Features:")
-            attention = input("Use attention mechanism? (Y/n): ").strip().lower()
+            print(Fore.GREEN + Style.BRIGHT + "\nEnhanced Features Configuration:")
+            cancel_msg = Fore.RED + Style.BRIGHT + "\nEnhanced features configuration cancelled"
+            
+            attention = input(Fore.YELLOW + Style.BRIGHT + "Use attention mechanism? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
             if attention == 'c':
-                print("Enhanced features configuration cancelled")
+                print(cancel_msg)
                 return None
             model_config['use_attention'] = attention in ('', 'y', 'yes')
             
-            residual = input("Use residual blocks? (Y/n): ").strip().lower()
+            residual = input(Fore.YELLOW + Style.BRIGHT + "Use residual blocks? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
             if residual == 'c':
-                print("Enhanced features configuration cancelled")
+                print(cancel_msg)
                 return None
             model_config['residual_blocks'] = residual in ('', 'y', 'yes')
             
-            skip_conn = input("Use skip connections? (Y/n): ").strip().lower()
+            skip_conn = input(Fore.YELLOW + Style.BRIGHT + "Use skip connections? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
             if skip_conn == 'c':
-                print("Enhanced features configuration cancelled")
+                print(cancel_msg)
                 return None
             model_config['skip_connection'] = skip_conn in ('', 'y', 'yes')
             
             if model_type == 'EnhancedAutoencoder':
-                legacy = input("Use legacy mode? (y/N): ").strip().lower()
+                legacy = input(Fore.YELLOW + Style.BRIGHT + "Use legacy mode? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
                 if legacy == 'c':
-                    print("Enhanced features configuration cancelled")
+                    print(cancel_msg)
                     return None
                 model_config['legacy_mode'] = legacy in ('y', 'yes')
         
+        # Ensemble-specific configuration
         if model_type == 'AutoencoderEnsemble':
-            print("\nEnsemble Configuration:")
-            num_models = input("Number of ensemble models (3): ").strip()
+            print(Fore.GREEN + Style.BRIGHT + "\nEnsemble Configuration:")
+            cancel_msg = Fore.RED + Style.BRIGHT + "\nEnsemble configuration cancelled"
+            
+            num_models = input(Fore.YELLOW + Style.BRIGHT + "Number of ensemble models " + Fore.WHITE + Style.BRIGHT + "(3): " + Style.RESET_ALL).strip()
             if num_models.lower() == 'c':
-                print("Ensemble configuration cancelled")
+                print(cancel_msg)
                 return None
             model_config['num_models'] = int(num_models) if num_models else 3
             
-            diversity = input("Diversity factor (0.3): ").strip()
+            diversity = input(Fore.YELLOW + Style.BRIGHT + "Diversity factor " + Fore.WHITE + Style.BRIGHT + "(0.3): " + Style.RESET_ALL).strip()
             if diversity.lower() == 'c':
-                print("Ensemble configuration cancelled")
+                print(cancel_msg)
                 return None
             model_config['diversity_factor'] = float(diversity) if diversity else 0.3
         
-        min_features = input("Minimum features validation (5): ").strip()
+        # Validation configuration
+        min_features = input(Fore.YELLOW + Style.BRIGHT + "Minimum features validation " + Fore.WHITE + Style.BRIGHT + "(5): " + Style.RESET_ALL).strip()
         if min_features.lower() == 'c':
-            print("Ensemble configuration cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nValidation configuration cancelled")
             return None
         model_config['min_features'] = int(min_features) if min_features else 5
-        
-        print("\n" + "="*50)
-        print("TRAINING CONFIGURATION")
-        print("="*50)
+
+        # TRAINING CONFIGURATION SECTION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "TRAINING CONFIGURATION")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         training_config = final_config.setdefault('training', {})
         
-        print("\nBasic Training Parameters:")
-        epochs = input("Number of epochs (50): ").strip()
+        print(Fore.GREEN + Style.BRIGHT + "\nBasic Training Parameters:")
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nTraining configuration cancelled"
+        
+        epochs = input(Fore.YELLOW + Style.BRIGHT + "Number of epochs " + Fore.WHITE + Style.BRIGHT + "(50): " + Style.RESET_ALL).strip()
         if epochs.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['epochs'] = int(epochs) if epochs else 50
         
-        batch_size = input("Batch size (64): ").strip()
+        batch_size = input(Fore.YELLOW + Style.BRIGHT + "Batch size " + Fore.WHITE + Style.BRIGHT + "(64): " + Style.RESET_ALL).strip()
         if batch_size.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['batch_size'] = int(batch_size) if batch_size else 64
         
-        lr = input("Learning rate (0.001): ").strip()
+        lr = input(Fore.YELLOW + Style.BRIGHT + "Learning rate " + Fore.WHITE + Style.BRIGHT + "(0.001): " + Style.RESET_ALL).strip()
         if lr.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['learning_rate'] = float(lr) if lr else 0.001
         
-        patience = input("Early stopping patience (15): ").strip()
+        patience = input(Fore.YELLOW + Style.BRIGHT + "Early stopping patience " + Fore.WHITE + Style.BRIGHT + "(15): " + Style.RESET_ALL).strip()
         if patience.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['patience'] = int(patience) if patience else 15
         
-        validation_split = input("Validation split (0.2): ").strip()
+        validation_split = input(Fore.YELLOW + Style.BRIGHT + "Validation split " + Fore.WHITE + Style.BRIGHT + "(0.2): " + Style.RESET_ALL).strip()
         if validation_split.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['validation_split'] = float(validation_split) if validation_split else 0.2
         
-        print("\nAdvanced Training:")
-        weight_decay = input("Weight decay (1e-4): ").strip()
+        print(Fore.GREEN + Style.BRIGHT + "\nAdvanced Training Configuration:")
+        weight_decay = input(Fore.YELLOW + Style.BRIGHT + "Weight decay " + Fore.WHITE + Style.BRIGHT + "(1e-4): " + Style.RESET_ALL).strip()
         if weight_decay.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['weight_decay'] = float(weight_decay) if weight_decay else 1e-4
         
-        gradient_clip = input("Gradient clipping threshold (1.0): ").strip()
+        gradient_clip = input(Fore.YELLOW + Style.BRIGHT + "Gradient clipping threshold " + Fore.WHITE + Style.BRIGHT + "(1.0): " + Style.RESET_ALL).strip()
         if gradient_clip.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['gradient_clip'] = float(gradient_clip) if gradient_clip else 1.0
         
-        grad_accum = input("Gradient accumulation steps (1): ").strip()
+        grad_accum = input(Fore.YELLOW + Style.BRIGHT + "Gradient accumulation steps " + Fore.WHITE + Style.BRIGHT + "(1): " + Style.RESET_ALL).strip()
         if grad_accum.lower() == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['gradient_accumulation_steps'] = int(grad_accum) if grad_accum else 1
         
-        print("\nOptimizer options:")
+        # Optimizer selection with enhanced UI
+        print(Fore.GREEN + Style.BRIGHT + "\nOptimizer Selection:")
         optimizers = ['AdamW', 'Adam', 'SGD', 'RMSprop']
         for i, opt in enumerate(optimizers, 1):
-            print(f"{i}. {opt}")
-        print(f"{len(optimizers)+1}. Cancel and return to previous menu")
+            print(Fore.WHITE + Style.BRIGHT + f"{i}. {opt}")
+        print(Fore.RED + Style.BRIGHT + f"{len(optimizers)+1}. Cancel and return to previous menu")
         
         while True:
-            opt_choice = input(f"Select optimizer (1-{len(optimizers)+1}): ").strip()
-            if opt_choice in [str(i) for i in range(1, len(optimizers)+2)]:
-                break
-            print(f"Please select 1-{len(optimizers)+1}")
+            try:
+                opt_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect optimizer (1-{len(optimizers)+1}): " + Style.RESET_ALL).strip()
+                if opt_choice in [str(i) for i in range(1, len(optimizers)+2)]:
+                    break
+                print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(optimizers)+1}")
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nOptimizer selection cancelled")
+                return None
         
         if opt_choice == str(len(optimizers)+1):
-            print("Optimizer selection cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nOptimizer selection cancelled")
             return None
         
         optimizer = optimizers[int(opt_choice)-1]
         training_config['optimizer'] = optimizer
         
+        # Optimizer-specific parameters
         if optimizer in ['AdamW', 'Adam']:
-            adam_betas_input = input("Adam betas (0.9,0.999): ").strip()
+            adam_betas_input = input(Fore.YELLOW + Style.BRIGHT + "Adam betas " + Fore.WHITE + Style.BRIGHT + "(0.9,0.999): " + Style.RESET_ALL).strip()
             if adam_betas_input.lower() == 'c':
-                print("Optimizer configuration cancelled")
+                print(Fore.RED + Style.BRIGHT + "\nOptimizer configuration cancelled")
                 return None
             if adam_betas_input:
                 betas = [float(x.strip()) for x in adam_betas_input.split(',')]
@@ -43757,46 +44393,55 @@ def _interactive_custom_setup(
             else:
                 training_config['adam_betas'] = (0.9, 0.999)
             
-            adam_eps = input("Adam epsilon (1e-8): ").strip()
+            adam_eps = input(Fore.YELLOW + Style.BRIGHT + "Adam epsilon " + Fore.WHITE + Style.BRIGHT + "(1e-8): " + Style.RESET_ALL).strip()
             if adam_eps.lower() == 'c':
-                print("Optimizer configuration cancelled")
+                print(Fore.RED + Style.BRIGHT + "\nOptimizer configuration cancelled")
                 return None
             training_config['adam_eps'] = float(adam_eps) if adam_eps else 1e-8
         
-        scheduler = input("Use learning rate scheduler? (Y/n): ").strip().lower()
+        # Learning rate scheduler
+        scheduler = input(Fore.YELLOW + Style.BRIGHT + "Use learning rate scheduler? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nScheduler configuration cancelled"
+        
         if scheduler == 'c':
-            print("Scheduler configuration cancelled")
+            print(cancel_msg)
             return None
         if scheduler in ('', 'y', 'yes'):
-            print("Scheduler options:")
+            print(Fore.GREEN + Style.BRIGHT + "\nScheduler Options:")
             scheduler_types = ['ReduceLROnPlateau', 'StepLR', 'CosineAnnealingLR', 'ExponentialLR']
             for i, sched in enumerate(scheduler_types, 1):
-                print(f"{i}. {sched}")
-            print(f"{len(scheduler_types)+1}. Cancel and return to previous menu")
+                print(Fore.WHITE + Style.BRIGHT + f"{i}. {sched}")
+            print(Fore.RED + Style.BRIGHT + f"{len(scheduler_types)+1}. Cancel and return to previous menu")
             
             while True:
-                sched_choice = input(f"Select scheduler (1-{len(scheduler_types)+1}): ").strip()
-                if sched_choice in [str(i) for i in range(1, len(scheduler_types)+2)]:
-                    break
+                try:
+                    sched_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect scheduler (1-{len(scheduler_types)+1}): " + Style.RESET_ALL).strip()
+                    if sched_choice in [str(i) for i in range(1, len(scheduler_types)+2)]:
+                        break
+                    print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(scheduler_types)+1}")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nScheduler selection cancelled")
+                    return None
             
             if sched_choice == str(len(scheduler_types)+1):
-                print("Scheduler selection cancelled")
+                print(Fore.RED + Style.BRIGHT + "\nScheduler selection cancelled")
                 return None
             
             training_config['scheduler'] = scheduler_types[int(sched_choice)-1]
             
+            # Scheduler-specific parameters
             if training_config['scheduler'] == 'ReduceLROnPlateau':
-                lr_patience = input("LR scheduler patience (5): ").strip()
+                lr_patience = input(Fore.YELLOW + Style.BRIGHT + "LR scheduler patience " + Fore.WHITE + Style.BRIGHT + "(5): " + Style.RESET_ALL).strip()
                 if lr_patience == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
-                lr_factor = input("LR reduction factor (0.5): ").strip()
+                lr_factor = input(Fore.YELLOW + Style.BRIGHT + "LR reduction factor " + Fore.WHITE + Style.BRIGHT + "(0.5): " + Style.RESET_ALL).strip()
                 if lr_factor == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
-                min_lr = input("Minimum learning rate (1e-6): ").strip()
+                min_lr = input(Fore.YELLOW + Style.BRIGHT + "Minimum learning rate " + Fore.WHITE + Style.BRIGHT + "(1e-6): " + Style.RESET_ALL).strip()
                 if min_lr == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
                 
                 scheduler_params = {
@@ -43806,13 +44451,13 @@ def _interactive_custom_setup(
                 }
                 training_config['scheduler_params'] = scheduler_params
             elif training_config['scheduler'] == 'StepLR':
-                step_size = input("Step size (30): ").strip()
+                step_size = input(Fore.YELLOW + Style.BRIGHT + "Step size " + Fore.WHITE + Style.BRIGHT + "(30): " + Style.RESET_ALL).strip()
                 if step_size == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
-                gamma = input("Gamma (0.1): ").strip()
+                gamma = input(Fore.YELLOW + Style.BRIGHT + "Gamma " + Fore.WHITE + Style.BRIGHT + "(0.1): " + Style.RESET_ALL).strip()
                 if gamma == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
                 
                 scheduler_params = {
@@ -43821,13 +44466,13 @@ def _interactive_custom_setup(
                 }
                 training_config['scheduler_params'] = scheduler_params
             elif training_config['scheduler'] == 'CosineAnnealingLR':
-                t_max = input(f"T_max ({training_config['epochs']}): ").strip()
+                t_max = input(Fore.YELLOW + Style.BRIGHT + f"T_max " + Fore.WHITE + Style.BRIGHT + f"({training_config['epochs']}): " + Style.RESET_ALL).strip()
                 if t_max == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
-                eta_min = input("Eta min (1e-7): ").strip()
+                eta_min = input(Fore.YELLOW + Style.BRIGHT + "Eta min " + Fore.WHITE + Style.BRIGHT + "(1e-7): " + Style.RESET_ALL).strip()
                 if eta_min == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
                 
                 scheduler_params = {
@@ -43836,9 +44481,9 @@ def _interactive_custom_setup(
                 }
                 training_config['scheduler_params'] = scheduler_params
             elif training_config['scheduler'] == 'ExponentialLR':
-                gamma = input("Gamma (0.95): ").strip()
+                gamma = input(Fore.YELLOW + Style.BRIGHT + "Gamma " + Fore.WHITE + Style.BRIGHT + "(0.95): " + Style.RESET_ALL).strip()
                 if gamma == 'c':
-                    print("Scheduler configuration cancelled")
+                    print(cancel_msg)
                     return None
                 
                 scheduler_params = {
@@ -43848,383 +44493,402 @@ def _interactive_custom_setup(
         else:
             training_config['scheduler'] = None
         
-        early_stopping = input("Enable early stopping? (Y/n): ").strip().lower()
+        # Additional training options
+        early_stopping = input(Fore.YELLOW + Style.BRIGHT + "Enable early stopping? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nTraining configuration cancelled"
+        
         if early_stopping == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['early_stopping'] = early_stopping in ('', 'y', 'yes')
         
-        shuffle = input("Shuffle training data? (Y/n): ").strip().lower()
+        shuffle = input(Fore.YELLOW + Style.BRIGHT + "Shuffle training data? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if shuffle == 'c':
-            print("Training configuration cancelled")
+            print(cancel_msg)
             return None
         training_config['shuffle'] = shuffle in ('', 'y', 'yes')
         
+        # Mixed precision training
         if torch.cuda.is_available():
-            mixed_prec = input("Use mixed precision training? (Y/n): ").strip().lower()
+            mixed_prec = input(Fore.YELLOW + Style.BRIGHT + "Use mixed precision training? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
             if mixed_prec == 'c':
-                print("Training configuration cancelled")
+                print(cancel_msg)
                 return None
             training_config['mixed_precision'] = mixed_prec in ('', 'y', 'yes')
         else:
             training_config['mixed_precision'] = False
-        
-        print("\n" + "="*50)
-        print("SYSTEM & HARDWARE")
-        print("="*50)
+
+        # SYSTEM & HARDWARE CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "SYSTEM & HARDWARE CONFIGURATION")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         hardware_config = final_config.setdefault('hardware', {})
+        system_config = final_config.setdefault('system', {})
+        advanced_config = final_config.setdefault('advanced_training', {})
         
-        device_choice = input("Device (auto/cpu/cuda): ").strip()
+        device_choice = input(Fore.YELLOW + Style.BRIGHT + "\nDevice " + Fore.WHITE + Style.BRIGHT + "(auto/cpu/cuda): " + Style.RESET_ALL).strip()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nHardware configuration cancelled"
+        
         if device_choice.lower() == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         hardware_config['device'] = device_choice if device_choice else 'auto'
         
-        cuda_opt = input("Enable CUDA optimizations? (Y/n): ").strip().lower()
+        cuda_opt = input(Fore.YELLOW + Style.BRIGHT + "Enable CUDA optimizations? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if cuda_opt == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         hardware_config['cuda_optimizations'] = cuda_opt in ('', 'y', 'yes') and torch.cuda.is_available()
         
-        memory_mgmt = input("Enable memory management? (Y/n): ").strip().lower()
+        memory_mgmt = input(Fore.YELLOW + Style.BRIGHT + "Enable memory management? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if memory_mgmt == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         hardware_config['memory_management'] = {'enable_memory_efficient': memory_mgmt in ('', 'y', 'yes')}
         
-        gpu_memory = input("Recommended GPU memory GB (4.0): ").strip()
+        gpu_memory = input(Fore.YELLOW + Style.BRIGHT + "Recommended GPU memory GB " + Fore.WHITE + Style.BRIGHT + "(4.0): " + Style.RESET_ALL).strip()
         if gpu_memory.lower() == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         hardware_config['recommended_gpu_memory'] = float(gpu_memory) if gpu_memory else 4.0
         
-        perf_class = input("System performance class (auto/low/medium/high): ").strip()
+        perf_class = input(Fore.YELLOW + Style.BRIGHT + "System performance class " + Fore.WHITE + Style.BRIGHT + "(auto/low/medium/high): " + Style.RESET_ALL).strip()
         if perf_class.lower() == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         hardware_config['system_performance_class'] = perf_class if perf_class else 'auto'
         
-        advanced_config = final_config.setdefault('advanced_training', {})
-        num_workers = input("Data loader workers (4): ").strip()
+        # Advanced training configuration
+        num_workers = input(Fore.YELLOW + Style.BRIGHT + "Data loader workers " + Fore.WHITE + Style.BRIGHT + "(4): " + Style.RESET_ALL).strip()
         if num_workers.lower() == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         advanced_config['num_workers'] = int(num_workers) if num_workers else 4
         
-        pin_memory = input("Pin memory for GPU? (Y/n): ").strip().lower()
+        pin_memory = input(Fore.YELLOW + Style.BRIGHT + "Pin memory for GPU? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if pin_memory == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         advanced_config['pin_memory'] = pin_memory in ('', 'y', 'yes') and torch.cuda.is_available()
         
-        persistent_workers = input("Use persistent workers? (Y/n): ").strip().lower()
+        persistent_workers = input(Fore.YELLOW + Style.BRIGHT + "Use persistent workers? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if persistent_workers == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         advanced_config['persistent_workers'] = persistent_workers in ('', 'y', 'yes')
         
-        memory_efficient = input("Enable memory efficient training? (Y/n): ").strip().lower()
+        memory_efficient = input(Fore.YELLOW + Style.BRIGHT + "Enable memory efficient training? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if memory_efficient == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         advanced_config['memory_efficient'] = memory_efficient in ('', 'y', 'yes')
         
-        compile_model = input("Compile model with torch.compile? (y/N): ").strip().lower()
+        compile_model = input(Fore.YELLOW + Style.BRIGHT + "Compile model with torch.compile? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if compile_model == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         advanced_config['compile_model'] = compile_model in ('y', 'yes')
         
-        benchmark_mode = input("Enable benchmark mode? (y/N): ").strip().lower()
+        benchmark_mode = input(Fore.YELLOW + Style.BRIGHT + "Enable benchmark mode? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if benchmark_mode == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         advanced_config['benchmark_mode'] = benchmark_mode in ('y', 'yes')
         
-        gradient_checkpointing = input("Use gradient checkpointing? (y/N): ").strip().lower()
+        gradient_checkpointing = input(Fore.YELLOW + Style.BRIGHT + "Use gradient checkpointing? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if gradient_checkpointing == 'c':
-            print("Hardware configuration cancelled")
+            print(cancel_msg)
             return None
         advanced_config['gradient_checkpointing'] = gradient_checkpointing in ('y', 'yes')
         
-        system_config = final_config.setdefault('system', {})
+        # System configuration
+        parallel_processing = input(Fore.YELLOW + Style.BRIGHT + "Enable parallel processing? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nSystem configuration cancelled"
         
-        parallel_processing = input("Enable parallel processing? (y/N): ").strip().lower()
         if parallel_processing == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['parallel_processing'] = parallel_processing in ('y', 'yes')
         
-        max_workers = input("Maximum workers (4): ").strip()
+        max_workers = input(Fore.YELLOW + Style.BRIGHT + "Maximum workers " + Fore.WHITE + Style.BRIGHT + "(4): " + Style.RESET_ALL).strip()
         if max_workers.lower() == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['max_workers'] = int(max_workers) if max_workers else 4
         
-        distributed_training = input("Enable distributed training? (y/N): ").strip().lower()
+        distributed_training = input(Fore.YELLOW + Style.BRIGHT + "Enable distributed training? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if distributed_training == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['distributed_training'] = distributed_training in ('y', 'yes')
-        
-        print("\n" + "="*50)
-        print("MONITORING & LOGGING")
-        print("="*50)
+
+        # MONITORING & LOGGING CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "MONITORING & LOGGING")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         monitoring_config = final_config.setdefault('monitoring', {})
         
-        tensorboard = input("Enable TensorBoard logging? (Y/n): ").strip().lower()
+        tensorboard = input(Fore.YELLOW + Style.BRIGHT + "\nEnable TensorBoard logging? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nMonitoring configuration cancelled"
+        
         if tensorboard == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['tensorboard_logging'] = tensorboard in ('', 'y', 'yes')
         
-        verbose = input("Verbose output? (Y/n): ").strip().lower()
+        verbose = input(Fore.YELLOW + Style.BRIGHT + "Verbose output? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if verbose == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['verbose'] = verbose in ('', 'y', 'yes')
         
-        debug = input("Enable debug mode? (y/N): ").strip().lower()
+        debug = input(Fore.YELLOW + Style.BRIGHT + "Enable debug mode? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if debug == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['debug'] = debug in ('y', 'yes')
         
-        checkpoints = input("Save training checkpoints? (Y/n): ").strip().lower()
+        checkpoints = input(Fore.YELLOW + Style.BRIGHT + "Save training checkpoints? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if checkpoints == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['save_checkpoints'] = checkpoints in ('', 'y', 'yes')
         
         if monitoring_config['save_checkpoints']:
-            checkpoint_freq = input("Checkpoint frequency in epochs (10): ").strip()
+            checkpoint_freq = input(Fore.YELLOW + Style.BRIGHT + "Checkpoint frequency in epochs " + Fore.WHITE + Style.BRIGHT + "(10): " + Style.RESET_ALL).strip()
             if checkpoint_freq.lower() == 'c':
-                print("Monitoring configuration cancelled")
+                print(cancel_msg)
                 return None
             monitoring_config['checkpoint_frequency'] = int(checkpoint_freq) if checkpoint_freq else 10
         
-        save_best = input("Save best model? (Y/n): ").strip().lower()
+        save_best = input(Fore.YELLOW + Style.BRIGHT + "Save best model? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if save_best == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['save_best_model'] = save_best in ('', 'y', 'yes')
         
-        save_history = input("Save model history? (Y/n): ").strip().lower()
+        save_history = input(Fore.YELLOW + Style.BRIGHT + "Save model history? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if save_history == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['save_model_history'] = save_history in ('', 'y', 'yes')
         
-        log_freq = input("Log frequency (1): ").strip()
+        log_freq = input(Fore.YELLOW + Style.BRIGHT + "Log frequency " + Fore.WHITE + Style.BRIGHT + "(1): " + Style.RESET_ALL).strip()
         if log_freq.lower() == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['log_frequency'] = int(log_freq) if log_freq else 1
         
-        metrics_freq = input("Metrics frequency (1): ").strip()
+        metrics_freq = input(Fore.YELLOW + Style.BRIGHT + "Metrics frequency " + Fore.WHITE + Style.BRIGHT + "(1): " + Style.RESET_ALL).strip()
         if metrics_freq.lower() == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['metrics_frequency'] = int(metrics_freq) if metrics_freq else 1
         
-        print("\nMetrics to track (space-separated):")
-        print("Available: loss, reconstruction_error, anomaly_detection_rate, mse_statistics")
-        metrics_input = input("Metrics (default: loss reconstruction_error): ").strip()
+        print(Fore.GREEN + Style.BRIGHT + "\nMetrics to track (space-separated):")
+        print(Fore.WHITE + Style.BRIGHT + "Available: loss, reconstruction_error, anomaly_detection_rate, mse_statistics")
+        metrics_input = input(Fore.YELLOW + Style.BRIGHT + "Metrics " + Fore.WHITE + Style.BRIGHT + "(default: loss reconstruction_error): " + Style.RESET_ALL).strip()
         if metrics_input.lower() == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         if metrics_input:
             monitoring_config['metrics_to_track'] = metrics_input.split()
         else:
             monitoring_config['metrics_to_track'] = ['loss', 'reconstruction_error']
         
-        console_level = input("Console logging level (INFO/DEBUG/WARNING): ").strip()
+        console_level = input(Fore.YELLOW + Style.BRIGHT + "Console logging level " + Fore.WHITE + Style.BRIGHT + "(INFO/DEBUG/WARNING): " + Style.RESET_ALL).strip()
         if console_level.lower() == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['console_logging_level'] = console_level if console_level else 'INFO'
         
-        early_metric = input("Early stopping metric (val_loss): ").strip()
+        early_metric = input(Fore.YELLOW + Style.BRIGHT + "Early stopping metric " + Fore.WHITE + Style.BRIGHT + "(val_loss): " + Style.RESET_ALL).strip()
         if early_metric.lower() == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['early_stopping_metric'] = early_metric if early_metric else 'val_loss'
         
-        checkpoint_format = input("Checkpoint format (pth/pt): ").strip()
+        checkpoint_format = input(Fore.YELLOW + Style.BRIGHT + "Checkpoint format " + Fore.WHITE + Style.BRIGHT + "(pth/pt): " + Style.RESET_ALL).strip()
         if checkpoint_format.lower() == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['checkpoint_format'] = checkpoint_format if checkpoint_format else 'pth'
         
-        log_summary = input("Log model summary? (Y/n): ").strip().lower()
+        log_summary = input(Fore.YELLOW + Style.BRIGHT + "Log model summary? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if log_summary == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['log_model_summary'] = log_summary in ('', 'y', 'yes')
         
-        tensorboard_dir = input(f"TensorBoard directory ({TB_DIR}): ").strip()
+        tensorboard_dir = input(Fore.YELLOW + Style.BRIGHT + f"TensorBoard directory " + Fore.WHITE + Style.BRIGHT + f"({TB_DIR}): " + Style.RESET_ALL).strip()
         if tensorboard_dir.lower() == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['tensorboard_dir'] = tensorboard_dir if tensorboard_dir else TB_DIR
         
-        stability_metrics = input("Track stability metrics? (Y/n): ").strip().lower()
+        stability_metrics = input(Fore.YELLOW + Style.BRIGHT + "Track stability metrics? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if stability_metrics == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['stability_metrics'] = stability_metrics in ('', 'y', 'yes')
         
-        performance_metrics = input("Track performance metrics? (Y/n): ").strip().lower()
+        performance_metrics = input(Fore.YELLOW + Style.BRIGHT + "Track performance metrics? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if performance_metrics == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['performance_metrics'] = performance_metrics in ('', 'y', 'yes')
         
-        profiling = input("Enable profiling? (y/N): ").strip().lower()
+        profiling = input(Fore.YELLOW + Style.BRIGHT + "Enable profiling? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if profiling == 'c':
-            print("Monitoring configuration cancelled")
+            print(cancel_msg)
             return None
         monitoring_config['profiling_enabled'] = profiling in ('y', 'yes')
-        
-        print("\n" + "="*50)
-        print("SECURITY & ANOMALY DETECTION")
-        print("="*50)
+
+        # SECURITY & ANOMALY DETECTION CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "SECURITY & ANOMALY DETECTION")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         security_config = final_config.setdefault('security', {})
         
-        percentile = input("Anomaly threshold percentile (95.0): ").strip()
+        percentile = input(Fore.YELLOW + Style.BRIGHT + "\nAnomaly threshold percentile " + Fore.WHITE + Style.BRIGHT + "(95.0): " + Style.RESET_ALL).strip()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nSecurity configuration cancelled"
+        
         if percentile.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['percentile'] = float(percentile) if percentile else 95.0
         
-        threshold_method = input("Threshold calculation method (percentile/adaptive): ").strip()
+        threshold_method = input(Fore.YELLOW + Style.BRIGHT + "Threshold calculation method " + Fore.WHITE + Style.BRIGHT + "(percentile/adaptive): " + Style.RESET_ALL).strip()
         if threshold_method.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['anomaly_threshold_strategy'] = threshold_method if threshold_method else 'percentile'
         
-        enable_security = input("Enable security metrics? (Y/n): ").strip().lower()
+        enable_security = input(Fore.YELLOW + Style.BRIGHT + "Enable security metrics? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if enable_security == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['enable_security_metrics'] = enable_security in ('', 'y', 'yes')
         
-        adaptive_thresh = input("Use adaptive thresholding? (Y/n): ").strip().lower()
+        adaptive_thresh = input(Fore.YELLOW + Style.BRIGHT + "Use adaptive thresholding? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if adaptive_thresh == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['adaptive_threshold'] = adaptive_thresh in ('', 'y', 'yes')
         
-        attack_thresh = input("Attack threshold (optional): ").strip()
+        attack_thresh = input(Fore.YELLOW + Style.BRIGHT + "Attack threshold " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
         if attack_thresh.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         if attack_thresh:
             security_config['attack_threshold'] = float(attack_thresh)
         
-        false_neg_cost = input("False negative cost (optional): ").strip()
+        false_neg_cost = input(Fore.YELLOW + Style.BRIGHT + "False negative cost " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
         if false_neg_cost.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         if false_neg_cost:
             security_config['false_negative_cost'] = float(false_neg_cost)
         
-        early_warning = input("Early warning threshold (optional): ").strip()
+        early_warning = input(Fore.YELLOW + Style.BRIGHT + "Early warning threshold " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
         if early_warning.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         if early_warning:
             security_config['early_warning_threshold'] = float(early_warning)
         
-        confidence_interval = input("Confidence interval (optional): ").strip()
+        confidence_interval = input(Fore.YELLOW + Style.BRIGHT + "Confidence interval " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
         if confidence_interval.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         if confidence_interval:
             security_config['confidence_interval'] = float(confidence_interval)
         
-        detection_methods = input("Detection methods (space-separated, optional): ").strip()
+        detection_methods = input(Fore.YELLOW + Style.BRIGHT + "Detection methods " + Fore.WHITE + Style.BRIGHT + "(space-separated, optional): " + Style.RESET_ALL).strip()
         if detection_methods.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         if detection_methods:
             security_config['detection_methods'] = detection_methods.split()
         
-        alert_levels = input("Alert levels (space-separated, optional): ").strip()
+        alert_levels = input(Fore.YELLOW + Style.BRIGHT + "Alert levels " + Fore.WHITE + Style.BRIGHT + "(space-separated, optional): " + Style.RESET_ALL).strip()
         if alert_levels.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         if alert_levels:
             security_config['alert_levels'] = alert_levels.split()
         
-        threshold_validation = input("Enable threshold validation? (Y/n): ").strip().lower()
+        threshold_validation = input(Fore.YELLOW + Style.BRIGHT + "Enable threshold validation? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if threshold_validation == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['threshold_validation'] = threshold_validation in ('', 'y', 'yes')
         
-        robust_detection = input("Enable robust detection? (Y/n): ").strip().lower()
+        robust_detection = input(Fore.YELLOW + Style.BRIGHT + "Enable robust detection? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if robust_detection == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['robust_detection'] = robust_detection in ('', 'y', 'yes')
         
-        fp_tolerance = input("False positive tolerance (optional): ").strip()
+        fp_tolerance = input(Fore.YELLOW + Style.BRIGHT + "False positive tolerance " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
         if fp_tolerance.lower() == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         if fp_tolerance:
             security_config['false_positive_tolerance'] = float(fp_tolerance)
         
-        perf_optimized = input("Performance optimized detection? (Y/n): ").strip().lower()
+        perf_optimized = input(Fore.YELLOW + Style.BRIGHT + "Performance optimized detection? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if perf_optimized == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['performance_optimized_detection'] = perf_optimized in ('', 'y', 'yes')
         
-        real_time = input("Real-time monitoring? (y/N): ").strip().lower()
+        real_time = input(Fore.YELLOW + Style.BRIGHT + "Real-time monitoring? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if real_time == 'c':
-            print("Security configuration cancelled")
+            print(cancel_msg)
             return None
         security_config['real_time_monitoring'] = real_time in ('y', 'yes')
         
         if model_type == 'AutoencoderEnsemble':
-            voting = input("Ensemble voting method (average/majority/weighted): ").strip()
+            voting = input(Fore.YELLOW + Style.BRIGHT + "Ensemble voting method " + Fore.WHITE + Style.BRIGHT + "(average/majority/weighted): " + Style.RESET_ALL).strip()
             if voting.lower() == 'c':
-                print("Security configuration cancelled")
+                print(cancel_msg)
                 return None
             security_config['ensemble_voting'] = voting if voting else 'average'
             
-            uncertainty = input("Uncertainty threshold (optional): ").strip()
+            uncertainty = input(Fore.YELLOW + Style.BRIGHT + "Uncertainty threshold " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
             if uncertainty.lower() == 'c':
-                print("Security configuration cancelled")
+                print(cancel_msg)
                 return None
             if uncertainty:
                 security_config['uncertainty_threshold'] = float(uncertainty)
-        
-        print("\n" + "="*50)
-        print("VALIDATION & TESTING")
-        print("="*50)
+
+        # VALIDATION & TESTING CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "VALIDATION & TESTING")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         validation_config = final_config.setdefault('validation', {})
         
-        detailed_metrics = input("Calculate detailed metrics? (Y/n): ").strip().lower()
+        detailed_metrics = input(Fore.YELLOW + Style.BRIGHT + "\nCalculate detailed metrics? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nValidation configuration cancelled"
+        
         if detailed_metrics == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         validation_config['detailed_metrics'] = detailed_metrics in ('', 'y', 'yes')
         
-        cross_validation = input("Enable cross-validation? (y/N): ").strip().lower()
+        cross_validation = input(Fore.YELLOW + Style.BRIGHT + "Enable cross-validation? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if cross_validation == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         if cross_validation in ('y', 'yes'):
-            cv_folds = input("Number of CV folds (5): ").strip()
+            cv_folds = input(Fore.YELLOW + Style.BRIGHT + "Number of CV folds " + Fore.WHITE + Style.BRIGHT + "(5): " + Style.RESET_ALL).strip()
             if cv_folds.lower() == 'c':
-                print("Validation configuration cancelled")
+                print(cancel_msg)
                 return None
             validation_config['cross_validation'] = {
                 'enabled': True,
@@ -44233,274 +44897,288 @@ def _interactive_custom_setup(
         else:
             validation_config['cross_validation'] = {'enabled': False}
         
-        val_freq = input("Validation frequency (1): ").strip()
+        val_freq = input(Fore.YELLOW + Style.BRIGHT + "Validation frequency " + Fore.WHITE + Style.BRIGHT + "(1): " + Style.RESET_ALL).strip()
         if val_freq.lower() == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         validation_config['validation_frequency'] = int(val_freq) if val_freq else 1
         
-        save_val_results = input("Save validation results? (Y/n): ").strip().lower()
+        save_val_results = input(Fore.YELLOW + Style.BRIGHT + "Save validation results? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if save_val_results == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         validation_config['save_validation_results'] = save_val_results in ('', 'y', 'yes')
         
-        robustness = input("Enable robustness testing? (y/N): ").strip().lower()
+        robustness = input(Fore.YELLOW + Style.BRIGHT + "Enable robustness testing? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if robustness == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         validation_config['robustness_testing'] = robustness in ('y', 'yes')
         
-        benchmarking = input("Enable performance benchmarking? (y/N): ").strip().lower()
+        benchmarking = input(Fore.YELLOW + Style.BRIGHT + "Enable performance benchmarking? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if benchmarking == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         validation_config['performance_benchmarking'] = benchmarking in ('y', 'yes')
         
-        confidence_intervals = input("Calculate confidence intervals? (y/N): ").strip().lower()
+        confidence_intervals = input(Fore.YELLOW + Style.BRIGHT + "Calculate confidence intervals? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if confidence_intervals == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         validation_config['confidence_intervals'] = confidence_intervals in ('y', 'yes')
         
-        validation_metrics = input("Validation metrics (space-separated, default: loss reconstruction_error): ").strip()
+        validation_metrics = input(Fore.YELLOW + Style.BRIGHT + "Validation metrics " + Fore.WHITE + Style.BRIGHT + "(space-separated, default: loss reconstruction_error): " + Style.RESET_ALL).strip()
         if validation_metrics.lower() == 'c':
-            print("Validation configuration cancelled")
+            print(cancel_msg)
             return None
         if validation_metrics:
             validation_config['metrics'] = validation_metrics.split()
         else:
             validation_config['metrics'] = ['loss', 'reconstruction_error']
-        
-        print("\n" + "="*50)
-        print("EXPORT & SAVING")
-        print("="*50)
+
+        # EXPORT & SAVING CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "EXPORT & SAVING")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         export_config = final_config.setdefault('export', {})
         
-        save_model = input("Save trained model? (Y/n): ").strip().lower()
+        save_model = input(Fore.YELLOW + Style.BRIGHT + "\nSave trained model? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nExport configuration cancelled"
+        
         if save_model == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         export_config['save_model'] = save_model in ('', 'y', 'yes')
         
-        save_metadata = input("Save training metadata? (Y/n): ").strip().lower()
+        save_metadata = input(Fore.YELLOW + Style.BRIGHT + "Save training metadata? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if save_metadata == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         export_config['save_metadata'] = save_metadata in ('', 'y', 'yes')
         
-        save_history = input("Save training history? (Y/n): ").strip().lower()
+        save_history = input(Fore.YELLOW + Style.BRIGHT + "Save training history? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if save_history == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         export_config['save_training_history'] = save_history in ('', 'y', 'yes')
         
-        export_onnx = input("Export to ONNX format? (y/N): ").strip().lower()
+        export_onnx = input(Fore.YELLOW + Style.BRIGHT + "Export to ONNX format? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if export_onnx == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         export_config['export_onnx'] = export_onnx in ('y', 'yes')
         
-        model_dir = input(f"Model directory ({DEFAULT_MODEL_DIR}): ").strip()
+        model_dir = input(Fore.YELLOW + Style.BRIGHT + f"Model directory " + Fore.WHITE + f"({DEFAULT_MODEL_DIR}): " + Style.RESET_ALL).strip()
         if model_dir.lower() == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['model_dir'] = model_dir if model_dir else DEFAULT_MODEL_DIR
         
-        log_dir = input(f"Log directory ({LOG_DIR}): ").strip()
+        log_dir = input(Fore.YELLOW + Style.BRIGHT + f"Log directory " + Fore.WHITE + f"({LOG_DIR}): " + Style.RESET_ALL).strip()
         if log_dir.lower() == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['log_dir'] = log_dir if log_dir else LOG_DIR
         
-        config_dir = input(f"Config directory ({DEFAULT_MODEL_DIR}): ").strip()
+        config_dir = input(Fore.YELLOW + Style.BRIGHT + f"Config directory " + Fore.WHITE + f"({DEFAULT_MODEL_DIR}): " + Style.RESET_ALL).strip()
         if config_dir.lower() == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['config_dir'] = config_dir if config_dir else DEFAULT_MODEL_DIR
         
-        data_dir = input(f"Data directory ({DEFAULT_MODEL_DIR}): ").strip()
+        data_dir = input(Fore.YELLOW + Style.BRIGHT + f"Data directory " + Fore.WHITE + f"({DEFAULT_MODEL_DIR}): " + Style.RESET_ALL).strip()
         if data_dir.lower() == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['data_dir'] = data_dir if data_dir else DEFAULT_MODEL_DIR
         
-        checkpoint_dir = input(f"Checkpoint directory ({DEFAULT_MODEL_DIR}): ").strip()
+        checkpoint_dir = input(Fore.YELLOW + Style.BRIGHT + f"Checkpoint directory " + Fore.WHITE + f"({DEFAULT_MODEL_DIR}): " + Style.RESET_ALL).strip()
         if checkpoint_dir.lower() == 'c':
-            print("Export configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['checkpoint_dir'] = checkpoint_dir if checkpoint_dir else DEFAULT_MODEL_DIR
+
+        # REPRODUCIBILITY & SYSTEM CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "REPRODUCIBILITY & SYSTEM")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
-        print("\n" + "="*50)
-        print("REPRODUCIBILITY & SYSTEM")
-        print("="*50)
+        reproducible = input(Fore.YELLOW + Style.BRIGHT + "\nEnable reproducible training? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nSystem configuration cancelled"
         
-        reproducible = input("Enable reproducible training? (Y/n): ").strip().lower()
         if reproducible == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['reproducible'] = reproducible in ('', 'y', 'yes')
         
         if system_config['reproducible']:
-            random_seed = input("Random seed (42): ").strip()
+            random_seed = input(Fore.YELLOW + Style.BRIGHT + "Random seed " + Fore.WHITE + Style.BRIGHT + "(42): " + Style.RESET_ALL).strip()
             if random_seed.lower() == 'c':
-                print("System configuration cancelled")
+                print(cancel_msg)
                 return None
             system_config['random_seed'] = int(random_seed) if random_seed else 42
         
-        non_interactive = input("Set non-interactive mode? (y/N): ").strip().lower()
+        non_interactive = input(Fore.YELLOW + Style.BRIGHT + "Set non-interactive mode? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if non_interactive == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['non_interactive'] = non_interactive in ('y', 'yes')
         
-        python_exec = input(f"Python executable ({sys.executable}): ").strip()
+        python_exec = input(Fore.YELLOW + Style.BRIGHT + f"Python executable " + Fore.WHITE + f"({sys.executable}): " + Style.RESET_ALL).strip()
         if python_exec.lower() == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['python_executable'] = python_exec if python_exec else sys.executable
         
-        work_dir = input(f"Working directory ({os.getcwd()}): ").strip()
+        work_dir = input(Fore.YELLOW + Style.BRIGHT + f"Working directory " + Fore.WHITE + f"({os.getcwd()}): " + Style.RESET_ALL).strip()
         if work_dir.lower() == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['working_directory'] = work_dir if work_dir else os.getcwd()
         
-        env_health = input("Environment health check (auto/skip): ").strip()
+        env_health = input(Fore.YELLOW + Style.BRIGHT + "Environment health check " + Fore.WHITE + Style.BRIGHT + "(auto/skip): " + Style.RESET_ALL).strip()
         if env_health.lower() == 'c':
-            print("System configuration cancelled")
+            print(cancel_msg)
             return None
         system_config['environment_health'] = env_health if env_health else 'auto'
-        
-        print("\n" + "="*50)
-        print("HYPERPARAMETER OPTIMIZATION")
-        print("="*50)
+
+        # HYPERPARAMETER OPTIMIZATION CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         hpo_config = final_config.setdefault('hyperparameter_optimization', {})
         
-        hpo_enabled = input("Enable hyperparameter optimization? (y/N): ").strip().lower()
+        hpo_enabled = input(Fore.YELLOW + Style.BRIGHT + "\nEnable hyperparameter optimization? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nHPO configuration cancelled"
+        
         if hpo_enabled == 'c':
-            print("HPO configuration cancelled")
+            print(cancel_msg)
             return None
         hpo_config['enabled'] = hpo_enabled in ('y', 'yes')
         
         if hpo_config['enabled']:
-            hpo_strategy = input("HPO strategy (optuna/hyperopt/random): ").strip()
+            hpo_strategy = input(Fore.YELLOW + Style.BRIGHT + "HPO strategy " + Fore.WHITE + Style.BRIGHT + "(optuna/hyperopt/random): " + Style.RESET_ALL).strip()
             if hpo_strategy.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['strategy'] = hpo_strategy if hpo_strategy else 'optuna'
             
-            study_name = input("Study name (optional): ").strip()
+            study_name = input(Fore.YELLOW + Style.BRIGHT + "Study name " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
             if study_name.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             if study_name:
                 hpo_config['study_name'] = study_name
             
-            direction = input("Optimization direction (minimize/maximize): ").strip()
+            direction = input(Fore.YELLOW + Style.BRIGHT + "Optimization direction " + Fore.WHITE + Style.BRIGHT + "(minimize/maximize): " + Style.RESET_ALL).strip()
             if direction.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['direction'] = direction if direction else 'minimize'
             
-            n_trials = input("Number of trials (100): ").strip()
+            n_trials = input(Fore.YELLOW + Style.BRIGHT + "Number of trials " + Fore.WHITE + Style.BRIGHT + "(100): " + Style.RESET_ALL).strip()
             if n_trials.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['n_trials'] = int(n_trials) if n_trials else 100
             
-            timeout_input = input("Timeout in seconds (optional): ").strip()
+            timeout_input = input(Fore.YELLOW + Style.BRIGHT + "Timeout in seconds " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
             if timeout_input.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             if timeout_input:
                 hpo_config['timeout'] = int(timeout_input)
             
-            sampler = input("Sampler (TPE/Random/Grid): ").strip()
+            sampler = input(Fore.YELLOW + Style.BRIGHT + "Sampler " + Fore.WHITE + Style.BRIGHT + "(TPE/Random/Grid): " + Style.RESET_ALL).strip()
             if sampler.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['sampler'] = sampler if sampler else 'TPE'
             
-            pruner = input("Pruner (MedianPruner/HyperbandPruner/None): ").strip()
+            pruner = input(Fore.YELLOW + Style.BRIGHT + "Pruner " + Fore.WHITE + Style.BRIGHT + "(MedianPruner/HyperbandPruner/None): " + Style.RESET_ALL).strip()
             if pruner.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['pruner'] = pruner if pruner else 'MedianPruner'
             
-            objective_metric = input("Objective metric (val_loss): ").strip()
+            objective_metric = input(Fore.YELLOW + Style.BRIGHT + "Objective metric " + Fore.WHITE + Style.BRIGHT + "(val_loss): " + Style.RESET_ALL).strip()
             if objective_metric.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['objective_metric'] = objective_metric if objective_metric else 'val_loss'
             
-            trial_epochs = input("Trial epochs (10): ").strip()
+            trial_epochs = input(Fore.YELLOW + Style.BRIGHT + "Trial epochs " + Fore.WHITE + Style.BRIGHT + "(10): " + Style.RESET_ALL).strip()
             if trial_epochs.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['trial_epochs'] = int(trial_epochs) if trial_epochs else 10
             
-            trial_patience = input("Trial patience (5): ").strip()
+            trial_patience = input(Fore.YELLOW + Style.BRIGHT + "Trial patience " + Fore.WHITE + Style.BRIGHT + "(5): " + Style.RESET_ALL).strip()
             if trial_patience.lower() == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['trial_patience'] = int(trial_patience) if trial_patience else 5
             
-            cleanup_trials = input("Cleanup trials after completion? (Y/n): ").strip().lower()
+            cleanup_trials = input(Fore.YELLOW + Style.BRIGHT + "Cleanup trials after completion? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
             if cleanup_trials == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['cleanup_trials'] = cleanup_trials in ('', 'y', 'yes')
             
-            generate_plots = input("Generate optimization plots? (Y/n): ").strip().lower()
+            generate_plots = input(Fore.YELLOW + Style.BRIGHT + "Generate optimization plots? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
             if generate_plots == 'c':
-                print("HPO configuration cancelled")
+                print(cancel_msg)
                 return None
             hpo_config['generate_plots'] = generate_plots in ('', 'y', 'yes')
-        
-        print("\n" + "="*50)
-        print("PRESETS & ADVANCED")
-        print("="*50)
+
+        # PRESETS & ADVANCED CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "PRESETS & ADVANCED")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         presets_config = final_config.setdefault('presets', {})
         
-        current_preset = input("Current preset name (optional): ").strip()
+        current_preset = input(Fore.YELLOW + Style.BRIGHT + "Current preset name " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nPresets configuration cancelled"
+        
         if current_preset.lower() == 'c':
-            print("Presets configuration cancelled")
+            print(cancel_msg)
             return None
         if current_preset:
             presets_config['current_preset'] = current_preset
         
-        auto_apply = input("Auto-apply compatible presets? (y/N): ").strip().lower()
+        auto_apply = input(Fore.YELLOW + Style.BRIGHT + "Auto-apply compatible presets? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if auto_apply == 'c':
-            print("Presets configuration cancelled")
+            print(cancel_msg)
             return None
         presets_config['auto_apply'] = auto_apply in ('y', 'yes')
         
-        validate_compatibility = input("Validate preset compatibility? (Y/n): ").strip().lower()
+        validate_compatibility = input(Fore.YELLOW + Style.BRIGHT + "Validate preset compatibility? " + Fore.WHITE + Style.BRIGHT + "(Y/n): " + Style.RESET_ALL).strip().lower()
         if validate_compatibility == 'c':
-            print("Presets configuration cancelled")
+            print(cancel_msg)
             return None
         presets_config['validate_compatibility'] = validate_compatibility in ('', 'y', 'yes')
         
         experimental_config = final_config.setdefault('experimental', {})
         
-        experimental_features = input("Enable experimental features? (y/N): ").strip().lower()
+        experimental_features = input(Fore.YELLOW + Style.BRIGHT + "\nEnable experimental features? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nExperimental configuration cancelled"
+        
         if experimental_features == 'c':
-            print("Experimental configuration cancelled")
+            print(cancel_msg)
             return None
         if experimental_features in ('y', 'yes'):
-            print("Available experimental features:")
-            print("1. Advanced attention mechanisms")
-            print("2. Dynamic architecture adjustment")
-            print("3. Adaptive learning rates")
-            print("4. Novel regularization techniques")
+            print(Fore.GREEN + Style.BRIGHT + "\nAvailable experimental features:")
+            print(Fore.WHITE + Style.BRIGHT + "1. Advanced attention mechanisms")
+            print(Fore.WHITE + Style.BRIGHT + "2. Dynamic architecture adjustment")
+            print(Fore.WHITE + Style.BRIGHT + "3. Adaptive learning rates")
+            print(Fore.WHITE + Style.BRIGHT + "4. Novel regularization techniques")
             
-            exp_features_input = input("Select features (space-separated numbers, optional): ").strip()
+            exp_features_input = input(Fore.YELLOW + Style.BRIGHT + "\nSelect features " + Fore.WHITE + Style.BRIGHT + "(space-separated numbers, optional): " + Style.RESET_ALL).strip()
             if exp_features_input.lower() == 'c':
-                print("Experimental configuration cancelled")
+                print(cancel_msg)
                 return None
             if exp_features_input:
                 feature_map = {
@@ -44515,40 +45193,43 @@ def _interactive_custom_setup(
                         selected_features[feature_map[num]] = True
                 experimental_config['experimental_features'] = selected_features
         
-        auto_optimize = input("Enable automatic optimization? (y/N): ").strip().lower()
+        auto_optimize = input(Fore.YELLOW + Style.BRIGHT + "Enable automatic optimization? " + Fore.WHITE + Style.BRIGHT + "(y/N): " + Style.RESET_ALL).strip().lower()
         if auto_optimize == 'c':
-            print("Experimental configuration cancelled")
+            print(cancel_msg)
             return None
         experimental_config['auto_optimize'] = auto_optimize in ('y', 'yes')
-        
-        print("\n" + "="*50)
-        print("METADATA & DOCUMENTATION")
-        print("="*50)
+
+        # METADATA & DOCUMENTATION CONFIGURATION
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.CYAN + Style.BRIGHT + "METADATA & DOCUMENTATION")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         
         metadata_config = final_config.setdefault('metadata', {})
         
-        description = input("Experiment description (optional): ").strip()
+        description = input(Fore.YELLOW + Style.BRIGHT + "Experiment description " + Fore.WHITE + Style.BRIGHT + "(optional): " + Style.RESET_ALL).strip()
+        cancel_msg = Fore.RED + Style.BRIGHT + "\nMetadata configuration cancelled"
+        
         if description.lower() == 'c':
-            print("Metadata configuration cancelled")
+            print(cancel_msg)
             return None
         if description:
             metadata_config['description'] = description
         
-        version = input("Configuration version (1.0): ").strip()
+        version = input(Fore.YELLOW + Style.BRIGHT + "Configuration version " + Fore.WHITE + Style.BRIGHT + "(1.0): " + Style.RESET_ALL).strip()
         if version.lower() == 'c':
-            print("Metadata configuration cancelled")
+            print(cancel_msg)
             return None
         metadata_config['version'] = version if version else '1.0'
         
-        config_version = input("Config format version (1.0): ").strip()
+        config_version = input(Fore.YELLOW + Style.BRIGHT + "Config format version " + Fore.WHITE + Style.BRIGHT + "(1.0): " + Style.RESET_ALL).strip()
         if config_version.lower() == 'c':
-            print("Metadata configuration cancelled")
+            print(cancel_msg)
             return None
         metadata_config['config_version'] = config_version if config_version else '1.0'
         
-        config_type = input("Configuration type (custom): ").strip()
+        config_type = input(Fore.YELLOW + Style.BRIGHT + "Configuration type " + Fore.WHITE + Style.BRIGHT + "(custom): " + Style.RESET_ALL).strip()
         if config_type.lower() == 'c':
-            print("Metadata configuration cancelled")
+            print(cancel_msg)
             return None
         metadata_config['config_type'] = config_type if config_type else 'custom'
         
@@ -44558,9 +45239,9 @@ def _interactive_custom_setup(
         if final_config.get('presets', {}).get('current_preset'):
             metadata_config['preset_used'] = final_config['presets']['current_preset']
         
-        compatibility = input("Compatibility tags (space-separated, optional): ").strip()
+        compatibility = input(Fore.YELLOW + Style.BRIGHT + "Compatibility tags " + Fore.WHITE + Style.BRIGHT + "(space-separated, optional): " + Style.RESET_ALL).strip()
         if compatibility.lower() == 'c':
-            print("Metadata configuration cancelled")
+            print(cancel_msg)
             return None
         if compatibility:
             metadata_config['compatibility'] = compatibility.split()
@@ -44582,102 +45263,160 @@ def _interactive_custom_setup(
             'recommendations': [],
             'configuration_health': {}
         })
+
+        # FINAL CONFIGURATION REVIEW
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*60)
+        print(Fore.CYAN + Style.BRIGHT + "CONFIGURATION REVIEW")
+        print(Fore.YELLOW + Style.BRIGHT + "-"*60)
         
-        print("\n" + "="*60)
-        print("CONFIGURATION REVIEW")
-        print("="*60)
-        
-        print(f"Data: {'Real Data' if use_real_data else 'Synthetic Data'}")
-        print(f"Model: {model_type}")
-        print(f"Training: {training_config.get('epochs', 50)} epochs")
-        print(f"Batch Size: {training_config.get('batch_size', 64)}")
-        print(f"Learning Rate: {training_config.get('learning_rate', 0.001)}")
-        print(f"Optimizer: {training_config.get('optimizer', 'AdamW')}")
-        print(f"Scheduler: {training_config.get('scheduler', 'None')}")
-        print(f"Mixed Precision: {training_config.get('mixed_precision', False)}")
-        print(f"Device: {hardware_config.get('device', 'auto')}")
-        
-        print(f"Architecture:")
-        print(f"   Encoding Dim: {model_config.get('encoding_dim')}")
-        print(f"   Hidden Dims: {model_config.get('hidden_dims')}")
-        print(f"   Dropout Rates: {model_config.get('dropout_rates')}")
-        print(f"   Activation: {model_config.get('activation')}")
-        print(f"   Normalization: {model_config.get('normalization')}")
-        
-        if model_type == 'AutoencoderEnsemble':
-            print(f"   Ensemble Size: {model_config.get('num_models')}")
-            print(f"   Diversity Factor: {model_config.get('diversity_factor')}")
-        elif model_type == 'EnhancedAutoencoder':
-            features = []
-            if model_config.get('use_attention'):
-                features.append("Attention")
-            if model_config.get('residual_blocks'):
-                features.append("Residual Blocks")
-            if model_config.get('skip_connection'):
-                features.append("Skip Connections")
-            if features:
-                print(f"   Enhanced Features: {', '.join(features)}")
-            print(f"   Legacy Mode: {model_config.get('legacy_mode', False)}")
-        
-        print(f"Security:")
-        print(f"   Anomaly Threshold: {security_config.get('percentile', 95.0)}th percentile")
-        print(f"   Threshold Method: {security_config.get('anomaly_threshold_strategy', 'percentile')}")
-        print(f"   Adaptive Threshold: {security_config.get('adaptive_threshold', True)}")
-        
-        print(f"Monitoring:")
-        print(f"   TensorBoard: {monitoring_config.get('tensorboard_logging', True)}")
-        print(f"   Checkpoints: {monitoring_config.get('save_checkpoints', True)}")
-        print(f"   Metrics: {monitoring_config.get('metrics_to_track', ['loss', 'reconstruction_error'])}")
-        
-        print(f"System:")
-        print(f"   Reproducible: {system_config.get('reproducible', True)}")
-        print(f"   Workers: {advanced_config.get('num_workers', 4)}")
-        print(f"   Model Directory: {system_config.get('model_dir', DEFAULT_MODEL_DIR)}")
-        
-        if hpo_config.get('enabled'):
-            print(f"HPO:")
-            print(f"   Strategy: {hpo_config.get('strategy', 'optuna')}")
-            print(f"   Trials: {hpo_config.get('n_trials', 100)}")
-            print(f"   Objective: {hpo_config.get('objective_metric', 'val_loss')}")
-        
+        # Comprehensive configuration summary
         estimated_time = _estimate_training_time(
             training_config.get('epochs', 50), 
             model_type,
             training_config.get('batch_size', 64)
         )
-        print(f"Estimated Time: ~{estimated_time} minutes")
         
-        print("\n" + "="*60)
-        confirm = input("Start training with this configuration? (Y/n/c to cancel): ").strip().lower()
+        print(Fore.YELLOW + Style.BRIGHT + f"\nConfiguration Summary:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data: " + Fore.GREEN + Style.BRIGHT + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('epochs', 50)} epochs")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('batch_size', 64)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('learning_rate', 0.001)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Optimizer: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('optimizer', 'AdamW')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Scheduler: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('scheduler', 'None')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('mixed_precision', False)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + Style.BRIGHT + f"{hardware_config.get('device', 'auto')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Estimated Time: " + Fore.GREEN + Style.BRIGHT + f"~{estimated_time} minutes")
+        
+        print(Fore.YELLOW + Style.BRIGHT + f"\nArchitecture Details:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Encoding Dim: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('encoding_dim')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Hidden Dims: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('hidden_dims')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Dropout Rates: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('dropout_rates')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Activation: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('activation')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Normalization: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('normalization')}")
+        
+        # Enhanced features display
+        if model_type in ['EnhancedAutoencoder', 'AutoencoderEnsemble']:
+            enhanced_features = []
+            if model_config.get('use_attention'):
+                enhanced_features.append("Attention")
+            if model_config.get('residual_blocks'):
+                enhanced_features.append("Residual Blocks")
+            if model_config.get('skip_connection'):
+                enhanced_features.append("Skip Connections")
+            
+            if enhanced_features:
+                print(Fore.MAGENTA + Style.BRIGHT + f"\n   Enhanced Features:")
+                print(Fore.GREEN + Style.BRIGHT + f"     └─ Enhanced Features: " + Fore.CYAN + Style.BRIGHT + f"{', '.join(enhanced_features)}")
+        
+        if model_type == 'AutoencoderEnsemble':
+            print(Fore.MAGENTA + Style.BRIGHT + f"\n   Ensemble Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"     ├─ Ensemble Size: " + Fore.CYAN + Style.BRIGHT + f"{model_config.get('num_models', 3)} models")
+            print(Fore.GREEN + Style.BRIGHT + f"     └─ Diversity Factor: " + Fore.CYAN + Style.BRIGHT + f"{model_config.get('diversity_factor', 0.3)}")
+        
+        # Security configuration display
+        print(Fore.YELLOW + Style.BRIGHT + f"\nSecurity Configuration:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Anomaly Threshold: " + Fore.GREEN + Style.BRIGHT + f"{security_config.get('percentile', 95.0)}th percentile")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Threshold Method: " + Fore.GREEN + Style.BRIGHT + f"{security_config.get('anomaly_threshold_strategy', 'percentile')}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Adaptive Threshold: " + Fore.GREEN + Style.BRIGHT + f"{security_config.get('adaptive_threshold', True)}")
+        
+        # System configuration display
+        print(Fore.YELLOW + Style.BRIGHT + f"\nSystem Configuration:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Reproducible: " + Fore.GREEN + Style.BRIGHT + f"{system_config.get('reproducible', True)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Workers: " + Fore.GREEN + Style.BRIGHT + f"{advanced_config.get('num_workers', 4)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Directory: " + Fore.GREEN + Style.BRIGHT + f"{system_config.get('model_dir', DEFAULT_MODEL_DIR)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Config Directory: " + Fore.GREEN + Style.BRIGHT + f"{system_config.get('config_dir', CONFIG_DIR)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Log Directory: " + Fore.GREEN + Style.BRIGHT + f"{system_config.get('log_dir', LOG_DIR)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Tensorboard Directory: " + Fore.GREEN + Style.BRIGHT + f"{system_config.get('tb_dir', TB_DIR)}")
+        
+        # Monitoring configuration display
+        print(Fore.YELLOW + Style.BRIGHT + f"\nMonitoring Configuration:")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ TensorBoard: " + Fore.GREEN + Style.BRIGHT + f"{monitoring_config.get('tensorboard_logging', True)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Checkpoints: " + Fore.GREEN + Style.BRIGHT + f"{monitoring_config.get('save_checkpoints', True)}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Metrics: " + Fore.GREEN + Style.BRIGHT + f"{monitoring_config.get('metrics_to_track', ['loss', 'reconstruction_error'])}")
+        
+        # HPO configuration display
+        if hpo_config.get('enabled'):
+            print(Fore.YELLOW + Style.BRIGHT + f"\nHPO Configuration:")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Strategy: " + Fore.GREEN + Style.BRIGHT + f"{hpo_config.get('strategy', 'optuna')}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Trials: " + Fore.GREEN + Style.BRIGHT + f"{hpo_config.get('n_trials', 100)}")
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Objective: " + Fore.GREEN + Style.BRIGHT + f"{hpo_config.get('objective_metric', 'val_loss')}")
+        
+        # Final confirmation with enhanced options
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*60)
+        confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with this configuration? " + Fore.WHITE + Style.BRIGHT + "(Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
+        
         if confirm in ('', 'y', 'yes'):
-            print("\nLaunching comprehensive training...")
+            console.clear()
+            
+            launch_panel = Panel.fit(
+                "Launching training with custom configuration...",
+                style="bold green",
+                border_style="green",
+                padding=(1, 2),
+                box=box.ROUNDED
+            )
+            # Small delay to ensure panel is rendered before proceeding
+            time.sleep(3)
+            console.clear()
+            
             return _launch_training_with_config(final_config, **kwargs)
         elif confirm in ('c', 'cancel'):
-            print("Training cancelled")
+            print(Fore.RED + Style.BRIGHT + "\nTraining cancelled by user")
             return None
         else:
-            print("Would you like to:")
-            print("1. Try again with different settings")
-            print("2. Return to previous menu")
+            # Enhanced fallback options matching other functions
+            print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to:")
+            print(Fore.WHITE + Style.BRIGHT + "1. Try again with different settings")
+            print(Fore.WHITE + Style.BRIGHT + "2. Return to training menu")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel completely")
             
             while True:
-                retry_choice = input("Select option (1-2): ").strip()
-                if retry_choice in ['1', '2']:
-                    break
-                print("Invalid choice. Please select 1-2.")
+                try:
+                    retry_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): " + Style.RESET_ALL).strip()
+                    if retry_choice in ['0', '1', '2']:
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nOperation cancelled")
+                    return None
             
             if retry_choice == '1':
+                print(Fore.CYAN + Style.BRIGHT + "\nRestarting custom configuration...")
                 return _interactive_custom_setup(base_config, use_real_data, **kwargs)
+            elif retry_choice == '2':
+                print(Fore.YELLOW + Style.BRIGHT + "\nReturning to training menu...")
+                return None
             else:
-                print("Returning to previous menu")
+                print(Fore.RED + Style.BRIGHT + "\nConfiguration cancelled")
                 return None
             
     except KeyboardInterrupt:
-        print("\nCustom setup interrupted")
+        print(Fore.RED + Style.BRIGHT + "\n\nCustom setup interrupted by user!")
         return None
     except Exception as e:
-        logger.error(f"Custom setup failed: {e}")
-        print(f"Custom setup failed: {str(e)}")
+        logger.error(f"Custom setup failed: {e}", exc_info=True)
+        message = (
+            f"Error encountered during custom configuration setup: {str(e)}\n"
+            f"Context:\n"
+            f"- Base Config: {bool(base_config)}\n"
+            f"- Use Real Data: {use_real_data}\n\n"
+            f"This could be due to:\n"
+            f"- Invalid input values\n"
+            f"- Configuration validation issues\n"
+            f"- System resource constraints\n"
+            f"- Interactive input handling problems"
+        )
+        console.print(
+            Panel.fit(
+                f"{message}",
+                title="CUSTOM SETUP ERROR",
+                style="bold red",
+                border_style="red",
+                padding=(1, 2),
+                box=box.ROUNDED
+            )
+        )
         return None
 
 def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
@@ -44819,6 +45558,10 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
         training_params.setdefault('log_dir', LOG_DIR)
         training_params.setdefault('tensorboard_dir', TB_DIR)
         
+        training_params.setdefault('checkpoint_dir', CHECKPOINTS_DIR)
+        training_params.setdefault('data_dir', DATA_DIR)
+        training_params.setdefault('config_dir', CONFIG_DIR)
+        
         if monitoring_config.get('tensorboard_dir'):
             training_params['tensorboard_dir'] = monitoring_config['tensorboard_dir']
         elif system_config.get('log_dir'):
@@ -44831,9 +45574,9 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
         results = train_model(**training_params)
         
         if results and results.get('success', False):
-            print("\n" + "="*60)
+            print("\n" + "="*40)
             print("TRAINING COMPLETED SUCCESSFULLY!")
-            print("="*60)
+            print("="*40)
             
             _display_training_results(results)
             
@@ -45139,9 +45882,9 @@ def _estimate_training_time(epochs: int, model_type: str, batch_size: int = 64) 
 
 def _display_training_results(results: Dict[str, Any]) -> None:
     try:
-        print("\n" + "="*80)
+        print("\n" + "="*40)
         print("TRAINING RESULTS SUMMARY")
-        print("="*80)
+        print("="*40)
         
         success = results.get('success', False)
         timestamp = results.get('timestamp', 'Unknown')
@@ -45619,10 +46362,10 @@ def train_model_quick(
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
-        print(Fore.YELLOW + Style.BRIGHT + "QUICK MODEL TRAINING - FAST TEST MODE")
-        print(Fore.CYAN + Style.BRIGHT + "="*40)
-        print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.MAGENTA + Style.BRIGHT + "QUICK MODEL TRAINING - FAST TEST MODE")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"\nActive Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
@@ -45691,7 +46434,7 @@ def train_model_quick(
         
         # Interactive prompt if enabled
         if interactive:
-            print(Fore.YELLOW + Style.BRIGHT + "Quick Training Features:")
+            print(Fore.YELLOW + Style.BRIGHT + "\nQuick Training Features:")
             print(Fore.GREEN + Style.BRIGHT + "  ├─ Optimized parameters for fast training")
             print(Fore.GREEN + Style.BRIGHT + "  ├─ Lightweight model for rapid validation")
             print(Fore.GREEN + Style.BRIGHT + "  ├─ Performance metrics and system validation")
@@ -45699,7 +46442,7 @@ def train_model_quick(
             print(Fore.GREEN + Style.BRIGHT + "  └─ Immediate feedback with training results")
             
             # Display current configuration with enhanced styling
-            print(Fore.YELLOW + Style.BRIGHT + "Quick Training Configurations:")
+            print(Fore.YELLOW + Style.BRIGHT + "\nQuick Training Configurations:")
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + Style.BRIGHT + f"{quick_model_type}")
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.GREEN + Style.BRIGHT + f"{quick_epochs}")
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + Style.BRIGHT + f"{quick_batch_size}")
@@ -45964,7 +46707,7 @@ def train_model_quick(
             # Display quick training header with enhanced styling
             if verbose:
                 
-                print(Fore.YELLOW + Style.BRIGHT + "Configuration:")
+                print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration:")
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{quick_model_type}")
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{quick_epochs}")
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data: " + Fore.YELLOW + Style.BRIGHT + f"{quick_normal_samples + quick_attack_samples} samples, {quick_features} features")
@@ -45974,7 +46717,8 @@ def train_model_quick(
             # Prepare comprehensive training configuration optimized for speed
             comprehensive_config = {
                 # Model architecture - simplified for speed
-                'model_architecture': {
+                #'model_architecture': {
+                'model': {
                     'model_type': quick_model_type,
                     'input_dim': quick_features,
                     'encoding_dim': quick_encoding_dim,
@@ -45993,7 +46737,8 @@ def train_model_quick(
                 },
                 
                 # Training configuration - optimized for speed
-                'training_config': {
+                #'training_config': {
+                'training': {
                     'batch_size': quick_batch_size,
                     'epochs': quick_epochs,
                     'learning_rate': quick_learning_rate,
@@ -46014,7 +46759,8 @@ def train_model_quick(
                 },
                 
                 # Data configuration - synthetic for speed
-                'data_config': {
+                #'data_config': {
+                'data': {
                     'normal_samples': quick_normal_samples,
                     'attack_samples': quick_attack_samples,
                     'features': quick_features,
@@ -46032,7 +46778,8 @@ def train_model_quick(
                 },
                 
                 # Security configuration - simplified for speed
-                'security_config': {
+                #'security_config': {
+                'security': {
                     'percentile': 95.0,  # Standard percentile
                     'attack_threshold': None,  # Will be calculated
                     'false_negative_cost': 1.0,
@@ -46042,7 +46789,8 @@ def train_model_quick(
                 },
                 
                 # System configuration - optimized for speed
-                'system_config': {
+                #'system_config': {
+                'system': {
                     'model_dir': Path(model_dir),
                     'log_dir': Path(model_dir) / "logs",
                     'tensorboard_dir': Path(model_dir) / "tensorboard",
@@ -46055,9 +46803,12 @@ def train_model_quick(
                 },
                 
                 # Monitoring configuration - minimal for speed
-                'monitoring_config': {
+                #'monitoring_config': {
+                'monitoring': {
                     'verbose': verbose and not minimal_logging,
                     'debug_mode': False,
+                    'tensorboard_dir': Path(model_dir) / "tensorboard",
+                    'tb_dir': Path(model_dir) / "tensorboard",
                     'tensorboard_logging': tensorboard_logging,
                     'save_checkpoints': False if fast_mode else True,
                     'checkpoint_frequency': max(5, quick_epochs // 2),
@@ -46067,7 +46818,8 @@ def train_model_quick(
                 },
                 
                 # Export configuration - minimal for speed
-                'export_config': {
+                #'export_config': {
+                'export': {
                     'export_onnx': export_onnx,
                     'save_model': save_results,
                     'save_metadata': save_results,
@@ -46086,7 +46838,8 @@ def train_model_quick(
                 },
                 
                 # Validation configuration - minimal for speed
-                'validation_config': {
+                #'validation_config': {
+                'validation': {
                     'calculate_detailed_metrics': not fast_mode,
                     'cross_validation': False,  # Disabled for speed
                     'cv_folds': 3
@@ -46267,7 +47020,7 @@ def train_model_quick(
                 # Display quick training results with enhanced styling
                 if verbose:
                     
-                    print(Fore.YELLOW + Style.BRIGHT + "Training Summary:")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nTraining Summary:")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{quick_model_type}")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{final_metrics.get('final_epoch', 0)}/{quick_epochs}")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Duration: " + Fore.YELLOW + Style.BRIGHT + f"{training_time:.1f} minutes")
@@ -46299,15 +47052,7 @@ def train_model_quick(
                     
                     # Recommendations
                     if recommendations:
-                        console.print(
-                            Panel.fit(
-                                "[bold yellow]Recommendations for Improvement[/bold yellow]",
-                                style="bold yellow",
-                                border_style="yellow",
-                                padding=(1, 1),
-                                box=box.ROUNDED
-                            )
-                        )
+                        print(Fore.YELLOW + Style.BRIGHT + "\nRecommendations for Improvement:")
                         for i, rec in enumerate(recommendations, 1):
                             print(Fore.CYAN + Style.BRIGHT + f"{i}. {rec}")
                     
@@ -46341,7 +47086,7 @@ def train_model_quick(
                 
                 if verbose:
                     
-                    print(Fore.RED + Style.BRIGHT + "Error Details:")
+                    print(Fore.RED + Style.BRIGHT + "\nError Details:")
                     print(Fore.YELLOW + Style.BRIGHT + f"  ├─ Error: " + Fore.RED + Style.BRIGHT + f"{error_info}")
                     print(Fore.YELLOW + Style.BRIGHT + f"  ├─ Duration: " + Fore.RED + Style.BRIGHT + f"{quick_duration/60:.1f} minutes")
                     print(Fore.YELLOW + Style.BRIGHT + f"  └─ Model Type: " + Fore.RED + Style.BRIGHT + f"{quick_model_type}")
@@ -46371,7 +47116,7 @@ def train_model_quick(
                     quick_results['quick_results_path'] = str(quick_results_path)
                     
                     if verbose:
-                        print(Fore.GREEN + Style.BRIGHT + f"Quick training results saved to: {quick_results_path}")
+                        print(Fore.GREEN + Style.BRIGHT + f"\nQuick training results saved to: {quick_results_path}")
                 
                 except Exception as e:
                     logger.warning(f"Failed to save quick training results: {e}")
@@ -46495,7 +47240,7 @@ def train_model_quick(
         )
         console.print(
             Panel.fit(
-                f"[bold red]{message}[/bold red]",
+                f"{message}",
                 title="QUICK TRAINING SETUP ERROR",
                 style="bold red",
                 border_style="red",
@@ -46540,9 +47285,9 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.CYAN + Style.BRIGHT + "CUSTOM TRAINING CONFIGURATION")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -46555,7 +47300,9 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
             logger.warning(f"Failed to load current config: {e}")
             console.print(
                 Panel.fit(
-                    f"[bold yellow]Warning: Failed to load current config, using defaults: {str(e)}[/bold yellow]",
+                    #f"Warning: Failed to load current config, using defaults: {str(e)}",
+                    f"Failed to load current config, using defaults: {str(e)}",
+                    title="WARNING",
                     style="bold yellow",
                     border_style="yellow",
                     padding=(1, 1),
@@ -47321,18 +48068,18 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     experimental_config = final_config.get('experimental', {})
                     export_config = final_config.get('export', {})
                     
-                    print(Fore.YELLOW + Style.BRIGHT + "Model Configuration:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  1. Type: " + Fore.GREEN + f"{model_config.get('model_type', 'EnhancedAutoencoder')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  2. Encoding Dim: " + Fore.GREEN + f"{model_config.get('encoding_dim', 32)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  3. Hidden Dims: " + Fore.GREEN + f"{model_config.get('hidden_dims', [256, 128, 64])}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  4. Dropout Rates: " + Fore.GREEN + f"{model_config.get('dropout_rates', [0.2, 0.15, 0.1])}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  5. Activation: " + Fore.GREEN + f"{model_config.get('activation', 'leaky_relu')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  6. Normalization: " + Fore.GREEN + f"{model_config.get('normalization', 'batch')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  7. Weight Init: " + Fore.GREEN + f"{model_config.get('weight_init', 'xavier_uniform')}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nModel Configuration:")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Type: " + Fore.GREEN + f"{model_config.get('model_type', 'EnhancedAutoencoder')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Encoding Dim: " + Fore.GREEN + f"{model_config.get('encoding_dim', 32)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Hidden Dims: " + Fore.GREEN + f"{model_config.get('hidden_dims', [256, 128, 64])}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Dropout Rates: " + Fore.GREEN + f"{model_config.get('dropout_rates', [0.2, 0.15, 0.1])}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Activation: " + Fore.GREEN + f"{model_config.get('activation', 'leaky_relu')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Normalization: " + Fore.GREEN + f"{model_config.get('normalization', 'batch')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Weight Init: " + Fore.GREEN + f"{model_config.get('weight_init', 'xavier_uniform')}")
                     
                     if model_config.get('model_type') == 'AutoencoderEnsemble':
-                        print(Fore.CYAN + Style.BRIGHT + f"  8. Ensemble Size: " + Fore.GREEN + f"{model_config.get('num_models', 3)}")
-                        print(Fore.CYAN + Style.BRIGHT + f"  9 Diversity Factor: " + Fore.GREEN + f"{model_config.get('diversity_factor', 0.3)}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Ensemble Size: " + Fore.GREEN + f"{model_config.get('num_models', 3)}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Diversity Factor: " + Fore.GREEN + f"{model_config.get('diversity_factor', 0.3)}")
                     elif model_config.get('model_type') == 'EnhancedAutoencoder':
                         features = []
                         if model_config.get('use_attention', True):
@@ -47342,47 +48089,47 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         if model_config.get('skip_connection', True):
                             features.append("Skip Connections")
                         if features:
-                            print(Fore.CYAN + Style.BRIGHT + f"  10. Enhanced Features: " + Fore.GREEN + f"{', '.join(features)}")
-                        print(Fore.CYAN + Style.BRIGHT + f"  11. Legacy Mode: " + Fore.GREEN + f"{model_config.get('legacy_mode', False)}")
+                            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Enhanced Features: " + Fore.GREEN + f"{', '.join(features)}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Legacy Mode: " + Fore.GREEN + f"{model_config.get('legacy_mode', False)}")
                     
                     print(Fore.YELLOW + Style.BRIGHT + "\nTraining Configuration:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  12. Epochs: " + Fore.GREEN + f"{training_config.get('epochs', 50)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  13. Batch Size: " + Fore.GREEN + f"{training_config.get('batch_size', 64)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  14. Learning Rate: " + Fore.GREEN + f"{training_config.get('learning_rate', 0.001)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  15. Weight Decay: " + Fore.GREEN + f"{training_config.get('weight_decay', 1e-4)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  16. Patience: " + Fore.GREEN + f"{training_config.get('patience', 15)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  17. Optimizer: " + Fore.GREEN + f"{training_config.get('optimizer', 'AdamW')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  18. Scheduler: " + Fore.GREEN + f"{training_config.get('scheduler', 'ReduceLROnPlateau')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  19. Mixed Precision: " + Fore.GREEN + f"{training_config.get('mixed_precision', torch.cuda.is_available())}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  20. Early Stopping: " + Fore.GREEN + f"{training_config.get('early_stopping', True)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.GREEN + f"{training_config.get('epochs', 50)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + f"{training_config.get('batch_size', 64)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + f"{training_config.get('learning_rate', 0.001)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Weight Decay: " + Fore.GREEN + f"{training_config.get('weight_decay', 1e-4)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Patience: " + Fore.GREEN + f"{training_config.get('patience', 15)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Optimizer: " + Fore.GREEN + f"{training_config.get('optimizer', 'AdamW')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Scheduler: " + Fore.GREEN + f"{training_config.get('scheduler', 'ReduceLROnPlateau')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + f"{training_config.get('mixed_precision', torch.cuda.is_available())}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Early Stopping: " + Fore.GREEN + f"{training_config.get('early_stopping', True)}")
                     
                     print(Fore.YELLOW + Style.BRIGHT + "\nData Configuration:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  21. Use Real Data: " + Fore.GREEN + f"{data_config.get('use_real_data', False)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Use Real Data: " + Fore.GREEN + f"{data_config.get('use_real_data', False)}")
                     if not data_config.get('use_real_data', False):
-                        print(Fore.CYAN + Style.BRIGHT + f"  22. Normal Samples: " + Fore.GREEN + f"{data_config.get('normal_samples', 8000)}")
-                        print(Fore.CYAN + Style.BRIGHT + f"  23. Attack Samples: " + Fore.GREEN + f"{data_config.get('attack_samples', 2000)}")
-                        print(Fore.CYAN + Style.BRIGHT + f"  24. Features: " + Fore.GREEN + f"{data_config.get('features', 20)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  25. Validation Split: " + Fore.GREEN + f"{training_config.get('validation_split', 0.2)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  26. Test Split: " + Fore.GREEN + f"{data_config.get('test_split', 0.2)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  27. Data Normalization: " + Fore.GREEN + f"{data_config.get('data_normalization', 'standard')}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.GREEN + f"{data_config.get('normal_samples', 8000)}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.GREEN + f"{data_config.get('attack_samples', 2000)}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Features: " + Fore.GREEN + f"{data_config.get('features', 20)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Validation Split: " + Fore.GREEN + f"{training_config.get('validation_split', 0.2)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Test Split: " + Fore.GREEN + f"{data_config.get('test_split', 0.2)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Data Normalization: " + Fore.GREEN + f"{data_config.get('data_normalization', 'standard')}")
                     
                     print(Fore.YELLOW + Style.BRIGHT + "\nSecurity Configuration:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  28. Anomaly Threshold: " + Fore.GREEN + f"{security_config.get('percentile', 95.0)}th percentile")
-                    print(Fore.CYAN + Style.BRIGHT + f"  29. Threshold Method: " + Fore.GREEN + f"{security_config.get('anomaly_threshold_strategy', 'percentile')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  30. Adaptive Threshold: " + Fore.GREEN + f"{security_config.get('adaptive_threshold', True)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  31. Security Metrics: " + Fore.GREEN + f"{security_config.get('enable_security_metrics', True)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Anomaly Threshold: " + Fore.GREEN + f"{security_config.get('percentile', 95.0)}th percentile")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Threshold Method: " + Fore.GREEN + f"{security_config.get('anomaly_threshold_strategy', 'percentile')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Adaptive Threshold: " + Fore.GREEN + f"{security_config.get('adaptive_threshold', True)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Security Metrics: " + Fore.GREEN + f"{security_config.get('enable_security_metrics', True)}")
                     
                     print(Fore.YELLOW + Style.BRIGHT + "\nSystem Configuration:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  32. Device: " + Fore.GREEN + f"{hardware_config.get('device', system_config.get('device', 'auto'))}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  33. Reproducible: " + Fore.GREEN + f"{system_config.get('reproducible', True)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  34. Workers: " + Fore.GREEN + f"{system_config.get('num_workers', 4)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  35. Model Directory: " + Fore.GREEN + f"{system_config.get('model_dir', DEFAULT_MODEL_DIR)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + f"{hardware_config.get('device', system_config.get('device', 'auto'))}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Reproducible: " + Fore.GREEN + f"{system_config.get('reproducible', True)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Workers: " + Fore.GREEN + f"{system_config.get('num_workers', 4)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Model Directory: " + Fore.GREEN + f"{system_config.get('model_dir', DEFAULT_MODEL_DIR)}")
                     
                     print(Fore.YELLOW + Style.BRIGHT + "\nMonitoring Configuration:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  36. TensorBoard: " + Fore.GREEN + f"{monitoring_config.get('tensorboard_logging', True)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  37. Checkpoints: " + Fore.GREEN + f"{monitoring_config.get('save_checkpoints', True)}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  38. Metrics: " + Fore.GREEN + f"{monitoring_config.get('metrics_to_track', ['loss', 'reconstruction_error'])}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  39. Verbose: " + Fore.GREEN + f"{monitoring_config.get('verbose', True)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ TensorBoard: " + Fore.GREEN + f"{monitoring_config.get('tensorboard_logging', True)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Checkpoints: " + Fore.GREEN + f"{monitoring_config.get('save_checkpoints', True)}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Metrics: " + Fore.GREEN + f"{monitoring_config.get('metrics_to_track', ['loss', 'reconstruction_error'])}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Verbose: " + Fore.GREEN + f"{monitoring_config.get('verbose', True)}")
                     
                     estimated_time = _estimate_training_time(
                         training_config.get('epochs', 50),
@@ -47390,7 +48137,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                         training_config.get('batch_size', 64)
                     )
                     print(Fore.YELLOW + Style.BRIGHT + "\nPerformance Estimate:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  40. Estimated Training Time: " + Fore.GREEN + f"~{estimated_time} minutes")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Estimated Training Time: " + Fore.GREEN + f"~{estimated_time} minutes")
                     
                     
                     modify_more = input(Fore.YELLOW + Style.BRIGHT + "Continue modifying configuration? (y/N): " + Style.RESET_ALL).strip().lower()
@@ -47409,7 +48156,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
                     
                     console.print(
                         Panel.fit(
-                            "[bold green]READY TO START CUSTOM TRAINING[/bold green]",
+                            "READY TO START CUSTOM TRAINING",
                             style="bold green",
                             border_style="green",
                             padding=(1, 2),
@@ -47466,7 +48213,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
     except Exception as e:
         logger.error(f"Custom training configuration failed: {e}", exc_info=True)
         message = (
-            f"Error encountered during custom training configuration: {str(e)}\n\n"
+            f"Error encountered during custom training configuration: {str(e)}\n"
             f"Context:\n"
             f"- Current Preset: {preset_name}\n"
             f"- Model Type: {model_type}\n"
@@ -47475,11 +48222,11 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
             f"- Configuration file corruption\n"
             f"- Invalid parameter combinations\n"
             f"- System resource issues\n"
-            f"- Interactive input handling problems\n"
+            f"- Interactive input handling problems"
         )
         console.print(
             Panel.fit(
-                f"[bold red]{message}[/bold red]",
+                f"{message}",
                 title="CUSTOM TRAINING CONFIGURATION ERROR",
                 style="bold red",
                 border_style="red",
@@ -47568,9 +48315,9 @@ def run_stability_test(
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + "SYSTEM STABILITY TEST")
-        print(Fore.CYAN + Style.BRIGHT + "="*40)
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
@@ -47588,9 +48335,10 @@ def run_stability_test(
                 logger.warning(f"Failed to load current config: {e}")
                 console.print(
                     Panel.fit(
-                        f"[bold yellow]Warning: Failed to load current config, using defaults: {str(e)}[/bold yellow]",
-                        style="bold yellow",
-                        border_style="yellow",
+                        f"Failed to load current config, using defaults: {str(e)}",
+                        title="WARNING",
+                        style="bold red",
+                        border_style="red",
                         padding=(1, 1),
                         box=box.ROUNDED
                     )
@@ -47683,7 +48431,7 @@ def run_stability_test(
         
         # Interactive prompt if enabled
         if interactive:
-            print(Fore.YELLOW + Style.BRIGHT + "Stability Test Validates:")
+            print(Fore.YELLOW + Style.BRIGHT + "\nStability Test Validates:")
             print(Fore.GREEN + Style.BRIGHT + "  ├─ System hardware compatibility")
             print(Fore.GREEN + Style.BRIGHT + "  ├─ Training pipeline functionality")
             print(Fore.GREEN + Style.BRIGHT + "  ├─ Data processing integrity")
@@ -47770,13 +48518,13 @@ def run_stability_test(
                 
                 if verbose:
                     print(Fore.YELLOW + Style.BRIGHT + "System Information:")
-                    print(Fore.WHITE + Style.BRIGHT + f"  1. System: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('system', 'Unknown')} {system_info.get('machine', '')}")
-                    print(Fore.WHITE + Style.BRIGHT + f"  2. Python: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('python_version', '').split()[0]}")
-                    print(Fore.WHITE + Style.BRIGHT + f"  3. PyTorch: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('pytorch_version', 'Unknown')}")
-                    print(Fore.WHITE + Style.BRIGHT + f"  4. Device: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('device', 'Unknown')}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ System: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('system', 'Unknown')} {system_info.get('machine', '')}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Python: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('python_version', '').split()[0]}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('pytorch_version', 'Unknown')}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('device', 'Unknown')}")
                     if torch.cuda.is_available():
-                        print(Fore.WHITE + Style.BRIGHT + f"  5. CUDA: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('cuda_version', 'Unknown')}")
-                        print(Fore.WHITE + Style.BRIGHT + f"  6. GPUs: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('gpu_count', 0)}")
+                        print(Fore.WHITE + Style.BRIGHT + f"  ├─ CUDA: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('cuda_version', 'Unknown')}")
+                        print(Fore.WHITE + Style.BRIGHT + f"  └─ GPUs: " + Fore.GREEN + Style.BRIGHT + f"{system_info.get('gpu_count', 0)}")
                     print()
                 
             except Exception as e:
@@ -47841,10 +48589,10 @@ def run_stability_test(
                 
                 if verbose:
                     print(Fore.GREEN + Style.BRIGHT + f"Hardware compatibility test passed:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  1. Device: {device}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  2. Tensor operations: OK")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: {device}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Tensor operations: OK")
                     if test_mixed_precision and device.type == 'cuda':
-                        print(Fore.GREEN + Style.BRIGHT + f"  3. Mixed precision: {hw_test_results['details'].get('mixed_precision', 'N/A')}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mixed precision: {hw_test_results['details'].get('mixed_precision', 'N/A')}")
                 
             except Exception as e:
                 hw_test_results['status'] = 'FAILED'
@@ -47940,9 +48688,9 @@ def run_stability_test(
                 
                 if verbose:
                     print(Fore.GREEN + Style.BRIGHT + f"Data pipeline test passed:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  1. Synthetic data: {test_normal_samples + test_attack_samples} samples, {test_features} features")
-                    print(Fore.GREEN + Style.BRIGHT + f"  2. DataLoaders: {len(train_loader)} train, {len(val_loader)} val, {len(test_loader)} test batches")
-                    print(Fore.GREEN + Style.BRIGHT + f"  3. Data quality score: {validation_result['quality_score']:.2f}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Synthetic data: {test_normal_samples + test_attack_samples} samples, {test_features} features")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ DataLoaders: {len(train_loader)} train, {len(val_loader)} val, {len(test_loader)} test batches")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Data quality score: {validation_result['quality_score']:.2f}")
             
             except Exception as e:
                 data_test_results['status'] = 'FAILED'
@@ -48053,10 +48801,10 @@ def run_stability_test(
                 
                 if verbose:
                     print(Fore.GREEN + Style.BRIGHT + f"Model initialization test passed:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  1. Model: {test_model_type} ({type(model).__name__})")
-                    print(Fore.GREEN + Style.BRIGHT + f"  2. Parameters: {total_params:,} total, {trainable_params:,} trainable")
-                    print(Fore.GREEN + Style.BRIGHT + f"  3. Forward pass: {test_input.shape} → {test_output.shape}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  4. Device: {next(model.parameters()).device}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: {test_model_type} ({type(model).__name__})")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parameters: {total_params:,} total, {trainable_params:,} trainable")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Forward pass: {test_input.shape} → {test_output.shape}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Device: {next(model.parameters()).device}")
             
             except Exception as e:
                 model_test_results['status'] = 'FAILED'
@@ -48091,7 +48839,8 @@ def run_stability_test(
                 
                 # Prepare training configuration
                 stability_training_config = {
-                    'model_architecture': {
+                    #'model_architecture': {
+                    'model': {
                         'model_type': test_model_type,
                         'input_dim': test_features,
                         'encoding_dim': test_encoding_dim,
@@ -48100,7 +48849,8 @@ def run_stability_test(
                         'activation': 'leaky_relu',
                         'normalization': None if test_model_type == 'SimpleAutoencoder' else 'batch'
                     },
-                    'training_config': {
+                    #'training_config': {
+                    'training': {
                         'batch_size': test_batch_size,
                         'epochs': test_epochs,
                         'learning_rate': test_learning_rate,
@@ -48113,27 +48863,31 @@ def run_stability_test(
                         'early_stopping': True,
                         'validation_split': 0.2
                     },
-                    'data_config': {
+                    #'data_config': {
+                    'data': {
                         'normal_samples': test_normal_samples,
                         'attack_samples': test_attack_samples,
                         'features': test_features,
                         'use_real_data': False,
                         'data_preprocessing': True
                     },
-                    'system_config': {
+                    #'system_config': {
+                    'system': {
                         'model_dir': test_results_dir / "training_test",
                         'device': str(device),
                         'random_seed': 42,
                         'reproducible': True
                     },
-                    'monitoring_config': {
+                    #'monitoring_config': {
+                    'monitoring': {
                         'verbose': False,
                         'debug_mode': False,
                         'tensorboard_logging': False,
                         'save_checkpoints': False,
                         'progress_bar': False
                     },
-                    'export_config': {
+                    #'export_config': {
+                    'export': {
                         'export_onnx': False,
                         'save_model': False,
                         'save_metadata': False,
@@ -48186,11 +48940,11 @@ def run_stability_test(
                     
                     if verbose:
                         print(Fore.GREEN + Style.BRIGHT + f"Training stability test passed:")
-                        print(Fore.GREEN + Style.BRIGHT + f"  1. Epochs: {final_metrics.get('final_epoch', 0)}/{test_epochs}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  2. Best validation loss: {best_val_loss:.6f}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  3. Training quality: {training_quality}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  4. Training time: {training_time:.1f} minutes")
-                        print(Fore.GREEN + Style.BRIGHT + f"  5. Threshold: {final_metrics.get('threshold', 0):.6f}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: {final_metrics.get('final_epoch', 0)}/{test_epochs}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best validation loss: {best_val_loss:.6f}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training quality: {training_quality}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training time: {training_time:.1f} minutes")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Threshold: {final_metrics.get('threshold', 0):.6f}")
                 
                 else:
                     # Training failed or returned error
@@ -48287,10 +49041,10 @@ def run_stability_test(
                     
                     if verbose:
                         print(Fore.GREEN + Style.BRIGHT + f"Performance benchmarking passed:")
-                        print(Fore.GREEN + Style.BRIGHT + f"  1. Throughput: {samples_per_second:.1f} samples/sec")
-                        print(Fore.GREEN + Style.BRIGHT + f"  2. Inference time: {throughput_time * 1000:.2f} ms")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Throughput: {samples_per_second:.1f} samples/sec")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Inference time: {throughput_time * 1000:.2f} ms")
                         if torch.cuda.is_available():
-                            print(Fore.GREEN + Style.BRIGHT + f"  3. Memory usage: {memory_usage_mb:.1f} MB")
+                            print(Fore.GREEN + Style.BRIGHT + f"  └─ Memory usage: {memory_usage_mb:.1f} MB")
                 
                 except Exception as e:
                     perf_test_results['status'] = 'FAILED'
@@ -48630,7 +49384,7 @@ def run_stability_test(
         
         console.print(
             Panel.fit(
-                f"[bold red]{error_msg}[/bold red]",
+                f"{error_msg}",
                 title="STABILITY TEST INITIALIZATION ERROR",
                 style="bold red",
                 border_style="red",
@@ -49168,7 +49922,8 @@ def hyperparameter_search(
                 # Build comprehensive configuration for train_model
                 trial_config = {
                     # Model architecture configuration
-                    'model_architecture': {
+                    #'model_architecture': {
+                    'model': {
                         'model_type': model_params['model_type'],
                         'input_dim': input_dim,
                         'encoding_dim': model_params['encoding_dim'],
@@ -49188,7 +49943,8 @@ def hyperparameter_search(
                     },
                     
                     # Training configuration
-                    'training_config': {
+                    #'training_config': {
+                    'training': {
                         'batch_size': batch_size,
                         'epochs': trial_epochs,
                         'learning_rate': learning_rate,
@@ -49205,7 +49961,8 @@ def hyperparameter_search(
                     },
                     
                     # Data configuration
-                    'data_config': {
+                    #'data_config': {
+                    'data': {
                         'use_real_data': True,  # We're using provided data
                         'features': input_dim,
                         'data_preprocessing': True,
@@ -49213,7 +49970,8 @@ def hyperparameter_search(
                     },
                     
                     # System configuration
-                    'system_config': {
+                    #'system_config': {
+                    'system': {
                         'device': device,
                         'random_seed': random_seed,
                         'reproducible': True,
@@ -49222,7 +49980,8 @@ def hyperparameter_search(
                     },
                     
                     # Monitoring configuration (minimal for HPO)
-                    'monitoring_config': {
+                    #'monitoring_config': {
+                    'monitoring': {
                         'verbose': False,
                         'debug_mode': False,
                         'tensorboard_logging': False,
@@ -49232,7 +49991,8 @@ def hyperparameter_search(
                     },
                     
                     # Export configuration (minimal for HPO)
-                    'export_config': {
+                    #'export_config': {
+                    'export': {
                         'export_onnx': False,
                         'save_model': False,
                         'save_metadata': False,
@@ -50331,7 +51091,8 @@ def setup_hyperparameter_optimization(
                         # Create comprehensive config for train_model
                         fold_config = {
                             # Model architecture configuration
-                            'model_architecture': {
+                            #'model_architecture': {
+                            'model': {
                                 'model_type': fold_params['model_type'],
                                 'input_dim': fold_params['input_dim'],
                                 'encoding_dim': fold_params['encoding_dim'],
@@ -50351,7 +51112,8 @@ def setup_hyperparameter_optimization(
                             },
                             
                             # Training configuration
-                            'training_config': {
+                            #'training_config': {
+                            'training': {
                                 'batch_size': fold_params['batch_size'],
                                 'epochs': fold_params['epochs'],
                                 'learning_rate': fold_params['learning_rate'],
@@ -50368,7 +51130,8 @@ def setup_hyperparameter_optimization(
                             },
                             
                             # Data configuration
-                            'data_config': {
+                            #'data_config': {
+                            'data': {
                                 'use_real_data': False,
                                 'features': fold_params['features'],
                                 'normal_samples': len(X_fold_train),
@@ -50378,7 +51141,8 @@ def setup_hyperparameter_optimization(
                             },
                             
                             # System configuration
-                            'system_config': {
+                            #'system_config': {
+                            'system': {
                                 'device': fold_params['device'],
                                 'random_seed': fold_params['random_seed'],
                                 'reproducible': True,
@@ -50387,7 +51151,8 @@ def setup_hyperparameter_optimization(
                             },
                             
                             # Monitoring configuration (minimal for HPO)
-                            'monitoring_config': {
+                            #'monitoring_config': {
+                            'monitoring': {
                                 'verbose': False,
                                 'debug_mode': False,
                                 'tensorboard_logging': False,
@@ -50397,7 +51162,8 @@ def setup_hyperparameter_optimization(
                             },
                             
                             # Export configuration (minimal for HPO)
-                            'export_config': {
+                            #'export_config': {
+                            'export': {
                                 'export_onnx': False,
                                 'save_model': False,
                                 'save_metadata': False,
@@ -50437,8 +51203,7 @@ def setup_hyperparameter_optimization(
                             y_val=np.zeros(len(X_fold_val)),
                             y_test=np.zeros(len(X_fold_val)),
                             **{k: v for k, v in fold_params.items() 
-                               if k not in ['model_dir', 'log_dir', 'tensorboard_dir', 'tb_dir', 
-                                          'normal_samples', 'attack_samples', 'use_real_data']}
+                               if k not in ['model_dir', 'log_dir', 'tensorboard_dir', 'tb_dir', 'normal_samples', 'attack_samples', 'use_real_data']}
                         )
                         
                         # Extract validation loss
@@ -55693,9 +56458,9 @@ def print_main_menu(config: Optional[Dict[str, Any]] = None):
             config_source = config["metadata"].get("config_source", "Unknown")
     
     # menu header with context
-    print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+    print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
     print(Fore.CYAN + Style.BRIGHT + "MAIN APPLICATION MENU")
-    print(Fore.YELLOW + Style.BRIGHT + "="*40)
+    print(Fore.YELLOW + Style.BRIGHT + "-"*40)
     print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
     print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
     print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -55759,7 +56524,7 @@ def interactive_main():
                     model_training_menu(config)
                 except Exception as e:
                     message = (
-                        f"Error encountered while showing model training menu: {str(e)}\n\n"
+                        f"Error encountered while showing model training menu: {str(e)}\n"
                         f"Context:\n"
                         f"- Current Preset: {config.get('presets', {}).get('current_preset', 'Custom/Default')}\n"
                         f"- Model Type: {config.get('model', {}).get('model_type', 'Unknown')}\n\n"
@@ -55767,11 +56532,11 @@ def interactive_main():
                         f"- Configuration file corruption\n"
                         f"- Missing model dependencies\n"
                         f"- System resource constraints\n"
-                        f"- Data availability issues\n"
+                        f"- Data availability issues"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="TRAINING MENU ERROR",
                             style="bold red",
                             border_style="red",
@@ -55781,6 +56546,8 @@ def interactive_main():
                     )
             elif choice == "2":
                 try:
+                    console.clear()
+                    
                     current_preset = config.get('presets', {}).get('current_preset', 'Custom/Default')
                     model_type = config.get('model', {}).get('model_type', 'Unknown')
                     
@@ -55797,7 +56564,7 @@ def interactive_main():
                         f"- Preset configurations for different scenarios\n"
                         f"- Model comparison and analysis tools\n\n"
                         f"HPO can significantly improve model accuracy and efficiency\n"
-                        f"by finding optimal settings for your specific dataset and task.\n"
+                        f"by finding optimal settings for your specific dataset and task."
                     )
                     console.print(
                         Panel.fit(
@@ -55812,20 +56579,22 @@ def interactive_main():
                     # Small delay to ensure panel is rendered before proceeding
                     time.sleep(3)
                     
+                    console.clear()
+                    
                     hpo_training_menu(config)
                 except Exception as e:
                     message = (
-                        f"Error encountered while showing HPO training menu: {str(e)}\n\n"
+                        f"Error encountered while showing HPO training menu: {str(e)}\n"
                         f"Context:\n"
                         f"- Current Configuration: {config.get('presets', {}).get('current_preset', 'Custom/Default')}\n\n"
                         f"Please check:\n"
                         f"- HPO dependencies are installed\n"
                         f"- Configuration files are valid\n"
-                        f"- System has sufficient resources\n"
+                        f"- System has sufficient resources"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="HPO MENU ERROR",
                             border_style="bold red",
@@ -55843,11 +56612,11 @@ def interactive_main():
                         "Ensure:\n"
                         "- Multiple models are configured\n"
                         "- Comparison data is available\n"
-                        "- Visualization dependencies are installed\n"
+                        "- Visualization dependencies are installed"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="MODEL COMPARISON ERROR",
                             border_style="bold red",
@@ -55861,11 +56630,11 @@ def interactive_main():
                 except Exception as e:
                     message = (
                         f"Error encountered while showing configuration menu: {str(e)}\n"
-                        "Please check configuration files and permissions.\n"
+                        "Please check configuration files and permissions."
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="CONFIGURATION ERROR",
                             border_style="bold red",
@@ -55879,11 +56648,11 @@ def interactive_main():
                 except Exception as e:
                     message = (
                         f"Error encountered while showing system information: {str(e)}\n"
-                        "Please check system dependencies and permissions.\n"
+                        "Please check system dependencies and permissions."
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="SYSTEM INFO ERROR",
                             border_style="bold red",
@@ -55897,11 +56666,11 @@ def interactive_main():
                 except Exception as e:
                     message = (
                         f"Error encountered while running performance benchmark: {str(e)}\n"
-                        "Please check configuration and system resources.\n"
+                        "Please check configuration and system resources."
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="BENCHMARK ERROR",
                             border_style="bold red",
@@ -55915,11 +56684,11 @@ def interactive_main():
                 except Exception as e:
                     message = (
                         f"Error encountered while showing model analysis menu: {str(e)}\n"
-                        "Please check configuration and visualization dependencies.\n"
+                        "Please check configuration and visualization dependencies."
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="ANALYSIS ERROR",
                             border_style="bold red",
@@ -55933,11 +56702,11 @@ def interactive_main():
                 except Exception as e:
                     message = (
                         f"Error encountered while showing advanced tools menu: {str(e)}\n"
-                        "Please check configuration and expert feature dependencies.\n"
+                        "Please check configuration and expert feature dependencies."
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="ADVANCED TOOLS ERROR",
                             border_style="bold red",
@@ -55951,11 +56720,11 @@ def interactive_main():
                 except Exception as e:
                     message = (
                         f"Error encountered while showing initialization reports: {str(e)}\n"
-                        "Please check if reports exist and try again.\n"
+                        "Please check if reports exist and try again."
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             style="bold red",
                             title="REPORTS ERROR",
                             border_style="bold red",
@@ -55964,10 +56733,11 @@ def interactive_main():
                         )
                     )
             elif choice == "0":
+                console.clear()
                 # Exit message
                 console.print(
                     Panel.fit(
-                        "[bold yellow]Thank you for using GreyChamp IDS Deep Learning Suite![/bold yellow]",
+                        "Thank you for using GreyChamp IDS Deep Learning Suite!",
                         title="EXIT APPLICATION",
                         style="bold yellow",
                         border_style="yellow",
@@ -55979,14 +56749,14 @@ def interactive_main():
                 print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
                 break
             else:
-                print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 0-9.")
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid selection '{choice}'. Please enter a number from 0-9.")
             
         except KeyboardInterrupt:
             print(Fore.RED + Style.BRIGHT + "\nOperation interrupted by user")
         except Exception as e:
             logger.error(f"Main menu error: {e}", exc_info=True)
             message = (
-                f"Unexpected error in main menu: {str(e)}\n\n"
+                f"Unexpected error in main menu: {str(e)}\n"
                 f"Context:\n"
                 f"- Selected Option: {choice}\n"
                 f"- Current Preset: {config.get('presets', {}).get('current_preset', 'Custom/Default')}\n"
@@ -56000,7 +56770,7 @@ def interactive_main():
             )
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="MAIN MENU ERROR",
                     style="bold red",
                     border_style="red",
@@ -56086,9 +56856,9 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
         data_path_config = data_config.get('data_path', 'Default')
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.CYAN + Style.BRIGHT + "MODEL TRAINING MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Active Training Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -56128,7 +56898,7 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     train_model_interactive(use_current_config=True, config=config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during training with current configuration: {str(e)}\n\n"
+                        f"Error encountered during training with current configuration: {str(e)}\n"
                         f"Context:\n"
                         f"- Preset: {preset_name}\n"
                         f"- Model: {model_type}\n"
@@ -56137,11 +56907,11 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                         f"- Invalid configuration parameters\n"
                         f"- Missing or corrupted data\n"
                         f"- Insufficient system resources\n"
-                        f"- Model architecture issues\n"
+                        f"- Model architecture issues"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="TRAINING ERROR",
                             style="bold red",
                             border_style="red",
@@ -56155,18 +56925,18 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     train_model_interactive(use_real_data=False, config=config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during synthetic data training: {str(e)}\n\n"
+                        f"Error encountered during synthetic data training: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Synthetic Samples: {normal_samples_count}\n\n"
                         f"Please check:\n"
                         f"- Data generation configuration\n"
                         f"- Model compatibility with synthetic data\n"
-                        f"- System memory availability\n"
+                        f"- System memory availability"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="SYNTHETIC TRAINING ERROR",
                             style="bold red",
                             border_style="red",
@@ -56180,7 +56950,7 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     train_model_interactive(use_real_data=True, config=config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during real data training: {str(e)}\n\n"
+                        f"Error encountered during real data training: {str(e)}\n"
                         f"Context:\n"
                         f"- Data Path: {data_path_config}\n"
                         f"- Model: {model_type}\n\n"
@@ -56188,11 +56958,11 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                         f"- Data file exists and is accessible\n"
                         f"- Data format is compatible\n"
                         f"- Sufficient disk space\n"
-                        f"- Data preprocessing requirements\n"
+                        f"- Data preprocessing requirements"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="REAL DATA TRAINING ERROR",
                             style="bold red",
                             border_style="red",
@@ -56206,18 +56976,18 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     train_model_quick(config=config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during quick training: {str(e)}\n\n"
+                        f"Error encountered during quick training: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Mode: Fast test\n\n"
                         f"This could indicate:\n"
                         f"- Model initialization issues\n"
                         f"- Basic configuration problems\n"
-                        f"- Critical dependency missing\n"
+                        f"- Critical dependency missing"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="QUICK TRAINING ERROR",
                             style="bold red",
                             border_style="red",
@@ -56231,18 +57001,18 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     train_model_custom(config=config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during custom training setup: {str(e)}\n\n"
+                        f"Error encountered during custom training setup: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Preset: {preset_name}\n\n"
                         f"Please check:\n"
                         f"- Parameter validation rules\n"
                         f"- Configuration file permissions\n"
-                        f"- Interactive input handling\n"
+                        f"- Interactive input handling"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CUSTOM TRAINING ERROR",
                             style="bold red",
                             border_style="red",
@@ -56256,18 +57026,18 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     select_preset_config()
                 except Exception as e:
                     message = (
-                        f"Error encountered during preset selection: {str(e)}\n\n"
+                        f"Error encountered during preset selection: {str(e)}\n"
                         f"Context:\n"
                         f"- Available Presets: {preset_count}\n"
                         f"- Current Preset: {preset_name}\n\n"
                         f"Please verify:\n"
                         f"- Preset configuration files\n"
                         f"- Preset validation logic\n"
-                        f"- Configuration loading mechanisms\n"
+                        f"- Configuration loading mechanisms"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="PRESET SELECTION ERROR",
                             style="bold red",
                             border_style="red",
@@ -56281,18 +57051,18 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     run_stability_test(config=config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during stability test: {str(e)}\n\n"
+                        f"Error encountered during stability test: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Test Type: 10-epoch quick test\n\n"
                         f"This may indicate:\n"
                         f"- Fundamental model issues\n"
                         f"- Training loop problems\n"
-                        f"- Data loading failures\n"
+                        f"- Data loading failures"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="STABILITY TEST ERROR",
                             style="bold red",
                             border_style="red",
@@ -56311,7 +57081,7 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
         except Exception as e:
             logger.error(f"Training menu error: {e}", exc_info=True)
             message = (
-                f"Unexpected error in training menu: {str(e)}\n\n"
+                f"Unexpected error in training menu: {str(e)}\n"
                 f"Context:\n"
                 f"- Selected Option: {choice}\n"
                 f"- Current Preset: {preset_name}\n"
@@ -56326,7 +57096,7 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
             )
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="TRAINING MENU ERROR",
                     style="bold red",
                     border_style="red",
@@ -56415,9 +57185,9 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
         hpo_strategy = hpo_config.get('strategy', 'optuna')
         
         # Menu display with context
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION MENU")
-        print(Fore.CYAN + Style.BRIGHT + "="*40)
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Active HPO Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
@@ -56465,7 +57235,7 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     
                 except Exception as e:
                     message = (
-                        f"Error encountered during Express HPO: {str(e)}\n\n"
+                        f"Error encountered during Express HPO: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Preset: {preset_name}\n"
@@ -56474,11 +57244,11 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                         f"- Invalid HPO configuration\n"
                         f"- Missing optimization dependencies\n"
                         f"- System resource constraints\n"
-                        f"- Data loading issues\n"
+                        f"- Data loading issues"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="EXPRESS HPO ERROR",
                             style="bold red",
                             border_style="red",
@@ -56497,7 +57267,7 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     
                 except Exception as e:
                     message = (
-                        f"Error encountered during Current Configuration HPO: {str(e)}\n\n"
+                        f"Error encountered during Current Configuration HPO: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Preset: {preset_name}\n"
@@ -56505,11 +57275,11 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                         f"Please check:\n"
                         f"- Current configuration validity\n"
                         f"- Model compatibility with HPO\n"
-                        f"- Configuration file integrity\n"
+                        f"- Configuration file integrity"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CURRENT CONFIG HPO ERROR",
                             style="bold red",
                             border_style="red",
@@ -56528,18 +57298,18 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     
                 except Exception as e:
                     message = (
-                        f"Error encountered during Synthetic Data HPO: {str(e)}\n\n"
+                        f"Error encountered during Synthetic Data HPO: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Synthetic Samples: {hpo_normal_samples_count}\n\n"
                         f"Please verify:\n"
                         f"- Data generation configuration\n"
                         f"- Model compatibility with synthetic data\n"
-                        f"- System memory availability\n"
+                        f"- System memory availability"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="SYNTHETIC DATA HPO ERROR",
                             style="bold red",
                             border_style="red",
@@ -56558,7 +57328,7 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     
                 except Exception as e:
                     message = (
-                        f"Error encountered during Real Data HPO: {str(e)}\n\n"
+                        f"Error encountered during Real Data HPO: {str(e)}\n"
                         f"Context:\n"
                         f"- Data Path: {hpo_data_path}\n"
                         f"- Model: {model_type}\n\n"
@@ -56566,11 +57336,11 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                         f"- Data file exists and is accessible\n"
                         f"- Data format is compatible\n"
                         f"- Sufficient disk space\n"
-                        f"- Data preprocessing requirements\n"
+                        f"- Data preprocessing requirements"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="REAL DATA HPO ERROR",
                             style="bold red",
                             border_style="red",
@@ -56589,18 +57359,18 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     
                 except Exception as e:
                     message = (
-                        f"Error encountered during Custom HPO setup: {str(e)}\n\n"
+                        f"Error encountered during Custom HPO setup: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Preset: {preset_name}\n\n"
                         f"Please check:\n"
                         f"- Parameter validation rules\n"
                         f"- Configuration file permissions\n"
-                        f"- Interactive input handling\n"
+                        f"- Interactive input handling"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CUSTOM HPO ERROR",
                             style="bold red",
                             border_style="red",
@@ -56614,18 +57384,18 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     _hpo_preset_selection_menu(config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during HPO preset selection: {str(e)}\n\n"
+                        f"Error encountered during HPO preset selection: {str(e)}\n"
                         f"Context:\n"
                         f"- Available Presets: {hpo_preset_count}\n"
                         f"- Current Preset: {preset_name}\n\n"
                         f"Please verify:\n"
                         f"- HPO preset configuration files\n"
                         f"- Preset validation logic\n"
-                        f"- Configuration loading mechanisms\n"
+                        f"- Configuration loading mechanisms"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="HPO PRESET SELECTION ERROR",
                             style="bold red",
                             border_style="red",
@@ -56645,18 +57415,18 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     
                 except Exception as e:
                     message = (
-                        f"Error encountered while continuing existing study: {str(e)}\n\n"
+                        f"Error encountered while continuing existing study: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Strategy: {hpo_strategy}\n\n"
                         f"Please check:\n"
                         f"- Existing study files exist\n"
                         f"- Study database accessibility\n"
-                        f"- Study compatibility with current configuration\n"
+                        f"- Study compatibility with current configuration"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONTINUE STUDY ERROR",
                             style="bold red",
                             border_style="red",
@@ -56670,18 +57440,18 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     _run_quick_hpo_test(config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during quick HPO test: {str(e)}\n\n"
+                        f"Error encountered during quick HPO test: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Test Type: 10 trials, 5 epochs\n\n"
                         f"This may indicate:\n"
                         f"- Basic HPO functionality issues\n"
                         f"- Model initialization problems\n"
-                        f"- Resource allocation failures\n"
+                        f"- Resource allocation failures"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="QUICK HPO TEST ERROR",
                             style="bold red",
                             border_style="red",
@@ -56695,18 +57465,18 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
                     _run_hpo_model_comparison(config)
                 except Exception as e:
                     message = (
-                        f"Error encountered during HPO model comparison: {str(e)}\n\n"
+                        f"Error encountered during HPO model comparison: {str(e)}\n"
                         f"Context:\n"
                         f"- Model: {model_type}\n"
                         f"- Comparison Type: Multi-model HPO\n\n"
                         f"Please ensure:\n"
                         f"- Multiple models are configured\n"
                         f"- Comparison data is available\n"
-                        f"- Sufficient system resources\n"
+                        f"- Sufficient system resources"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="HPO MODEL COMPARISON ERROR",
                             style="bold red",
                             border_style="red",
@@ -56725,7 +57495,7 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
         except Exception as e:
             logger.error(f"HPO menu error: {e}", exc_info=True)
             message = (
-                f"Unexpected error in HPO menu: {str(e)}\n\n"
+                f"Unexpected error in HPO menu: {str(e)}\n"
                 f"Context:\n"
                 f"- Selected Option: {choice}\n"
                 f"- Current Preset: {preset_name}\n"
@@ -56740,7 +57510,7 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None):
             )
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="HPO MENU ERROR",
                     style="bold red",
                     border_style="red",
@@ -56840,9 +57610,9 @@ def configuration_menu():
         preset_count = len(PRESET_CONFIGS) if 'PRESET_CONFIGS' in globals() else 'Unknown'
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.CYAN + Style.BRIGHT + "CONFIGURATION MANAGEMENT MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Active Configuration Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -56884,7 +57654,7 @@ def configuration_menu():
                     show_current_config()
                 except Exception as e:
                     message = (
-                        f"Error encountered while displaying current configuration: {str(e)}\n\n"
+                        f"Error encountered while displaying current configuration: {str(e)}\n"
                         f"Context:\n"
                         f"- Preset: {preset_name}\n"
                         f"- Model: {model_type}\n"
@@ -56893,11 +57663,11 @@ def configuration_menu():
                         f"- Configuration file corruption\n"
                         f"- Invalid configuration structure\n"
                         f"- Display formatting issues\n"
-                        f"- System resource constraints\n"
+                        f"- System resource constraints"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONFIGURATION DISPLAY ERROR",
                             style="bold red",
                             border_style="red",
@@ -56911,7 +57681,7 @@ def configuration_menu():
                     save_config_interactive()
                 except Exception as e:
                     message = (
-                        f"Error encountered while saving configuration: {str(e)}\n\n"
+                        f"Error encountered while saving configuration: {str(e)}\n"
                         f"Context:\n"
                         f"- Preset: {preset_name}\n"
                         f"- Config Status: {config_status}\n\n"
@@ -56919,11 +57689,11 @@ def configuration_menu():
                         f"- File system permissions\n"
                         f"- Available disk space\n"
                         f"- Configuration validity\n"
-                        f"- File path accessibility\n"
+                        f"- File path accessibility"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONFIGURATION SAVE ERROR",
                             style="bold red",
                             border_style="red",
@@ -56937,18 +57707,18 @@ def configuration_menu():
                     select_preset_config()
                 except Exception as e:
                     message = (
-                        f"Error encountered during preset selection: {str(e)}\n\n"
+                        f"Error encountered during preset selection: {str(e)}\n"
                         f"Context:\n"
                         f"- Available Presets: {preset_count}\n"
                         f"- Current Preset: {preset_name}\n\n"
                         f"Please verify:\n"
                         f"- Preset configuration files exist\n"
                         f"- Preset validation logic\n"
-                        f"- Configuration loading mechanisms\n"
+                        f"- Configuration loading mechanisms"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="PRESET SELECTION ERROR",
                             style="bold red",
                             border_style="red",
@@ -56962,7 +57732,7 @@ def configuration_menu():
                     load_saved_config_interactive()
                 except Exception as e:
                     message = (
-                        f"Error encountered while loading configuration: {str(e)}\n\n"
+                        f"Error encountered while loading configuration: {str(e)}\n"
                         f"Context:\n"
                         f"- Current Preset: {preset_name}\n"
                         f"- Config Status: {config_status}\n\n"
@@ -56970,11 +57740,11 @@ def configuration_menu():
                         f"- Configuration file exists and is accessible\n"
                         f"- File format is supported\n"
                         f"- Configuration is compatible with current system\n"
-                        f"- File is not corrupted\n"
+                        f"- File is not corrupted"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONFIGURATION LOAD ERROR",
                             style="bold red",
                             border_style="red",
@@ -56988,17 +57758,17 @@ def configuration_menu():
                     reset_config_interactive()
                 except Exception as e:
                     message = (
-                        f"Error encountered while resetting configuration: {str(e)}\n\n"
+                        f"Error encountered while resetting configuration: {str(e)}\n"
                         f"Context:\n"
                         f"- Current Preset: {preset_name}\n\n"
                         f"This could indicate:\n"
                         f"- Default configuration files missing\n"
                         f"- System file permissions issues\n"
-                        f"- Configuration restoration problems\n"
+                        f"- Configuration restoration problems"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONFIGURATION RESET ERROR",
                             style="bold red",
                             border_style="red",
@@ -57012,18 +57782,18 @@ def configuration_menu():
                     validate_config_interactive()
                 except Exception as e:
                     message = (
-                        f"Error encountered during configuration validation: {str(e)}\n\n"
+                        f"Error encountered during configuration validation: {str(e)}\n"
                         f"Context:\n"
                         f"- Current Health: {health_status}\n"
                         f"- Preset: {preset_name}\n\n"
                         f"Please check:\n"
                         f"- Configuration file integrity\n"
                         f"- Validation rule definitions\n"
-                        f"- System state and dependencies\n"
+                        f"- System state and dependencies"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONFIGURATION VALIDATION ERROR",
                             style="bold red",
                             border_style="red",
@@ -57037,18 +57807,18 @@ def configuration_menu():
                     edit_config_interactive()
                 except Exception as e:
                     message = (
-                        f"Error encountered in interactive configuration editor: {str(e)}\n\n"
+                        f"Error encountered in interactive configuration editor: {str(e)}\n"
                         f"Context:\n"
                         f"- Preset: {preset_name}\n"
                         f"- Model: {model_type}\n\n"
                         f"Please check:\n"
                         f"- Editor dependencies are installed\n"
                         f"- Configuration file permissions\n"
-                        f"- Interactive input handling\n"
+                        f"- Interactive input handling"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONFIGURATION EDITOR ERROR",
                             style="bold red",
                             border_style="red",
@@ -57062,18 +57832,18 @@ def configuration_menu():
                     compare_configs_interactive()
                 except Exception as e:
                     message = (
-                        f"Error encountered during configuration comparison: {str(e)}\n\n"
+                        f"Error encountered during configuration comparison: {str(e)}\n"
                         f"Context:\n"
                         f"- Active Preset: {preset_name}\n"
                         f"- Config Source: {config_source}\n\n"
                         f"Please verify:\n"
                         f"- Comparison configurations exist\n"
                         f"- Configuration formats are compatible\n"
-                        f"- Sufficient system resources available\n"
+                        f"- Sufficient system resources available"
                     )
                     console.print(
                         Panel.fit(
-                            f"[bold red]{message}[/bold red]",
+                            f"{message}",
                             title="CONFIGURATION COMPARISON ERROR",
                             style="bold red",
                             border_style="red",
@@ -57092,7 +57862,7 @@ def configuration_menu():
         except Exception as e:
             logger.error(f"Configuration menu error: {e}", exc_info=True)
             message = (
-                f"Unexpected error in configuration menu: {str(e)}\n\n"
+                f"Unexpected error in configuration menu: {str(e)}\n"
                 f"Context:\n"
                 f"- Selected Option: {choice}\n"
                 f"- Current Preset: {preset_name}\n"
@@ -57107,7 +57877,7 @@ def configuration_menu():
             )
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="CONFIGURATION MENU ERROR",
                     style="bold red",
                     border_style="red",
@@ -57191,9 +57961,9 @@ def model_analysis_menu():
         data_path_config = data_config.get('data_path', 'Default')
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.CYAN + Style.BRIGHT + "MODEL ANALYSIS & VISUALIZATION MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Active Analysis Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -57403,9 +58173,9 @@ def advanced_tools_menu():
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.CYAN + Style.BRIGHT + "ADVANCED TOOLS MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Advanced Tools Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -57611,7 +58381,7 @@ def show_init_report():
             
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="NO REPORTS DIRECTORY",
                     style="bold red",
                     border_style="red",
@@ -57662,7 +58432,7 @@ def show_init_report():
             
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="NO REPORTS FOUND",
                     style="bold red",
                     border_style="red",
@@ -57678,9 +58448,9 @@ def show_init_report():
             return
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.CYAN + Style.BRIGHT + "INITIALIZATION REPORTS MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"System Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -57707,7 +58477,16 @@ def show_init_report():
         
         categories.append("8. Show All Available Files " + Fore.GREEN + Style.BRIGHT + "(Complete Listing)")
         categories.append(Fore.RED + Style.BRIGHT + "0. Return to Main Menu")
-
+        
+        # def display_menu():
+        #     """Display the report menu categories with enhanced styling."""
+        #     print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Report Categories:")
+        #     for category in categories:
+        #         if category.startswith("0."):
+        #             print(f"  {category}")
+        #         else:
+        #             print(f"  {Fore.WHITE + Style.BRIGHT}{category.split(' (')[0]}{Style.RESET_ALL}{' (' + category.split(' (')[1] if '(' in category else ''}")
+        
         def display_menu():
             """Display the report menu categories with enhanced styling."""
             print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Report Categories:")
@@ -57715,8 +58494,14 @@ def show_init_report():
                 if category.startswith("0."):
                     print(f"  {category}")
                 else:
-                    print(f"  {Fore.WHITE + Style.BRIGHT}{category.split(' (')[0]}{Style.RESET_ALL}{' (' + category.split(' (')[1] if '(' in category else ''}")
-
+                    # Use partition which always returns 3 parts (before, separator, after)
+                    main_part, separator, desc_part = category.partition(' (')
+                    if separator:  # If ' (' was found in the string
+                        print(f"  {Fore.WHITE + Style.BRIGHT}{main_part}{Style.RESET_ALL}{separator}{desc_part}")
+                    else:
+                        # Handle categories without parentheses
+                        print(f"  {Fore.WHITE + Style.BRIGHT}{category}{Style.RESET_ALL}")
+        
         # Display menu initially
         display_menu()
         
@@ -57752,7 +58537,7 @@ def show_init_report():
                             )
                             console.print(
                                 Panel.fit(
-                                    f"[bold red]{message}[/bold red]",
+                                    f"{message}",
                                     title="NO HTML DASHBOARDS",
                                     style="bold red",
                                     border_style="red",
@@ -57793,7 +58578,7 @@ def show_init_report():
                                     )
                                     console.print(
                                         Panel.fit(
-                                            f"[bold green]{message}[/bold green]",
+                                            f"{message}",
                                             title="OPENING DASHBOARD",
                                             style="bold green",
                                             border_style="green",
@@ -57825,7 +58610,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="HTML DASHBOARD ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -57883,7 +58668,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="TEXT SUMMARY ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -57910,7 +58695,7 @@ def show_init_report():
                             )
                             console.print(
                                 Panel.fit(
-                                    f"[bold red]{message}[/bold red]",
+                                    f"{message}",
                                     title="NO JSON REPORTS",
                                     style="bold red",
                                     border_style="red",
@@ -57960,7 +58745,7 @@ def show_init_report():
                                     )
                                     console.print(
                                         Panel.fit(
-                                            f"[bold green]{message}[/bold green]",
+                                            f"{message}",
                                             title="JSON REPORT VIEWER",
                                             style="bold green",
                                             border_style="green",
@@ -57992,7 +58777,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="JSON REPORT ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -58019,7 +58804,7 @@ def show_init_report():
                             )
                             console.print(
                                 Panel.fit(
-                                    f"[bold red]{message}[/bold red]",
+                                    f"{message}",
                                     title="NO STATUS REPORTS",
                                     style="bold red",
                                     border_style="red",
@@ -58069,7 +58854,7 @@ def show_init_report():
                                     )
                                     console.print(
                                         Panel.fit(
-                                            f"[bold green]{message}[/bold green]",
+                                            f"{message}",
                                             title="STATUS REPORT VIEWER",
                                             style="bold green",
                                             border_style="green",
@@ -58097,7 +58882,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="STATUS REPORT ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -58124,7 +58909,7 @@ def show_init_report():
                             )
                             console.print(
                                 Panel.fit(
-                                    f"[bold red]{message}[/bold red]",
+                                    f"{message}",
                                     title="NO DIAGNOSTIC REPORTS",
                                     style="bold red",
                                     border_style="red",
@@ -58167,7 +58952,7 @@ def show_init_report():
                                     )
                                     console.print(
                                         Panel.fit(
-                                            f"[bold green]{message}[/bold green]",
+                                            f"{message}",
                                             title="DIAGNOSTIC REPORT VIEWER",
                                             style="bold green",
                                             border_style="green",
@@ -58198,7 +58983,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="DIAGNOSTIC REPORT ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -58225,7 +59010,7 @@ def show_init_report():
                             )
                             console.print(
                                 Panel.fit(
-                                    f"[bold red]{message}[/bold red]",
+                                    f"{message}",
                                     title="NO DASHBOARD DATA",
                                     style="bold red",
                                     border_style="red",
@@ -58268,7 +59053,7 @@ def show_init_report():
                                     )
                                     console.print(
                                         Panel.fit(
-                                            f"[bold green]{message}[/bold green]",
+                                            f"{message}",
                                             title="DASHBOARD DATA VIEWER",
                                             style="bold green",
                                             border_style="green",
@@ -58296,7 +59081,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="DASHBOARD DATA ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -58323,7 +59108,7 @@ def show_init_report():
                             )
                             console.print(
                                 Panel.fit(
-                                    f"[bold red]{message}[/bold red]",
+                                    f"{message}",
                                     title="NO REPORT INDEX",
                                     style="bold red",
                                     border_style="red",
@@ -58348,7 +59133,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold green]{message}[/bold green]",
+                                f"{message}",
                                 title="REPORT INDEX VIEWER",
                                 style="bold green",
                                 border_style="green",
@@ -58369,7 +59154,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="REPORT INDEX ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -58394,7 +59179,7 @@ def show_init_report():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="FILE LISTING ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -58433,7 +59218,7 @@ def show_init_report():
                 )
                 console.print(
                     Panel.fit(
-                        f"[bold red]{message}[/bold red]",
+                        f"{message}",
                         title="REPORTS MENU ERROR",
                         style="bold red",
                         border_style="red",
@@ -58456,7 +59241,7 @@ def show_init_report():
         )
         console.print(
             Panel.fit(
-                f"[bold red]{message}[/bold red]",
+                f"{message}",
                 title="INIT REPORTS ERROR",
                 style="bold red",
                 border_style="red",
@@ -58943,7 +59728,7 @@ def display_model_comparison() -> None:
         print(Fore.GREEN + Style.BRIGHT + f"Active Comparison Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}\n")
         
         # Get comparison results with error handling
         try:
@@ -60298,43 +61083,13 @@ def show_system_info():
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.CYAN + Style.BRIGHT + "SYSTEM INFORMATION & ANALYSIS")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Active System Context:")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
         print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
-        
-        # Show informative panel before system analysis - consistent with interactive_main()
-        message = (
-            f"Comprehensive System Information & Analysis\n\n"
-            f"Current Context:\n"
-            f"- Active Preset: {preset_name}\n"
-            f"- Model Type: {model_type}\n"
-            f"- Config Source: {config_source}\n\n"
-            f"This analysis provides detailed information about:\n"
-            f"- Hardware capabilities and performance metrics\n"
-            f"- System resources and memory utilization\n"
-            f"- Software environment and package dependencies\n"
-            f"- Configuration status and compatibility checks\n"
-            f"- System health and optimization recommendations\n\n"
-            f"The analysis helps identify potential bottlenecks and\n"
-            f"optimization opportunities for your specific setup.\n"
-        )
-        console.print(
-            Panel.fit(
-                f"[bold white]{message}[/bold white]",
-                title="SYSTEM INFORMATION ANALYSIS",
-                style="bold yellow",
-                border_style="yellow",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
-        
-        # Small delay to ensure panel is rendered
-        time.sleep(3)
         
         # Get system information
         try:
@@ -60354,7 +61109,7 @@ def show_system_info():
             
             # Display errors with context
             message = (
-                f"Failed to generate comprehensive system analysis: {str(e)}\n\n"
+                f"Failed to generate comprehensive system analysis: {str(e)}\n"
                 f"Context:\n"
                 f"- Current Preset: {preset_name}\n"
                 f"- Model Type: {model_type}\n"
@@ -60364,11 +61119,11 @@ def show_system_info():
                 f"- Hardware detection issues\n"
                 f"- Missing system dependencies\n"
                 f"- Permission or access problems\n\n"
-                f"Attempting fallback analysis...\n"
+                f"Attempting fallback analysis..."
             )
             console.print(
                 Panel.fit(
-                    f"[bold yellow]{message}[/bold yellow]",
+                    f"{message}",
                     title="ANALYSIS WARNING",
                     style="bold yellow",
                     border_style="yellow",
@@ -60393,7 +61148,7 @@ def show_system_info():
             except Exception as fallback_error:
                 logger.error(f"Fallback hardware check also failed: {fallback_error}")
                 message = (
-                    f"Critical: Comprehensive system analysis failed\n\n"
+                    f"Critical: Comprehensive system analysis failed\n"
                     f"Primary Error: {str(e)}\n"
                     f"Fallback Error: {str(fallback_error)}\n\n"
                     f"Context:\n"
@@ -60404,11 +61159,11 @@ def show_system_info():
                     f"1. System resource availability\n"
                     f"2. Hardware detection permissions\n"
                     f"3. Required system dependencies\n"
-                    f"4. System logs for detailed errors\n"
+                    f"4. System logs for detailed errors"
                 )
                 console.print(
                     Panel.fit(
-                        f"[bold red]{message}[/bold red]",
+                        f"{message}",
                         title="CRITICAL ANALYSIS FAILURE",
                         style="bold red",
                         border_style="red",
@@ -60430,8 +61185,8 @@ def show_system_info():
         main_table = Table(
             title="\n[bold yellow]COMPREHENSIVE SYSTEM INFORMATION & ANALYSIS[/bold yellow]",
             box=box.ROUNDED,
-            header_style="bold bright_magenta",
-            border_style="bright_magenta",
+            header_style="bold yellow",
+            border_style="magenta",
             title_style="bold yellow",
             title_justify="left",
             show_lines=True,
@@ -60736,10 +61491,10 @@ def show_system_info():
                     # Truncate long version strings
                     if len(version) > 15:
                         version = version[:12] + "..."
-                    status_color = "green" if status == "OK" else "yellow" if status == "WARNING" else "red"
+                    status_color = "bold green" if status == "OK" else "bold yellow" if status == "WARNING" else "bold red"
                     key_pkg_details.append(f"[{status_color}]{pkg_name}: {version}[/{status_color}]")
                 else:
-                    key_pkg_details.append(f"[red]{pkg_name}: Missing[/red]")
+                    key_pkg_details.append(f"[bold red]{pkg_name}: Missing[/bold red]")
             
             main_table.add_row(
                 "Key Packages",
@@ -60779,17 +61534,17 @@ def show_system_info():
                 try:
                     if module_obj and hasattr(module_obj, '__version__'):
                         version = module_obj.__version__
-                        fallback_packages.append(f"[green]{display_name}: {version}[/green]")
+                        fallback_packages.append(f"[bold green]{display_name}: {version}[/bold green]")
                     else:
                         # Try to import and get version
                         try:
                             imported_module = __import__(module_name)
                             version = getattr(imported_module, '__version__', 'Available')
-                            fallback_packages.append(f"[green]{display_name}: {version}[/green]")
+                            fallback_packages.append(f"[bold green]{display_name}: {version}[/bold green]")
                         except ImportError:
-                            fallback_packages.append(f"[red]{display_name}: Missing[/red]")
+                            fallback_packages.append(f"[bold red]{display_name}: Missing[/bold red]")
                 except Exception:
-                    fallback_packages.append(f"[yellow]{display_name}: Unknown[/yellow]")
+                    fallback_packages.append(f"[bold yellow]{display_name}: Unknown[/bold yellow]")
             
             if fallback_packages:
                 main_table.add_row(
@@ -60898,7 +61653,7 @@ def show_system_info():
                 current_load = cpu_info.get('current_load')
                 
                 if current_load is not None:
-                    load_color = "green" if current_load < 50 else "yellow" if current_load < 80 else "red"
+                    load_color = "bold green" if current_load < 50 else "bold yellow" if current_load < 80 else "bold red"
                     perf_detail += f" | Load: [{load_color}]{current_load:.1f}%[/{load_color}]"
                 
                 main_table.add_row(
@@ -60996,7 +61751,7 @@ def show_system_info():
                         utilization = device.get('utilization_percent', None)
                         
                         if utilization is not None:
-                            util_color = "green" if utilization < 50 else "yellow" if utilization < 80 else "red"
+                            util_color = "bold green" if utilization < 50 else "bold yellow" if utilization < 80 else "bold red"
                             device_detail += f" | Usage: [{util_color}]{utilization:.1f}%[/{util_color}]"
                         
                         main_table.add_row(
@@ -61318,13 +62073,14 @@ def show_system_info():
         
         # Print the main table
         console.print(main_table)
+        console.print()
         
         # SYSTEM STATUS & HEALTH
         status_table = Table(
             title="[bold yellow]SYSTEM STATUS & HEALTH[/bold yellow]",
             box=box.ROUNDED,
-            header_style="bold bright_white",
-            border_style="bright_white",
+            header_style="bold yellow",
+            border_style="white",
             title_style="bold yellow",
             title_justify="left",
             show_lines=True,
@@ -61334,7 +62090,7 @@ def show_system_info():
         
         status_table.add_column("Component", style="bold cyan", width=25)
         status_table.add_column("Status", width=12, justify="center")
-        status_table.add_column("Details", style="dim", min_width=50, max_width=80)
+        status_table.add_column("Details", style="bold", min_width=50, max_width=80)
         
         # Directory check
         try:
@@ -61363,7 +62119,7 @@ def show_system_info():
                     details += f" (+{len(missing_dirs)-3} more)"
             
             status_table.add_row(
-                "Directory Structure",
+                "[bold cyan]Directory Structure[/bold cyan]",
                 Text(status_text, style=status_style),
                 details, style=status_style
             )
@@ -61375,7 +62131,7 @@ def show_system_info():
             details_style = "bold red"
             
             status_table.add_row(
-                "Directory Structure",
+                "[bold cyan]Directory Structure[/bold cyan]",
                 Text(status_text, style=status_style),
                 details, style=details_style
             )
@@ -61394,14 +62150,14 @@ def show_system_info():
                     details += "..."
                 
                 status_table.add_row(
-                    "Model Variants",
+                    "[bold cyan]Model Variants[/bold cyan]",
                     Text(status_text, style=variants_style),
                     details, style=details_style
                 )
             
             else:
                 status_table.add_row(
-                    "Model Variants", 
+                    "[bold cyan]Model Variants[/bold cyan]", 
                     Text("INIT", style="bold yellow"),
                     "Not initialized or empty", style="bold yellow"
                 )
@@ -61446,7 +62202,7 @@ def show_system_info():
                     details = f"{len(warnings)} warnings found"
                 
                 status_table.add_row(
-                    "Configuration",
+                    "[bold cyan]Configuration[/bold cyan]",
                     Text(status_text, style=status_style),
                     details, style=status_style
                 )
@@ -61458,14 +62214,14 @@ def show_system_info():
                 details_style = "bold red"
                 
                 status_table.add_row(
-                    "Configuration",
+                    "[bold cyan]Configuration[/bold cyan]",
                     Text(status_text, style=status_style),
                     details, style=details_style
                 )
         
         else:
             status_table.add_row(
-                "Configuration",
+                "[bold cyan]Configuration[/bold cyan]",
                 Text("MISSING", style="bold yellow"),
                 "No configuration loaded", style="bold yellow"
             )
@@ -61495,7 +62251,7 @@ def show_system_info():
                     mem_details = f"Memory usage: {rss_delta:+.1f}MB process, {system_delta*1024:+.0f}MB system"
                 
                 status_table.add_row(
-                    "Memory Impact",
+                    "[bold cyan] Impact[/bold cyan]",
                     Text(mem_status, style=mem_style),
                     mem_details, style=mem_style
                 )
@@ -61526,7 +62282,7 @@ def show_system_info():
             opt_details = f"{enabled_count}/{total_count} features available ({availability_score:.0f}%)"
             
             status_table.add_row(
-                "Optional Features",
+                "[bold cyan]Optional Features[/bold cyan]",
                 Text(opt_status, style=opt_style),
                 opt_details, style=opt_style
             )
@@ -61593,6 +62349,7 @@ def show_system_info():
         
         # Print the status table
         console.print(status_table)
+        console.print()
         
         # WARNINGS & RECOMMENDATIONS
         if analysis_available and 'detailed_analysis' in system_info:
@@ -61610,9 +62367,10 @@ def show_system_info():
             if all_warnings:
                 recommendations_table = Table(
                     title="[bold yellow]SYSTEM ANALYSIS & RECOMMENDATIONS[/bold yellow]",
-                    box=box.ROUNDED,
-                    header_style="bold bright_white",
-                    border_style="bright_white", 
+                    #box=box.ROUNDED,
+                    box=box.DOUBLE_EDGE,
+                    header_style="bold cyan",
+                    border_style="cyan", 
                     title_style="bold yellow",
                     title_justify="left",
                     show_lines=True,
@@ -61622,7 +62380,7 @@ def show_system_info():
                 
                 recommendations_table.add_column("Type", style="bold cyan", width=18)
                 recommendations_table.add_column("Priority", width=10, justify="center")
-                recommendations_table.add_column("Recommendation", style="dim", min_width=65, max_width=85)
+                recommendations_table.add_column("Recommendation", style="bold", min_width=65, max_width=85)
                 
                 # Sort by priority (HIGH -> MEDIUM -> LOW)
                 priority_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
@@ -61654,9 +62412,9 @@ def show_system_info():
                 # Show total count if there are more recommendations
                 if len(all_warnings) > 10:
                     recommendations_table.add_row(
-                        Text("...", style="dim"),
-                        Text("...", style="dim"),
-                        Text(f"... and {len(all_warnings) - 10} more recommendations", style="dim italic")
+                        Text("...", style="bold"),
+                        Text("...", style="bold"),
+                        Text(f"... and {len(all_warnings) - 10} more recommendations", style="bold italic")
                     )
                 
                 console.print(recommendations_table)
@@ -61671,7 +62429,7 @@ def show_system_info():
                 issues_table = Table(
                     title="[bold red]COLLECTION ISSUES[/bold red]" if errors else "[bold yellow]COLLECTION WARNINGS[/bold yellow]",
                     box=box.ROUNDED,
-                    header_style="bold bright_white",
+                    header_style="bold white",
                     border_style="red" if errors else "yellow",
                     title_style="bold red" if errors else "bold yellow",
                     title_justify="left", 
@@ -61681,7 +62439,7 @@ def show_system_info():
                 )
                 
                 issues_table.add_column("Type", style="bold cyan", width=12)
-                issues_table.add_column("Issue", style="dim", min_width=80, max_width=100)
+                issues_table.add_column("Issue", style="bold", min_width=80, max_width=100)
                 
                 for error in errors[:5]:  # Show up to 5 errors
                     display_error = error
@@ -61709,8 +62467,8 @@ def show_system_info():
                     total_remaining = (len(errors) - 5 if len(errors) > 5 else 0) + (len(warnings) - 5 if len(warnings) > 5 else 0)
                     
                     issues_table.add_row(
-                        Text("...", style="dim"),
-                        Text(f"... and {total_remaining} more issues", style="dim italic")
+                        Text("...", style="bold"),
+                        Text(f"... and {total_remaining} more issues", style="bold italic")
                     )
                 
                 console.print(issues_table)
@@ -62475,7 +63233,7 @@ def select_preset_config():
         # Check if presets are available
         if not PRESET_CONFIGS:
             message = (
-                f"No preset configurations available.\n\n"
+                f"No preset configurations available.\n"
                 f"This could be due to:\n"
                 f"- Missing preset configuration files\n"
                 f"- Corrupted preset definitions\n"
@@ -62484,7 +63242,7 @@ def select_preset_config():
             )
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="NO PRESETS AVAILABLE",
                     style="bold red",
                     border_style="red",
@@ -62563,6 +63321,7 @@ def select_preset_config():
                 f"[bold]Security:[/bold] Threshold: {security_config.get('attack_threshold', 'N/A')}, "
                 f"Percentile: {security_config.get('percentile', 'N/A')}%",
                 title=f"[{i}] {name.title()}",
+                style=title_style,
                 border_style=border_style,
                 padding=(1, 2)
             )
@@ -62618,6 +63377,7 @@ def select_preset_config():
                     f"[bold]Data:[/bold] Samples: {preset_data_config.get('normal_samples', 'N/A')}, "
                     f"Path: {preset_data_config.get('data_path', 'N/A')}",
                     title="[bold]PRESET CONFIRMATION[/bold]",
+                    style="bold",
                     border_style="green",
                     padding=(1, 2),
                     box=box.ROUNDED
@@ -62752,7 +63512,7 @@ def select_preset_config():
                         )
                         console.print(
                             Panel.fit(
-                                f"[bold red]{message}[/bold red]",
+                                f"{message}",
                                 title="PRESET APPLICATION ERROR",
                                 style="bold red",
                                 border_style="red",
@@ -62774,7 +63534,7 @@ def select_preset_config():
                 )
                 console.print(
                     Panel.fit(
-                        f"[bold red]{message}[/bold red]",
+                        f"{message}",
                         title="SELECTION PROCESSING ERROR",
                         style="bold red",
                         border_style="red",
@@ -62791,7 +63551,7 @@ def select_preset_config():
             )
             console.print(
                 Panel.fit(
-                    f"[bold red]{message}[/bold red]",
+                    f"{message}",
                     title="INVALID SELECTION",
                     style="bold red",
                     border_style="red",
@@ -62812,7 +63572,7 @@ def select_preset_config():
         )
         console.print(
             Panel.fit(
-                f"[bold red]{message}[/bold red]",
+                f"{message}",
                 title="PRESET SELECTION ERROR",
                 style="bold red",
                 border_style="red",
@@ -63193,6 +63953,7 @@ def show_current_config():
             "\n".join(preset_info_content),
             title="[bold]Configuration Status & Runtime Information[/bold]",
             border_style="cyan",
+            style="bold",
             padding=(1, 2)
         )
         console.print(combined_panel)
