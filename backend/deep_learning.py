@@ -9990,7 +9990,461 @@ def _monitored_operation(operation_name: str):
         # Ensure metrics are available even if operation fails
         monitor.get_metrics()
 
-
+def update_global_config(config: Dict[str, Any]) -> None:
+    """Update module-level constants from config with enhanced validation, logging, preset support,
+    and intelligent memory management.
+    
+    This function synchronizes global configuration variables with the provided configuration
+    dictionary, ensuring type safety, value validation, comprehensive change tracking, and
+    optimal memory usage during intensive configuration processing.
+    
+    Args:
+        config: Configuration dictionary to update from
+        
+    Raises:
+        ValueError: If any configuration values are invalid
+        TypeError: If any configuration values are of incorrect type
+        KeyError: If required configuration sections are missing
+    """
+    if not isinstance(config, dict):
+        raise TypeError(f"Configuration must be a dictionary, got {type(config).__name__}")
+    
+    # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
+    hardware_data = None
+    total_ram_gb = 8.0  # Conservative default
+    
+    try:
+        hardware_data = check_hardware(include_memory_usage=True)
+        total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+        
+        # Initial memory cleanup for memory-constrained systems before processing large configs
+        if total_ram_gb < 16 and len(str(config)) > 100000:  # Large config (>100KB serialized)
+            initial_clear_results = enhanced_clear_memory(
+                aggressive=total_ram_gb < 8,  # More aggressive on low-memory systems
+                hardware_data=hardware_data
+            )
+            
+            if initial_clear_results.get('success'):
+                logger.debug(f"Initial memory optimization for config processing: {', '.join(initial_clear_results.get('actions_taken', []))}")
+    except Exception as e:
+        logger.debug(f"Initial memory optimization failed: {e}")
+    
+    # Validate config structure with better error messages
+    required_sections = ['training', 'model', 'security', 'data']
+    missing_sections = [section for section in required_sections if section not in config]
+    if missing_sections:
+        raise KeyError(f"Missing required configuration sections: {missing_sections}")
+    
+    # Initialize comprehensive change tracking
+    changes = {
+        'metadata': {
+            'config_version': '2.1',
+            'update_time': datetime.now().isoformat(),
+            'source': config.get('metadata', {}).get('preset_used', 'manual'),
+            'total_changes': 0,
+            'memory_optimizations_applied': 0,
+            'large_config_processing': len(str(config)) > 50000
+        },
+        'training': {},
+        'model': {},
+        'security': {},
+        'data': {},
+        'system': {}
+    }
+    
+    # Training configuration updates with memory optimization checkpoints
+    try:
+        training_config = config.get('training', {})
+        
+        # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before processing large training configs
+        if len(str(training_config)) > 20000 and total_ram_gb < 16:
+            try:
+                training_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
+                if training_clear_results.get('success'):
+                    changes['metadata']['memory_optimizations_applied'] += 1
+                    logger.debug("Memory optimized before training config processing")
+            except Exception as e:
+                logger.debug(f"Training config memory optimization failed: {e}")
+        
+        # Training parameter updates
+        global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, EARLY_STOPPING_PATIENCE, LEARNING_RATE
+        global WEIGHT_DECAY, GRADIENT_CLIP, GRADIENT_ACCUMULATION_STEPS, MIXED_PRECISION, NUM_WORKERS
+        
+        if 'batch_size' in training_config:
+            old_value = DEFAULT_BATCH_SIZE
+            new_value = max(1, min(2048, int(training_config['batch_size'])))
+            if old_value != new_value:
+                DEFAULT_BATCH_SIZE = new_value
+                changes['training']['batch_size'] = {'from': old_value, 'to': new_value}
+        
+        if 'epochs' in training_config:
+            old_value = DEFAULT_EPOCHS
+            new_value = max(1, min(10000, int(training_config['epochs'])))
+            if old_value != new_value:
+                DEFAULT_EPOCHS = new_value
+                changes['training']['epochs'] = {'from': old_value, 'to': new_value}
+        
+        if 'patience' in training_config:
+            old_value = EARLY_STOPPING_PATIENCE
+            new_value = max(1, min(1000, int(training_config['patience'])))
+            if old_value != new_value:
+                EARLY_STOPPING_PATIENCE = new_value
+                changes['training']['patience'] = {'from': old_value, 'to': new_value}
+        
+        if 'learning_rate' in training_config:
+            old_value = LEARNING_RATE
+            new_value = max(1e-8, min(1.0, float(training_config['learning_rate'])))
+            if old_value != new_value:
+                LEARNING_RATE = new_value
+                changes['training']['learning_rate'] = {'from': old_value, 'to': new_value}
+        
+        if 'weight_decay' in training_config:
+            old_value = WEIGHT_DECAY
+            new_value = max(0.0, min(1.0, float(training_config['weight_decay'])))
+            if old_value != new_value:
+                WEIGHT_DECAY = new_value
+                changes['training']['weight_decay'] = {'from': old_value, 'to': new_value}
+        
+        if 'gradient_clip' in training_config:
+            old_value = GRADIENT_CLIP
+            new_value = max(0.01, min(100.0, float(training_config['gradient_clip'])))
+            if old_value != new_value:
+                GRADIENT_CLIP = new_value
+                changes['training']['gradient_clip'] = {'from': old_value, 'to': new_value}
+        
+        if 'gradient_accumulation_steps' in training_config:
+            old_value = GRADIENT_ACCUMULATION_STEPS
+            new_value = max(1, min(256, int(training_config['gradient_accumulation_steps'])))
+            if old_value != new_value:
+                GRADIENT_ACCUMULATION_STEPS = new_value
+                changes['training']['gradient_accumulation_steps'] = {'from': old_value, 'to': new_value}
+        
+        if 'mixed_precision' in training_config:
+            old_value = MIXED_PRECISION
+            new_value = bool(training_config['mixed_precision'])
+            if old_value != new_value:
+                MIXED_PRECISION = new_value
+                changes['training']['mixed_precision'] = {'from': old_value, 'to': new_value}
+        
+        if 'num_workers' in training_config:
+            old_value = NUM_WORKERS
+            new_value = max(0, min(32, int(training_config['num_workers'])))
+            if old_value != new_value:
+                NUM_WORKERS = new_value
+                changes['training']['num_workers'] = {'from': old_value, 'to': new_value}
+                
+    except Exception as e:
+        logger.error(f"Error updating training configuration: {e}")
+        raise ValueError(f"Invalid training configuration: {e}")
+    
+    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before model config processing
+    try:
+        model_config = config.get('model', {})
+        
+        if len(str(model_config)) > 15000 and total_ram_gb < 16:
+            model_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
+            if model_clear_results.get('success'):
+                changes['metadata']['memory_optimizations_applied'] += 1
+                logger.debug("Memory optimized before model config processing")
+    
+        # Model parameter updates
+        global DEFAULT_ENCODING_DIM, HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
+        global NORMALIZATION, USE_BATCH_NORM, USE_LAYER_NORM, DIVERSITY_FACTOR, MIN_FEATURES, NUM_MODELS
+        
+        if 'encoding_dim' in model_config:
+            old_value = DEFAULT_ENCODING_DIM
+            new_value = max(1, min(1024, int(model_config['encoding_dim'])))
+            if old_value != new_value:
+                DEFAULT_ENCODING_DIM = new_value
+                changes['model']['encoding_dim'] = {'from': old_value, 'to': new_value}
+        
+        if 'hidden_dims' in model_config:
+            old_value = HIDDEN_LAYER_SIZES
+            new_dims = model_config['hidden_dims']
+            if isinstance(new_dims, (list, tuple)) and all(isinstance(d, int) and d > 0 for d in new_dims):
+                new_value = list(new_dims)
+                if old_value != new_value:
+                    HIDDEN_LAYER_SIZES = new_value
+                    changes['model']['hidden_dims'] = {'from': old_value, 'to': new_value}
+        
+        if 'dropout_rates' in model_config:
+            old_value = DROPOUT_RATES
+            new_rates = model_config['dropout_rates']
+            if isinstance(new_rates, (list, tuple)) and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in new_rates):
+                new_value = list(new_rates)
+                if old_value != new_value:
+                    DROPOUT_RATES = new_value
+                    changes['model']['dropout_rates'] = {'from': old_value, 'to': new_value}
+        
+        valid_activations = ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu']
+        if 'activation' in model_config:
+            old_value = ACTIVATION
+            new_value = model_config['activation']
+            if isinstance(new_value, str) and new_value.lower() in valid_activations:
+                new_value = new_value.lower()
+                if old_value != new_value:
+                    ACTIVATION = new_value
+                    changes['model']['activation'] = {'from': old_value, 'to': new_value}
+        
+        if 'activation_param' in model_config:
+            old_value = ACTIVATION_PARAM
+            new_value = max(0.0, min(1.0, float(model_config['activation_param'])))
+            if old_value != new_value:
+                ACTIVATION_PARAM = new_value
+                changes['model']['activation_param'] = {'from': old_value, 'to': new_value}
+        
+        valid_normalizations = ['batch', 'layer', 'instance', 'group', None, 'none']
+        if 'normalization' in model_config:
+            old_value = NORMALIZATION
+            new_value = model_config['normalization']
+            if new_value in valid_normalizations:
+                if new_value == 'none':
+                    new_value = None
+                if old_value != new_value:
+                    NORMALIZATION = new_value
+                    changes['model']['normalization'] = {'from': old_value, 'to': new_value}
+        
+        if 'use_batch_norm' in model_config:
+            old_value = USE_BATCH_NORM
+            new_value = bool(model_config['use_batch_norm'])
+            if old_value != new_value:
+                USE_BATCH_NORM = new_value
+                changes['model']['use_batch_norm'] = {'from': old_value, 'to': new_value}
+        
+        if 'use_layer_norm' in model_config:
+            old_value = USE_LAYER_NORM
+            new_value = bool(model_config['use_layer_norm'])
+            if old_value != new_value:
+                USE_LAYER_NORM = new_value
+                changes['model']['use_layer_norm'] = {'from': old_value, 'to': new_value}
+        
+        if 'diversity_factor' in model_config:
+            old_value = DIVERSITY_FACTOR
+            new_value = max(0.0, min(1.0, float(model_config['diversity_factor'])))
+            if old_value != new_value:
+                DIVERSITY_FACTOR = new_value
+                changes['model']['diversity_factor'] = {'from': old_value, 'to': new_value}
+        
+        if 'min_features' in model_config:
+            old_value = MIN_FEATURES
+            new_value = max(1, min(10000, int(model_config['min_features'])))
+            if old_value != new_value:
+                MIN_FEATURES = new_value
+                changes['model']['min_features'] = {'from': old_value, 'to': new_value}
+        
+        if 'num_models' in model_config:
+            old_value = NUM_MODELS
+            new_value = max(1, min(20, int(model_config['num_models'])))
+            if old_value != new_value:
+                NUM_MODELS = new_value
+                changes['model']['num_models'] = {'from': old_value, 'to': new_value}
+    
+    except Exception as e:
+        logger.error(f"Error updating model configuration: {e}")
+        raise ValueError(f"Invalid model configuration: {e}")
+    
+    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before security config processing
+    try:
+        security_config = config.get('security', {})
+        
+        if len(str(security_config)) > 10000 and total_ram_gb < 16:
+            security_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
+            if security_clear_results.get('success'):
+                changes['metadata']['memory_optimizations_applied'] += 1
+                logger.debug("Memory optimized before security config processing")
+    
+        # Security parameter updates
+        global DEFAULT_PERCENTILE, DEFAULT_ATTACK_THRESHOLD, FALSE_NEGATIVE_COST, SECURITY_METRICS
+        
+        if 'percentile' in security_config:
+            old_value = DEFAULT_PERCENTILE
+            new_value = max(50.0, min(99.99, float(security_config['percentile'])))
+            if old_value != new_value:
+                DEFAULT_PERCENTILE = new_value
+                changes['security']['percentile'] = {'from': old_value, 'to': new_value}
+        
+        if 'attack_threshold' in security_config:
+            old_value = DEFAULT_ATTACK_THRESHOLD
+            new_value = max(0.001, min(1.0, float(security_config['attack_threshold'])))
+            if old_value != new_value:
+                DEFAULT_ATTACK_THRESHOLD = new_value
+                changes['security']['attack_threshold'] = {'from': old_value, 'to': new_value}
+        
+        if 'false_negative_cost' in security_config:
+            old_value = FALSE_NEGATIVE_COST
+            new_value = max(0.1, min(100.0, float(security_config['false_negative_cost'])))
+            if old_value != new_value:
+                FALSE_NEGATIVE_COST = new_value
+                changes['security']['false_negative_cost'] = {'from': old_value, 'to': new_value}
+        
+        if 'enable_security_metrics' in security_config:
+            old_value = SECURITY_METRICS
+            new_value = bool(security_config['enable_security_metrics'])
+            if old_value != new_value:
+                SECURITY_METRICS = new_value
+                changes['security']['enable_security_metrics'] = {'from': old_value, 'to': new_value}
+    
+    except Exception as e:
+        logger.error(f"Error updating security configuration: {e}")
+        raise ValueError(f"Invalid security configuration: {e}")
+    
+    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before data config processing
+    try:
+        data_config = config.get('data', {})
+        
+        if len(str(data_config)) > 10000 and total_ram_gb < 16:
+            data_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
+            if data_clear_results.get('success'):
+                changes['metadata']['memory_optimizations_applied'] += 1
+                logger.debug("Memory optimized before data config processing")
+    
+        # Data parameter updates
+        global NORMAL_SAMPLES, ATTACK_SAMPLES, FEATURES, ANOMALY_FACTOR, RANDOM_STATE
+        
+        if 'normal_samples' in data_config:
+            old_value = NORMAL_SAMPLES
+            new_value = max(10, min(1000000, int(data_config['normal_samples'])))
+            if old_value != new_value:
+                NORMAL_SAMPLES = new_value
+                changes['data']['normal_samples'] = {'from': old_value, 'to': new_value}
+        
+        if 'attack_samples' in data_config:
+            old_value = ATTACK_SAMPLES
+            new_value = max(5, min(100000, int(data_config['attack_samples'])))
+            if old_value != new_value:
+                ATTACK_SAMPLES = new_value
+                changes['data']['attack_samples'] = {'from': old_value, 'to': new_value}
+        
+        if 'features' in data_config:
+            old_value = FEATURES
+            new_value = max(1, min(10000, int(data_config['features'])))
+            if old_value != new_value:
+                FEATURES = new_value
+                changes['data']['features'] = {'from': old_value, 'to': new_value}
+        
+        if 'anomaly_factor' in data_config:
+            old_value = ANOMALY_FACTOR
+            new_value = max(0.1, min(100.0, float(data_config['anomaly_factor'])))
+            if old_value != new_value:
+                ANOMALY_FACTOR = new_value
+                changes['data']['anomaly_factor'] = {'from': old_value, 'to': new_value}
+        
+        if 'random_state' in data_config:
+            old_value = RANDOM_STATE
+            new_value = int(data_config['random_state'])
+            if old_value != new_value:
+                RANDOM_STATE = new_value
+                changes['data']['random_state'] = {'from': old_value, 'to': new_value}
+    
+    except Exception as e:
+        logger.error(f"Error updating data configuration: {e}")
+        raise ValueError(f"Invalid data configuration: {e}")
+    
+    # Handle preset application with comprehensive validation and memory optimization
+    try:
+        preset_config = config.get('presets', {})
+        
+        # Clear memory before intensive preset processing if needed
+        if len(str(preset_config)) > 5000 and total_ram_gb < 16:
+            preset_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
+            if preset_clear_results.get('success'):
+                changes['metadata']['memory_optimizations_applied'] += 1
+                logger.debug("Memory optimized before preset processing")
+        
+        current_preset = preset_config.get('current_preset')
+        if current_preset and current_preset in PRESET_CONFIGS:
+            logger.debug(f"Applying preset configuration: {current_preset}")
+            
+            # Apply preset-specific optimizations
+            preset_data = PRESET_CONFIGS[current_preset]
+            if isinstance(preset_data, dict):
+                # Record preset application
+                changes['system']['preset_applied'] = {
+                    'preset': current_preset,
+                    'description': preset_data.get('metadata', {}).get('description', 'No description'),
+                    'compatibility': preset_data.get('metadata', {}).get('compatibility', [])
+                }
+                
+                # Update global constants from preset if they haven't been explicitly overridden
+                preset_training = preset_data.get('training', {})
+                preset_model = preset_data.get('model', {})
+                
+                # Only apply preset values if they haven't been changed by direct config
+                if 'batch_size' not in changes['training'] and 'batch_size' in preset_training:
+                    DEFAULT_BATCH_SIZE = max(1, min(2048, int(preset_training['batch_size'])))
+                    changes['training']['batch_size_from_preset'] = DEFAULT_BATCH_SIZE
+                
+                if 'epochs' not in changes['training'] and 'epochs' in preset_training:
+                    DEFAULT_EPOCHS = max(1, min(10000, int(preset_training['epochs'])))
+                    changes['training']['epochs_from_preset'] = DEFAULT_EPOCHS
+                
+                if 'encoding_dim' not in changes['model'] and 'encoding_dim' in preset_model:
+                    DEFAULT_ENCODING_DIM = max(1, min(1024, int(preset_model['encoding_dim'])))
+                    changes['model']['encoding_dim_from_preset'] = DEFAULT_ENCODING_DIM
+    
+    except Exception as e:
+        logger.warning(f"Error applying preset configuration: {e}")
+        changes['system']['preset_error'] = str(e)
+    
+    # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
+    # Aggressive cleanup after configuration processing completion
+    try:
+        final_clear_results = enhanced_clear_memory(
+            aggressive=True,  # Aggressive final cleanup
+            hardware_data=hardware_data
+        )
+        
+        if final_clear_results.get('success'):
+            changes['metadata']['final_memory_cleanup'] = {
+                'actions': final_clear_results.get('actions_taken', []),
+                'timestamp': datetime.now().isoformat(),
+                'memory_impact': {
+                    'optimization_effective': True,
+                    'final_cleanup_performed': True
+                }
+            }
+            
+            changes['metadata']['memory_optimizations_applied'] += 1
+            logger.debug(f"Final memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
+            
+    except Exception as e:
+        logger.debug(f"Final memory optimization failed: {e}")
+        changes['metadata']['final_cleanup_error'] = str(e)
+    
+    # Calculate total changes and log summary
+    total_changes = sum(len(section) for section in changes.values() 
+                       if isinstance(section, dict) and section != changes['metadata'])
+    changes['metadata']['total_changes'] = total_changes
+    
+    if total_changes > 0:
+        logger.debug(f"Updated {total_changes} global configuration parameters")
+        logger.debug(f"Applied {changes['metadata']['memory_optimizations_applied']} memory optimizations during processing")
+        
+        # Log significant changes
+        for section_name, section_changes in changes.items():
+            if isinstance(section_changes, dict) and section_changes and section_name != 'metadata':
+                logger.debug(f"Updated {section_name}: {list(section_changes.keys())}")
+        
+        # Log preset application if it occurred
+        if 'preset_applied' in changes.get('system', {}):
+            preset_info = changes['system']['preset_applied']
+            logger.debug(f"Applied preset '{preset_info['preset']}': {preset_info['description']}")
+    else:
+        logger.debug("No global configuration changes applied")
+    
+    # Final validation of global state
+    try:
+        validate_global_config_state()
+        logger.debug("Global configuration state validation passed")
+    except Exception as e:
+        logger.error(f"Global configuration state validation failed: {e}")
+        raise ValueError(f"Global configuration state became invalid: {e}")
+    
+    # Save change log for audit trail
+    try:
+        save_change_log(changes)
+    except Exception as e:
+        logger.debug(f"Failed to save configuration change log: {e}")
 
 def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool, List[str], List[str]]:
     """
@@ -16467,461 +16921,7 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             logger.critical(f"Even emergency fallback configuration failed: {fallback_error}")
             raise RuntimeError(f"Complete configuration initialization failure: {str(e)}. Emergency fallback also failed: {str(fallback_error)}") from e
 
-def update_global_config(config: Dict[str, Any]) -> None:
-    """Update module-level constants from config with enhanced validation, logging, preset support,
-    and intelligent memory management.
-    
-    This function synchronizes global configuration variables with the provided configuration
-    dictionary, ensuring type safety, value validation, comprehensive change tracking, and
-    optimal memory usage during intensive configuration processing.
-    
-    Args:
-        config: Configuration dictionary to update from
-        
-    Raises:
-        ValueError: If any configuration values are invalid
-        TypeError: If any configuration values are of incorrect type
-        KeyError: If required configuration sections are missing
-    """
-    if not isinstance(config, dict):
-        raise TypeError(f"Configuration must be a dictionary, got {type(config).__name__}")
-    
-    # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
-    hardware_data = None
-    total_ram_gb = 8.0  # Conservative default
-    
-    try:
-        hardware_data = check_hardware(include_memory_usage=True)
-        total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
-        
-        # Initial memory cleanup for memory-constrained systems before processing large configs
-        if total_ram_gb < 16 and len(str(config)) > 100000:  # Large config (>100KB serialized)
-            initial_clear_results = enhanced_clear_memory(
-                aggressive=total_ram_gb < 8,  # More aggressive on low-memory systems
-                hardware_data=hardware_data
-            )
-            
-            if initial_clear_results.get('success'):
-                logger.debug(f"Initial memory optimization for config processing: {', '.join(initial_clear_results.get('actions_taken', []))}")
-    except Exception as e:
-        logger.debug(f"Initial memory optimization failed: {e}")
-    
-    # Validate config structure with better error messages
-    required_sections = ['training', 'model', 'security', 'data']
-    missing_sections = [section for section in required_sections if section not in config]
-    if missing_sections:
-        raise KeyError(f"Missing required configuration sections: {missing_sections}")
-    
-    # Initialize comprehensive change tracking
-    changes = {
-        'metadata': {
-            'config_version': '2.1',
-            'update_time': datetime.now().isoformat(),
-            'source': config.get('metadata', {}).get('preset_used', 'manual'),
-            'total_changes': 0,
-            'memory_optimizations_applied': 0,
-            'large_config_processing': len(str(config)) > 50000
-        },
-        'training': {},
-        'model': {},
-        'security': {},
-        'data': {},
-        'system': {}
-    }
-    
-    # Training configuration updates with memory optimization checkpoints
-    try:
-        training_config = config.get('training', {})
-        
-        # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before processing large training configs
-        if len(str(training_config)) > 20000 and total_ram_gb < 16:
-            try:
-                training_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
-                if training_clear_results.get('success'):
-                    changes['metadata']['memory_optimizations_applied'] += 1
-                    logger.debug("Memory optimized before training config processing")
-            except Exception as e:
-                logger.debug(f"Training config memory optimization failed: {e}")
-        
-        # Training parameter updates
-        global DEFAULT_BATCH_SIZE, DEFAULT_EPOCHS, EARLY_STOPPING_PATIENCE, LEARNING_RATE
-        global WEIGHT_DECAY, GRADIENT_CLIP, GRADIENT_ACCUMULATION_STEPS, MIXED_PRECISION, NUM_WORKERS
-        
-        if 'batch_size' in training_config:
-            old_value = DEFAULT_BATCH_SIZE
-            new_value = max(1, min(2048, int(training_config['batch_size'])))
-            if old_value != new_value:
-                DEFAULT_BATCH_SIZE = new_value
-                changes['training']['batch_size'] = {'from': old_value, 'to': new_value}
-        
-        if 'epochs' in training_config:
-            old_value = DEFAULT_EPOCHS
-            new_value = max(1, min(10000, int(training_config['epochs'])))
-            if old_value != new_value:
-                DEFAULT_EPOCHS = new_value
-                changes['training']['epochs'] = {'from': old_value, 'to': new_value}
-        
-        if 'patience' in training_config:
-            old_value = EARLY_STOPPING_PATIENCE
-            new_value = max(1, min(1000, int(training_config['patience'])))
-            if old_value != new_value:
-                EARLY_STOPPING_PATIENCE = new_value
-                changes['training']['patience'] = {'from': old_value, 'to': new_value}
-        
-        if 'learning_rate' in training_config:
-            old_value = LEARNING_RATE
-            new_value = max(1e-8, min(1.0, float(training_config['learning_rate'])))
-            if old_value != new_value:
-                LEARNING_RATE = new_value
-                changes['training']['learning_rate'] = {'from': old_value, 'to': new_value}
-        
-        if 'weight_decay' in training_config:
-            old_value = WEIGHT_DECAY
-            new_value = max(0.0, min(1.0, float(training_config['weight_decay'])))
-            if old_value != new_value:
-                WEIGHT_DECAY = new_value
-                changes['training']['weight_decay'] = {'from': old_value, 'to': new_value}
-        
-        if 'gradient_clip' in training_config:
-            old_value = GRADIENT_CLIP
-            new_value = max(0.01, min(100.0, float(training_config['gradient_clip'])))
-            if old_value != new_value:
-                GRADIENT_CLIP = new_value
-                changes['training']['gradient_clip'] = {'from': old_value, 'to': new_value}
-        
-        if 'gradient_accumulation_steps' in training_config:
-            old_value = GRADIENT_ACCUMULATION_STEPS
-            new_value = max(1, min(256, int(training_config['gradient_accumulation_steps'])))
-            if old_value != new_value:
-                GRADIENT_ACCUMULATION_STEPS = new_value
-                changes['training']['gradient_accumulation_steps'] = {'from': old_value, 'to': new_value}
-        
-        if 'mixed_precision' in training_config:
-            old_value = MIXED_PRECISION
-            new_value = bool(training_config['mixed_precision'])
-            if old_value != new_value:
-                MIXED_PRECISION = new_value
-                changes['training']['mixed_precision'] = {'from': old_value, 'to': new_value}
-        
-        if 'num_workers' in training_config:
-            old_value = NUM_WORKERS
-            new_value = max(0, min(32, int(training_config['num_workers'])))
-            if old_value != new_value:
-                NUM_WORKERS = new_value
-                changes['training']['num_workers'] = {'from': old_value, 'to': new_value}
-                
-    except Exception as e:
-        logger.error(f"Error updating training configuration: {e}")
-        raise ValueError(f"Invalid training configuration: {e}")
-    
-    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before model config processing
-    try:
-        model_config = config.get('model', {})
-        
-        if len(str(model_config)) > 15000 and total_ram_gb < 16:
-            model_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
-            if model_clear_results.get('success'):
-                changes['metadata']['memory_optimizations_applied'] += 1
-                logger.debug("Memory optimized before model config processing")
-    
-        # Model parameter updates
-        global DEFAULT_ENCODING_DIM, HIDDEN_LAYER_SIZES, DROPOUT_RATES, ACTIVATION, ACTIVATION_PARAM
-        global NORMALIZATION, USE_BATCH_NORM, USE_LAYER_NORM, DIVERSITY_FACTOR, MIN_FEATURES, NUM_MODELS
-        
-        if 'encoding_dim' in model_config:
-            old_value = DEFAULT_ENCODING_DIM
-            new_value = max(1, min(1024, int(model_config['encoding_dim'])))
-            if old_value != new_value:
-                DEFAULT_ENCODING_DIM = new_value
-                changes['model']['encoding_dim'] = {'from': old_value, 'to': new_value}
-        
-        if 'hidden_dims' in model_config:
-            old_value = HIDDEN_LAYER_SIZES
-            new_dims = model_config['hidden_dims']
-            if isinstance(new_dims, (list, tuple)) and all(isinstance(d, int) and d > 0 for d in new_dims):
-                new_value = list(new_dims)
-                if old_value != new_value:
-                    HIDDEN_LAYER_SIZES = new_value
-                    changes['model']['hidden_dims'] = {'from': old_value, 'to': new_value}
-        
-        if 'dropout_rates' in model_config:
-            old_value = DROPOUT_RATES
-            new_rates = model_config['dropout_rates']
-            if isinstance(new_rates, (list, tuple)) and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in new_rates):
-                new_value = list(new_rates)
-                if old_value != new_value:
-                    DROPOUT_RATES = new_value
-                    changes['model']['dropout_rates'] = {'from': old_value, 'to': new_value}
-        
-        valid_activations = ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu']
-        if 'activation' in model_config:
-            old_value = ACTIVATION
-            new_value = model_config['activation']
-            if isinstance(new_value, str) and new_value.lower() in valid_activations:
-                new_value = new_value.lower()
-                if old_value != new_value:
-                    ACTIVATION = new_value
-                    changes['model']['activation'] = {'from': old_value, 'to': new_value}
-        
-        if 'activation_param' in model_config:
-            old_value = ACTIVATION_PARAM
-            new_value = max(0.0, min(1.0, float(model_config['activation_param'])))
-            if old_value != new_value:
-                ACTIVATION_PARAM = new_value
-                changes['model']['activation_param'] = {'from': old_value, 'to': new_value}
-        
-        valid_normalizations = ['batch', 'layer', 'instance', 'group', None, 'none']
-        if 'normalization' in model_config:
-            old_value = NORMALIZATION
-            new_value = model_config['normalization']
-            if new_value in valid_normalizations:
-                if new_value == 'none':
-                    new_value = None
-                if old_value != new_value:
-                    NORMALIZATION = new_value
-                    changes['model']['normalization'] = {'from': old_value, 'to': new_value}
-        
-        if 'use_batch_norm' in model_config:
-            old_value = USE_BATCH_NORM
-            new_value = bool(model_config['use_batch_norm'])
-            if old_value != new_value:
-                USE_BATCH_NORM = new_value
-                changes['model']['use_batch_norm'] = {'from': old_value, 'to': new_value}
-        
-        if 'use_layer_norm' in model_config:
-            old_value = USE_LAYER_NORM
-            new_value = bool(model_config['use_layer_norm'])
-            if old_value != new_value:
-                USE_LAYER_NORM = new_value
-                changes['model']['use_layer_norm'] = {'from': old_value, 'to': new_value}
-        
-        if 'diversity_factor' in model_config:
-            old_value = DIVERSITY_FACTOR
-            new_value = max(0.0, min(1.0, float(model_config['diversity_factor'])))
-            if old_value != new_value:
-                DIVERSITY_FACTOR = new_value
-                changes['model']['diversity_factor'] = {'from': old_value, 'to': new_value}
-        
-        if 'min_features' in model_config:
-            old_value = MIN_FEATURES
-            new_value = max(1, min(10000, int(model_config['min_features'])))
-            if old_value != new_value:
-                MIN_FEATURES = new_value
-                changes['model']['min_features'] = {'from': old_value, 'to': new_value}
-        
-        if 'num_models' in model_config:
-            old_value = NUM_MODELS
-            new_value = max(1, min(20, int(model_config['num_models'])))
-            if old_value != new_value:
-                NUM_MODELS = new_value
-                changes['model']['num_models'] = {'from': old_value, 'to': new_value}
-    
-    except Exception as e:
-        logger.error(f"Error updating model configuration: {e}")
-        raise ValueError(f"Invalid model configuration: {e}")
-    
-    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before security config processing
-    try:
-        security_config = config.get('security', {})
-        
-        if len(str(security_config)) > 10000 and total_ram_gb < 16:
-            security_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
-            if security_clear_results.get('success'):
-                changes['metadata']['memory_optimizations_applied'] += 1
-                logger.debug("Memory optimized before security config processing")
-    
-        # Security parameter updates
-        global DEFAULT_PERCENTILE, DEFAULT_ATTACK_THRESHOLD, FALSE_NEGATIVE_COST, SECURITY_METRICS
-        
-        if 'percentile' in security_config:
-            old_value = DEFAULT_PERCENTILE
-            new_value = max(50.0, min(99.99, float(security_config['percentile'])))
-            if old_value != new_value:
-                DEFAULT_PERCENTILE = new_value
-                changes['security']['percentile'] = {'from': old_value, 'to': new_value}
-        
-        if 'attack_threshold' in security_config:
-            old_value = DEFAULT_ATTACK_THRESHOLD
-            new_value = max(0.001, min(1.0, float(security_config['attack_threshold'])))
-            if old_value != new_value:
-                DEFAULT_ATTACK_THRESHOLD = new_value
-                changes['security']['attack_threshold'] = {'from': old_value, 'to': new_value}
-        
-        if 'false_negative_cost' in security_config:
-            old_value = FALSE_NEGATIVE_COST
-            new_value = max(0.1, min(100.0, float(security_config['false_negative_cost'])))
-            if old_value != new_value:
-                FALSE_NEGATIVE_COST = new_value
-                changes['security']['false_negative_cost'] = {'from': old_value, 'to': new_value}
-        
-        if 'enable_security_metrics' in security_config:
-            old_value = SECURITY_METRICS
-            new_value = bool(security_config['enable_security_metrics'])
-            if old_value != new_value:
-                SECURITY_METRICS = new_value
-                changes['security']['enable_security_metrics'] = {'from': old_value, 'to': new_value}
-    
-    except Exception as e:
-        logger.error(f"Error updating security configuration: {e}")
-        raise ValueError(f"Invalid security configuration: {e}")
-    
-    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before data config processing
-    try:
-        data_config = config.get('data', {})
-        
-        if len(str(data_config)) > 10000 and total_ram_gb < 16:
-            data_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
-            if data_clear_results.get('success'):
-                changes['metadata']['memory_optimizations_applied'] += 1
-                logger.debug("Memory optimized before data config processing")
-    
-        # Data parameter updates
-        global NORMAL_SAMPLES, ATTACK_SAMPLES, FEATURES, ANOMALY_FACTOR, RANDOM_STATE
-        
-        if 'normal_samples' in data_config:
-            old_value = NORMAL_SAMPLES
-            new_value = max(10, min(1000000, int(data_config['normal_samples'])))
-            if old_value != new_value:
-                NORMAL_SAMPLES = new_value
-                changes['data']['normal_samples'] = {'from': old_value, 'to': new_value}
-        
-        if 'attack_samples' in data_config:
-            old_value = ATTACK_SAMPLES
-            new_value = max(5, min(100000, int(data_config['attack_samples'])))
-            if old_value != new_value:
-                ATTACK_SAMPLES = new_value
-                changes['data']['attack_samples'] = {'from': old_value, 'to': new_value}
-        
-        if 'features' in data_config:
-            old_value = FEATURES
-            new_value = max(1, min(10000, int(data_config['features'])))
-            if old_value != new_value:
-                FEATURES = new_value
-                changes['data']['features'] = {'from': old_value, 'to': new_value}
-        
-        if 'anomaly_factor' in data_config:
-            old_value = ANOMALY_FACTOR
-            new_value = max(0.1, min(100.0, float(data_config['anomaly_factor'])))
-            if old_value != new_value:
-                ANOMALY_FACTOR = new_value
-                changes['data']['anomaly_factor'] = {'from': old_value, 'to': new_value}
-        
-        if 'random_state' in data_config:
-            old_value = RANDOM_STATE
-            new_value = int(data_config['random_state'])
-            if old_value != new_value:
-                RANDOM_STATE = new_value
-                changes['data']['random_state'] = {'from': old_value, 'to': new_value}
-    
-    except Exception as e:
-        logger.error(f"Error updating data configuration: {e}")
-        raise ValueError(f"Invalid data configuration: {e}")
-    
-    # Handle preset application with comprehensive validation and memory optimization
-    try:
-        preset_config = config.get('presets', {})
-        
-        # Clear memory before intensive preset processing if needed
-        if len(str(preset_config)) > 5000 and total_ram_gb < 16:
-            preset_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
-            if preset_clear_results.get('success'):
-                changes['metadata']['memory_optimizations_applied'] += 1
-                logger.debug("Memory optimized before preset processing")
-        
-        current_preset = preset_config.get('current_preset')
-        if current_preset and current_preset in PRESET_CONFIGS:
-            logger.debug(f"Applying preset configuration: {current_preset}")
-            
-            # Apply preset-specific optimizations
-            preset_data = PRESET_CONFIGS[current_preset]
-            if isinstance(preset_data, dict):
-                # Record preset application
-                changes['system']['preset_applied'] = {
-                    'preset': current_preset,
-                    'description': preset_data.get('metadata', {}).get('description', 'No description'),
-                    'compatibility': preset_data.get('metadata', {}).get('compatibility', [])
-                }
-                
-                # Update global constants from preset if they haven't been explicitly overridden
-                preset_training = preset_data.get('training', {})
-                preset_model = preset_data.get('model', {})
-                
-                # Only apply preset values if they haven't been changed by direct config
-                if 'batch_size' not in changes['training'] and 'batch_size' in preset_training:
-                    DEFAULT_BATCH_SIZE = max(1, min(2048, int(preset_training['batch_size'])))
-                    changes['training']['batch_size_from_preset'] = DEFAULT_BATCH_SIZE
-                
-                if 'epochs' not in changes['training'] and 'epochs' in preset_training:
-                    DEFAULT_EPOCHS = max(1, min(10000, int(preset_training['epochs'])))
-                    changes['training']['epochs_from_preset'] = DEFAULT_EPOCHS
-                
-                if 'encoding_dim' not in changes['model'] and 'encoding_dim' in preset_model:
-                    DEFAULT_ENCODING_DIM = max(1, min(1024, int(preset_model['encoding_dim'])))
-                    changes['model']['encoding_dim_from_preset'] = DEFAULT_ENCODING_DIM
-    
-    except Exception as e:
-        logger.warning(f"Error applying preset configuration: {e}")
-        changes['system']['preset_error'] = str(e)
-    
-    # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
-    # Aggressive cleanup after configuration processing completion
-    try:
-        final_clear_results = enhanced_clear_memory(
-            aggressive=True,  # Aggressive final cleanup
-            hardware_data=hardware_data
-        )
-        
-        if final_clear_results.get('success'):
-            changes['metadata']['final_memory_cleanup'] = {
-                'actions': final_clear_results.get('actions_taken', []),
-                'timestamp': datetime.now().isoformat(),
-                'memory_impact': {
-                    'optimization_effective': True,
-                    'final_cleanup_performed': True
-                }
-            }
-            
-            changes['metadata']['memory_optimizations_applied'] += 1
-            logger.debug(f"Final memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-            
-    except Exception as e:
-        logger.debug(f"Final memory optimization failed: {e}")
-        changes['metadata']['final_cleanup_error'] = str(e)
-    
-    # Calculate total changes and log summary
-    total_changes = sum(len(section) for section in changes.values() 
-                       if isinstance(section, dict) and section != changes['metadata'])
-    changes['metadata']['total_changes'] = total_changes
-    
-    if total_changes > 0:
-        logger.debug(f"Updated {total_changes} global configuration parameters")
-        logger.debug(f"Applied {changes['metadata']['memory_optimizations_applied']} memory optimizations during processing")
-        
-        # Log significant changes
-        for section_name, section_changes in changes.items():
-            if isinstance(section_changes, dict) and section_changes and section_name != 'metadata':
-                logger.debug(f"Updated {section_name}: {list(section_changes.keys())}")
-        
-        # Log preset application if it occurred
-        if 'preset_applied' in changes.get('system', {}):
-            preset_info = changes['system']['preset_applied']
-            logger.debug(f"Applied preset '{preset_info['preset']}': {preset_info['description']}")
-    else:
-        logger.debug("No global configuration changes applied")
-    
-    # Final validation of global state
-    try:
-        validate_global_config_state()
-        logger.debug("Global configuration state validation passed")
-    except Exception as e:
-        logger.error(f"Global configuration state validation failed: {e}")
-        raise ValueError(f"Global configuration state became invalid: {e}")
-    
-    # Save change log for audit trail
-    try:
-        save_change_log(changes)
-    except Exception as e:
-        logger.debug(f"Failed to save configuration change log: {e}")
+
 
 # Helper functions for the updated configuration system
 def save_change_log(changes: Dict[str, Any]) -> None:
@@ -43773,7 +43773,7 @@ def _interactive_express_setup(
 
 def _interactive_preset_setup(
     base_config: Dict[str, Any],
-    use_real_data: Optional[bool], 
+    use_real_data: Optional[bool],
     **kwargs
 ) -> Optional[Dict[str, Any]]:
     """
@@ -52565,8 +52565,26 @@ def run_hyperparameter_optimization(
                 best_config = hpo_results['best_config_for_training']
                 current_config = get_current_config()
                 
+                # Sanitize best_config to remove None values that should have defaults
+                def sanitize_config_values(cfg):
+                    """Remove or replace problematic None values."""
+                    if not isinstance(cfg, dict):
+                        return cfg
+                    
+                    sanitized = {}
+                    for key, value in cfg.items():
+                        if isinstance(value, dict):
+                            sanitized[key] = sanitize_config_values(value)
+                        elif value is not None:
+                            sanitized[key] = value
+                        # Skip None values - let update_global_config use defaults
+                    
+                    return sanitized
+                
+                best_config_sanitized = sanitize_config_values(best_config)
+                
                 # Merge best configuration
-                for section, values in best_config.items():
+                for section, values in best_config_sanitized.items():
                     if isinstance(values, dict):
                         current_config.setdefault(section, {}).update(values)
                     else:
@@ -52578,7 +52596,6 @@ def run_hyperparameter_optimization(
                     'hpo_study_name': study_name,
                     'hpo_best_value': best_value,
                     'hpo_optimization_date': datetime.now().isoformat(),
-                    #'hpo_trial_number': best_trial.number if best_trial else None
                     'hpo_trial_number': best_trial.number if best_trial else 0
                 })
                 
@@ -52589,6 +52606,7 @@ def run_hyperparameter_optimization(
                 
             except Exception as e:
                 logger.warning(f"Failed to save best configuration: {e}")
+                logger.debug(f"Failed config details: {best_config if 'best_config' in locals() else 'N/A'}")
                 recommendations.append("Failed to save best configuration - manually apply best parameters")
         
         # Offer to train final model with best parameters
@@ -52795,40 +52813,48 @@ def hpo_training_menu(config: Optional[Dict[str, Any]] = None, **kwargs):
         presets_section = config.get('presets', {})
         
         # Context extraction using multiple fallbacks with preset compatibility
-        preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
         # Determine preset name from multiple sources
+        # Method 1: Check presets section
         if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "default")
+            preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = metadata.get("preset_used", "default")
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = config.get("_preset_name", "default")
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
         
-        # Validate preset exists in PRESET_CONFIGS
-        if preset_name not in PRESET_CONFIGS:
-            logger.warning(f"Preset '{preset_name}' not found in PRESET_CONFIGS, using default")
-            preset_name = "default"
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
         
-        # Extract model type with validation
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
         if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'SimpleAutoencoder')
-            # Validate model type against available variants
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                model_type = 'SimpleAutoencoder'
+            model_type = model_config.get('model_type', 'Unknown')
         
         # Extract config source with fallbacks
         if "runtime" in config and isinstance(config["runtime"], dict):
-            config_source = config["runtime"].get("config_source", "runtime")
+            config_source = config["runtime"].get("config_source", "Unknown")
         elif "metadata" in config and isinstance(config["metadata"], dict):
-            config_source = config["metadata"].get("config_source", "metadata")
+            config_source = config["metadata"].get("config_source", "Unknown")
         else:
-            config_source = "loaded_config"
+            config_source = "Unknown"
         
         # HPO-specific context extraction
         hpo_data_path = data_config.get('data_path', 'Default')
@@ -53396,40 +53422,48 @@ def run_hyperparameter_optimization_interactive(
         presets_section = config.get('presets', {})
         
         # Context extraction with preset compatibility
-        preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
         # Determine preset name from multiple sources
+        # Method 1: Check presets section
         if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "default")
+            preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = metadata.get("preset_used", "default")
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = config.get("_preset_name", "default")
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
         
-        # Validate preset exists in PRESET_CONFIGS
-        if preset_name not in PRESET_CONFIGS:
-            logger.warning(f"Preset '{preset_name}' not found in PRESET_CONFIGS, using default")
-            preset_name = "default"
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
         
-        # Extract model type with validation
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
         if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'SimpleAutoencoder')
-            # Validate model type against available variants
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                model_type = 'SimpleAutoencoder'
+            model_type = model_config.get('model_type', 'Unknown')
         
         # Extract config source with fallbacks
         if "runtime" in config and isinstance(config["runtime"], dict):
-            config_source = config["runtime"].get("config_source", "runtime")
+            config_source = config["runtime"].get("config_source", "Unknown")
         elif "metadata" in config and isinstance(config["metadata"], dict):
-            config_source = config["metadata"].get("config_source", "metadata")
+            config_source = config["metadata"].get("config_source", "Unknown")
         else:
-            config_source = "loaded_config"
+            config_source = "Unknown"
         
         # HPO-specific context from current preset configuration
         hpo_strategy = hpo_config.get('strategy', 'optuna')
@@ -54238,40 +54272,48 @@ def _run_quick_hpo_test(
         metadata = config.get('metadata', {})
         
         # Context extraction with preset compatibility
-        preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
         # Determine preset name from multiple sources
+        # Method 1: Check presets section
         if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "default")
+            preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = metadata.get("preset_used", "default")
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = config.get("_preset_name", "default")
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
         
-        # Validate preset exists in PRESET_CONFIGS
-        if preset_name not in PRESET_CONFIGS:
-            logger.warning(f"Preset '{preset_name}' not found in PRESET_CONFIGS, using default")
-            preset_name = "default"
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
         
-        # Extract model type with validation
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
         if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'SimpleAutoencoder')
-            # Validate model type against available variants
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                model_type = 'SimpleAutoencoder'
+            model_type = model_config.get('model_type', 'Unknown')
         
         # Extract config source with fallbacks
         if "runtime" in config and isinstance(config["runtime"], dict):
-            config_source = config["runtime"].get("config_source", "runtime")
+            config_source = config["runtime"].get("config_source", "Unknown")
         elif "metadata" in config and isinstance(config["metadata"], dict):
-            config_source = config["metadata"].get("config_source", "metadata")
+            config_source = config["metadata"].get("config_source", "Unknown")
         else:
-            config_source = "loaded_config"
+            config_source = "Unknown"
         
         # Quick test specific parameter resolution with hardware awareness
         cuda_available = hardware_data.get('cuda', {}).get('available', False)
@@ -54362,65 +54404,43 @@ def _run_quick_hpo_test(
                 prefix = "  └─" if i == len(extended_params) - 1 else "  ├─"
                 print(Fore.GREEN + Style.BRIGHT + f"{prefix} {param}")
         
-        # Test description with context-aware information
-        message = (
-            f"Quick HPO Test Overview\n"
-            f"Purpose: Fast hyperparameter optimization for testing and validation\n\n"
-            f"Test Configuration:\n"
-            f"├─ Optimization Trials: {quick_trial_count} (reduced for speed)\n"
-            f"├─ Epochs per Trial: 5 (quick convergence)\n" 
-            f"├─ Model Type: {model_type}\n"
-            f"├─ Cross-Validation: 3-fold (balanced accuracy/speed)\n"
-            f"├─ Data Source: {quick_data_mode.title()} (optimized for quick testing)\n"
-            f"├─ Early Stopping: Enabled (efficient resource use)\n"
-            f"├─ Maximum Timeout: {quick_timeout} seconds\n"
-            f"└─ System Class: {system_class} (hardware-aware optimization)\n\n"
-            f"Expected Duration: 2-10 minutes\n"
-            f"Ideal For:\n"
-            f"├─ System testing and validation\n"
-            f"├─ Configuration verification\n"
-            f"├─ Quick experiments and prototyping\n"
-            f"├─ Resource requirement assessment\n"
-            f"└─ Pipeline functionality testing"
-        )
-        
-        print(Fore.YELLOW + Style.BRIGHT + f"\n{message}")
+        # Test use cases
+        print(Fore.YELLOW + Style.BRIGHT + "\nIdeal Use Cases:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ System testing and validation")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Configuration verification")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Quick experiments and prototyping")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Resource requirement assessment")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Pipeline functionality testing")
+
         print(Fore.MAGENTA + Style.BRIGHT + "-" * 40 + Style.RESET_ALL)
         
         # Skip prompt if non_interactive or skip_prompt is True
         if non_interactive or skip_prompt:
             print(Fore.GREEN + Style.BRIGHT + "\nNon-interactive mode - starting quick HPO test automatically...")
         else:
-            # Confirmation with context-aware summary
-            confirm_message = (
-                f"Current Context Summary\n\n"
-                f"Configuration:\n"
-                f"├─ Active Preset: {preset_name}\n"
-                f"├─ Target Model: {model_type}\n"
-                f"├─ Configuration Source: {config_source}\n"
-                f"├─ System Class: {system_class}\n"
-                f"└─ Hardware: {cpu_cores} cores, {memory_gb:.1f}GB RAM, CUDA: {cuda_available}\n\n"
-                f"Test Parameters:\n"
-                f"├─ Test Type: Quick HPO ({quick_trial_count} trials, 5 epochs)\n"
-                f"├─ Data: {quick_data_mode.title()} (optimized for quick testing)\n"
-                f"└─ Expected Duration: 2-10 minutes"
-            )
-            
-            print(Fore.GREEN + Style.BRIGHT + f"\n{confirm_message}")
-            print(Fore.YELLOW + Style.BRIGHT + "-" * 40 + Style.RESET_ALL)
-            
-            # Input handling with retry logic
+            # Confirmation input handling
             confirm = None
-            while not confirm:
+            while confirm is None:
                 try:
-                    confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart quick HPO test? (Y/n): ").strip().lower()
-                    if not confirm:
+                    user_input = input(Fore.YELLOW + Style.BRIGHT + "\nStart quick HPO test? (Y/n) [default: Y]: ").strip().lower()
+                    
+                    # Default to 'yes' on empty input
+                    if not user_input:
+                        confirm = True
+                        print(Fore.GREEN + Style.BRIGHT + "Using default selection: Yes")
+                    elif user_input in ('y', 'yes'):
+                        confirm = True
+                    elif user_input in ('n', 'no'):
+                        confirm = False
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "Please enter 'y' for yes or 'n' for no.")
                         continue
+                        
                 except (EOFError, KeyboardInterrupt):
                     print(Fore.RED + Style.BRIGHT + "\nQuick HPO test cancelled by user.")
                     return None
             
-            if confirm not in ('', 'y', 'yes'):
+            if not confirm:
                 print(Fore.RED + Style.BRIGHT + "\nQuick HPO test cancelled.")
                 return None
         
@@ -54624,51 +54644,8 @@ def _run_quick_hpo_test(
             # Use the result handler if available
             if '_handle_hpo_result' in globals():
                 _handle_hpo_result(result, "Quick HPO Test")
-            
-            # Additional quick test specific feedback
-            if result.get('success', False):
-                message = (
-                    f"Quick HPO Test Completed Successfully!\n\n"
-                    f"Test Summary:\n"
-                    f"├─ Completed Trials: {result.get('total_trials', 'N/A')}\n"
-                    f"├─ Best Score: {result.get('best_score', 'N/A'):.4f}\n"
-                    f"├─ Duration: {result.get('duration', 'N/A')}\n"
-                    f"├─ Model: {model_type}\n"
-                    f"├─ Preset: {preset_name}\n"
-                    f"├─ Data Mode: {quick_data_mode.title()}\n"
-                    f"└─ System Class: {system_class}\n\n"
-                    f"The quick test validated your HPO setup and configuration."
-                )
-                print(Fore.GREEN + Style.BRIGHT + "\n" + "-"*40)
-                print(Fore.GREEN + Style.BRIGHT + f"{message}")
-                print(Fore.GREEN + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
-                
                 return result
-            
-            else:
-                message = (
-                    f"Quick HPO Test Completed with Notes\n\n"
-                    f"Test completed but encountered some issues.\n"
-                    f"Check the detailed results above for more information.\n\n"
-                    f"This is normal for quick tests and helps identify\n"
-                    f"potential configuration improvements."
-                )
-                print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-                print(Fore.YELLOW + Style.BRIGHT + f"{message}")
-                print(Fore.YELLOW + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
-                
-                return result
-        
         else:
-            message = (
-                f"Quick HPO Test Failed to Return Results\n\n"
-                f"The test may have encountered an unexpected issue.\n"
-                f"Check the logs for detailed error information."
-            )
-            print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
-            print(Fore.RED + Style.BRIGHT + f"{message}")
-            print(Fore.RED + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
-            
             return None
     
     except KeyboardInterrupt:
@@ -54782,49 +54759,53 @@ def _run_hpo_model_comparison(
         metadata = config.get('metadata', {})
         
         # Context extraction with preset compatibility
-        preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
-        # Determine preset name from multiple sources
+        # Method 1: Check presets section
         if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "default")
+            preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = metadata.get("preset_used", "default")
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
         
-        if preset_name in ["default", None, "", "none"]:
-            preset_name = config.get("_preset_name", "default")
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
         
-        # Validate preset exists in PRESET_CONFIGS
-        if preset_name not in PRESET_CONFIGS:
-            logger.warning(f"Preset '{preset_name}' not found in PRESET_CONFIGS, using default")
-            preset_name = "default"
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
         
-        # Extract model type with validation
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
         if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'SimpleAutoencoder')
-            # Validate model type against available variants
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                model_type = 'SimpleAutoencoder'
+            model_type = model_config.get('model_type', 'Unknown')
         
         # Extract config source with fallbacks
         if "runtime" in config and isinstance(config["runtime"], dict):
-            config_source = config["runtime"].get("config_source", "runtime")
+            config_source = config["runtime"].get("config_source", "Unknown")
         elif "metadata" in config and isinstance(config["metadata"], dict):
-            config_source = config["metadata"].get("config_source", "metadata")
+            config_source = config["metadata"].get("config_source", "Unknown")
         else:
-            config_source = "loaded_config"
+            config_source = "Unknown"
         
-        # Get available models for comparison with validation
+        # Get available models for comparison
         if model_types:
-            available_models = [model for model in model_types if model in MODEL_VARIANTS]
-            if len(available_models) != len(model_types):
-                invalid_models = set(model_types) - set(MODEL_VARIANTS.keys())
-                logger.warning(f"Invalid model types removed from comparison: {invalid_models}")
+            available_models = model_types
         else:
-            available_models = list(MODEL_VARIANTS.keys())
+            available_models = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
         
         # Ensure we have at least 2 models for comparison
         if len(available_models) < 2:
@@ -56406,41 +56387,48 @@ def _interactive_hpo_express_setup(
         metadata = base_config.get('metadata', {}) if base_config else {}
         
         # Context extraction with preset compatibility
-        preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
         if base_config:
-            # Determine preset name from multiple sources
+            # Method 1: Check presets section
             if isinstance(presets_section, dict):
-                preset_name = presets_section.get("current_preset", "default")
+                preset_name = presets_section.get("current_preset", "Custom/Default")
             
-            if preset_name in ["default", None, "", "none"]:
-                preset_name = metadata.get("preset_used", "default")
+            # Method 2: Check metadata for preset_used
+            if preset_name in ["Custom/Default", None, ""]:
+                metadata = base_config.get("metadata", {})
+                if isinstance(metadata, dict):
+                    preset_name = metadata.get("preset_used", "Custom/Default")
             
-            if preset_name in ["default", None, "", "none"]:
-                preset_name = base_config.get("_preset_name", "default")
+            # Method 3: Check legacy _preset_name field
+            if preset_name in ["Custom/Default", None, ""]:
+                preset_name = base_config.get("_preset_name", "Custom/Default")
             
-            # Validate preset exists in PRESET_CONFIGS
-            if preset_name not in PRESET_CONFIGS:
-                logger.warning(f"Preset '{preset_name}' not found in PRESET_CONFIGS, using default")
-                preset_name = "default"
+            # Method 4: Check runtime information
+            if preset_name in ["Custom/Default", None, ""]:
+                runtime = base_config.get("runtime", {})
+                if isinstance(runtime, dict):
+                    preset_name = runtime.get("active_preset", "Custom/Default")
             
-            # Extract model type with validation
+            # Clean up preset name display
+            if preset_name in ["Custom/Default", None, "", "none"]:
+                preset_name = "Custom/Default"
+            elif isinstance(preset_name, str):
+                preset_name = preset_name.title()
+            
+            # Extract model type with error handling
             if isinstance(model_config, dict):
-                model_type = model_config.get('model_type', 'SimpleAutoencoder')
-                # Validate model type against available variants
-                if model_type not in MODEL_VARIANTS:
-                    logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                    model_type = 'SimpleAutoencoder'
+                model_type = model_config.get('model_type', 'Unknown')
             
             # Extract config source with fallbacks
             if "runtime" in base_config and isinstance(base_config["runtime"], dict):
-                config_source = base_config["runtime"].get("config_source", "runtime")
+                config_source = base_config["runtime"].get("config_source", "Unknown")
             elif "metadata" in base_config and isinstance(base_config["metadata"], dict):
-                config_source = base_config["metadata"].get("config_source", "metadata")
+                config_source = base_config["metadata"].get("config_source", "Unknown")
             else:
-                config_source = "loaded_config"
+                config_source = "Unknown"
         
         # Hardware-aware system class detection
         cuda_available = hardware_data.get('cuda', {}).get('available', False)
@@ -57036,32 +57024,40 @@ def _interactive_hpo_preset_setup(
         presets_section = base_config.get('presets', {})
         
         # Context extraction using multiple fallbacks
-        current_preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        current_preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
         # Determine preset name from multiple sources
+        # Method 1: Check presets section
         if isinstance(presets_section, dict):
-            current_preset_name = presets_section.get("current_preset", "default")
+            current_preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if current_preset_name in ["default", None, "", "none"]:
-            current_preset_name = metadata.get("preset_used", "default")
+        # Method 2: Check metadata for preset_used
+        if current_preset_name in ["Custom/Default", None, ""]:
+            metadata = base_config.get("metadata", {})
+            if isinstance(metadata, dict):
+                current_preset_name = metadata.get("preset_used", "Custom/Default")
         
-        if current_preset_name in ["default", None, "", "none"]:
-            current_preset_name = base_config.get("_preset_name", "default")
+        # Method 3: Check legacy _preset_name field
+        if current_preset_name in ["Custom/Default", None, ""]:
+            current_preset_name = base_config.get("_preset_name", "Custom/Default")
         
-        # Validate preset exists in PRESET_CONFIGS
-        if current_preset_name not in PRESET_CONFIGS:
-            logger.warning(f"Preset '{current_preset_name}' not found in PRESET_CONFIGS, using default")
-            current_preset_name = "default"
+        # Method 4: Check runtime information
+        if current_preset_name in ["Custom/Default", None, ""]:
+            runtime = base_config.get("runtime", {})
+            if isinstance(runtime, dict):
+                current_preset_name = runtime.get("active_preset", "Custom/Default")
         
-        # Extract model type with validation
+        # Clean up preset name display
+        if current_preset_name in ["Custom/Default", None, "", "none"]:
+            current_preset_name = "Custom/Default"
+        elif isinstance(current_preset_name, str):
+            current_preset_name = current_preset_name.title()
+        
+        # Extract model type with error handling
         if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'SimpleAutoencoder')
-            # Validate model type against available variants
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                model_type = 'SimpleAutoencoder'
+            model_type = model_config.get('model_type', 'Unknown')
         
         # Extract config source with fallbacks
         if "runtime" in base_config and isinstance(base_config["runtime"], dict):
@@ -57069,7 +57065,7 @@ def _interactive_hpo_preset_setup(
         elif "metadata" in base_config and isinstance(base_config["metadata"], dict):
             config_source = base_config["metadata"].get("config_source", "metadata")
         else:
-            config_source = "loaded_config"
+            config_source = "Unknown"
         
         # Hardware-aware system class detection
         cuda_available = hardware_data.get('cuda', {}).get('available', False)
@@ -57729,32 +57725,39 @@ def _interactive_hpo_custom_setup(
         presets_section = base_config.get('presets', {})
         
         # Context extraction using multiple fallbacks
-        current_preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        current_preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
-        # Determine preset name from multiple sources
+        # Method 1: Check presets section
         if isinstance(presets_section, dict):
-            current_preset_name = presets_section.get("current_preset", "default")
+            current_preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if current_preset_name in ["default", None, "", "none"]:
-            current_preset_name = metadata.get("preset_used", "default")
+        # Method 2: Check metadata for preset_used
+        if current_preset_name in ["Custom/Default", None, ""]:
+            metadata = base_config.get("metadata", {})
+            if isinstance(metadata, dict):
+                current_preset_name = metadata.get("preset_used", "Custom/Default")
         
-        if current_preset_name in ["default", None, "", "none"]:
-            current_preset_name = base_config.get("_preset_name", "default")
+        # Method 3: Check legacy _preset_name field
+        if current_preset_name in ["Custom/Default", None, ""]:
+            current_preset_name = base_config.get("_preset_name", "Custom/Default")
         
-        # Validate preset exists in PRESET_CONFIGS
-        if current_preset_name not in PRESET_CONFIGS:
-            logger.warning(f"Preset '{current_preset_name}' not found in PRESET_CONFIGS, using default")
-            current_preset_name = "default"
+        # Method 4: Check runtime information
+        if current_preset_name in ["Custom/Default", None, ""]:
+            runtime = base_config.get("runtime", {})
+            if isinstance(runtime, dict):
+                current_preset_name = runtime.get("active_preset", "Custom/Default")
         
-        # Extract model type with validation
+        # Clean up preset name display
+        if current_preset_name in ["Custom/Default", None, "", "none"]:
+            current_preset_name = "Custom/Default"
+        elif isinstance(current_preset_name, str):
+            current_preset_name = current_preset_name.title()
+        
+        # Extract model type with error handling
         if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'SimpleAutoencoder')
-            # Validate model type against available variants
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                model_type = 'SimpleAutoencoder'
+            model_type = model_config.get('model_type', 'Unknown')
         
         # Extract config source with fallbacks
         if "runtime" in base_config and isinstance(base_config["runtime"], dict):
@@ -57762,7 +57765,7 @@ def _interactive_hpo_custom_setup(
         elif "metadata" in base_config and isinstance(base_config["metadata"], dict):
             config_source = base_config["metadata"].get("config_source", "metadata")
         else:
-            config_source = "loaded_config"
+            config_source = "Unknown"
         
         # Hardware-aware system class detection
         cuda_available = hardware_data.get('cuda', {}).get('available', False)
@@ -59416,32 +59419,39 @@ def _interactive_hpo_continue_setup(
         presets_section = base_config.get('presets', {})
         
         # Context extraction using multiple fallbacks with preset compatibility
-        current_preset_name = "default"
-        model_type = "SimpleAutoencoder"
-        config_source = "unknown"
+        current_preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
-        # Determine preset name from multiple sources
+        # Method 1: Check presets section
         if isinstance(presets_section, dict):
-            current_preset_name = presets_section.get("current_preset", "default")
+            current_preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if current_preset_name in ["default", None, "", "none"]:
-            current_preset_name = metadata.get("preset_used", "default")
+        # Method 2: Check metadata for preset_used
+        if current_preset_name in ["Custom/Default", None, ""]:
+            metadata = base_config.get("metadata", {})
+            if isinstance(metadata, dict):
+                current_preset_name = metadata.get("preset_used", "Custom/Default")
         
-        if current_preset_name in ["default", None, "", "none"]:
-            current_preset_name = base_config.get("_preset_name", "default")
+        # Method 3: Check legacy _preset_name field
+        if current_preset_name in ["Custom/Default", None, ""]:
+            current_preset_name = base_config.get("_preset_name", "Custom/Default")
         
-        # Validate preset exists in PRESET_CONFIGS
-        if current_preset_name not in PRESET_CONFIGS:
-            logger.warning(f"Preset '{current_preset_name}' not found in PRESET_CONFIGS, using default")
-            current_preset_name = "default"
+        # Method 4: Check runtime information
+        if current_preset_name in ["Custom/Default", None, ""]:
+            runtime = base_config.get("runtime", {})
+            if isinstance(runtime, dict):
+                current_preset_name = runtime.get("active_preset", "Custom/Default")
         
-        # Extract model type with validation
+        # Clean up preset name display
+        if current_preset_name in ["Custom/Default", None, "", "none"]:
+            current_preset_name = "Custom/Default"
+        elif isinstance(current_preset_name, str):
+            current_preset_name = current_preset_name.title()
+        
+        # Extract model type with error handling
         if isinstance(model_config, dict):
-            model_type = model_config.get('model_type', 'SimpleAutoencoder')
-            # Validate model type against available variants
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, using SimpleAutoencoder")
-                model_type = 'SimpleAutoencoder'
+            model_type = model_config.get('model_type', 'Unknown')
         
         # Extract config source with fallbacks
         if "runtime" in base_config and isinstance(base_config["runtime"], dict):
@@ -59449,7 +59459,7 @@ def _interactive_hpo_continue_setup(
         elif "metadata" in base_config and isinstance(base_config["metadata"], dict):
             config_source = base_config["metadata"].get("config_source", "metadata")
         else:
-            config_source = "loaded_config"
+            config_source = "Unknown"
         
         # HPO-specific context from current preset configuration
         hpo_strategy = current_hpo_config.get('strategy', 'optuna')
@@ -63708,7 +63718,8 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
                     
             elif choice == "6":
                 try:
-                    select_preset_config()
+                    #select_preset_config()
+                    _interactive_preset_setup(base_config=config, use_real_data=False)
                 except Exception as e:
                     message = (
                         f"Error encountered during preset selection: {str(e)}\n"
