@@ -7460,7 +7460,7 @@ DEFAULT_PRESET = {
     },
     'security': {
         'percentile': 95, 'attack_threshold': 0.3, 'false_negative_cost': 2.0,
-        'enable_security_metrics': True, 'anomaly_threshold_strategy': 'percentile',
+        'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
         'early_warning_threshold': 0.25, 'adaptive_threshold': True, 'confidence_interval': 0.95,
         'detection_methods': ['reconstruction_error', 'statistical_analysis'],
         'alert_levels': ['low', 'medium', 'high', 'critical'], 'threshold_validation': True
@@ -11401,6 +11401,11 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 logger.warning(f"Configuration validation passed with {warning_count} warnings")
         else:
             logger.error(f"Configuration validation failed with {error_count} errors and {warning_count} warnings")
+            # Log each error and warning
+            for err in errors:
+                logger.error(f"Validation Error: {err}")
+            for warn in warnings:
+                logger.warning(f"Validation Warning: {warn}")
         
         # Return results
         is_valid = error_count == 0
@@ -41580,9 +41585,9 @@ def train_model(
         training_stats['run_id'] = run_id
         training_stats['experiment_dir'] = str(experiment_dir)
         
-        logger.info("=" * 80)
+        logger.info("-"*40)
         logger.info("COMPREHENSIVE TRAINING CONFIGURATION")
-        logger.info("=" * 80)
+        logger.info("-"*40)
         logger.info(f"Model Configuration:")
         logger.info(f"  Type: {model_type}")
         logger.info(f"  Encoding Dimension: {encoding_dim}")
@@ -41614,7 +41619,7 @@ def train_model(
         logger.info(f"  Workers: {num_workers}")
         logger.info(f"  Pin Memory: {pin_memory}")
         logger.info(f"  Parameter Compatibility: Full Autoencoder Class Support")
-        logger.info("=" * 80)
+        logger.info("-"*40)
         
         # Data preparation with comprehensive configuration
         logger.info("PREPARING DATA")
@@ -41891,9 +41896,9 @@ def train_model(
         logger.info(f"Mixed precision: {'Enabled' if mixed_precision else 'Disabled'}")
         
         # Training loop
-        logger.info("=" * 80)
+        logger.info("-"*40)
         logger.info("STARTING TRAINING")
-        logger.info("=" * 80)
+        logger.info("-"*40)
         
         # Training state
         best_val_loss = float('inf')
@@ -42069,7 +42074,6 @@ def train_model(
                 
                 # Periodic checkpointing
                 if save_checkpoints and epoch % checkpoint_frequency == 0 and epoch > 0:
-                    #checkpoint_path = model_dir / f"checkpoint_epoch_{epoch+1}.pth"
                     checkpoint_path = checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pth"
                     torch.save({
                         'epoch': epoch,
@@ -42339,30 +42343,6 @@ def train_model(
                 logger.error(f"Failed to save training history: {e}")
         
         # Save configuration used
-        # try:
-        #     config_path = config_dir / "training_config.json"
-        #     with open(config_path, "w") as f:
-        #         json.dump(config, f, indent=2, default=str)
-        #     saved_artifacts['config_path'] = str(config_path)
-        #     logger.info(f"Training configuration saved: {config_path}")
-        # except Exception as e:
-        #     logger.error(f"Failed to save config: {e}")
-        
-        # Save configuration used
-        # try:
-        #     save_dir = config_dir if config_dir is not None else model_dir
-        #     if isinstance(save_dir, str):
-        #         save_dir = Path(save_dir)
-            
-        #     config_path = save_dir / "training_config.json"
-        #     with open(config_path, "w") as f:
-        #         json.dump(config, f, indent=2, default=str)
-        #     saved_artifacts['config_path'] = str(config_path)
-        #     logger.info(f"Training configuration saved: {config_path}")
-        # except Exception as e:
-        #     logger.error(f"Failed to save config: {e}")
-        
-        # Save configuration used
         try:
             save_dir = config_dir if config_dir is not None else model_dir
             if isinstance(save_dir, str):
@@ -42397,7 +42377,7 @@ def train_model(
         except Exception as e:
             logger.error(f"Failed to save config: {e}")
         
-        # Prepare final results with comprehensive model class information
+        # Prepare final results with model class information
         final_results = {
             "success": True,
             "run_id": run_id,
@@ -42440,16 +42420,6 @@ def train_model(
             "configuration": config,
             "training_stats": training_stats
         }
-        
-        # Save final results summary
-        # try:
-        #     results_path = results_dir / "training_results.json"
-        #     with open(results_path, "w") as f:
-        #         json.dump(final_results, f, indent=2, default=str)
-        #     saved_artifacts['results_path'] = str(results_path)
-        #     logger.info(f"Final results summary saved: {results_path}")
-        # except Exception as e:
-        #     logger.error(f"Failed to save results summary: {e}")
         
         # Save final results summary
         try:
@@ -42535,10 +42505,10 @@ def train_model(
             except Exception as e:
                 logger.warning(f"Failed to close TensorBoard writer: {e}")
         
-        # Log final summary with comprehensive parameter compatibility information
-        logger.info("=" * 40)
+        # Log final summary with parameter compatibility information
+        logger.info("-"*40)
         logger.info("TRAINING COMPLETED SUCCESSFULLY")
-        logger.info("=" * 40)
+        logger.info("-"*40)
         logger.info(f"Model Type: {model_type}")
         logger.info(f"Training Time: {total_training_time/60:.1f} minutes ({final_epoch} epochs)")
         logger.info(f"Best Validation Loss: {best_val_loss:.6f}")
@@ -42555,7 +42525,7 @@ def train_model(
         logger.info("Saved Artifacts:")
         for artifact_type, artifact_path in saved_artifacts.items():
             logger.info(f"  {artifact_type}: {artifact_path}")
-        logger.info("=" * 40)
+        logger.info("-"*40)
         
         return final_results
         
@@ -42564,7 +42534,7 @@ def train_model(
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
         
-        # Save error information with comprehensive parameter compatibility context
+        # Save error information with parameter compatibility context
         error_info = {
             "success": False,
             "error": str(e),
@@ -42624,22 +42594,6 @@ def train_model(
                 }
             except Exception:
                 error_info["data_info"] = {"error": "Could not extract data info"}
-        
-        # Save error information to file
-        # try:
-        #     error_dir = Path(locals().get('model_dir', DEFAULT_MODEL_DIR))
-        #     error_dir.mkdir(parents=True, exist_ok=True)
-        #     error_path = error_dir / f"training_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            
-        #     with open(error_path, "w") as f:
-        #         json.dump(error_info, f, indent=2, default=str)
-            
-        #     logger.error(f"Error information saved to: {error_path}")
-        #     error_info["error_log_path"] = str(error_path)
-            
-        # except Exception as save_error:
-        #     logger.error(f"Failed to save error information: {save_error}")
-        #     error_info["save_error"] = str(save_error)
         
         # Save error information to file
         try:
@@ -42770,17 +42724,6 @@ def train_model(
                 
                 if error_info.get("data_info"):
                     partial_results["data_info"] = error_info["data_info"]
-                
-                # Save partial results
-                # try:
-                #     if locals().get('model_dir'):
-                #         partial_results_path = Path(locals()['model_dir']) / "partial_training_results.json"
-                #         with open(partial_results_path, "w") as f:
-                #             json.dump(partial_results, f, indent=2, default=str)
-                #         partial_results["partial_results_path"] = str(partial_results_path)
-                #         logger.info(f"Partial results saved: {partial_results_path}")
-                # except Exception as partial_save_error:
-                #     logger.warning(f"Failed to save partial results: {partial_save_error}")
                 
                 # Save partial results
                 try:
@@ -45666,7 +45609,7 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
         runtime_config = config.get('runtime', {})
         
         for key, value in model_config.items():
-            if key in ['model_type', 'encoding_dim', 'hidden_dims', 'dropout_rates', 
+            if key in ['model_type', 'encoding_dim', 'hidden_dims', 'dropout_rates',
                       'activation', 'normalization', 'skip_connection', 'residual_blocks',
                       'use_attention', 'legacy_mode', 'num_models', 'diversity_factor',
                       'activation_param', 'use_batch_norm', 'use_layer_norm', 'bias',
@@ -48511,12 +48454,6 @@ def run_stability_test(
         print("\033c", end="")
         banner_config = show_banner(return_config=True)
         
-        # Use the config returned from show_banner or fallback
-        # if banner_config is not None:
-        #     config = banner_config
-        # elif config is None:
-        #     config = get_current_config()
-        
         if config is None and banner_config is not None:
             config = banner_config
         else:
@@ -49785,28 +49722,109 @@ def hyperparameter_search(
     # Advanced parameters
     parallel_jobs = hpo_config_section.setdefault('parallel_jobs', cleaned_params.get('parallel_jobs', 1))
     memory_limit = hpo_config_section.setdefault('memory_limit', cleaned_params.get('memory_limit', None))
-    
+
     # Set up logging
-    # if verbose:
-    #     original_level = logger.level
-    #     logger.setLevel(logging.INFO)
+    if verbose:
+        original_level = logger.level
+        logger.setLevel(logging.INFO)
+    
+    # Progress tracking data
+    progress_data = {
+        'current_stage': 'Starting...',
+        'trials_completed': 0,
+        'trials_failed': 0,
+        'trials_pruned': 0,
+        'best_value': float('inf'),
+        'current_trial': None,
+        'current_model_type': None
+    }
+    
+    # Initialize results tracking
+    hpo_results = {
+        'start_time': start_time.isoformat(),
+        'study_name': study_name,
+        'configuration': hpo_config_section,
+        'trials_completed': 0,
+        'best_value': float('inf'),
+        'best_params': {},
+        'best_config': {},
+        'optimization_history': [],
+        'model_performance': {},
+        'errors': [],
+        'warnings': []
+    }
     
     try:
         # Display HPO header
         if verbose:
-            print("\n" + "="*80)
-            print("HYPERPARAMETER OPTIMIZATION")
-            print("="*80)
-            print(f"Study: {study_name}")
-            print(f"Trials: {n_trials}")
-            print(f"Timeout: {timeout_seconds}s" if timeout_seconds > 0 else "Timeout: None")
-            print(f"Model Types: {', '.join(model_types)}")
-            print(f"CV Folds: {cv_folds}")
-            print(f"Sampler: {sampler_type}")
-            print(f"Pruner: {pruner_type}")
-            print("-"*80)
+            print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION LAUNCH")
+            print(Fore.CYAN + Style.BRIGHT + "-"*40)
+            
+            print(Fore.YELLOW + Style.BRIGHT + "Optimization Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Study Name: " + Fore.YELLOW + Style.BRIGHT + f"{study_name}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Trials: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials}")
+            
+            if timeout_seconds > 0:
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{timeout_seconds}s")
+            else:
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"None")
+            
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Types: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(model_types)}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ CV Folds: " + Fore.YELLOW + Style.BRIGHT + f"{cv_folds}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{sampler_type}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{pruner_type}")
+            
+            print(Fore.CYAN + Style.BRIGHT + "\n  Training Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Trial Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{trial_epochs}")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Trial Patience: " + Fore.YELLOW + Style.BRIGHT + f"{trial_patience}")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Batch Size Range: " + Fore.YELLOW + Style.BRIGHT + f"[32, 64, 128, 256]")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Learning Rate Range: " + Fore.YELLOW + Style.BRIGHT + f"[1e-4, 1e-2]")
+            print(Fore.GREEN + Style.BRIGHT + f"    └─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{device}")
+            
+            print(Fore.CYAN + Style.BRIGHT + "\n  System Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Random Seed: " + Fore.YELLOW + Style.BRIGHT + f"{random_seed}")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Num Workers: " + Fore.YELLOW + Style.BRIGHT + f"{num_workers}")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Parallel Jobs: " + Fore.YELLOW + Style.BRIGHT + f"{parallel_jobs}")
+            print(Fore.GREEN + Style.BRIGHT + f"    └─ Memory Limit: " + Fore.YELLOW + Style.BRIGHT + f"{memory_limit or 'Auto'}")
+            
+            print(Fore.CYAN + Style.BRIGHT + "\n  Output Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Save Study: " + Fore.YELLOW + Style.BRIGHT + f"{save_study}")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Generate Plots: " + Fore.YELLOW + Style.BRIGHT + f"{generate_plots}")
+            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Study Directory: " + Fore.YELLOW + Style.BRIGHT + f"{study_dir}")
+            print(Fore.GREEN + Style.BRIGHT + f"    └─ Storage: " + Fore.YELLOW + Style.BRIGHT + f"{storage_url or 'In-Memory'}")
+            
+            print(Fore.MAGENTA + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.GREEN + Style.BRIGHT + "  Starting hyperparameter optimization process...")
+            print(Fore.MAGENTA + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
         
-        # Prepare data
+        # Calculate total stages for progress tracking
+        total_stages = 6  # Preparation, Data, Setup, Optimization, Analysis, Finalization
+        
+        # STAGE 1: Preparation
+        progress_data['current_stage'] = "Preparation"
+        if verbose:
+            stage_bar = tqdm(total=total_stages, desc="Hyperparameter Search", unit="stage", position=0, leave=True)
+            stage_bar.set_description("Preparation")
+        
+        # Memory optimization at start
+        _optimize_memory_if_needed(
+            condition=True,
+            hardware_data=None,
+            aggressive=False,
+            silent=not verbose
+        )
+        
+        if verbose:
+            stage_bar.update(1)
+            stage_bar.set_postfix(stage="Preparation complete")
+        
+        # STAGE 2: Data Preparation
+        progress_data['current_stage'] = "Data Preparation"
+        if verbose:
+            stage_bar.set_description("Data Preparation")
+        
+        # Prepare data with nested progress for different data sources
         if data is None:
             if X_train is not None:
                 # Create data dictionary from provided arrays
@@ -49820,14 +49838,24 @@ def hyperparameter_search(
                 # Generate or load data based on configuration
                 if use_real_data:
                     try:
+                        if verbose:
+                            data_bar = tqdm(total=1, desc="Loading Real Data", unit="step", position=1, leave=False)
+                        
                         data = load_and_validate_data(
                             data_path=data_path,
                             artifacts_path=artifacts_path,
                             config=final_config
                         )
-                        logger.info("Loaded real data for HPO")
+                        
+                        if verbose:
+                            data_bar.update(1)
+                            data_bar.close()
+                            logger.info("Loaded real data for HPO")
                     except Exception as e:
-                        logger.warning(f"Failed to load real data: {e}, falling back to synthetic data")
+                        if verbose:
+                            if 'data_bar' in locals():
+                                data_bar.close()
+                            logger.warning(f"Failed to load real data: {e}, falling back to synthetic data")
                         data = generate_synthetic_data(
                             normal_samples=10000,
                             attack_samples=2000,
@@ -49837,6 +49865,9 @@ def hyperparameter_search(
                             config=final_config
                         )
                 else:
+                    if verbose:
+                        data_bar = tqdm(total=1, desc="Generating Synthetic Data", unit="step", position=1, leave=False)
+                    
                     data = generate_synthetic_data(
                         normal_samples=10000,
                         attack_samples=2000,
@@ -49845,6 +49876,10 @@ def hyperparameter_search(
                         random_state=random_seed,
                         config=final_config
                     )
+                    
+                    if verbose:
+                        data_bar.update(1)
+                        data_bar.close()
         
         # Validate data
         if not isinstance(data, dict) or 'X_train' not in data:
@@ -49856,25 +49891,60 @@ def hyperparameter_search(
         feature_names = data.get('feature_names', [f'feature_{i}' for i in range(X_train.shape[1])])
         input_dim = X_train.shape[1]
         
-        if verbose:
-            print(f"Data prepared: {X_train.shape[0]} train samples, {input_dim} features")
-            if X_val is not None:
-                print(f"Validation samples: {X_val.shape[0]}")
-            if X_test is not None:
-                print(f"Test samples: {X_test.shape[0]}")
+        # Update data info in results
+        hpo_results['data_info'] = {
+            'train_samples': len(X_train),
+            'val_samples': len(X_val) if X_val is not None else 0,
+            'test_samples': len(X_test) if X_test is not None else 0,
+            'features': input_dim,
+            'cv_folds': cv_folds
+        }
         
-        # Set up cross-validation
+        if verbose:
+            stage_bar.update(1)
+            stage_bar.set_postfix(stage=f"Data: {X_train.shape[0]} samples, {input_dim} features")
+        
+        # STAGE 3: Study Setup
+        progress_data['current_stage'] = "Study Setup"
+        if verbose:
+            stage_bar.set_description("Study Setup")
+        
+        # Set up cross-validation with nested progress
+        if verbose:
+            setup_bar = tqdm(total=4, desc="Study Setup Steps", unit="step", position=1, leave=False)
+        
         if X_val is None:
-            kf = KFold(n_splits=cv_folds, shuffle=cv_shuffle, random_state=cv_random_state)
-            cv_splits = list(kf.split(X_train))
+            # Handle case when cv_folds=1 by using a simple train/validation split
+            if cv_folds == 1:
+                # Use a single 80/20 train-validation split
+                from sklearn.model_selection import train_test_split
+                train_idx, val_idx = train_test_split(
+                    np.arange(len(X_train)), 
+                    test_size=0.2, 
+                    random_state=cv_random_state,
+                    shuffle=cv_shuffle
+                )
+                cv_splits = [(train_idx, val_idx)]
+            else:
+                # Use k-fold cross-validation for cv_folds >= 2
+                kf = KFold(n_splits=cv_folds, shuffle=cv_shuffle, random_state=cv_random_state)
+                cv_splits = list(kf.split(X_train))
         else:
             # Use fixed train/validation split
             cv_splits = [(np.arange(len(X_train)), np.arange(len(X_val)))]
             cv_folds = 1
+            if verbose:
+                logger.info("Using provided train/validation split")
+        
+        if verbose and 'setup_bar' in locals():
+            setup_bar.update(1)
         
         # Create study directory
         study_dir = Path(study_dir)
         study_dir.mkdir(parents=True, exist_ok=True)
+        
+        if verbose and 'setup_bar' in locals():
+            setup_bar.update(1)
         
         # Set up Optuna sampler
         if sampler_type == 'TPE':
@@ -49891,8 +49961,12 @@ def hyperparameter_search(
         elif sampler_type == 'CmaEs':
             sampler = CmaEsSampler(seed=random_seed)
         else:
-            logger.warning(f"Unknown sampler type '{sampler_type}', using TPE")
+            if verbose:
+                logger.warning(f"Unknown sampler type '{sampler_type}', using TPE")
             sampler = TPESampler(seed=random_seed)
+        
+        if verbose and 'setup_bar' in locals():
+            setup_bar.update(1)
         
         # Set up Optuna pruner
         if pruner_type == 'MedianPruner':
@@ -49910,8 +49984,12 @@ def hyperparameter_search(
         elif pruner_type == 'NopPruner' or pruner_type == 'None':
             pruner = NopPruner()
         else:
-            logger.warning(f"Unknown pruner type '{pruner_type}', using MedianPruner")
+            if verbose:
+                logger.warning(f"Unknown pruner type '{pruner_type}', using MedianPruner")
             pruner = MedianPruner()
+        
+        if verbose and 'setup_bar' in locals():
+            setup_bar.update(1)
         
         # Set up storage if specified
         storage = None
@@ -49923,7 +50001,8 @@ def hyperparameter_search(
                     grace_period=120
                 )
             except Exception as e:
-                logger.warning(f"Failed to setup storage: {e}")
+                if verbose:
+                    logger.warning(f"Failed to setup storage: {e}")
         
         # Create study
         study = optuna.create_study(
@@ -49935,39 +50014,28 @@ def hyperparameter_search(
             load_if_exists=load_if_exists
         )
         
-        # Initialize results tracking
-        hpo_results = {
-            'start_time': start_time.isoformat(),
-            'study_name': study_name,
-            'configuration': hpo_config_section,
-            'data_info': {
-                'train_samples': len(X_train),
-                'val_samples': len(X_val) if X_val is not None else 0,
-                'test_samples': len(X_test) if X_test is not None else 0,
-                'features': input_dim,
-                'cv_folds': cv_folds
-            },
-            'trials_completed': 0,
-            'best_value': float('inf'),
-            'best_params': {},
-            'best_config': {},
-            'optimization_history': [],
-            'model_performance': {},
-            'errors': [],
-            'warnings': []
-        }
+        if verbose and 'setup_bar' in locals():
+            setup_bar.close()
+        
+        if verbose:
+            stage_bar.update(1)
+            stage_bar.set_postfix(stage="Study setup complete")
+        
+        # STAGE 4: Optimization with detailed progress
+        progress_data['current_stage'] = "Optimization"
+        if verbose:
+            stage_bar.set_description("Optimization")
+            print("Starting optimization...")
         
         # Define search space based on model types
         def get_search_space_for_model(trial, model_type, input_dim):
             """Define search space for specific model type"""
             
             if model_type == 'SimpleAutoencoder':
-                # SimpleAutoencoder search space
-                #encoding_dim = trial.suggest_int('encoding_dim', 8, min(64, input_dim // 2), step=8)
-                min_encoding_dim = min(8, max(4, input_dim // 4))  # Adjust min based on input_dim
-                max_encoding_dim = min(64, input_dim // 2)
-                if max_encoding_dim < min_encoding_dim:
-                    max_encoding_dim = min_encoding_dim
+                # SimpleAutoencoder search space - FIXED: Ensure min <= max
+                min_encoding_dim = max(4, min(8, input_dim // 8))  # More conservative minimum
+                max_encoding_dim = max(min_encoding_dim + 4, min(64, input_dim // 2))  # Ensure max > min
+                
                 encoding_dim = trial.suggest_int('encoding_dim', min_encoding_dim, max_encoding_dim)
                 
                 # Hidden layer configurations
@@ -50011,12 +50079,10 @@ def hyperparameter_search(
                 }
             
             elif model_type == 'EnhancedAutoencoder':
-                # EnhancedAutoencoder search space
-                #encoding_dim = trial.suggest_int('encoding_dim', 16, min(64, input_dim // 2), step=8)
-                min_encoding_dim = min(8, max(4, input_dim // 4))  # Adjust min based on input_dim
-                max_encoding_dim = min(64, input_dim // 2)
-                if max_encoding_dim < min_encoding_dim:
-                    max_encoding_dim = min_encoding_dim
+                # EnhancedAutoencoder search space - FIXED: Ensure min <= max
+                min_encoding_dim = max(4, min(8, input_dim // 8))  # More conservative minimum
+                max_encoding_dim = max(min_encoding_dim + 4, min(64, input_dim // 2))  # Ensure max > min
+                
                 encoding_dim = trial.suggest_int('encoding_dim', min_encoding_dim, max_encoding_dim)
                 
                 # Architecture choices
@@ -50064,8 +50130,11 @@ def hyperparameter_search(
                 }
             
             elif model_type == 'AutoencoderEnsemble':
-                # AutoencoderEnsemble search space
-                encoding_dim = trial.suggest_int('encoding_dim', 16, min(48, input_dim // 3), step=8)
+                # AutoencoderEnsemble search space - FIXED: Ensure min <= max
+                min_encoding_dim = max(4, min(8, input_dim // 8))  # More conservative minimum
+                max_encoding_dim = max(min_encoding_dim + 8, min(48, input_dim // 3))  # Ensure max > min
+                
+                encoding_dim = trial.suggest_int('encoding_dim', min_encoding_dim, max_encoding_dim, step=8)
                 num_models = trial.suggest_int('num_models', 3, 7, step=2)
                 diversity_factor = trial.suggest_float('diversity_factor', 0.1, 0.5)
                 
@@ -50110,14 +50179,17 @@ def hyperparameter_search(
             else:
                 raise ValueError(f"Unknown model type: {model_type}")
         
-        # Define objective function
+        # Define objective function with nested progress for cross-validation
         def objective(trial):
             try:
                 # Select model type
                 model_type = trial.suggest_categorical('model_type', model_types)
                 
+                # Update progress tracking
+                progress_data['current_trial'] = trial.number
+                progress_data['current_model_type'] = model_type
+                
                 # Get model-specific parameters
-                #model_params = get_search_space_for_model(trial, model_type)
                 model_params = get_search_space_for_model(trial, model_type, input_dim)
                 
                 # Training parameters
@@ -50152,8 +50224,6 @@ def hyperparameter_search(
                 
                 # Build comprehensive configuration for train_model
                 trial_config = {
-                    # Model architecture configuration
-                    #'model_architecture': {
                     'model': {
                         'model_type': model_params['model_type'],
                         'input_dim': input_dim,
@@ -50173,8 +50243,6 @@ def hyperparameter_search(
                         'min_features': model_params.get('min_features', 5)
                     },
                     
-                    # Training configuration
-                    #'training_config': {
                     'training': {
                         'batch_size': batch_size,
                         'epochs': trial_epochs,
@@ -50191,17 +50259,13 @@ def hyperparameter_search(
                         'validation_split': 0.2
                     },
                     
-                    # Data configuration
-                    #'data_config': {
                     'data': {
-                        'use_real_data': True,  # We're using provided data
+                        'use_real_data': True,
                         'features': input_dim,
                         'data_preprocessing': True,
                         'normalization_method': 'standard'
                     },
                     
-                    # System configuration
-                    #'system_config': {
                     'system': {
                         'device': device,
                         'random_seed': random_seed,
@@ -50210,8 +50274,6 @@ def hyperparameter_search(
                         'log_dir': study_dir / f"trial_{trial.number}" / "logs"
                     },
                     
-                    # Monitoring configuration (minimal for HPO)
-                    #'monitoring_config': {
                     'monitoring': {
                         'verbose': False,
                         'debug_mode': False,
@@ -50221,8 +50283,6 @@ def hyperparameter_search(
                         'log_frequency': 999999
                     },
                     
-                    # Export configuration (minimal for HPO)
-                    #'export_config': {
                     'export': {
                         'export_onnx': False,
                         'save_model': False,
@@ -50230,15 +50290,13 @@ def hyperparameter_search(
                         'save_training_history': False
                     },
                     
-                    # Advanced training configuration
                     'advanced_training': {
                         'num_workers': num_workers,
-                        'pin_memory': False,  # Disabled for HPO stability
+                        'pin_memory': False,
                         'persistent_workers': False,
                         'memory_efficient': True
                     },
                     
-                    # Error handling for HPO
                     'error_handling': {
                         'error_handling': 'continue',
                         'graceful_degradation': True,
@@ -50246,8 +50304,12 @@ def hyperparameter_search(
                     }
                 }
                 
-                # Perform cross-validation
+                # Perform cross-validation with nested progress
                 fold_scores = []
+                
+                # Create fold progress bar
+                if verbose:
+                    fold_bar = tqdm(total=len(cv_splits), desc=f"Trial {trial.number} CV Folds", unit="fold", position=2, leave=False)
                 
                 for fold_idx, (train_idx, val_idx) in enumerate(cv_splits):
                     try:
@@ -50261,8 +50323,8 @@ def hyperparameter_search(
                         fold_data = {
                             'X_train': X_fold_train,
                             'X_val': X_fold_val,
-                            'X_test': X_fold_val,  # Use validation as test for HPO
-                            'y_train': np.zeros(len(X_fold_train)),  # Dummy labels
+                            'X_test': X_fold_val,
+                            'y_train': np.zeros(len(X_fold_train)),
                             'y_val': np.zeros(len(X_fold_val)),
                             'y_test': np.zeros(len(X_fold_val)),
                             'feature_names': feature_names
@@ -50270,10 +50332,9 @@ def hyperparameter_search(
                         
                         # Use the comprehensive train_model function
                         result = train_model(
-                            # Pass data directly via config
                             config={
                                 **trial_config,
-                                'hpo_data': fold_data,  # Special key for HPO data
+                                'hpo_data': fold_data,
                                 'hpo_fold': fold_idx
                             }
                         )
@@ -50283,42 +50344,54 @@ def hyperparameter_search(
                             final_metrics = result.get('final_metrics', {})
                             val_loss = final_metrics.get('best_validation_loss', float('inf'))
                             
-                            # Additional metrics for analysis
                             test_loss = final_metrics.get('test_loss', float('inf'))
                             training_time = result.get('training_time_minutes', 0)
                             
-                            # Use validation loss as primary metric
                             fold_scores.append(val_loss)
                             
-                            # Store additional info in trial attributes
                             trial.set_user_attr(f'fold_{fold_idx}_val_loss', val_loss)
                             trial.set_user_attr(f'fold_{fold_idx}_test_loss', test_loss)
                             trial.set_user_attr(f'fold_{fold_idx}_training_time', training_time)
                             
                         else:
-                            # Training failed
                             error_msg = result.get('error', 'Unknown error') if result else 'No result returned'
-                            logger.warning(f"Trial {trial.number}, Fold {fold_idx} failed: {error_msg}")
+                            if verbose:
+                                logger.warning(f"Trial {trial.number}, Fold {fold_idx} failed: {error_msg}")
                             fold_scores.append(float('inf'))
                         
+                        # Update fold progress
+                        if verbose and 'fold_bar' in locals():
+                            fold_bar.update(1)
+                            fold_bar.set_postfix(loss=f"{fold_scores[-1]:.6f}" if fold_scores else "N/A")
+                        
                         # Report intermediate value for pruning
-                        if fold_idx == 0:  # Report after first fold
+                        if fold_idx == 0:
                             trial.report(fold_scores[0], fold_idx)
                             if trial.should_prune():
+                                if verbose and 'fold_bar' in locals():
+                                    fold_bar.close()
                                 raise optuna.TrialPruned()
                     
                     except optuna.TrialPruned:
+                        if verbose and 'fold_bar' in locals():
+                            fold_bar.close()
                         raise
                     except Exception as e:
-                        logger.warning(f"Trial {trial.number}, Fold {fold_idx} error: {str(e)}")
+                        if verbose:
+                            logger.warning(f"Trial {trial.number}, Fold {fold_idx} error: {str(e)}")
                         fold_scores.append(float('inf'))
+                        if verbose and 'fold_bar' in locals():
+                            fold_bar.update(1)
+                
+                # Close fold progress bar
+                if verbose and 'fold_bar' in locals():
+                    fold_bar.close()
                 
                 # Calculate final score
                 if fold_scores:
                     mean_score = np.mean(fold_scores)
                     std_score = np.std(fold_scores)
                     
-                    # Store trial results
                     trial.set_user_attr('mean_cv_score', mean_score)
                     trial.set_user_attr('std_cv_score', std_score)
                     trial.set_user_attr('individual_fold_scores', fold_scores)
@@ -50339,21 +50412,24 @@ def hyperparameter_search(
             except optuna.TrialPruned:
                 raise
             except Exception as e:
-                logger.error(f"Trial {trial.number} failed with error: {str(e)}")
+                if verbose:
+                    logger.error(f"Trial {trial.number} failed with error: {str(e)}")
                 trial.set_user_attr('error', str(e))
                 trial.set_user_attr('failed', True)
                 return float('inf')
         
-        # Set up callbacks
+        # Set up callbacks with progress tracking
         callbacks = []
         
-        # Progress callback
         def progress_callback(study, trial):
             if trial.state == optuna.trial.TrialState.COMPLETE:
+                progress_data['trials_completed'] += 1
+                if trial.value < progress_data['best_value']:
+                    progress_data['best_value'] = trial.value
+                
                 if verbose:
                     print(f"Trial {trial.number:3d} complete | Value: {trial.value:.5f} | Best: {study.best_value:.5f}")
                 
-                # Update results
                 hpo_results['trials_completed'] = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
                 hpo_results['optimization_history'].append({
                     'trial': trial.number,
@@ -50369,9 +50445,11 @@ def hyperparameter_search(
                         hpo_results['best_config'] = trial.user_attrs['complete_config'].copy()
             
             elif trial.state == optuna.trial.TrialState.PRUNED:
+                progress_data['trials_pruned'] += 1
                 if verbose:
                     print(f"Trial {trial.number:3d} pruned")
             elif trial.state == optuna.trial.TrialState.FAIL:
+                progress_data['trials_failed'] += 1
                 if verbose:
                     print(f"Trial {trial.number:3d} failed")
                 hpo_results['errors'].append(f"Trial {trial.number} failed")
@@ -50392,18 +50470,77 @@ def hyperparameter_search(
         
         callbacks.append(early_stopping_callback)
         
-        # Run optimization
-        if verbose:
-            print("Starting optimization...")
+        # Run optimization with nested tqdm progress bars
+        # Create main optimization progress bar
+        trial_bar = tqdm(total=n_trials, desc="Running Trials", unit="trial", position=1, leave=False)
         
-        study.optimize(
-            objective,
-            n_trials=n_trials,
-            timeout=timeout_seconds if timeout_seconds > 0 else None,
-            callbacks=callbacks,
-            gc_after_trial=True,
-            show_progress_bar=False  # We have custom progress
-        )
+        # Custom optimization loop to update progress bar
+        def optimize_with_progress():
+            for i in range(n_trials):
+                if study._stop_flag:
+                    break
+                
+                trial = study.ask()
+                value = objective(trial)
+                study.tell(trial, value)
+                
+                # Update progress bar
+                completed = progress_data['trials_completed']
+                pruned = progress_data['trials_pruned']
+                failed = progress_data['trials_failed']
+                best_val = progress_data['best_value']
+                
+                trial_bar.set_postfix(
+                    completed=completed,
+                    pruned=pruned,
+                    failed=failed,
+                    best=f"{best_val:.5f}",
+                    current_model=progress_data.get('current_model_type', 'N/A')
+                )
+                trial_bar.update(1)
+                
+                # Memory optimization between trials
+                if i % 5 == 0:  # Every 5 trials
+                    _optimize_memory_if_needed(
+                        condition=True,
+                        hardware_data=None,
+                        aggressive=False,
+                        silent=not verbose
+                    )
+        
+        # Run the optimization
+        if timeout_seconds > 0:
+            # Run with timeout
+            import threading
+            stop_event = threading.Event()
+            
+            def run_optimization():
+                optimize_with_progress()
+                stop_event.set()
+            
+            optimization_thread = threading.Thread(target=run_optimization)
+            optimization_thread.start()
+            optimization_thread.join(timeout=timeout_seconds)
+            
+            if optimization_thread.is_alive():
+                study.stop()
+                if verbose:
+                    print(f"Optimization timeout after {timeout_seconds} seconds")
+        else:
+            # Run without timeout
+            optimize_with_progress()
+        
+        # Close the trial progress bar
+        trial_bar.close()
+        
+        if verbose:
+            stage_bar.update(1)
+            stage_bar.set_postfix(stage=f"Optimization complete: {progress_data['trials_completed']} trials")
+        
+        # STAGE 5: Analysis
+        progress_data['current_stage'] = "Analysis"
+        if verbose:
+            stage_bar.set_description("Analysis")
         
         # Calculate total time
         total_time = time.time() - hpo_start_time
@@ -50414,9 +50551,9 @@ def hyperparameter_search(
             'total_time_seconds': total_time,
             'total_time_minutes': total_time / 60,
             'study': study,
-            'n_trials_completed': len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
-            'n_trials_pruned': len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]),
-            'n_trials_failed': len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL])
+            'n_trials_completed': progress_data['trials_completed'],
+            'n_trials_pruned': progress_data['trials_pruned'],
+            'n_trials_failed': progress_data['trials_failed']
         })
         
         if study.trials:
@@ -50431,104 +50568,226 @@ def hyperparameter_search(
             if 'complete_config' in best_trial.user_attrs:
                 hpo_results['best_config'] = best_trial.user_attrs['complete_config']
         
+        if verbose:
+            stage_bar.update(1)
+            stage_bar.set_postfix(stage="Analysis complete")
+        
+        # STAGE 6: Finalization
+        progress_data['current_stage'] = "Finalization"
+        if verbose:
+            stage_bar.set_description("Finalization")
+        
         # Display results
         if verbose:
-            print("\n" + "="*80)
-            print("HYPERPARAMETER OPTIMIZATION COMPLETED")
-            print("="*80)
-            print(f"Total time: {total_time/60:.1f} minutes")
-            print(f"Trials completed: {hpo_results['n_trials_completed']}")
-            print(f"Trials pruned: {hpo_results['n_trials_pruned']}")
-            print(f"Trials failed: {hpo_results['n_trials_failed']}")
+            print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION COMPLETED")
+            print(Fore.CYAN + Style.BRIGHT + "-"*40)
+            
+            print(Fore.YELLOW + Style.BRIGHT + "Performance Summary:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Time: " + Fore.YELLOW + Style.BRIGHT + f"{total_time/60:.1f} minutes")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials Completed: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_results['n_trials_completed']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials Pruned: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_results['n_trials_pruned']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Trials Failed: " + Fore.YELLOW + Style.BRIGHT + f"{hpo_results['n_trials_failed']}")
+            
+            # Calculate success rate
+            total_trials = hpo_results['n_trials_completed'] + hpo_results['n_trials_pruned'] + hpo_results['n_trials_failed']
+            if total_trials > 0:
+                success_rate = (hpo_results['n_trials_completed'] / total_trials) * 100
+                success_color = Fore.GREEN if success_rate > 90 else Fore.YELLOW if success_rate > 75 else Fore.RED
+                print(Fore.CYAN + Style.BRIGHT + f"  ┌─ Success Rate: " + success_color + Style.BRIGHT + f"{success_rate:.1f}%")
             
             if study.trials:
-                print(f"\nBest trial (#{best_trial.number}):")
-                print(f"  Objective value: {best_trial.value:.6f}")
-                print(f"  Model type: {best_trial.params.get('model_type', 'Unknown')}")
-                print(f"  Learning rate: {best_trial.params.get('learning_rate', 'Unknown')}")
-                print(f"  Batch size: {best_trial.params.get('batch_size', 'Unknown')}")
-                print(f"  Encoding dim: {best_trial.params.get('encoding_dim', 'Unknown')}")
+                print(Fore.MAGENTA + Style.BRIGHT + "\n  Best Trial Results:")
+                print(Fore.GREEN + Style.BRIGHT + f"    ├─ Trial Number: " + Fore.YELLOW + Style.BRIGHT + f"#{best_trial.number}")
+                print(Fore.GREEN + Style.BRIGHT + f"    ├─ Objective Value: " + Fore.YELLOW + Style.BRIGHT + f"{best_trial.value:.6f}")
+                print(Fore.GREEN + Style.BRIGHT + f"    ├─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{best_trial.params.get('model_type', 'Unknown')}")
+                print(Fore.GREEN + Style.BRIGHT + f"    ├─ Learning Rate: " + Fore.YELLOW + Style.BRIGHT + f"{best_trial.params.get('learning_rate', 'Unknown'):.6f}")
+                print(Fore.GREEN + Style.BRIGHT + f"    ├─ Batch Size: " + Fore.YELLOW + Style.BRIGHT + f"{best_trial.params.get('batch_size', 'Unknown')}")
+                print(Fore.GREEN + Style.BRIGHT + f"    └─ Encoding Dim: " + Fore.YELLOW + Style.BRIGHT + f"{best_trial.params.get('encoding_dim', 'Unknown')}")
                 
                 if 'mean_cv_score' in best_trial.user_attrs:
                     mean_cv = best_trial.user_attrs['mean_cv_score']
                     std_cv = best_trial.user_attrs.get('std_cv_score', 0)
-                    print(f"  CV Score: {mean_cv:.6f} ± {std_cv:.6f}")
+                    consistency_color = Fore.GREEN if std_cv < 0.01 else Fore.YELLOW if std_cv < 0.05 else Fore.RED
+                    print(Fore.CYAN + Style.BRIGHT + f"\n    Cross-Validation Performance:")
+                    print(Fore.GREEN + Style.BRIGHT + f"      ├─ Mean CV Score: " + Fore.YELLOW + Style.BRIGHT + f"{mean_cv:.6f}")
+                    print(Fore.GREEN + Style.BRIGHT + f"      └─ Std CV Score: " + consistency_color + Style.BRIGHT + f"±{std_cv:.6f}")
         
-        # Save study and results
+        # Save study and results with enhanced progress tracking
         if save_study:
             try:
+                if verbose:
+                    print(Fore.CYAN + Style.BRIGHT + "\n  Saving Study Data:")
+                    save_steps = ['study_object', 'results_json']
+                    save_bar = tqdm(total=len(save_steps), desc="    Saving Files", unit="file", position=1, leave=False)
+                
                 # Save study object
                 study_path = study_dir / f"{study_name}_study.pkl"
                 joblib.dump(study, study_path)
                 
+                if verbose and 'save_bar' in locals():
+                    save_bar.update(1)
+                    save_bar.set_postfix(file="study.pkl")
+                
                 # Save results
                 results_path = study_dir / f"{study_name}_results.json"
                 with open(results_path, 'w') as f:
-                    # Prepare JSON-serializable results
                     json_results = hpo_results.copy()
-                    json_results.pop('study', None)  # Remove non-serializable study object
+                    json_results.pop('study', None)
                     json.dump(json_results, f, indent=2, default=str)
+                
+                if verbose and 'save_bar' in locals():
+                    save_bar.update(1)
+                    save_bar.set_postfix(file="results.json")
+                    save_bar.close()
                 
                 hpo_results['study_path'] = str(study_path)
                 hpo_results['results_path'] = str(results_path)
                 
                 if verbose:
-                    print(f"\nStudy saved to: {study_path}")
-                    print(f"Results saved to: {results_path}")
+                    print(Fore.GREEN + Style.BRIGHT + f"    ├─ Study Object: " + Fore.YELLOW + Style.BRIGHT + f"{study_path}")
+                    print(Fore.GREEN + Style.BRIGHT + f"    └─ Results JSON: " + Fore.YELLOW + Style.BRIGHT + f"{results_path}")
+                    print(Fore.GREEN + Style.BRIGHT + "    ┌─ " + Fore.CYAN + Style.BRIGHT + "Study data saved successfully!")
             
             except Exception as e:
-                logger.warning(f"Failed to save study: {e}")
+                if verbose:
+                    print(Fore.RED + Style.BRIGHT + f"    └─ Failed to save study: {e}")
                 hpo_results['warnings'].append(f"Failed to save study: {e}")
         
-        # Generate plots
+        # Generate plots with enhanced progress tracking
         if generate_plots and study.trials:
             try:
                 plot_dir = study_dir / "plots"
                 plot_dir.mkdir(exist_ok=True)
                 
+                if verbose:
+                    print(Fore.CYAN + Style.BRIGHT + "\n  Generating Optimization Plots:")
+                    plot_types = ['optimization_history']
+                    if len(study.trials) > 10:
+                        plot_types.append('param_importances')
+                    if len(study.trials) > 5:
+                        plot_types.append('parallel_coordinate')
+                    
+                    plot_bar = tqdm(total=len(plot_types), desc="    Creating Plots", unit="plot", position=1, leave=False)
+                
                 # Optimization history
                 fig = vis.plot_optimization_history(study)
-                fig.write_html(plot_dir / "optimization_history.html")
+                plot_path = plot_dir / "optimization_history.html"
+                fig.write_html(plot_path)
+                
+                if verbose and 'plot_bar' in locals():
+                    plot_bar.update(1)
+                    plot_bar.set_postfix(plot="optimization_history")
                 
                 # Parameter importances
                 if len(study.trials) > 10:
                     fig = vis.plot_param_importances(study)
-                    fig.write_html(plot_dir / "param_importances.html")
+                    plot_path = plot_dir / "param_importances.html"
+                    fig.write_html(plot_path)
+                    
+                    if verbose and 'plot_bar' in locals():
+                        plot_bar.update(1)
+                        plot_bar.set_postfix(plot="param_importances")
                 
                 # Parallel coordinate plot
                 if len(study.trials) > 5:
                     fig = vis.plot_parallel_coordinate(study)
-                    fig.write_html(plot_dir / "parallel_coordinate.html")
+                    plot_path = plot_dir / "parallel_coordinate.html"
+                    fig.write_html(plot_path)
+                    
+                    if verbose and 'plot_bar' in locals():
+                        plot_bar.update(1)
+                        plot_bar.set_postfix(plot="parallel_coordinate")
+                
+                if verbose and 'plot_bar' in locals():
+                    plot_bar.close()
                 
                 hpo_results['plots_dir'] = str(plot_dir)
                 
                 if verbose:
-                    print(f"Plots saved to: {plot_dir}")
+                    print(Fore.GREEN + Style.BRIGHT + f"    ├─ Plots Directory: " + Fore.YELLOW + Style.BRIGHT + f"{plot_dir}")
+                    print(Fore.GREEN + Style.BRIGHT + f"    └─ Generated Plots: " + Fore.YELLOW + Style.BRIGHT + f"{len(plot_types)} visualizations")
+                    print(Fore.GREEN + Style.BRIGHT + "    ┌─ " + Fore.CYAN + Style.BRIGHT + "Plots generated successfully!")
             
             except Exception as e:
-                logger.warning(f"Failed to generate plots: {e}")
+                if verbose:
+                    print(Fore.RED + Style.BRIGHT + f"    └─ Failed to generate plots: {e}")
                 hpo_results['warnings'].append(f"Failed to generate plots: {e}")
         
-        # Summary statistics
+        # Calculate and display comprehensive statistics
         if study.trials:
+            if verbose:
+                print(Fore.CYAN + Style.BRIGHT + "\n  Calculating Performance Statistics:")
+                stats_bar = tqdm(total=1, desc="    Analyzing Data", unit="step", position=1, leave=False)
+            
             completed_trials = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
             if completed_trials:
                 values = [t.value for t in completed_trials]
+                best_value = min(values)
+                worst_value = max(values)
+                mean_value = np.mean(values)
+                median_value = np.median(values)
+                std_value = np.std(values)
+                improvement_ratio = (worst_value - best_value) / worst_value if worst_value > 0 else 0
+                
                 hpo_results['summary_statistics'] = {
-                    'best_value': min(values),
-                    'worst_value': max(values),
-                    'mean_value': np.mean(values),
-                    'median_value': np.median(values),
-                    'std_value': np.std(values),
-                    'improvement_ratio': (max(values) - min(values)) / max(values) if max(values) > 0 else 0
+                    'best_value': best_value,
+                    'worst_value': worst_value,
+                    'mean_value': mean_value,
+                    'median_value': median_value,
+                    'std_value': std_value,
+                    'improvement_ratio': improvement_ratio
                 }
+                
+                if verbose:
+                    if 'stats_bar' in locals():
+                        stats_bar.update(1)
+                        stats_bar.close()
+                    
+                    print(Fore.MAGENTA + Style.BRIGHT + "\n  Statistical Summary:")
+                    print(Fore.GREEN + Style.BRIGHT + f"    ├─ Best Value: " + Fore.YELLOW + Style.BRIGHT + f"{best_value:.6f}")
+                    print(Fore.GREEN + Style.BRIGHT + f"    ├─ Worst Value: " + Fore.YELLOW + Style.BRIGHT + f"{worst_value:.6f}")
+                    print(Fore.GREEN + Style.BRIGHT + f"    ├─ Mean Value: " + Fore.YELLOW + Style.BRIGHT + f"{mean_value:.6f}")
+                    print(Fore.GREEN + Style.BRIGHT + f"    ├─ Median Value: " + Fore.YELLOW + Style.BRIGHT + f"{median_value:.6f}")
+                    
+                    consistency_color = Fore.GREEN if std_value < 0.01 else Fore.YELLOW if std_value < 0.05 else Fore.RED
+                    print(Fore.GREEN + Style.BRIGHT + f"    ├─ Std Deviation: " + consistency_color + Style.BRIGHT + f"±{std_value:.6f}")
+                    
+                    improvement_color = Fore.GREEN if improvement_ratio > 0.5 else Fore.YELLOW if improvement_ratio > 0.2 else Fore.BLUE
+                    print(Fore.GREEN + Style.BRIGHT + f"    └─ Improvement Ratio: " + improvement_color + Style.BRIGHT + f"{improvement_ratio:.1%}")
+        
+        # Final memory optimization
+        _optimize_memory_if_needed(
+            condition=True,
+            hardware_data=None,
+            aggressive=True,
+            silent=not verbose
+        )
+        
+        # Final completion message
+        if verbose:
+            print(Fore.MAGENTA + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.GREEN + Style.BRIGHT + " HYPERPARAMETER SEARCH COMPLETE")
+            print(Fore.MAGENTA + Style.BRIGHT + "-"*40)
+            print(Fore.CYAN + Style.BRIGHT + "  Next Steps:")
+            print(Fore.WHITE + Style.BRIGHT + "    ├─ Review optimization results and plots")
+            print(Fore.WHITE + Style.BRIGHT + "    ├─ Use best parameters for production training")
+            print(Fore.WHITE + Style.BRIGHT + "    ├─ Consider fine-tuning with narrowed search space")
+            print(Fore.WHITE + Style.BRIGHT + "    └─ Validate best model on separate test set")
+            print(Fore.MAGENTA + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
+        
+        if verbose:
+            stage_bar.update(1)
+            stage_bar.set_postfix(stage="Optimization complete!")
+            stage_bar.close()
         
         return hpo_results
     
     except Exception as e:
         error_msg = f"Hyperparameter optimization failed: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        if verbose:
+            logger.error(error_msg)
+            logger.error(f"Traceback: {traceback.format_exc()}")
         
         # Create error results
         error_results = {
@@ -50540,7 +50799,7 @@ def hyperparameter_search(
             'total_time_seconds': time.time() - hpo_start_time,
             'study_name': study_name,
             'configuration': hpo_config_section,
-            'trials_completed': locals().get('hpo_results', {}).get('trials_completed', 0),
+            'trials_completed': progress_data.get('trials_completed', 0),
             'traceback': traceback.format_exc()
         }
         
@@ -50552,17 +50811,18 @@ def hyperparameter_search(
                     json.dump(error_results, f, indent=2, default=str)
                 error_results['error_log_path'] = str(error_path)
             except Exception as save_error:
-                logger.warning(f"Failed to save error log: {save_error}")
+                if verbose:
+                    logger.warning(f"Failed to save error log: {save_error}")
         
         return error_results
     
     finally:
         # Restore logging level
-        # if verbose and 'original_level' in locals():
-        #     try:
-        #         logger.setLevel(original_level)
-        #     except Exception:
-        #         pass
+        if verbose and 'original_level' in locals():
+            try:
+                logger.setLevel(original_level)
+            except Exception:
+                pass
         
         # Final cleanup
         try:
@@ -50770,18 +51030,28 @@ def setup_hyperparameter_optimization(
     # Advanced parameters
     parallel_jobs = hpo_section.setdefault('parallel_jobs', cleaned_params.get('parallel_jobs', 1))
     memory_limit = hpo_section.setdefault('memory_limit', cleaned_params.get('memory_limit', None))
-    
+
     # Set up logging
-    # if verbose:
-    #     original_level = logger.level
-    #     logger.setLevel(getattr(logging, log_level))
+    if verbose:
+        original_level = logger.level
+        logger.setLevel(getattr(logging, log_level))
+    
+    # Progress tracking data
+    progress_data = {
+        'current_stage': 'Starting...',
+        'current_operation': None,
+        'setup_steps_completed': 0,
+        'total_setup_steps': 7,  # Configuration, Data, Sampler, Pruner, Storage, Study, Finalization
+        'warnings': [],
+        'errors': []
+    }
     
     try:
         # Display setup header
         if verbose:
-            print("\n" + "="*80)
+            print("\n" + "-"*40)
             print("HYPERPARAMETER OPTIMIZATION SETUP")
-            print("="*80)
+            print("-"*40)
             print(f"Study Name: {study_name}")
             print(f"Trials: {n_trials}")
             print(f"Timeout: {timeout_seconds}s" if timeout_seconds > 0 else "Timeout: None")
@@ -50790,13 +51060,85 @@ def setup_hyperparameter_optimization(
             print(f"Sampler: {sampler_type}")
             print(f"Pruner: {pruner_type}")
             print(f"Device: {device}")
-            print("-"*80)
+            print("-"*40)
         
-        # Create study directory
+        # Create main progress bar for setup stages
+        if verbose:
+            main_bar = tqdm(total=progress_data['total_setup_steps'], desc="HPO Setup", unit="stage", position=0, leave=True)
+        
+        # STAGE 1: Configuration Setup
+        progress_data['current_stage'] = "Configuration Setup"
+        if verbose:
+            main_bar.set_description("Configuration Setup")
+        
+        # Memory optimization at start
+        _optimize_memory_if_needed(
+            condition=True,
+            hardware_data=None,
+            aggressive=False,
+            silent=not verbose
+        )
+        
+        # Create study directory with nested progress
+        if verbose:
+            dir_bar = tqdm(total=1, desc="Creating Study Directory", unit="dir", position=1, leave=False)
+        
         study_dir = Path(study_dir)
         study_dir.mkdir(parents=True, exist_ok=True)
         
-        # Set up Optuna sampler
+        if verbose and 'dir_bar' in locals():
+            dir_bar.update(1)
+            dir_bar.close()
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage="Configuration loaded")
+        
+        # STAGE 2: Data Configuration
+        progress_data['current_stage'] = "Data Configuration"
+        progress_data['current_operation'] = "Setting up data parameters"
+        if verbose:
+            main_bar.set_description("Data Configuration")
+        
+        # Validate data parameters with nested progress
+        if verbose:
+            data_steps = ['validate_params', 'check_data_path', 'update_config']
+            data_bar = tqdm(total=len(data_steps), desc="Data Configuration", unit="step", position=1, leave=False)
+        
+        if use_real_data and not data_path:
+            warning_msg = "use_real_data is True but no data_path provided, falling back to synthetic data"
+            progress_data['warnings'].append(warning_msg)
+            if verbose:
+                logger.warning(warning_msg)
+            use_real_data = False
+        
+        if verbose and 'data_bar' in locals():
+            data_bar.update(1)
+        
+        # Update configuration with validated parameters
+        hpo_section['use_real_data'] = use_real_data
+        hpo_section['data_path'] = data_path
+        
+        if verbose and 'data_bar' in locals():
+            data_bar.update(1)
+            data_bar.update(1)  # Final step
+            data_bar.close()
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage="Data configuration complete")
+        
+        # STAGE 3: Sampler Setup
+        progress_data['current_stage'] = "Sampler Setup"
+        progress_data['current_operation'] = "Configuring optimization sampler"
+        if verbose:
+            main_bar.set_description("Sampler Setup")
+        
+        # Set up Optuna sampler with nested progress
+        if verbose:
+            sampler_steps = ['parse_config', 'create_sampler', 'validate_sampler']
+            sampler_bar = tqdm(total=len(sampler_steps), desc="Sampler Setup", unit="step", position=1, leave=False)
+        
         sampler_config = {
             'seed': random_seed,
             'n_startup_trials': min(10, n_trials // 10)
@@ -50813,6 +51155,9 @@ def setup_hyperparameter_optimization(
         else:
             sampler_type = sampler_raw
 
+        if verbose and 'sampler_bar' in locals():
+            sampler_bar.update(1)
+        
         # Map common sampler variants to standard names
         sampler_mapping = {
             'Random': 'TPE',  # Use the base name for the if-elif chain
@@ -50831,15 +51176,41 @@ def setup_hyperparameter_optimization(
                 multivariate=sampler_config.get('multivariate', True),
                 warn_independent_sampling=False
             )
+            sampler_description = f"TPE sampler (startup: {sampler_config['n_startup_trials']} trials)"
         elif sampler_type == 'Random':
             sampler = RandomSampler(seed=sampler_config['seed'])
+            sampler_description = "Random sampler configured"
         elif sampler_type == 'CmaEs':
             sampler = CmaEsSampler(seed=sampler_config['seed'])
+            sampler_description = "CMA-ES sampler configured"
         else:
-            logger.warning(f"Unknown sampler type '{sampler_type}', using TPE")
+            warning_msg = f"Unknown sampler type '{sampler_type}', using TPE"
+            progress_data['warnings'].append(warning_msg)
+            if verbose:
+                logger.warning(warning_msg)
             sampler = TPESampler(seed=sampler_config['seed'])
-
-        # Set up Optuna pruner with proper configuration parsing
+            sampler_description = "TPE sampler (fallback) configured"
+        
+        if verbose and 'sampler_bar' in locals():
+            sampler_bar.update(1)
+            sampler_bar.update(1)  # Final step
+            sampler_bar.close()
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage=sampler_description)
+        
+        # STAGE 4: Pruner Setup
+        progress_data['current_stage'] = "Pruner Setup"
+        progress_data['current_operation'] = "Configuring optimization pruner"
+        if verbose:
+            main_bar.set_description("Pruner Setup")
+        
+        # Set up Optuna pruner with proper configuration parsing and nested progress
+        if verbose:
+            pruner_steps = ['parse_config', 'create_pruner', 'validate_pruner']
+            pruner_bar = tqdm(total=len(pruner_steps), desc="Pruner Setup", unit="step", position=1, leave=False)
+        
         pruner_config = {
             'n_startup_trials': 5,
             'n_warmup_steps': 5
@@ -50856,6 +51227,9 @@ def setup_hyperparameter_optimization(
         else:
             pruner_type = pruner_raw
 
+        if verbose and 'pruner_bar' in locals():
+            pruner_bar.update(1)
+        
         # Map common pruner variants to standard names
         pruner_mapping = {
             'Nop': 'NopPruner',
@@ -50870,19 +51244,45 @@ def setup_hyperparameter_optimization(
                 n_warmup_steps=pruner_config['n_warmup_steps'],
                 interval_steps=pruner_config.get('interval_steps', 1)
             )
+            pruner_description = f"Median pruner (startup: {pruner_config['n_startup_trials']})"
         elif pruner_type == 'HyperbandPruner':
             pruner = HyperbandPruner(
                 min_resource=pruner_config.get('min_resource', 1),
                 max_resource=pruner_config.get('max_resource', trial_epochs),
                 reduction_factor=pruner_config.get('reduction_factor', 3)
             )
+            pruner_description = "Hyperband pruner configured"
         elif pruner_type == 'NopPruner' or pruner_type == 'None':
             pruner = NopPruner()
+            pruner_description = "No pruning configured"
         else:
-            logger.warning(f"Unknown pruner type '{pruner_type}', using MedianPruner")
+            warning_msg = f"Unknown pruner type '{pruner_type}', using MedianPruner"
+            progress_data['warnings'].append(warning_msg)
+            if verbose:
+                logger.warning(warning_msg)
             pruner = MedianPruner()
+            pruner_description = "Median pruner (fallback) configured"
         
-        # Set up storage if specified
+        if verbose and 'pruner_bar' in locals():
+            pruner_bar.update(1)
+            pruner_bar.update(1)  # Final step
+            pruner_bar.close()
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage=pruner_description)
+        
+        # STAGE 5: Storage Setup
+        progress_data['current_stage'] = "Storage Setup"
+        progress_data['current_operation'] = "Configuring study storage"
+        if verbose:
+            main_bar.set_description("Storage Setup")
+        
+        # Set up storage if specified with nested progress
+        if verbose:
+            storage_steps = ['check_storage_url', 'setup_storage', 'validate_storage']
+            storage_bar = tqdm(total=len(storage_steps), desc="Storage Setup", unit="step", position=1, leave=False)
+        
         storage = None
         if storage_url:
             try:
@@ -50891,12 +51291,39 @@ def setup_hyperparameter_optimization(
                     heartbeat_interval=60,
                     grace_period=120
                 )
+                storage_description = f"Persistent storage: {storage_url}"
                 if verbose:
                     print(f"Using persistent storage: {storage_url}")
             except Exception as e:
-                logger.warning(f"Failed to setup storage: {e}")
+                warning_msg = f"Failed to setup storage: {e}"
+                progress_data['warnings'].append(warning_msg)
+                if verbose:
+                    logger.warning(warning_msg)
+                storage_description = "Storage setup failed, using in-memory"
+        else:
+            storage_description = "Using in-memory storage"
         
-        # Create study
+        if verbose and 'storage_bar' in locals():
+            storage_bar.update(1)
+            storage_bar.update(1)
+            storage_bar.update(1)  # Final step
+            storage_bar.close()
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage=storage_description)
+        
+        # STAGE 6: Study Creation
+        progress_data['current_stage'] = "Study Creation"
+        progress_data['current_operation'] = "Creating optimization study"
+        if verbose:
+            main_bar.set_description("Study Creation")
+        
+        # Create study with nested progress
+        if verbose:
+            study_steps = ['create_study', 'configure_study', 'validate_study']
+            study_bar = tqdm(total=len(study_steps), desc="Study Creation", unit="step", position=1, leave=False)
+        
         study = optuna.create_study(
             direction=direction,
             sampler=sampler,
@@ -50905,6 +51332,21 @@ def setup_hyperparameter_optimization(
             storage=storage,
             load_if_exists=load_if_exists
         )
+        
+        if verbose and 'study_bar' in locals():
+            study_bar.update(1)
+            study_bar.update(1)
+            study_bar.update(1)  # Final step
+            study_bar.close()
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage=f"Study '{study_name}' created")
+        
+        # STAGE 7: Finalization
+        progress_data['current_stage'] = "Finalization"
+        if verbose:
+            main_bar.set_description("Finalization")
         
         # Define search space that integrates with train_model parameters
         def create_search_space(trial):
@@ -50946,13 +51388,11 @@ def setup_hyperparameter_optimization(
             gradient_accumulation_steps = trial.suggest_categorical('gradient_accumulation_steps', [1, 2, 4])
             mixed_precision = trial.suggest_categorical('mixed_precision', [False, True])
             
-            # Model-specific parameters
+            # Model-specific parameters - FIXED: Ensure min <= max for encoding dimensions
             if model_type == 'SimpleAutoencoder':
-                #encoding_dim = trial.suggest_int('encoding_dim', 8, min(64, features // 2), step=8)
-                min_encoding_dim = min(8, max(4, input_dim // 4))  # Adjust min based on input_dim
-                max_encoding_dim = min(64, input_dim // 2)
-                if max_encoding_dim < min_encoding_dim:
-                    max_encoding_dim = min_encoding_dim
+                min_encoding_dim = max(4, min(8, input_dim // 8))  # More conservative minimum
+                max_encoding_dim = max(min_encoding_dim + 4, min(64, input_dim // 2))  # Ensure max > min
+                
                 encoding_dim = trial.suggest_int('encoding_dim', min_encoding_dim, max_encoding_dim)
                 
                 # Architecture choices
@@ -51002,7 +51442,11 @@ def setup_hyperparameter_optimization(
                 }
             
             elif model_type == 'EnhancedAutoencoder':
-                encoding_dim = trial.suggest_int('encoding_dim', 16, min(64, features // 2), step=8)
+                # FIXED: Ensure min <= max for encoding dimensions
+                min_encoding_dim = max(4, min(8, input_dim // 8))
+                max_encoding_dim = max(min_encoding_dim + 8, min(64, input_dim // 2))
+                
+                encoding_dim = trial.suggest_int('encoding_dim', min_encoding_dim, max_encoding_dim, step=8)
                 
                 # Architecture choices
                 arch_choice = trial.suggest_categorical('enhanced_arch', [
@@ -51058,7 +51502,11 @@ def setup_hyperparameter_optimization(
                 }
             
             elif model_type == 'AutoencoderEnsemble':
-                encoding_dim = trial.suggest_int('encoding_dim', 16, min(48, features // 3), step=8)
+                # FIXED: Ensure min <= max for encoding dimensions
+                min_encoding_dim = max(4, min(8, input_dim // 8))
+                max_encoding_dim = max(min_encoding_dim + 8, min(48, input_dim // 3))
+                
+                encoding_dim = trial.suggest_int('encoding_dim', min_encoding_dim, max_encoding_dim, step=8)
                 num_models = trial.suggest_int('num_models', 3, 7, step=2)
                 diversity_factor = trial.suggest_float('diversity_factor', 0.1, 0.5)
                 
@@ -51210,17 +51658,14 @@ def setup_hyperparameter_optimization(
                 
                 if not use_real_data_local:
                     # Generate synthetic data for cross-validation
-                    # For autoencoders, we only need normal data, but generate_synthetic_data
-                    # requires both normal and attack samples to be positive
                     data = generate_synthetic_data(
                         normal_samples=normal_samples,
-                        attack_samples=attack_samples,  # FIXED: Use original attack_samples value
+                        attack_samples=attack_samples,
                         features=features,
-                        validation_split=0.1,  # Use small split for data generation
+                        validation_split=0.1,
                         random_state=cv_random_state,
                         config=final_config
                     )
-                    # For CV, we only need the normal training data
                     X_train_orig = data['X_train']
                     X_val_orig = data.get('X_val', np.array([]))
                     
@@ -51241,12 +51686,12 @@ def setup_hyperparameter_optimization(
                     X_data = X_combined[normal_mask]
                     
                     # Ensure we have enough data
-                    if len(X_data) < cv_folds * 50:  # Increased minimum requirement
+                    if len(X_data) < cv_folds * 50:
                         logger.warning(f"Not enough normal samples ({len(X_data)}) for CV, generating more")
                         # Generate more data with proper parameters
                         data = generate_synthetic_data(
-                            normal_samples=max(normal_samples, cv_folds * 100),  # Generate more samples
-                            attack_samples=attack_samples,  # FIXED: Keep original attack_samples value
+                            normal_samples=max(normal_samples, cv_folds * 100),
+                            attack_samples=attack_samples,
                             features=features,
                             validation_split=0.1,
                             random_state=cv_random_state,
@@ -51268,11 +51713,30 @@ def setup_hyperparameter_optimization(
                         normal_mask = y_combined == 0
                         X_data = X_combined[normal_mask]
                 
-                # Perform cross-validation
-                kf = KFold(n_splits=cv_folds, shuffle=cv_shuffle, random_state=cv_random_state)
+                # Perform cross-validation with nested progress
+                # Perform cross-validation with nested progress
+                if cv_folds == 1:
+                    # Use a single train/validation split when cv_folds=1
+                    from sklearn.model_selection import train_test_split
+                    train_idx, val_idx = train_test_split(
+                        np.arange(len(X_data)), 
+                        test_size=0.2, 
+                        random_state=cv_random_state,
+                        shuffle=cv_shuffle
+                    )
+                    fold_indices = [(train_idx, val_idx)]
+                else:
+                    # Use k-fold cross-validation for cv_folds >= 2
+                    kf = KFold(n_splits=cv_folds, shuffle=cv_shuffle, random_state=cv_random_state)
+                    fold_indices = list(kf.split(X_data))
+
                 fold_scores = []
+
+                if verbose:
+                    total_folds = len(fold_indices)
+                    fold_bar = tqdm(total=total_folds, desc=f"Trial {trial.number} CV Folds", unit="fold", position=1, leave=False)
                 
-                for fold_idx, (train_idx, val_idx) in enumerate(kf.split(X_data)):
+                for fold_idx, (train_idx, val_idx) in enumerate(fold_indices):
                     try:
                         # Create fold-specific data
                         X_fold_train = X_data[train_idx]
@@ -51298,8 +51762,8 @@ def setup_hyperparameter_optimization(
                             
                             # Override data parameters - use actual fold sizes
                             'normal_samples': len(X_fold_train),
-                            'attack_samples': 0,  # No attack samples for autoencoder
-                            'use_real_data': False,  # We're providing the data directly
+                            'attack_samples': 0,
+                            'use_real_data': False,
                             
                             # Use minimal settings for speed
                             'save_checkpoints': False,
@@ -51312,17 +51776,15 @@ def setup_hyperparameter_optimization(
                         fold_data = {
                             'X_train': X_fold_train,
                             'X_val': X_fold_val,
-                            'X_test': X_fold_val,  # Use validation as test for HPO
-                            'y_train': np.zeros(len(X_fold_train)),  # All normal samples
-                            'y_val': np.zeros(len(X_fold_val)),      # All normal samples  
-                            'y_test': np.zeros(len(X_fold_val)),     # All normal samples
+                            'X_test': X_fold_val,
+                            'y_train': np.zeros(len(X_fold_train)),
+                            'y_val': np.zeros(len(X_fold_val)),
+                            'y_test': np.zeros(len(X_fold_val)),
                             'feature_names': data.get('feature_names', [f'feature_{i}' for i in range(X_fold_train.shape[1])])
                         }
                         
                         # Create comprehensive config for train_model
                         fold_config = {
-                            # Model architecture configuration
-                            #'model_architecture': {
                             'model': {
                                 'model_type': fold_params['model_type'],
                                 'input_dim': fold_params['input_dim'],
@@ -51342,8 +51804,6 @@ def setup_hyperparameter_optimization(
                                 'min_features': fold_params.get('min_features', 5)
                             },
                             
-                            # Training configuration
-                            #'training_config': {
                             'training': {
                                 'batch_size': fold_params['batch_size'],
                                 'epochs': fold_params['epochs'],
@@ -51357,11 +51817,9 @@ def setup_hyperparameter_optimization(
                                 'scheduler_type': fold_params['scheduler_type'],
                                 'scheduler_params': fold_params['scheduler_params'],
                                 'early_stopping': True,
-                                'validation_split': 0.0  # We provide validation data directly
+                                'validation_split': 0.0
                             },
                             
-                            # Data configuration
-                            #'data_config': {
                             'data': {
                                 'use_real_data': False,
                                 'features': fold_params['features'],
@@ -51371,8 +51829,6 @@ def setup_hyperparameter_optimization(
                                 'normalization_method': 'standard'
                             },
                             
-                            # System configuration
-                            #'system_config': {
                             'system': {
                                 'device': fold_params['device'],
                                 'random_seed': fold_params['random_seed'],
@@ -51381,8 +51837,6 @@ def setup_hyperparameter_optimization(
                                 'log_dir': fold_dir / "logs"
                             },
                             
-                            # Monitoring configuration (minimal for HPO)
-                            #'monitoring_config': {
                             'monitoring': {
                                 'verbose': False,
                                 'debug_mode': False,
@@ -51392,8 +51846,6 @@ def setup_hyperparameter_optimization(
                                 'log_frequency': 999999
                             },
                             
-                            # Export configuration (minimal for HPO)
-                            #'export_config': {
                             'export': {
                                 'export_onnx': False,
                                 'save_model': False,
@@ -51401,30 +51853,26 @@ def setup_hyperparameter_optimization(
                                 'save_training_history': False
                             },
                             
-                            # Advanced training configuration
                             'advanced_training': {
                                 'num_workers': fold_params['num_workers'],
-                                'pin_memory': False,  # Disabled for HPO stability
+                                'pin_memory': False,
                                 'persistent_workers': False,
                                 'memory_efficient': True
                             },
                             
-                            # Error handling for HPO
                             'error_handling': {
                                 'error_handling': 'continue',
                                 'graceful_degradation': True,
                                 'continue_on_error': True
                             },
                             
-                            # HPO-specific data - provide data directly
                             'hpo_fold_data': fold_data,
                             'hpo_trial_number': trial.number,
                             'hpo_fold_number': fold_idx,
-                            'hpo_direct_data': True  # Flag to indicate direct data provision
+                            'hpo_direct_data': True
                         }
                         
                         # Train model using the comprehensive train_model function
-                        # Pass fold_data directly to avoid data generation issues
                         result = train_model(
                             config=fold_config,
                             X_train=X_fold_train,
@@ -51484,6 +51932,13 @@ def setup_hyperparameter_optimization(
                     except Exception as e:
                         logger.warning(f"Trial {trial.number}, Fold {fold_idx} error: {str(e)}")
                         fold_scores.append(float('inf'))
+                    
+                    finally:
+                        if verbose and 'fold_bar' in locals():
+                            fold_bar.update(1)
+                
+                if verbose and 'fold_bar' in locals():
+                    fold_bar.close()
                 
                 # Calculate final score
                 if fold_scores and any(score != float('inf') for score in fold_scores):
@@ -51548,7 +52003,11 @@ def setup_hyperparameter_optimization(
         
         callbacks.append(early_stopping_callback)
         
-        # Save study configuration
+        # Save study configuration with nested progress
+        if verbose:
+            config_steps = ['create_config', 'save_config', 'validate_config']
+            config_bar = tqdm(total=len(config_steps), desc="Saving Study Config", unit="step", position=1, leave=False)
+        
         study_config = {
             "study_name": study_name,
             "configuration": hpo_section,
@@ -51583,6 +52042,12 @@ def setup_hyperparameter_optimization(
         with open(config_path, "w") as f:
             json.dump(study_config, f, indent=2, default=str)
         
+        if verbose and 'config_bar' in locals():
+            config_bar.update(1)
+            config_bar.update(1)
+            config_bar.update(1)  # Final step
+            config_bar.close()
+        
         # Optimization function
         def run_optimization():
             """Run the optimization process"""
@@ -51596,7 +52061,7 @@ def setup_hyperparameter_optimization(
                     timeout=timeout_seconds if timeout_seconds > 0 else None,
                     callbacks=callbacks,
                     gc_after_trial=True,
-                    show_progress_bar=False  # We have custom progress
+                    show_progress_bar=False
                 )
                 
                 return {
@@ -51626,7 +52091,11 @@ def setup_hyperparameter_optimization(
             try:
                 best_trial = study.best_trial
                 
-                # Generate comprehensive analysis
+                # Generate comprehensive analysis with nested progress
+                if verbose:
+                    analysis_steps = ['study_summary', 'parameter_importance', 'save_analysis']
+                    analysis_bar = tqdm(total=len(analysis_steps), desc="Analyzing Results", unit="step", position=1, leave=False)
+                
                 analysis = {
                     'study_summary': {
                         'study_name': study_name,
@@ -51649,6 +52118,9 @@ def setup_hyperparameter_optimization(
                     'timestamp': datetime.now().isoformat()
                 }
                 
+                if verbose and 'analysis_bar' in locals():
+                    analysis_bar.update(1)
+                
                 # Calculate parameter importance if enough trials
                 if len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]) > 10:
                     try:
@@ -51657,12 +52129,19 @@ def setup_hyperparameter_optimization(
                     except Exception as e:
                         logger.warning(f"Failed to calculate parameter importance: {e}")
                 
+                if verbose and 'analysis_bar' in locals():
+                    analysis_bar.update(1)
+                
                 # Save analysis
                 if save_study:
                     analysis_path = study_dir / f"{study_name}_analysis.json"
                     with open(analysis_path, "w") as f:
                         json.dump(analysis, f, indent=2, default=str)
                     analysis['analysis_path'] = str(analysis_path)
+                
+                if verbose and 'analysis_bar' in locals():
+                    analysis_bar.update(1)
+                    analysis_bar.close()
                 
                 return analysis
             
@@ -51682,6 +52161,11 @@ def setup_hyperparameter_optimization(
                 
                 plots = {}
                 
+                # Generate plots with nested progress
+                if verbose:
+                    plot_types = ['optimization_history', 'param_importances', 'parallel_coordinate', 'slice_plot']
+                    plot_bar = tqdm(total=len(plot_types), desc="Generating Plots", unit="plot", position=1, leave=False)
+                
                 # Optimization history
                 try:
                     fig = vis.plot_optimization_history(study)
@@ -51690,6 +52174,9 @@ def setup_hyperparameter_optimization(
                     plots['optimization_history'] = str(plot_path)
                 except Exception as e:
                     logger.warning(f"Failed to generate optimization history plot: {e}")
+                
+                if verbose and 'plot_bar' in locals():
+                    plot_bar.update(1)
                 
                 # Parameter importances
                 if len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]) > 10:
@@ -51701,6 +52188,9 @@ def setup_hyperparameter_optimization(
                     except Exception as e:
                         logger.warning(f"Failed to generate parameter importance plot: {e}")
                 
+                if verbose and 'plot_bar' in locals():
+                    plot_bar.update(1)
+                
                 # Parallel coordinate plot
                 if len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]) > 5:
                     try:
@@ -51711,6 +52201,9 @@ def setup_hyperparameter_optimization(
                     except Exception as e:
                         logger.warning(f"Failed to generate parallel coordinate plot: {e}")
                 
+                if verbose and 'plot_bar' in locals():
+                    plot_bar.update(1)
+                
                 # Slice plot
                 if len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]) > 5:
                     try:
@@ -51720,6 +52213,10 @@ def setup_hyperparameter_optimization(
                         plots['slice_plot'] = str(plot_path)
                     except Exception as e:
                         logger.warning(f"Failed to generate slice plot: {e}")
+                
+                if verbose and 'plot_bar' in locals():
+                    plot_bar.update(1)
+                    plot_bar.close()
                 
                 if verbose and plots:
                     print(f"Plots saved to: {plot_dir}")
@@ -51739,10 +52236,18 @@ def setup_hyperparameter_optimization(
             try:
                 saved_files = {}
                 
+                # Save study data with nested progress
+                if verbose:
+                    save_steps = ['study_object', 'trials_data', 'configuration']
+                    save_bar = tqdm(total=len(save_steps), desc="Saving Study Data", unit="file", position=1, leave=False)
+                
                 # Save study object
                 study_path = study_dir / f"{study_name}_study.pkl"
                 joblib.dump(study, study_path)
                 saved_files['study_path'] = str(study_path)
+                
+                if verbose and 'save_bar' in locals():
+                    save_bar.update(1)
                 
                 # Save study trials data
                 trials_data = []
@@ -51763,6 +52268,11 @@ def setup_hyperparameter_optimization(
                     json.dump(trials_data, f, indent=2, default=str)
                 saved_files['trials_path'] = str(trials_path)
                 
+                if verbose and 'save_bar' in locals():
+                    save_bar.update(1)
+                    save_bar.update(1)  # Final step
+                    save_bar.close()
+                
                 if verbose:
                     print(f"Study data saved to: {study_dir}")
                 
@@ -51775,6 +52285,29 @@ def setup_hyperparameter_optimization(
         # Calculate setup time
         setup_time = time.time() - setup_start_time
         
+        # Final memory optimization
+        _optimize_memory_if_needed(
+            condition=True,
+            hardware_data=None,
+            aggressive=True,
+            silent=not verbose
+        )
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage="HPO setup complete!")
+            main_bar.close()
+        
+        if verbose:
+            print(f"Setup completed in {setup_time:.1f} seconds")
+            print("-"*40)
+            if progress_data['warnings']:
+                print(f"Warnings encountered: {len(progress_data['warnings'])}")
+                for warning in progress_data['warnings'][:3]:  # Show first 3 warnings
+                    print(f"  - {warning}")
+                if len(progress_data['warnings']) > 3:
+                    print(f"  ... and {len(progress_data['warnings']) - 3} more warnings")
+        
         # Return comprehensive setup results
         setup_results = {
             'success': True,
@@ -51783,6 +52316,7 @@ def setup_hyperparameter_optimization(
             'study_dir': str(study_dir),
             'configuration': study_config,
             'setup_time_seconds': setup_time,
+            'progress_data': progress_data,
             
             # Functions for running optimization
             'run_optimization': run_optimization,
@@ -51826,10 +52360,6 @@ def setup_hyperparameter_optimization(
             'show_progress': show_progress
         }
         
-        if verbose:
-            print(f"Setup completed in {setup_time:.1f} seconds")
-            print("-"*80)
-        
         return setup_results
     
     except Exception as e:
@@ -51845,7 +52375,8 @@ def setup_hyperparameter_optimization(
             'setup_time_seconds': time.time() - setup_start_time,
             'study_name': study_name,
             'configuration': hpo_section,
-            'traceback': traceback.format_exc()
+            'traceback': traceback.format_exc(),
+            'progress_data': progress_data
         }
         
         # Save error information
@@ -51863,11 +52394,11 @@ def setup_hyperparameter_optimization(
     
     finally:
         # Restore logging level
-        # if verbose and 'original_level' in locals():
-        #     try:
-        #         logger.setLevel(original_level)
-        #     except Exception:
-        #         pass
+        if verbose and 'original_level' in locals():
+            try:
+                logger.setLevel(original_level)
+            except Exception:
+                pass
         
         # Final cleanup
         try:
@@ -52040,6 +52571,10 @@ def run_hyperparameter_optimization(
     if cv_folds is not None:
         try:
             cv_folds = int(cv_folds)
+            # Ensure cv_folds is at least 1, but handle the case properly
+            if cv_folds < 1:
+                logger.warning(f"cv_folds must be >= 1, got {cv_folds}. Using default: 3")
+                cv_folds = 3
         except (TypeError, ValueError):
             logger.warning(f"Invalid cv_folds value: {cv_folds}, using default")
             cv_folds = 3
@@ -52094,15 +52629,31 @@ def run_hyperparameter_optimization(
     train_best_model = hpo_section.setdefault('train_best_model', cleaned_params.get('train_best_model', True))
     save_best_config = hpo_section.setdefault('save_best_config', cleaned_params.get('save_best_config', True))
     
+    # Progress tracking data
+    progress_data = {
+        'current_stage': 'Starting...',
+        'current_operation': None,
+        'trials_completed': 0,
+        'trials_failed': 0,
+        'trials_pruned': 0,
+        'best_value': float('inf'),
+        'current_trial': None,
+        'current_model_type': None,
+        'setup_completed': False,
+        'optimization_completed': False,
+        'analysis_completed': False,
+        'final_training_completed': False
+    }
+    
     try:
         # Interactive configuration if enabled
         if interactive:
-            print("\n" + "="*80)
+            print("\n" + "-"*40)
             print("HYPERPARAMETER OPTIMIZATION SETUP")
-            print("="*80)
+            print("-"*40)
             print("This will optimize model parameters for best performance using Optuna.")
             print("Configure the optimization parameters or use defaults.")
-            print("-"*80)
+            print("-"*40)
             
             # Core optimization parameters
             print("\nCORE OPTIMIZATION PARAMETERS")
@@ -52292,9 +52843,9 @@ def run_hyperparameter_optimization(
                     hpo_section['study_dir'] = str(study_dir)
             
             # Final confirmation
-            print("\n" + "="*60)
+            print("\n" + "-"*40)
             print("OPTIMIZATION CONFIGURATION SUMMARY")
-            print("="*60)
+            print("-"*40)
             print(f"Study Name: {study_name}")
             print(f"Trials: {n_trials}")
             print(f"Timeout: {timeout_minutes} minutes" if timeout_minutes > 0 else "Timeout: No limit")
@@ -52308,7 +52859,7 @@ def run_hyperparameter_optimization(
             print(f"Sampler: {sampler_type}")
             print(f"Pruner: {pruner_type}")
             print(f"Device: {device}")
-            print("="*60)
+            print("-"*40)
             
             confirm = input("\nStart hyperparameter optimization? (Y/n): ").lower().strip()
             if confirm in ('n', 'no'):
@@ -52318,11 +52869,28 @@ def run_hyperparameter_optimization(
         # Update final configuration
         final_config['hyperparameter_optimization'] = hpo_section
         
+        # Progress tracking for main HPO stages
+        total_stages = 5  # Setup, Optimization, Analysis, Final Training, Finalization
+        
+        # Create main progress bar
         if verbose:
+            main_bar = tqdm(total=total_stages, desc="HPO Pipeline", unit="stage", position=0, leave=True)
+        
+        # STAGE 1: Setup
+        progress_data['current_stage'] = "Setup"
+        if verbose:
+            main_bar.set_description("Setup")
             print("\nSetting up hyperparameter optimization...")
         
+        # Memory optimization at start
+        _optimize_memory_if_needed(
+            condition=True,
+            hardware_data=None,
+            aggressive=False,
+            silent=not verbose
+        )
+        
         # Set up hyperparameter optimization using the setup function
-        # FIX: Ensure timeout_seconds is properly calculated and not None
         timeout_seconds = timeout_minutes * 60 if timeout_minutes and timeout_minutes > 0 else 0
         
         hpo_setup = setup_hyperparameter_optimization(
@@ -52354,18 +52922,30 @@ def run_hyperparameter_optimization(
         
         if not hpo_setup.get('success', False):
             error_msg = hpo_setup.get('error', 'Setup failed')
-            print(f"HPO setup failed: {error_msg}")
+            if verbose:
+                main_bar.set_postfix(stage=f"Setup failed: {error_msg}")
+                print(f"HPO setup failed: {error_msg}")
             return hpo_setup
         
+        progress_data['setup_completed'] = True
         if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage="Setup completed")
+        
+        # STAGE 2: Optimization
+        progress_data['current_stage'] = "Optimization"
+        if verbose:
+            main_bar.set_description("Optimization")
             print("Setup completed successfully. Starting optimization...")
         
-        # Run optimization
+        # Run optimization with detailed progress tracking
         optimization_results = hpo_setup['run_optimization']()
         
         if not optimization_results.get('success', False):
             error_msg = optimization_results.get('error', 'Optimization failed')
-            print(f"Optimization failed: {error_msg}")
+            if verbose:
+                main_bar.set_postfix(stage=f"Optimization failed: {error_msg}")
+                print(f"Optimization failed: {error_msg}")
             return optimization_results
         
         # Get study and results
@@ -52375,28 +52955,49 @@ def run_hyperparameter_optimization(
         best_params = optimization_results['best_params']
         best_trial = optimization_results['best_trial']
         
-        # Calculate total time
-        total_time = time.time() - hpo_start_time
+        progress_data.update({
+            'trials_completed': n_trials_completed,
+            'best_value': best_value,
+            'optimization_completed': True
+        })
         
-        # Analyze results
         if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage=f"{n_trials_completed} trials, best: {best_value:.6f}")
+        
+        # STAGE 3: Analysis
+        progress_data['current_stage'] = "Analysis"
+        if verbose:
+            main_bar.set_description("Analysis")
             print("Analyzing optimization results...")
         
         analysis = hpo_setup['analyze_results']()
         
-        # Generate plots
+        # Generate plots with nested progress
         plots = {}
         if generate_plots:
             if verbose:
                 print("Generating optimization plots...")
+                plot_types = ['optimization_history', 'param_importances', 'parallel_coordinate', 'slice_plot']
+                plot_bar = tqdm(total=len(plot_types), desc="Generating Plots", unit="plot", position=1, leave=False)
+            
             plots = hpo_setup['generate_plots']()
+            
+            if verbose and 'plot_bar' in locals():
+                plot_bar.close()
         
-        # Save study data
-        saved_files = {}
-        if save_study:
-            if verbose:
-                print("Saving study data...")
-            saved_files = hpo_setup['save_study_data']()
+        progress_data['analysis_completed'] = True
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage="Analysis complete")
+        
+        # STAGE 4: Final Training (Optional)
+        progress_data['current_stage'] = "Final Training"
+        if verbose:
+            main_bar.set_description("Final Training")
+        
+        # Calculate total time so far
+        total_time = time.time() - hpo_start_time
         
         # Prepare comprehensive results
         hpo_results = {
@@ -52434,11 +53035,12 @@ def run_hyperparameter_optimization(
             # Analysis and artifacts
             'analysis': analysis,
             'plots': plots,
-            'saved_files': saved_files,
+            'saved_files': {},
             
             # Best configuration for train_model
             'best_config_for_training': None,
-            'recommendations': []
+            'recommendations': [],
+            'progress_data': progress_data
         }
         
         # Extract best configuration for train_model integration
@@ -52447,23 +53049,288 @@ def run_hyperparameter_optimization(
             if best_config_raw:
                 hpo_results['best_config_for_training'] = best_config_raw
         
-        # Display comprehensive results
+        # Save study data with nested progress
+        if save_study:
+            if verbose:
+                main_bar.set_postfix(stage="Saving study data...")
+                print("Saving study data...")
+                save_steps = ['study_object', 'trials_data', 'configuration']
+                save_bar = tqdm(total=len(save_steps), desc="Saving Study Data", unit="file", position=1, leave=False)
+            
+            saved_files = hpo_setup['save_study_data']()
+            hpo_results['saved_files'] = saved_files
+            
+            if verbose and 'save_bar' in locals():
+                save_bar.close()
+        
+        # Offer to train final model with best parameters
+        final_training_results = None
+        if train_best_model and n_trials_completed > 0 and hpo_results.get('best_config_for_training'):
+            if interactive:
+                train_final = input("\nTrain final model with optimized parameters? (Y/n): ").lower().strip()
+                train_final = train_final not in ('n', 'no')
+            else:
+                train_final = True
+            
+            if train_final:
+                try:
+                    if verbose:
+                        main_bar.set_postfix(stage="Training final model...")
+                        print("\nTraining final model with optimized parameters...")
+                    
+                    # Use the best configuration for training
+                    best_config = hpo_results['best_config_for_training'].copy()
+                    
+                    # Update with full training parameters (not trial parameters)
+                    training_config = best_config.setdefault('training', {})
+                    training_config.update({
+                        'epochs': 100,  # Full training epochs
+                        'patience': 20,  # Longer patience for final training
+                        'verbose': True,
+                        'tensorboard_logging': True,
+                        'save_checkpoints': True,
+                        'progress_bar': True
+                    })
+                    
+                    # Update monitoring for full training
+                    monitoring_config = best_config.setdefault('monitoring', {})
+                    monitoring_config.update({
+                        'verbose': True,
+                        'tensorboard_logging': True,
+                        'save_checkpoints': True,
+                        'save_best_model': True,
+                        'progress_bar': True
+                    })
+                    
+                    # Update export for full training
+                    export_config = best_config.setdefault('export', {})
+                    export_config.update({
+                        'save_model': True,
+                        'save_metadata': True,
+                        'save_training_history': True
+                    })
+                    
+                    # Update system config for final training
+                    system_config = best_config.setdefault('system', {})
+                    system_config.update({
+                        'model_dir': Path(study_dir) / "final_model",
+                        'log_dir': Path(study_dir) / "final_model" / "logs"
+                    })
+                    
+                    # Train final model
+                    final_training_results = train_model(config=best_config)
+                    
+                    if final_training_results and final_training_results.get('success', False):
+                        hpo_results['final_model_training'] = final_training_results
+                        progress_data['final_training_completed'] = True
+                        
+                        if verbose:
+                            main_bar.set_postfix(stage="Final model training completed!")
+                            print("\nFinal model training completed successfully!")
+                            final_metrics = final_training_results.get('final_metrics', {})
+                            print(f"Final Validation Loss: {final_metrics.get('best_validation_loss', 'N/A')}")
+                            print(f"Test Loss: {final_metrics.get('test_loss', 'N/A')}")
+                            print(f"Training Time: {final_training_results.get('training_time_minutes', 0):.1f} minutes")
+                            
+                            artifacts = final_training_results.get('artifacts', {})
+                            if artifacts:
+                                print(f"Final Model Artifacts:")
+                                for artifact_type, path in artifacts.items():
+                                    print(f"  {artifact_type.replace('_', ' ').title()}: {path}")
+                    else:
+                        error_msg = final_training_results.get('error', 'Unknown error') if final_training_results else 'No results'
+                        if verbose:
+                            main_bar.set_postfix(stage=f"Final training failed: {error_msg}")
+                            print(f"Final model training failed: {error_msg}")
+                        hpo_results['final_model_training'] = {'success': False, 'error': error_msg}
+                
+                except Exception as e:
+                    error_msg = f"Final model training failed: {str(e)}"
+                    if verbose:
+                        main_bar.set_postfix(stage=f"Final training failed: {error_msg}")
+                        print(error_msg)
+                    hpo_results['final_model_training'] = {'success': False, 'error': error_msg}
+        
         if verbose:
-            print("\n" + "="*80)
+            main_bar.update(1)
+            main_bar.set_postfix(stage="Final training complete")
+        
+        # STAGE 5: Finalization
+        progress_data['current_stage'] = "Finalization"
+        if verbose:
+            main_bar.set_description("Finalization")
+            main_bar.set_postfix(stage="Finalizing HPO results...")
+        
+        # Generate recommendations with nested progress for multiple recommendation categories
+        recommendations = []
+        
+        if verbose:
+            rec_categories = ['performance', 'configuration', 'resources', 'next_steps']
+            rec_bar = tqdm(total=len(rec_categories), desc="Generating Recommendations", unit="category", position=1, leave=False)
+        
+        # Performance recommendations
+        if n_trials_completed == 0:
+            recommendations.append("No trials completed successfully - check configuration and data")
+        elif n_trials_completed < n_trials * 0.5:
+            recommendations.append("Many trials failed - consider simplifying search space or checking system resources")
+        
+        if best_value != float('inf'):
+            if best_value < 0.01:
+                recommendations.append("Excellent optimization results - ready for production use")
+            elif best_value < 0.05:
+                recommendations.append("Good optimization results - consider additional fine-tuning")
+            elif best_value < 0.1:
+                recommendations.append("Acceptable results - may benefit from longer optimization or different search space")
+            else:
+                recommendations.append("High objective value - consider adjusting search space or model architecture")
+        
+        if verbose and 'rec_bar' in locals():
+            rec_bar.update(1)
+        
+        # Configuration recommendations
+        if len(model_types) == 1:
+            recommendations.append("Consider optimizing multiple model types for comparison")
+        
+        if cv_folds < 3:
+            recommendations.append("Consider using more cross-validation folds for more robust results")
+        
+        if trial_epochs < 20:
+            recommendations.append("Consider increasing trial epochs for more stable convergence")
+        
+        if verbose and 'rec_bar' in locals():
+            rec_bar.update(1)
+        
+        # Resource recommendations
+        if n_trials_completed > 0 and best_value > 0.1:
+            recommendations.append("Consider increasing computational resources for better optimization")
+        
+        if verbose and 'rec_bar' in locals():
+            rec_bar.update(1)
+        
+        # Next steps recommendations
+        if n_trials_completed > 0:
+            recommendations.append("Use best parameters for production training and validation")
+            if not hpo_results.get('final_model_training'):
+                recommendations.append("Train final model with optimized parameters for deployment")
+        
+        if verbose and 'rec_bar' in locals():
+            rec_bar.update(1)
+            rec_bar.close()
+        
+        hpo_results['recommendations'] = recommendations
+        
+        # Save best configuration to global config if requested
+        if save_best_config and hpo_results.get('best_config_for_training'):
+            try:
+                best_config = hpo_results['best_config_for_training']
+                current_config = get_current_config()
+                
+                # Sanitize best_config to remove None values that should have defaults
+                def sanitize_config_values(cfg):
+                    """Remove or replace problematic None values."""
+                    if not isinstance(cfg, dict):
+                        return cfg
+                    
+                    sanitized = {}
+                    for key, value in cfg.items():
+                        if isinstance(value, dict):
+                            sanitized[key] = sanitize_config_values(value)
+                        elif value is not None:
+                            sanitized[key] = value
+                        # Skip None values - let update_global_config use defaults
+                    
+                    return sanitized
+                
+                best_config_sanitized = sanitize_config_values(best_config)
+                
+                # Merge best configuration with nested progress
+                config_sections = list(best_config_sanitized.keys())
+                if verbose:
+                    config_bar = tqdm(total=len(config_sections), desc="Updating Global Config", unit="section", position=1, leave=False)
+                
+                for section in config_sections:
+                    values = best_config_sanitized[section]
+                    if isinstance(values, dict):
+                        current_config.setdefault(section, {}).update(values)
+                    else:
+                        current_config[section] = values
+                    
+                    if verbose and 'config_bar' in locals():
+                        config_bar.update(1)
+                
+                # Add HPO metadata
+                current_config.setdefault('metadata', {}).update({
+                    'optimized_with_hpo': True,
+                    'hpo_study_name': study_name,
+                    'hpo_best_value': best_value,
+                    'hpo_optimization_date': datetime.now().isoformat(),
+                    'hpo_trial_number': best_trial.number if best_trial else 0
+                })
+                
+                update_global_config(current_config)
+                
+                if verbose and 'config_bar' in locals():
+                    config_bar.close()
+                
+                if verbose:
+                    main_bar.set_postfix(stage="Best config saved to global config")
+                    print(f"\nBest configuration saved to global config")
+                
+            except Exception as e:
+                logger.warning(f"Failed to save best configuration: {e}")
+                recommendations.append("Failed to save best configuration - manually apply best parameters")
+        
+        # Final memory optimization
+        _optimize_memory_if_needed(
+            condition=True,
+            hardware_data=None,
+            aggressive=True,
+            silent=not verbose
+        )
+        
+        if verbose:
+            main_bar.update(1)
+            main_bar.set_postfix(stage="HPO pipeline complete!")
+            main_bar.close()
+        
+        # Update total time after all stages
+        total_time = time.time() - hpo_start_time
+        hpo_results.update({
+            'total_time_seconds': total_time,
+            'total_time_minutes': total_time / 60,
+            'end_time': datetime.now().isoformat()
+        })
+        
+        # Display comprehensive results with nested progress for different sections
+        if verbose:
+            print("\n" + "-"*40)
             print("HYPERPARAMETER OPTIMIZATION COMPLETED")
-            print("="*80)
+            print("-"*40)
             print(f"Total Time: {total_time/60:.1f} minutes")
             print(f"Study Name: {study_name}")
             print(f"Trials: {n_trials_completed}/{len(study.trials)} completed")
             
+            # Display results with nested progress for different sections
+            display_sections = ['best_results', 'parameters', 'statistics', 'artifacts', 'recommendations']
+            display_bar = tqdm(total=len(display_sections), desc="Displaying Results", unit="section", position=0, leave=False)
+            
             if n_trials_completed > 0:
+                # Best Results
                 print(f"\nBest Results:")
                 print(f"  Objective Value: {best_value:.6f}")
                 print(f"  Trial Number: {best_trial.number if best_trial else 'N/A'}")
                 
+                if 'display_bar' in locals():
+                    display_bar.update(1)
+                
+                # Parameters
                 print(f"\nBest Parameters:")
-                for param, value in best_params.items():
+                param_items = list(best_params.items())
+                for param, value in param_items:
                     print(f"  {param}: {value}")
+                
+                if 'display_bar' in locals():
+                    display_bar.update(1)
                 
                 # Show model-specific best parameters
                 if best_trial and hasattr(best_trial, 'user_attrs'):
@@ -52506,7 +53373,7 @@ def run_hyperparameter_optimization(
                             print(f"  Std CV Score: {np.std(valid_scores):.6f}")
                             print(f"  Valid Folds: {len(valid_scores)}/{len(cv_scores)}")
             
-            # Show study statistics
+            # Statistics
             if analysis.get('study_summary'):
                 summary = analysis['study_summary']
                 print(f"\nStudy Statistics:")
@@ -52514,187 +53381,37 @@ def run_hyperparameter_optimization(
                 print(f"  Pruned Trials: {summary.get('n_pruned_trials', 0)}")
                 print(f"  Failed Trials: {summary.get('n_failed_trials', 0)}")
             
-            # Show artifacts
-            if saved_files:
+            if 'display_bar' in locals():
+                display_bar.update(1)
+            
+            # Artifacts
+            if hpo_results['saved_files']:
                 print(f"\nSaved Artifacts:")
-                for file_type, file_path in saved_files.items():
-                    print(f"  {file_type.replace('_', ' ').title()}: {file_path}")
+                for file_type, file_path in hpo_results['saved_files'].items():
+                    if file_type != 'error':  # Skip error entries
+                        print(f"  {file_type.replace('_', ' ').title()}: {file_path}")
             
             if plots:
                 print(f"\nGenerated Plots:")
                 for plot_type, plot_path in plots.items():
                     print(f"  {plot_type.replace('_', ' ').title()}: {plot_path}")
-        
-        # Generate recommendations
-        recommendations = []
-        
-        if n_trials_completed == 0:
-            recommendations.append("No trials completed successfully - check configuration and data")
-        elif n_trials_completed < n_trials * 0.5:
-            recommendations.append("Many trials failed - consider simplifying search space or checking system resources")
-        
-        if best_value != float('inf'):
-            if best_value < 0.01:
-                recommendations.append("Excellent optimization results - ready for production use")
-            elif best_value < 0.05:
-                recommendations.append("Good optimization results - consider additional fine-tuning")
-            elif best_value < 0.1:
-                recommendations.append("Acceptable results - may benefit from longer optimization or different search space")
-            else:
-                recommendations.append("High objective value - consider adjusting search space or model architecture")
-        
-        if len(model_types) == 1:
-            recommendations.append("Consider optimizing multiple model types for comparison")
-        
-        if cv_folds < 3:
-            recommendations.append("Consider using more cross-validation folds for more robust results")
-        
-        if trial_epochs < 20:
-            recommendations.append("Consider increasing trial epochs for more stable convergence")
-        
-        hpo_results['recommendations'] = recommendations
-        
-        if verbose and recommendations:
-            print(f"\nRecommendations:")
-            for i, rec in enumerate(recommendations, 1):
-                print(f"  {i}. {rec}")
-        
-        # Save best configuration to global config if requested
-        if save_best_config and hpo_results.get('best_config_for_training'):
-            try:
-                best_config = hpo_results['best_config_for_training']
-                current_config = get_current_config()
-                
-                # Sanitize best_config to remove None values that should have defaults
-                def sanitize_config_values(cfg):
-                    """Remove or replace problematic None values."""
-                    if not isinstance(cfg, dict):
-                        return cfg
-                    
-                    sanitized = {}
-                    for key, value in cfg.items():
-                        if isinstance(value, dict):
-                            sanitized[key] = sanitize_config_values(value)
-                        elif value is not None:
-                            sanitized[key] = value
-                        # Skip None values - let update_global_config use defaults
-                    
-                    return sanitized
-                
-                best_config_sanitized = sanitize_config_values(best_config)
-                
-                # Merge best configuration
-                for section, values in best_config_sanitized.items():
-                    if isinstance(values, dict):
-                        current_config.setdefault(section, {}).update(values)
-                    else:
-                        current_config[section] = values
-                
-                # Add HPO metadata
-                current_config.setdefault('metadata', {}).update({
-                    'optimized_with_hpo': True,
-                    'hpo_study_name': study_name,
-                    'hpo_best_value': best_value,
-                    'hpo_optimization_date': datetime.now().isoformat(),
-                    'hpo_trial_number': best_trial.number if best_trial else 0
-                })
-                
-                update_global_config(current_config)
-                
-                if verbose:
-                    print(f"\nBest configuration saved to global config")
-                
-            except Exception as e:
-                logger.warning(f"Failed to save best configuration: {e}")
-                logger.debug(f"Failed config details: {best_config if 'best_config' in locals() else 'N/A'}")
-                recommendations.append("Failed to save best configuration - manually apply best parameters")
-        
-        # Offer to train final model with best parameters
-        if train_best_model and n_trials_completed > 0 and hpo_results.get('best_config_for_training'):
-            if interactive:
-                train_final = input("\nTrain final model with optimized parameters? (Y/n): ").lower().strip()
-                train_final = train_final not in ('n', 'no')
-            else:
-                train_final = True
             
-            if train_final:
-                try:
-                    if verbose:
-                        print("\nTraining final model with optimized parameters...")
-                    
-                    # Use the best configuration for training
-                    best_config = hpo_results['best_config_for_training'].copy()
-                    
-                    # Update with full training parameters (not trial parameters)
-                    training_config = best_config.setdefault('training_config', {})
-                    training_config.update({
-                        'epochs': 100,  # Full training epochs
-                        'patience': 20,  # Longer patience for final training
-                        'verbose': True,
-                        'tensorboard_logging': True,
-                        'save_checkpoints': True,
-                        'progress_bar': True
-                    })
-                    
-                    # Update monitoring for full training
-                    monitoring_config = best_config.setdefault('monitoring_config', {})
-                    monitoring_config.update({
-                        'verbose': True,
-                        'tensorboard_logging': True,
-                        'save_checkpoints': True,
-                        'save_best_model': True,
-                        'progress_bar': True
-                    })
-                    
-                    # Update export for full training
-                    export_config = best_config.setdefault('export_config', {})
-                    export_config.update({
-                        'save_model': True,
-                        'save_metadata': True,
-                        'save_training_history': True
-                    })
-                    
-                    # Update system config for final training
-                    system_config = best_config.setdefault('system_config', {})
-                    system_config.update({
-                        'model_dir': Path(study_dir) / "final_model",
-                        'log_dir': Path(study_dir) / "final_model" / "logs"
-                    })
-                    
-                    # Train final model
-                    final_training_results = train_model(config=best_config)
-                    
-                    if final_training_results and final_training_results.get('success', False):
-                        hpo_results['final_model_training'] = final_training_results
-                        
-                        if verbose:
-                            print("\nFinal model training completed successfully!")
-                            final_metrics = final_training_results.get('final_metrics', {})
-                            print(f"Final Validation Loss: {final_metrics.get('best_validation_loss', 'N/A')}")
-                            print(f"Test Loss: {final_metrics.get('test_loss', 'N/A')}")
-                            print(f"Training Time: {final_training_results.get('training_time_minutes', 0):.1f} minutes")
-                            
-                            artifacts = final_training_results.get('artifacts', {})
-                            if artifacts:
-                                print(f"Final Model Artifacts:")
-                                for artifact_type, path in artifacts.items():
-                                    print(f"  {artifact_type.replace('_', ' ').title()}: {path}")
-                    else:
-                        error_msg = final_training_results.get('error', 'Unknown error') if final_training_results else 'No results'
-                        print(f"Final model training failed: {error_msg}")
-                        hpo_results['final_model_training'] = {'success': False, 'error': error_msg}
-                        recommendations.append("Final model training failed - manually train with best parameters")
-                
-                except Exception as e:
-                    error_msg = f"Final model training failed: {str(e)}"
-                    print(error_msg)
-                    hpo_results['final_model_training'] = {'success': False, 'error': error_msg}
-                    recommendations.append("Final model training failed - manually train with best parameters")
-        
-        if verbose:
-            print("\n" + "="*80)
+            if 'display_bar' in locals():
+                display_bar.update(1)
+            
+            # Recommendations
+            if recommendations:
+                print(f"\nRecommendations:")
+                for i, rec in enumerate(recommendations, 1):
+                    print(f"  {i}. {rec}")
+            
+            if 'display_bar' in locals():
+                display_bar.update(1)
+                display_bar.close()
+            
+            print("\n" + "-"*40)
             print("HYPERPARAMETER OPTIMIZATION SUMMARY")
-            print("="*80)
+            print("-"*40)
             
             if n_trials_completed > 0:
                 print("Optimization completed successfully!")
@@ -52716,7 +53433,7 @@ def run_hyperparameter_optimization(
                 print("Optimization completed but no trials succeeded")
                 print("Check configuration and system requirements")
             
-            print("="*80)
+            print("-"*40)
         
         return hpo_results
     
@@ -52730,7 +53447,8 @@ def run_hyperparameter_optimization(
             'end_time': datetime.now().isoformat(),
             'total_time_seconds': time.time() - hpo_start_time,
             'study_name': study_name,
-            'configuration': hpo_section
+            'configuration': hpo_section,
+            'progress_data': progress_data
         }
     
     except Exception as e:
@@ -52747,7 +53465,8 @@ def run_hyperparameter_optimization(
             'total_time_seconds': time.time() - hpo_start_time,
             'study_name': study_name if 'study_name' in locals() else 'unknown',
             'configuration': hpo_section if 'hpo_section' in locals() else {},
-            'traceback': traceback.format_exc()
+            'traceback': traceback.format_exc(),
+            'progress_data': progress_data
         }
         
         # Save error information
@@ -54339,8 +55058,8 @@ def _run_quick_hpo_test(
         quick_timeout = timeout_seconds if timeout_seconds is not None else 900  # 15 minutes
         
         # Ensure quick test limits are respected
-        quick_trial_count = min(quick_trial_count, 20)  # Hard cap for quick test
-        quick_timeout = min(quick_timeout, 1800)  # Max 30 minutes for quick test
+        quick_trial_count = min(quick_trial_count, 10)  # Hard cap for quick test
+        quick_timeout = min(quick_timeout, 900)  # Max 30 minutes for quick test
         
         # Resolve data mode with preset compatibility
         use_real_data_config = data_config.get('use_real_data', False)
@@ -55266,20 +55985,21 @@ def _run_hpo_model_comparison(
             
             # Additional comparison-specific analysis if successful
             if result.get('success', False):
-                print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
-                print(Fore.GREEN + Style.BRIGHT + "MODEL COMPARISON COMPLETE")
-                print(Fore.CYAN + Style.BRIGHT + "-"*40)
-                print(Fore.GREEN + Style.BRIGHT + "Model Comparison Completed Successfully!")
-                print(Fore.WHITE + Style.BRIGHT + "\nComparison Summary:")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Configuration: " + Fore.YELLOW + Style.BRIGHT + f"{config_name} Mode")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Models Compared: " + Fore.YELLOW + Style.BRIGHT + f"{len(available_models)}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Trials: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('total_trials', 'N/A')}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best Performing Model: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('best_model', 'N/A')}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best Score: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('best_score', 'N/A'):.4f}")
-                print(Fore.GREEN + Style.BRIGHT + f"  └─ Duration: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('duration', 'N/A')}")
-                print(Fore.GREEN + Style.BRIGHT + "\nDetailed comparison report and visualizations have been generated.")
+                # print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+                # print(Fore.GREEN + Style.BRIGHT + "MODEL COMPARISON COMPLETE")
+                # print(Fore.CYAN + Style.BRIGHT + "-"*40)
+                # print(Fore.GREEN + Style.BRIGHT + "Model Comparison Completed Successfully!")
+                # print(Fore.WHITE + Style.BRIGHT + "\nComparison Summary:")
+                # print(Fore.GREEN + Style.BRIGHT + f"  ├─ Configuration: " + Fore.YELLOW + Style.BRIGHT + f"{config_name} Mode")
+                # print(Fore.GREEN + Style.BRIGHT + f"  ├─ Models Compared: " + Fore.YELLOW + Style.BRIGHT + f"{len(available_models)}")
+                # print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Trials: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('total_trials', 'N/A')}")
+                # print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best Performing Model: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('best_model', 'N/A')}")
+                # #print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best Score: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('best_score', 'N/A'):.4f}")
+                # print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best Score: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('best_score', 'N/A')}")
+                # print(Fore.GREEN + Style.BRIGHT + f"  └─ Duration: " + Fore.YELLOW + Style.BRIGHT + f"{result.get('duration', 'N/A')}")
+                # print(Fore.GREEN + Style.BRIGHT + "\nDetailed comparison report and visualizations have been generated.")
                 
-                print(Fore.CYAN + Style.BRIGHT + "-"*40)
+                # print(Fore.CYAN + Style.BRIGHT + "-"*40)
                 
                 # Display model comparison summary if available
                 if 'model_comparison' in result:
@@ -55287,21 +56007,21 @@ def _run_hpo_model_comparison(
                     
                 return result
             else:
-                print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-                print(Fore.YELLOW + Style.BRIGHT + "Model Comparison Completed with Notes")
-                print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-                print(Fore.WHITE + Style.BRIGHT + "The comparison completed but encountered some issues.")
-                print(Fore.WHITE + Style.BRIGHT + "Check the detailed results above for more information.")
-                print(Fore.YELLOW + Style.BRIGHT + "\nPartial results may still be available for analysis.")
-                print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+                # print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+                # print(Fore.YELLOW + Style.BRIGHT + "Model Comparison Completed with Notes")
+                # print(Fore.YELLOW + Style.BRIGHT + "-"*40)
+                # print(Fore.WHITE + Style.BRIGHT + "The comparison completed but encountered some issues.")
+                # print(Fore.WHITE + Style.BRIGHT + "Check the detailed results above for more information.")
+                # print(Fore.YELLOW + Style.BRIGHT + "\nPartial results may still be available for analysis.")
+                # print(Fore.YELLOW + Style.BRIGHT + "-"*40)
                 return result
         else:
-            print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
-            print(Fore.RED + Style.BRIGHT + "Model Comparison Failed to Return Results")
-            print(Fore.RED + Style.BRIGHT + "-"*40)
-            print(Fore.WHITE + Style.BRIGHT + "The comparison may have encountered an unexpected issue.")
-            print(Fore.WHITE + Style.BRIGHT + "Check the logs for detailed error information.")
-            print(Fore.RED + Style.BRIGHT + "-"*40)
+            # print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+            # print(Fore.RED + Style.BRIGHT + "Model Comparison Failed to Return Results")
+            # print(Fore.RED + Style.BRIGHT + "-"*40)
+            # print(Fore.WHITE + Style.BRIGHT + "The comparison may have encountered an unexpected issue.")
+            # print(Fore.WHITE + Style.BRIGHT + "Check the logs for detailed error information.")
+            # print(Fore.RED + Style.BRIGHT + "-"*40)
             return None
     
     except KeyboardInterrupt:
@@ -61610,7 +62330,7 @@ def _display_hpo_results(results: Dict[str, Any]) -> None:
                     # Create importance bar visualization
                     bar_length = int(importance * 20)  # Scale to 20 characters
                     bar = "█" * bar_length + "░" * (20 - bar_length)
-                    print(f"    {i:2d}. {param:<25} │{bar}│ {importance:.4f}")
+                    print(f"    {i:2d}. {param:<25}  │{bar}│ {importance:.4f}")
                 
                 if len(sorted_importance) > 10:
                     print(f"    ... and {len(sorted_importance) - 10} more parameters")
@@ -66199,7 +66919,6 @@ def display_model_comparison() -> None:
         system_class = hardware_ctx.get('system_class', 'unknown')
         memory_optimizations = metadata.get('memory_optimization_summary', {}).get('optimizations_performed', 0)
         helper_functions_used = len(metadata.get('helper_functions_utilized', []))
-        comparison_checks = len(metadata.get('validation_checks_performed', []))
         
         header_panel = Panel.fit(
             f"[bold yellow]MODEL ARCHITECTURE COMPARISON REPORT v{comparison_version}[/bold yellow]\n"
@@ -66214,7 +66933,6 @@ def display_model_comparison() -> None:
             f"Hardware: {'GPU Available' if gpu_available else 'CPU Only'} | "
             f"Memory Optimizations: {memory_optimizations}\n"
             f"Helper Functions: {helper_functions_used} | "
-            f"Comparison Checks: {comparison_checks} | "
             f"Analysis Completeness: {(metadata.get('successful_comparisons', 0) / max(metadata.get('available_variants', 1), 1) * 100):.1f}%",
             title="[bold yellow]COMPREHENSIVE ANALYSIS OVERVIEW[/bold yellow]",
             border_style="green",
@@ -66222,6 +66940,7 @@ def display_model_comparison() -> None:
             style="bold green",
             padding=(1, 2)
         )
+        console.print()
         console.print(header_panel)
         
         # ENHANCED MAIN COMPARISON TABLE
@@ -66238,15 +66957,15 @@ def display_model_comparison() -> None:
         )
         
         # Configure main table columns
-        main_table.add_column("Model", style="bold cyan", width=15, no_wrap=True)
-        main_table.add_column("Parameters", width=10, justify="left")
-        main_table.add_column("Size (MB)", width=8, justify="left")
-        main_table.add_column("Complexity", width=8, justify="left")
-        main_table.add_column("Inference (ms)", width=10, justify="left")
-        main_table.add_column("Throughput", width=12, justify="left")
-        main_table.add_column("Memory (MB)", width=10, justify="left")
-        main_table.add_column("Efficiency", width=10, justify="left")
-        main_table.add_column("Status", width=10, justify="left")
+        main_table.add_column("Model", style="bold yellow", width=15, no_wrap=True)
+        main_table.add_column("Parameters", style="bold cyan", width=10, justify="left")
+        main_table.add_column("Size (MB)", style="bold blue", width=8, justify="left")
+        main_table.add_column("Complexity", style="bold magenta", width=8, justify="left")
+        main_table.add_column("Inference (ms)", style="bold green", width=10, justify="left")
+        main_table.add_column("Throughput", style="bold", width=12, justify="left")
+        main_table.add_column("Memory (MB)", style="bold", width=10, justify="left")
+        main_table.add_column("Efficiency", style="bold", width=10, justify="left")
+        main_table.add_column("Status", style="bold", width=10, justify="left")
         
         # Prepare and sort model data
         model_data_list = []
@@ -66433,7 +67152,7 @@ def display_model_comparison() -> None:
         # ENHANCED DETAILED ARCHITECTURE ANALYSIS
         if successful_models:
             detail_table = Table(
-                title="DETAILED ARCHITECTURE & FEATURE ANALYSIS",
+                title="\nDETAILED ARCHITECTURE & FEATURE ANALYSIS",
                 box=box.ROUNDED,
                 header_style="bold cyan",
                 border_style="cyan",
@@ -66444,13 +67163,13 @@ def display_model_comparison() -> None:
                 width=min(200, console.width - 2)
             )
             
-            detail_table.add_column("Model", style="bold cyan", width=15)
-            detail_table.add_column("Description", width=32, justify="left")
-            detail_table.add_column("Layers", width=5, justify="left")
-            detail_table.add_column("Features", width=22, justify="left")
-            detail_table.add_column("FLOPs", width=7, justify="left")
-            detail_table.add_column("Complexity", width=8, justify="left")
-            detail_table.add_column("Use Cases", width=30, justify="left")
+            detail_table.add_column("Model", style="bold magenta", width=15)
+            detail_table.add_column("Description", style="bold yellow", width=32, justify="left")
+            detail_table.add_column("Layers", style="bold green", width=5, justify="left")
+            detail_table.add_column("Features", style="bold", width=22, justify="left")
+            detail_table.add_column("FLOPs", style="bold cyan", width=7, justify="left")
+            detail_table.add_column("Complexity", style="bold cyan", width=8, justify="left")
+            detail_table.add_column("Use Cases", style="bold yellow", width=30, justify="left")
             
             for model_name, model_data in successful_models:
                 arch = model_data.get('architecture', {})
@@ -66584,10 +67303,12 @@ def display_model_comparison() -> None:
         hardware_panel = Panel.fit(
             hardware_text,
             title="[bold]SYSTEM CAPABILITIES & ANALYSIS CONTEXT[/bold]",
-            border_style="bright_blue",
+            border_style="bold blue",
             title_align="left",
+            style="bold",
             padding=(1, 2)
         )
+        console.print()
         console.print(hardware_panel)
         
         # ENHANCED RECOMMENDATIONS & OPTIMAL CHOICES
@@ -66600,12 +67321,9 @@ def display_model_comparison() -> None:
             
             if all_recommendations:
                 # Categorize recommendations based on current implementation patterns
-                performance_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in 
-                                   ['performance', 'speed', 'throughput', 'optimization', 'gpu', 'batch', 'precision'])]
-                memory_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in 
-                              ['memory', 'ram', 'vram', 'checkpointing', 'accumulation', 'clear'])]
-                config_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in 
-                              ['config', 'setting', 'parameter', 'dimension', 'encoding'])]
+                performance_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['performance', 'speed', 'throughput', 'optimization', 'gpu', 'batch', 'precision'])]
+                memory_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['memory', 'ram', 'vram', 'checkpointing', 'accumulation', 'clear'])]
+                config_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['config', 'setting', 'parameter', 'dimension', 'encoding'])]
                 general_recs = [rec for rec in all_recommendations if rec not in performance_recs + memory_recs + config_recs]
                 
                 rec_sections = [
@@ -66625,6 +67343,7 @@ def display_model_comparison() -> None:
                             title=f"[bold {color}]{section_title.upper()}[/bold {color}]",
                             border_style=color,
                             title_align="left",
+                            style="bold",
                             padding=(1, 2)
                         )
                         console.print(rec_panel)
@@ -66633,7 +67352,7 @@ def display_model_comparison() -> None:
             optimal = summary.get('optimal_choices', {})
             if optimal:
                 opt_table = Table(
-                    title="[bold yellow]OPTIMAL MODEL SELECTION GUIDE[/bold yellow]",
+                    title="\n[bold yellow]OPTIMAL MODEL SELECTION GUIDE[/bold yellow]",
                     box=box.ROUNDED,
                     header_style="bold white",
                     title_style="bold green",
@@ -66645,8 +67364,8 @@ def display_model_comparison() -> None:
                 
                 opt_table.add_column("Scenario", style="bold cyan", width=15)
                 opt_table.add_column("Recommended Model", style="bold green", width=15)
-                opt_table.add_column("Rationale", width=35)
-                opt_table.add_column("Performance", width=10, justify="left")
+                opt_table.add_column("Rationale", style="bold", width=35)
+                opt_table.add_column("Performance", style="bold cyan", width=10, justify="left")
                 
                 # Rationale and performance metrics
                 for scenario, choice in optimal.items():
@@ -66708,7 +67427,7 @@ def display_model_comparison() -> None:
             rankings = summary.get('performance_ranking', {})
             if rankings:
                 rank_table = Table(
-                    title="[bold yellow]PERFORMANCE RANKINGS BY CATEGORY[/bold yellow]",
+                    title="\n[bold yellow]PERFORMANCE RANKINGS BY CATEGORY[/bold yellow]",
                     box=box.ROUNDED,
                     header_style="bold white",
                     title_style="bold blue",
