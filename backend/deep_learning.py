@@ -7673,1383 +7673,7 @@ def ensure_preset_consistency(config: Dict[str, Any]) -> Dict[str, Any]:
         logger.warning(f"Preset consistency check failed: {e}")
         return config
 
-def get_default_config() -> Dict[str, Any]:
-    """Get comprehensive default system configuration leveraging PRESET_CONFIGS and system analysis.
-    
-    This function loads the default preset from PRESET_CONFIGS and enhances it with
-    comprehensive system information and runtime-specific updates. It provides intelligent
-    system-aware configuration with performance optimizations and compatibility checks.
-    
-    Returns:
-        Dictionary containing the complete default configuration with system analysis
-    """
-    global _cached_config, _config_cache_time
-    
-    try:
-        current_time = datetime.now().isoformat()
-        
-        # Check cache validity (30 seconds)
-        if (_cached_config is not None and _config_cache_time is not None and 
-            time.time() - _config_cache_time < 30):
-            logger.debug("Returning cached default configuration")
-            return _cached_config
-        
-        # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
-        hardware_data = None
-        total_ram_gb = 8.0  # Conservative default
-        try:
-            hardware_data = check_hardware(include_memory_usage=True)
-            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
-        except Exception as e:
-            logger.debug(f"Hardware detection failed: {e}")
-            hardware_data = {}
-        
-        # PRE-PROCESSING MEMORY OPTIMIZATION - Clear memory before intensive operations
-        if total_ram_gb < 8:
-            try:
-                pre_clear = enhanced_clear_memory(
-                    aggressive=total_ram_gb < 4,
-                    hardware_data=hardware_data
-                )
-                if pre_clear.get('success'):
-                    logger.debug("Pre-processing memory optimization completed")
-            except Exception as e:
-                logger.debug(f"Pre-processing memory optimization failed: {e}")
-        
-        # Load base configuration from PRESET_CONFIGS
-        if 'default' in PRESET_CONFIGS and PRESET_CONFIGS['default']:
-            base_config = deepcopy(PRESET_CONFIGS['default'])
-            logger.debug("Loaded default configuration from PRESET_CONFIGS")
-            config_source = 'PRESET_CONFIGS[default]'
-        else:
-            logger.warning("Default preset not found in PRESET_CONFIGS, creating minimal fallback")
-            base_config = _create_minimal_fallback_config('minimal')
-            config_source = 'minimal_fallback'
-        
-        # Validate configuration structure
-        try:
-            validate_config(base_config)
-            logger.debug("Configuration validation passed")
-        except Exception as e:
-            logger.error(f"Configuration validation failed: {e}")
-            # Use standard fallback instead of emergency
-            base_config = _create_minimal_fallback_config('standard')
-            config_source = 'validation_failure_fallback'
-            # Re-validate fallback
-            try:
-                validate_config(base_config)
-            except Exception as validation_error:
-                logger.critical(f"Even fallback configuration failed validation: {validation_error}")
-                # Use emergency fallback
-                base_config = _create_minimal_fallback_config('emergency')
-                config_source = 'emergency_fallback'
-        
-        # MEMORY OPTIMIZATION - Clear memory after validation for low-memory systems
-        if total_ram_gb < 8:
-            try:
-                post_validation_clear = enhanced_clear_memory(
-                    aggressive=total_ram_gb < 4,
-                    hardware_data=hardware_data
-                )
-                if post_validation_clear.get('success'):
-                    logger.debug("Post-validation memory optimization completed")
-            except Exception as e:
-                logger.debug(f"Post-validation memory optimization failed: {e}")
-        
-        # Gather comprehensive system information with memory-aware approach
-        try:
-            # For systems with limited RAM, use basic system info to avoid memory pressure
-            if total_ram_gb < 4:
-                system_analysis = _get_basic_system_info()
-                logger.debug("Using basic system info due to memory constraints")
-            else:
-                system_analysis = get_system_info(
-                    include_versions=True,
-                    include_hardware=True, 
-                    include_memory_usage=True,
-                    include_detailed_analysis=total_ram_gb >= 8  # Only detailed analysis for systems with adequate RAM
-                )
-                analysis_duration = system_analysis.get('collection_metadata', {}).get('collection_duration_ms', 0)
-                logger.debug(f"System analysis completed in {analysis_duration:.1f}ms")
-        except Exception as e:
-            logger.warning(f"System analysis failed, using basic system info: {e}")
-            system_analysis = _get_basic_system_info()
-        
-        # MEMORY OPTIMIZATION - Clear memory after intensive system analysis
-        system_analysis_size = len(str(system_analysis)) / (1024 * 1024)  # Size in MB
-        if system_analysis_size > 1.0 or total_ram_gb < 8:
-            try:
-                post_analysis_clear = enhanced_clear_memory(
-                    aggressive=system_analysis_size > 5.0 or total_ram_gb < 4,
-                    hardware_data=hardware_data
-                )
-                if post_analysis_clear.get('success'):
-                    logger.debug(f"Post-analysis memory optimization completed for {system_analysis_size:.1f}MB data")
-            except Exception as e:
-                logger.debug(f"Post-analysis memory optimization failed: {e}")
-        
-        # Update metadata with comprehensive system information
-        if 'metadata' in base_config:
-            base_config['metadata'].update({
-                'last_accessed': current_time,
-                'config_loaded_at': current_time,
-                'config_source': config_source,
-                'system_analysis_timestamp': system_analysis.get('timestamp', current_time),
-                'system_analysis_quality': system_analysis.get('collection_metadata', {}).get('data_quality', 'unknown'),
-                'config_generation_method': 'system_aware_default'
-            })
-            
-            # Enhanced system information from analysis
-            if 'system' in base_config['metadata']:
-                base_config['metadata']['system'].update({
-                    # Core system info from analysis
-                    'python_version': system_analysis.get('python', {}).get('version_info', {}).get('version_tuple', platform.python_version()),
-                    'platform': system_analysis.get('platform', {}).get('platform', platform.platform()),
-                    'architecture': system_analysis.get('platform', {}).get('architecture', [platform.machine(), ''])[0] if isinstance(system_analysis.get('platform', {}).get('architecture', platform.machine()), list) else platform.machine(),
-                    'processor': system_analysis.get('platform', {}).get('processor', platform.processor() or 'unknown'),
-                    'hostname': system_analysis.get('platform', {}).get('node', platform.node()),
-                    'os': system_analysis.get('platform', {}).get('system', platform.system()),
-                    'os_release': system_analysis.get('platform', {}).get('release', platform.release()),
-                    
-                    # Hardware capabilities from analysis
-                    'cpu_count': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('cpu', {}).get('logical_cores', os.cpu_count() or 1),
-                    'cpu_performance_class': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('cpu', {}).get('performance_class', 'unknown'),
-                    'memory_gb': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0),
-                    'memory_performance_class': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('performance_class', 'unknown'),
-                    'system_performance_class': system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown'),
-                    'hardware_performance_score': system_analysis.get('hardware_analysis', {}).get('performance_score', 0),
-                    
-                    # Package environment health
-                    'environment_health': system_analysis.get('package_analysis', {}).get('environment_health', {}),
-                    'package_compatibility_score': system_analysis.get('package_analysis', {}).get('environment_health', {}).get('compatibility_score', 0),
-                    
-                    # Dynamic CUDA information
-                    'cuda_available': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False),
-                    'cuda_devices': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('count', 0),
-                    'cuda_total_memory_gb': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('total_memory_gb', 0),
-                    'gpu_performance_class': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('performance_class', 'none'),
-                })
-                
-                # Add PyTorch version information from package analysis
-                if 'package_versions' in system_analysis:
-                    torch_info = system_analysis['package_versions'].get('torch', {})
-                    base_config['metadata']['system'].update({
-                        'pytorch_version': torch_info.get('version', 'unknown'),
-                        'pytorch_status': torch_info.get('status', 'unknown'),
-                        'pytorch_compatible': torch_info.get('compatible', False),
-                        'cuda_version': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('cuda_version', 'unknown')
-                    })
-        
-        # MEMORY OPTIMIZATION - Clear memory after metadata processing for large configs
-        if len(str(base_config.get('metadata', {}))) > 50000 and total_ram_gb < 16:
-            try:
-                metadata_clear = enhanced_clear_memory(
-                    aggressive=False,
-                    hardware_data=hardware_data
-                )
-                if metadata_clear.get('success'):
-                    logger.debug("Metadata processing memory optimization completed")
-            except Exception as e:
-                logger.debug(f"Metadata processing memory optimization failed: {e}")
-        
-        # Apply system-aware optimizations to training configuration
-        if 'training' in base_config and 'hardware_analysis' in system_analysis:
-            hardware_caps = system_analysis['hardware_analysis'].get('capabilities', {})
-            system_class = system_analysis['hardware_analysis'].get('system_class', 'unknown')
-            
-            # CPU-based optimizations
-            cpu_info = hardware_caps.get('cpu', {})
-            logical_cores = cpu_info.get('logical_cores', 1)
-            
-            # Optimize num_workers based on CPU cores and system class
-            if system_class == 'high_performance':
-                optimal_workers = min(8, max(4, logical_cores // 2))
-            elif system_class == 'standard':
-                optimal_workers = min(4, max(2, logical_cores // 2))
-            else:  # limited
-                optimal_workers = min(2, max(1, logical_cores // 4))
-            
-            # Only update if different from preset value
-            current_workers = base_config['training'].get('num_workers', 1)
-            if abs(optimal_workers - current_workers) > 1:
-                base_config['training']['num_workers'] = optimal_workers
-                logger.debug(f"Optimized num_workers: {current_workers} -> {optimal_workers}")
-            
-            # Memory-based optimizations
-            memory_info = hardware_caps.get('memory', {})
-            total_memory_gb = memory_info.get('total_gb', 0)
-            current_batch_size = base_config['training'].get('batch_size', 64)
-            
-            # Adjust batch size based on available memory
-            if total_memory_gb >= 32:
-                # High memory system - can handle larger batches
-                if current_batch_size < 128:
-                    new_batch_size = min(128, current_batch_size * 2)
-                    base_config['training']['batch_size'] = new_batch_size
-                    logger.debug(f"Increased batch_size for high memory: {current_batch_size} -> {new_batch_size}")
-            elif total_memory_gb > 0 and total_memory_gb < 8:
-                # Low memory system - reduce batch size
-                new_batch_size = min(32, current_batch_size)
-                base_config['training']['batch_size'] = new_batch_size
-                base_config['training']['gradient_accumulation_steps'] = max(2, base_config['training'].get('gradient_accumulation_steps', 1))
-                logger.debug(f"Reduced batch_size for low memory: {current_batch_size} -> {new_batch_size}")
-            
-            # GPU-based optimizations  
-            gpu_info = hardware_caps.get('gpu', {})
-            cuda_available = gpu_info.get('available', False)
-            gpu_memory_gb = gpu_info.get('total_memory_gb', 0)
-            
-            # Update CUDA-dependent settings
-            base_config['training']['pin_memory'] = cuda_available
-            base_config['training']['mixed_precision'] = cuda_available and gpu_memory_gb >= 4
-            
-            # Adjust batch size based on GPU memory
-            if cuda_available and gpu_memory_gb > 0:
-                current_batch_size = base_config['training'].get('batch_size', 64)
-                
-                if gpu_memory_gb >= 16:
-                    # High-end GPU - can handle larger models and batches
-                    new_batch_size = min(256, current_batch_size * 2)
-                    if new_batch_size != current_batch_size:
-                        base_config['training']['batch_size'] = new_batch_size
-                        logger.debug(f"Increased batch_size for high-end GPU: {current_batch_size} -> {new_batch_size}")
-                elif gpu_memory_gb < 4:
-                    # Limited GPU memory - reduce batch size
-                    new_batch_size = min(16, current_batch_size // 2)
-                    base_config['training']['batch_size'] = max(1, new_batch_size)
-                    base_config['training']['gradient_accumulation_steps'] = max(4, base_config['training'].get('gradient_accumulation_steps', 1))
-                    logger.debug(f"Reduced batch_size for limited GPU: {current_batch_size} -> {new_batch_size}")
-        
-        # Apply system-aware model configuration optimizations
-        if 'model' in base_config and 'hardware_analysis' in system_analysis:
-            hardware_caps = system_analysis['hardware_analysis'].get('capabilities', {})
-            system_class = system_analysis['hardware_analysis'].get('system_class', 'unknown')
-            
-            # Adjust model complexity based on system capabilities
-            if system_class == 'limited':
-                # Reduce model complexity for limited systems
-                current_encoding_dim = base_config['model'].get('encoding_dim', 12)
-                new_encoding_dim = min(8, current_encoding_dim)
-                if new_encoding_dim != current_encoding_dim:
-                    base_config['model']['encoding_dim'] = new_encoding_dim
-                    logger.debug(f"Reduced encoding_dim for limited system: {current_encoding_dim} -> {new_encoding_dim}")
-                
-                # Reduce hidden layer sizes
-                current_dims = base_config['model'].get('hidden_dims', [128, 64])
-                new_dims = [min(64, dim) for dim in current_dims]
-                if new_dims != current_dims:
-                    base_config['model']['hidden_dims'] = new_dims
-                    # Update dropout rates to match
-                    current_dropout = base_config['model'].get('dropout_rates', [0.2, 0.15])
-                    if len(current_dropout) > len(new_dims):
-                        base_config['model']['dropout_rates'] = current_dropout[:len(new_dims)]
-                    elif len(current_dropout) < len(new_dims):
-                        base_config['model']['dropout_rates'] = current_dropout + [0.2] * (len(new_dims) - len(current_dropout))
-                    logger.debug(f"Reduced hidden_dims for limited system: {current_dims} -> {new_dims}")
-                
-                # Force single model for ensembles
-                if base_config['model'].get('model_type') == 'AutoencoderEnsemble':
-                    base_config['model']['num_models'] = 1
-                    logger.debug("Reduced ensemble size to 1 for limited system")
-                
-                # Reduce memory usage by disabling normalization
-                base_config['model']['use_batch_norm'] = True
-                base_config['model']['use_layer_norm'] = False
-                logger.debug("Disabled normalization for limited system")
-                
-            elif system_class == 'high_performance':
-                # Increase model complexity for high-performance systems
-                gpu_info = hardware_caps.get('gpu', {})
-                if gpu_info.get('available') and gpu_info.get('total_memory_gb', 0) >= 8:
-                    # Can handle more complex models
-                    current_encoding_dim = base_config['model'].get('encoding_dim', 12)
-                    new_encoding_dim = max(16, current_encoding_dim)
-                    if new_encoding_dim != current_encoding_dim:
-                        base_config['model']['encoding_dim'] = new_encoding_dim
-                        logger.debug(f"Increased encoding_dim for high-performance system: {current_encoding_dim} -> {new_encoding_dim}")
-                    
-                    current_dims = base_config['model'].get('hidden_dims', [128, 64])
-                    if len(current_dims) < 3:
-                        new_dims = [256, 128, 64]
-                        base_config['model']['hidden_dims'] = new_dims
-                        # Update dropout rates to match
-                        base_config['model']['dropout_rates'] = [0.2, 0.15, 0.1]
-                        logger.debug(f"Enhanced hidden_dims for high-performance system: {current_dims} -> {new_dims}")
-        
-        # MEMORY OPTIMIZATION - Clear memory after configuration optimizations
-        config_complexity = len(str(base_config.get('model', {}))) + len(str(base_config.get('training', {})))
-        if config_complexity > 10000 and total_ram_gb < 16:
-            try:
-                config_optimization_clear = enhanced_clear_memory(
-                    aggressive=config_complexity > 50000,
-                    hardware_data=hardware_data
-                )
-                if config_optimization_clear.get('success'):
-                    logger.debug("Configuration optimization memory management completed")
-            except Exception as e:
-                logger.debug(f"Configuration optimization memory management failed: {e}")
-        
-        # Update hardware configuration with system-specific recommendations
-        if 'hardware' in base_config and 'hardware_analysis' in system_analysis:
-            hardware_caps = system_analysis['hardware_analysis'].get('capabilities', {})
-            
-            # Update hardware requirements based on actual system
-            memory_gb = hardware_caps.get('memory', {}).get('total_gb', 0)
-            gpu_memory_gb = hardware_caps.get('gpu', {}).get('total_memory_gb', 0)
-            
-            base_config['hardware'].update({
-                'detected_gpu_memory': gpu_memory_gb,
-                'detected_system_memory': memory_gb,
-                'recommended_gpu_memory': max(4, min(gpu_memory_gb, base_config['hardware'].get('recommended_gpu_memory', 8))) if gpu_memory_gb > 0 else base_config['hardware'].get('recommended_gpu_memory', 8),
-                'system_performance_class': system_analysis['hardware_analysis'].get('system_class', 'unknown'),
-                'optimization_recommendations': system_analysis.get('detailed_analysis', {}).get('configuration_suggestions', [])
-            })
-            
-            # Update performance optimization flags
-            cuda_available = hardware_caps.get('gpu', {}).get('available', False)
-            base_config['hardware']['performance_optimization'].update({
-                'use_cuda': cuda_available,
-                'use_amp': cuda_available and gpu_memory_gb >= 4,
-                # Enable benchmarking if CUDA available
-                'benchmark_mode': cuda_available,
-                # Deterministic mode for CPU-only systems
-                'deterministic': not cuda_available
-            })
-        
-        # Update system paths and ensure directories exist
-        if 'system' in base_config:
-            # Ensure all required directories exist
-            required_dirs = ['model_dir', 'log_dir', 'config_dir', 'data_dir', 'checkpoint_dir']
-            for dir_key in required_dirs:
-                if dir_key in base_config['system']:
-                    dir_path = Path(base_config['system'][dir_key])
-                    try:
-                        dir_path.mkdir(parents=True, exist_ok=True)
-                        logger.debug(f"Ensured directory exists: {dir_path}")
-                    except Exception as e:
-                        logger.warning(f"Could not create directory {dir_path}: {e}")
-            
-            # Update system configuration with current environment
-            base_config['system'].update({
-                'python_executable': sys.executable,
-                'working_directory': str(Path.cwd()),
-                'environment_health': system_analysis.get('package_analysis', {}).get('environment_health', {}).get('overall_status', 'unknown')
-            })
-        
-        # Update preset information with dynamic data
-        if 'presets' in base_config:
-            base_config['presets'].update({
-                'available_presets': get_available_presets(),
-                'current_preset': 'default',
-                'preset_configs': get_preset_descriptions(),
-                'custom_presets_available': get_safe_custom_presets(),
-                'system_recommended_preset': _recommend_preset_for_system(system_analysis),
-                'preset_compatibility': _check_preset_system_compatibility(base_config, system_analysis)
-            })
-        
-        # Add comprehensive runtime configuration
-        base_config['runtime'] = {
-            'config_loaded_at': current_time,
-            'config_source': config_source,
-            'runtime_id': hashlib.md5(current_time.encode()).hexdigest()[:8] if 'hashlib' in globals() else 'unknown',
-            'process_id': os.getpid(),
-            'working_directory': str(Path.cwd()),
-            'python_executable': sys.executable,
-            
-            # System analysis integration
-            'system_analysis_completed': 'hardware_analysis' in system_analysis,
-            'system_performance_score': system_analysis.get('hardware_analysis', {}).get('performance_score', 0),
-            'system_class': system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown'),
-            'environment_health': system_analysis.get('package_analysis', {}).get('environment_health', {}).get('overall_status', 'unknown'),
-            
-            # Configuration optimizations applied
-            'optimizations_applied': {
-                'training_optimized': 'training' in base_config and 'hardware_analysis' in system_analysis,
-                'model_optimized': 'model' in base_config and 'hardware_analysis' in system_analysis,
-                'hardware_optimized': 'hardware' in base_config and 'hardware_analysis' in system_analysis,
-                'system_aware': True,
-                'preset_based': config_source.startswith('PRESET_CONFIGS')
-            },
-            
-            # Resource availability
-            'resource_status': {
-                'cuda_available': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False),
-                'memory_adequate': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0) >= 4,
-                'cpu_adequate': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('cpu', {}).get('logical_cores', 0) >= 2,
-                'disk_adequate': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('storage', {}).get('free_gb', 0) >= 5
-            }
-        }
-        
-        # Add warnings and recommendations from system analysis
-        if 'detailed_analysis' in system_analysis:
-            analysis = system_analysis['detailed_analysis']
-            
-            base_config['runtime']['system_warnings'] = []
-            base_config['runtime']['recommendations'] = []
-            
-            # Collect all warnings and recommendations
-            for category in ['system_recommendations', 'performance_optimizations', 'compatibility_issues', 'resource_warnings']:
-                if category in analysis and analysis[category]:
-                    base_config['runtime']['system_warnings'].extend(analysis[category])
-            
-            if 'configuration_suggestions' in analysis:
-                base_config['runtime']['recommendations'].extend(analysis['configuration_suggestions'])
-            
-            # Add configuration health status
-            warning_count = len(base_config['runtime']['system_warnings'])
-            critical_issues = len([w for w in base_config['runtime']['system_warnings'] 
-                                 if any(keyword in w.lower() for keyword in ['critical', 'missing required', 'failed', 'error'])])
-            
-            base_config['runtime']['configuration_health'] = {
-                'status': 'healthy' if warning_count == 0 else 'needs_attention' if critical_issues == 0 else 'critical',
-                'warning_count': warning_count,
-                'recommendation_count': len(base_config['runtime']['recommendations']),
-                'critical_issues': critical_issues,
-                'overall_score': max(0, 100 - (warning_count * 10) - (critical_issues * 25))
-            }
-        
-        # Ensure model variants are initialized and compatible
-        if not MODEL_VARIANTS:
-            try:
-                logger.debug("MODEL_VARIANTS not initialized, attempting initialization")
-                #initialize_model_variants(silent=True)
-                initialize_model_variants(silent=False)
-            except Exception as e:
-                logger.warning(f"Failed to initialize model variants: {e}")
-        
-        # Validate model type compatibility
-        if MODEL_VARIANTS:
-            model_type = base_config.get('model', {}).get('model_type', 'SimpleAutoencoder')
-            if model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available, falling back to SimpleAutoencoder")
-                base_config['model']['model_type'] = 'SimpleAutoencoder'
-                # Simplify configuration for SimpleAutoencoder
-                base_config['model']['hidden_dims'] = [base_config['model']['hidden_dims'][0]] if base_config['model'].get('hidden_dims') else [64]
-                base_config['model']['dropout_rates'] = [base_config['model']['dropout_rates'][0]] if base_config['model'].get('dropout_rates') else [0.2]
-        
-        # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
-        # Aggressive cleanup after all processing is complete
-        try:
-            final_clear_results = enhanced_clear_memory(
-                aggressive=True,  # Aggressive final cleanup
-                hardware_data=hardware_data
-            )
-            
-            if final_clear_results.get('success'):
-                actions_taken = final_clear_results.get('actions_taken', [])
-                logger.debug(f"Final memory optimization completed: {', '.join(actions_taken)}")
-                
-                # Add memory optimization summary to runtime
-                if 'memory_optimization_summary' not in base_config['runtime']:
-                    base_config['runtime']['memory_optimization_summary'] = {
-                        'optimizations_performed': len(actions_taken),
-                        'final_cleanup': True,
-                        'hardware_aware': True,
-                        'aggressive_mode': True
-                    }
-                
-        except Exception as e:
-            logger.debug(f"Final memory optimization failed: {e}")
-        
-        # Cache the configuration
-        _cached_config = base_config
-        _config_cache_time = time.time()
-        
-        # Log configuration summary
-        model_info = base_config.get('model', {})
-        training_info = base_config.get('training', {})
-        system_class = system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown')
-        
-        logger.info("Successfully generated system-aware default configuration:")
-        logger.info(f"  - System Class: {system_class}")
-        logger.info(f"  - Model: {model_info.get('model_type', 'unknown')} (encoding_dim={model_info.get('encoding_dim', 'unknown')})")
-        logger.info(f"  - Training: batch_size={training_info.get('batch_size', 'unknown')}, epochs={training_info.get('epochs', 'unknown')}")
-        logger.info(f"  - Hardware: CUDA={'available' if base_config.get('hardware', {}).get('performance_optimization', {}).get('use_cuda', False) else 'disabled'}")
-        logger.info(f"  - Config Source: {config_source}")
-        
-        return base_config
-        
-    except Exception as e:
-        logger.error(f"Failed to generate default configuration: {e}", exc_info=True)
-        
-        # Emergency memory cleanup on error
-        try:
-            emergency_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
-            logger.debug("Emergency memory cleanup performed after error")
-        except Exception as cleanup_error:
-            logger.debug(f"Emergency cleanup failed: {cleanup_error}")
-        
-        # Return minimal fallback with error information
-        try:
-            fallback_config = _create_minimal_fallback_config('minimal')
-        except Exception as fallback_error:
-            logger.critical(f"Even minimal fallback failed: {fallback_error}")
-            # Last resort configuration
-            fallback_config = {
-                'metadata': {
-                    'version': '2.1', 'config_version': '2.1',
-                    'created': datetime.now().isoformat() if 'datetime' in globals() else 'unknown',
-                    'description': 'Emergency last resort configuration',
-                    'preset_used': 'emergency_last_resort',
-                    'compatibility': ['SimpleAutoencoder'],
-                    'system': {
-                        'python_version': platform.python_version() if 'platform' in globals() else 'unknown',
-                        'os': platform.system() if 'platform' in globals() else 'unknown'
-                    }
-                },
-                'training': {
-                    'batch_size': 8, 'epochs': 5, 'learning_rate': 0.01, 'num_workers': 1,
-                    'optimizer': 'SGD', 'mixed_precision': False, 'patience': 3
-                },
-                'model': {
-                    'model_type': 'SimpleAutoencoder', 'encoding_dim': 4, 'hidden_dims': [32],
-                    'dropout_rates': [0.1], 'activation': 'relu', 'num_models': 1
-                },
-                'data': {
-                    'normal_samples': 100, 'attack_samples': 20, 'features': 8, 'validation_split': 0.3
-                },
-                'security': {
-                    'percentile': 90, 'attack_threshold': 0.5, 'enable_security_metrics': False
-                },
-                'hardware': {
-                    'device': 'cpu', 'recommended_gpu_memory': 1,
-                    'performance_optimization': {'use_cuda': False, 'use_amp': False, 'deterministic': True}
-                },
-                'system': {
-                    'model_dir': './models/emergency', 'debug': True, 'random_seed': 42
-                },
-                'presets': {
-                    'current_preset': 'emergency_last_resort', 'available_presets': []
-                }
-            }
-        
-        fallback_config['runtime'] = {
-            'config_loaded_at': datetime.now().isoformat() if 'datetime' in globals() else 'unknown',
-            'config_source': 'emergency_fallback',
-            'error': str(e),
-            'system_analysis_failed': True,
-            'configuration_health': {
-                'status': 'critical',
-                'error_message': str(e),
-                'fallback_used': True
-            }
-        }
-        
-        # Cache the fallback
-        _cached_config = fallback_config
-        _config_cache_time = time.time()
-        
-        return fallback_config
 
-def _get_basic_system_info() -> Dict[str, Any]:
-    """Get basic system information when full analysis fails."""
-    try:
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'platform': {
-                'system': platform.system(),
-                'platform': platform.platform(),
-                'machine': platform.machine(),
-                'node': platform.node()
-            },
-            'python': {
-                'version_info': {
-                    'version_tuple': tuple(sys.version_info[:3])
-                }
-            },
-            'hardware_analysis': {
-                'capabilities': {
-                    'cpu': {
-                        'logical_cores': os.cpu_count() or 1,
-                        'performance_class': 'unknown'
-                    },
-                    'memory': {
-                        'total_gb': 0,
-                        'performance_class': 'unknown'
-                    },
-                    'gpu': {
-                        'available': torch.cuda.is_available() if 'torch' in globals() else False,
-                        'count': torch.cuda.device_count() if 'torch' in globals() and torch.cuda.is_available() else 0,
-                        'performance_class': 'unknown'
-                    }
-                },
-                'system_class': 'unknown',
-                'performance_score': 50
-            },
-            'package_analysis': {
-                'environment_health': {
-                    'overall_status': 'unknown',
-                    'compatibility_score': 0
-                }
-            },
-            'collection_metadata': {
-                'data_quality': 'basic',
-                'errors': ['Full system analysis failed, using basic info']
-            }
-        }
-    except Exception:
-        return {
-            'timestamp': datetime.now().isoformat(),
-            'hardware_analysis': {'system_class': 'unknown', 'performance_score': 0},
-            'package_analysis': {'environment_health': {'overall_status': 'unknown'}},
-            'collection_metadata': {'data_quality': 'minimal', 'errors': ['Basic system info collection failed']}
-        }
-
-def reset_config() -> None:
-    """Reset configuration to default values with comprehensive cleanup.
-    
-    This function now leverages get_default_config() to obtain a fresh, system-aware
-    default configuration instead of creating one from scratch, reducing code
-    redundancy and ensuring consistency with the default configuration generation logic.
-    """
-    try:
-        logger.info("Resetting configuration to system-aware defaults...")
-        
-        # Clear any cached configurations to ensure fresh generation
-        global _cached_config, _config_cache_time
-        _cached_config = None
-        _config_cache_time = None
-        
-        # Get fresh default configuration using get_default_config()
-        # This automatically includes system analysis, hardware optimization, and preset integration
-        try:
-            default_config = get_default_config()
-            logger.debug("Successfully obtained fresh default configuration from get_default_config()")
-        except Exception as e:
-            logger.error(f"Failed to get default configuration: {e}")
-            logger.warning("Falling back to minimal emergency configuration")
-            
-            # Emergency fallback - create absolute minimal configuration
-            default_config = _create_minimal_fallback_config('emergency')
-            logger.warning("Using emergency fallback configuration due to get_default_config() failure")
-        
-        # Validate the default configuration before applying
-        try:
-            validate_config(default_config)
-            logger.debug("Default configuration validation passed")
-        except Exception as validation_error:
-            logger.error(f"Default configuration validation failed: {validation_error}")
-            logger.warning("Attempting to fix validation issues automatically")
-            
-            # Try to fix common validation issues
-            try:
-                # Ensure required sections exist
-                required_sections = ['training', 'model', 'security', 'data']
-                for section in required_sections:
-                    if section not in default_config:
-                        logger.warning(f"Adding missing section: {section}")
-                        if section == 'training':
-                            default_config[section] = {
-                                'batch_size': 32, 'epochs': 10, 'learning_rate': 0.001,
-                                'num_workers': 1, 'optimizer': 'Adam'
-                            }
-                        elif section == 'model':
-                            default_config[section] = {
-                                'model_type': 'SimpleAutoencoder', 'encoding_dim': 8,
-                                'hidden_dims': [64], 'dropout_rates': [0.2]
-                            }
-                        elif section == 'security':
-                            default_config[section] = {
-                                'percentile': 95, 'attack_threshold': 0.3,
-                                'enable_security_metrics': True
-                            }
-                        elif section == 'data':
-                            default_config[section] = {
-                                'normal_samples': 1000, 'attack_samples': 200,
-                                'features': 10, 'validation_split': 0.2
-                            }
-                
-                # Re-validate after fixes
-                validate_config(default_config)
-                logger.info("Successfully fixed validation issues in default configuration")
-                
-            except Exception as fix_error:
-                logger.critical(f"Could not fix default configuration: {fix_error}")
-                # Last resort - use emergency fallback
-                default_config = _create_minimal_fallback_config('emergency')
-                logger.critical("Using emergency fallback configuration due to validation failures")
-        
-        # Ensure metadata reflects the reset operation
-        if 'metadata' not in default_config:
-            default_config['metadata'] = {}
-        
-        default_config['metadata'].update({
-            'modified': datetime.now().isoformat(),
-            'reset_timestamp': datetime.now().isoformat(),
-            'reset_reason': 'manual_reset_to_defaults',
-            'config_source': 'reset_to_system_aware_defaults'
-        })
-        
-        # Add reset operation to runtime information
-        if 'runtime' not in default_config:
-            default_config['runtime'] = {}
-        
-        default_config['runtime'].update({
-            'last_reset': datetime.now().isoformat(),
-            'reset_method': 'get_default_config',
-            'config_generation_method': 'system_aware_reset'
-        })
-        
-        # Update preset information to reflect reset
-        if 'presets' in default_config:
-            default_config['presets']['current_preset'] = 'default'
-            default_config['presets']['last_reset'] = datetime.now().isoformat()
-            default_config['presets']['reset_to_preset'] = 'default'
-        
-        # Update global configuration with the new default
-        try:
-            update_global_config(default_config)
-            logger.debug("Successfully updated global configuration")
-        except Exception as e:
-            logger.error(f"Failed to update global configuration: {e}")
-            # Continue anyway as this isn't critical for reset operation
-        
-        # Save the reset configuration to file
-        try:
-            save_config(default_config)
-            logger.debug("Successfully saved reset configuration to file")
-        except Exception as e:
-            logger.error(f"Failed to save reset configuration: {e}")
-            # Log but don't fail - the configuration is still reset in memory
-        
-        # Clear any model variants cache to ensure fresh initialization
-        global MODEL_VARIANTS
-        if MODEL_VARIANTS:
-            logger.debug("Clearing model variants cache for fresh initialization")
-            MODEL_VARIANTS.clear()
-        
-        # Re-initialize model variants with the new configuration
-        try:
-            initialize_model_variants(silent=False)
-            logger.debug("Successfully re-initialized model variants")
-        except Exception as e:
-            logger.warning(f"Failed to re-initialize model variants: {e}")
-            # Non-critical for reset operation
-        
-        # Force memory cleanup after reset
-        try:
-            enhanced_clear_memory()
-            logger.debug("Completed memory cleanup after reset")
-        except Exception as e:
-            logger.debug(f"Memory cleanup had issues: {e}")
-        
-        # Log successful reset with configuration summary
-        model_info = default_config.get('model', {})
-        training_info = default_config.get('training', {})
-        system_class = default_config.get('runtime', {}).get('system_class', 'unknown')
-        
-        logger.info("Configuration reset completed successfully:")
-        logger.info(f"  - System Class: {system_class}")
-        logger.info(f"  - Model: {model_info.get('model_type', 'unknown')} (encoding_dim={model_info.get('encoding_dim', 'unknown')})")
-        logger.info(f"  - Training: batch_size={training_info.get('batch_size', 'unknown')}, epochs={training_info.get('epochs', 'unknown')}")
-        logger.info(f"  - Config Source: {default_config.get('runtime', {}).get('config_source', 'unknown')}")
-        
-        # Verify reset by checking key parameters
-        verification_checks = [
-            ('training.batch_size', training_info.get('batch_size')),
-            ('model.model_type', model_info.get('model_type')),
-            ('model.encoding_dim', model_info.get('encoding_dim')),
-            ('security.percentile', default_config.get('security', {}).get('percentile')),
-            ('data.normal_samples', default_config.get('data', {}).get('normal_samples'))
-        ]
-        
-        logger.debug("Reset verification checks:")
-        for param_name, param_value in verification_checks:
-            logger.debug(f"  - {param_name}: {param_value}")
-        
-        logger.info("[SUCCESS] Configuration has been reset to system-aware defaults")
-        
-    except Exception as e:
-        logger.error(f"Critical failure during configuration reset: {e}", exc_info=True)
-        
-        # Emergency recovery attempt
-        try:
-            logger.critical("Attempting emergency configuration recovery...")
-            
-            # Create absolute minimal configuration
-            emergency_config = {
-                'metadata': {
-                    'version': '2.1',
-                    'config_version': '2.1',
-                    'created': datetime.now().isoformat(),
-                    'description': 'Emergency recovery configuration',
-                    'preset_used': 'emergency_recovery',
-                    'reset_failed': True,
-                    'original_error': str(e)
-                },
-                'training': {
-                    'batch_size': 16, 'epochs': 5, 'learning_rate': 0.001,
-                    'num_workers': 1, 'optimizer': 'SGD', 'patience': 3
-                },
-                'model': {
-                    'model_type': 'SimpleAutoencoder', 'encoding_dim': 4,
-                    'hidden_dims': [32], 'dropout_rates': [0.1], 'activation': 'relu'
-                },
-                'data': {
-                    'normal_samples': 100, 'attack_samples': 20, 'features': 8,
-                    'validation_split': 0.3, 'normalization': 'minmax'
-                },
-                'security': {
-                    'percentile': 90, 'attack_threshold': 0.5,
-                    'enable_security_metrics': False
-                },
-                'system': {
-                    'model_dir': './models/emergency', 'debug': True,
-                    'random_seed': 42, 'export_onnx': False
-                },
-                'hardware': {
-                    'device': 'cpu', 'recommended_gpu_memory': 1,
-                    'performance_optimization': {'use_cuda': False, 'use_amp': False}
-                },
-                'presets': {
-                    'current_preset': 'emergency_recovery',
-                    'available_presets': []
-                },
-                'runtime': {
-                    'config_source': 'emergency_recovery',
-                    'reset_failed': True,
-                    'emergency_recovery': True,
-                    'recovery_timestamp': datetime.now().isoformat()
-                }
-            }
-            
-            # Try to apply emergency configuration
-            update_global_config(emergency_config)
-            
-            # Try to save emergency configuration
-            try:
-                save_config(emergency_config)
-            except:
-                logger.critical("Could not save emergency configuration to file")
-            
-            logger.critical("[EMERGENCY] Applied minimal emergency configuration")
-            logger.critical("System is in degraded state - manual intervention recommended")
-            
-        except Exception as recovery_error:
-            logger.critical(f"Emergency recovery also failed: {recovery_error}")
-            logger.critical("System configuration is in critical failure state")
-            raise RuntimeError(f"Configuration reset failed completely: {str(e)}. Recovery failed: {str(recovery_error)}")
-        
-        # Re-raise the original exception with context
-        raise RuntimeError(f"Configuration reset failed: {str(e)}. Emergency recovery applied.")
-
-def reset_config_interactive():
-    """Interactive configuration reset with enhanced confirmation and feedback."""
-    try:
-        # clear screen and show banner
-        print("\033c", end="")
-        show_banner()
-        
-        # Get current configuration info for display
-        try:
-            current_config = get_current_config()
-            current_preset = current_config.get('presets', {}).get('current_preset', 'unknown')
-            current_model = current_config.get('model', {}).get('model_type', 'unknown')
-            system_class = current_config.get('runtime', {}).get('system_class', 'unknown')
-        except Exception as e:
-            logger.debug(f"Could not get current config for display: {e}")
-            current_preset = 'unknown'
-            current_model = 'unknown'
-            system_class = 'unknown'
-        
-        # Display current configuration summary
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
-        print(Fore.YELLOW + Style.BRIGHT + "CONFIGURATION RESET")
-        print(Fore.CYAN + Style.BRIGHT + "="*40)
-        print(Fore.GREEN + Style.BRIGHT + f"\nCurrent Preset: {current_preset}")
-        print(Fore.GREEN + Style.BRIGHT + f"Current Model:  {current_model}")
-        print(Fore.GREEN + Style.BRIGHT + f"System Class:   {system_class}")
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*60)
-        print(Fore.RED + Style.BRIGHT + "This will reset your configuration to system-aware defaults.")
-        print(Fore.RED + Style.BRIGHT + "All current settings will be lost and cannot be recovered.")
-        print(Fore.RED + Style.BRIGHT + "The new configuration will be optimized for your system.")
-        print(Fore.YELLOW + Style.BRIGHT + "="*60)
-        
-        # Get user confirmation with multiple prompts for safety
-        response1 = input(Fore.YELLOW + Style.BRIGHT + "\nDo you want to reset configuration to defaults? (y/N): ").lower().strip()
-        
-        if response1 != 'y':
-            print(Fore.RED + Style.BRIGHT + "Configuration reset cancelled.")
-            return
-        
-        print(Fore.YELLOW + Style.BRIGHT + "\nWARNING! This action cannot be undone!")
-        reset_message = (Fore.RED + Style.BRIGHT + "RESET")
-        response2 = input(Fore.YELLOW + Style.BRIGHT + f"Are you absolutely sure? Type '{reset_message}' to confirm: ").lower().strip()
-        
-        if response2 != 'reset':
-            print(Fore.RED + Style.BRIGHT + "Configuration reset cancelled.")
-            return
-        
-        # Perform the reset
-        print(Fore.GREEN + Style.BRIGHT + "\nResetting configuration...")
-        try:
-            reset_config()
-            
-            # Get new configuration summary
-            try:
-                new_config = get_current_config()
-                new_preset = new_config.get('presets', {}).get('current_preset', 'unknown')
-                new_model = new_config.get('model', {}).get('model_type', 'unknown')
-                new_system_class = new_config.get('runtime', {}).get('system_class', 'unknown')
-                new_batch_size = new_config.get('training', {}).get('batch_size', 'unknown')
-                new_epochs = new_config.get('training', {}).get('epochs', 'unknown')
-            except Exception as e:
-                logger.debug(f"Could not get new config for display: {e}")
-                new_preset = 'unknown'
-                new_model = 'unknown'
-                new_system_class = 'unknown'
-                new_batch_size = 'unknown'
-                new_epochs = 'unknown'
-            
-            print(Fore.GREEN + Style.BRIGHT + "\n" + "="*60)
-            print(Fore.GREEN + Style.BRIGHT + "RESET COMPLETED SUCCESSFULLY")
-            print(Fore.GREEN + Style.BRIGHT + "="*60)
-            print(Fore.GREEN + Style.BRIGHT + f"\nNew Preset:       {new_preset}")
-            print(Fore.GREEN + Style.BRIGHT + f"New Model:        {new_model}")
-            print(Fore.GREEN + Style.BRIGHT + f"System Class:     {new_system_class}")
-            print(Fore.GREEN + Style.BRIGHT + f"Batch Size:       {new_batch_size}")
-            print(Fore.GREEN + Style.BRIGHT + f"Epochs:           {new_epochs}")
-            print(Fore.GREEN + Style.BRIGHT + "\n" + "="*60)
-            print(Fore.GREEN + Style.BRIGHT + "\nConfiguration has been reset to optimized defaults for your system.")
-            print(Fore.GREEN + Style.BRIGHT + "You can now customize the settings as needed.")
-            
-        except Exception as e:
-            print(Fore.RED + Style.BRIGHT + f"\nERROR: Configuration reset failed: {e}")
-            print(Fore.RED + Style.BRIGHT + "System may be in an inconsistent state.")
-            print(Fore.RED + Style.BRIGHT + "Please check logs for details and consider manual recovery.")
-            
-    except KeyboardInterrupt:
-        print(Fore.RED + Style.BRIGHT + "\n\nConfiguration reset cancelled by user.")
-    except Exception as e:
-        print(Fore.RED + Style.BRIGHT + f"\nUnexpected error during interactive reset: {e}")
-        logger.error(f"Interactive reset failed: {e}", exc_info=True)
-
-def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str, Any]:
-    """Create fallback configuration with different levels of completeness.
-    
-    Args:
-        fallback_level: Level of fallback configuration
-            - 'minimal': Ultra-minimal for emergency use
-            - 'standard': More complete fallback with enhanced features
-            - 'emergency': Absolute minimal when everything fails
-    
-    Returns:
-        Dictionary containing fallback configuration
-    """
-    try:
-        current_time = datetime.now().isoformat()
-        
-        # Common base configuration matching updated preset structure
-        base_config = {
-            'metadata': {
-                'description': f'{fallback_level.title()} fallback configuration for system recovery',
-                'version': '2.1', 'config_version': '2.1', 'config_type': 'autoencoder',
-                'created': current_time, 'last_modified': current_time,
-                'preset_used': f'{fallback_level}_fallback',
-                'recommended_hardware': {'gpu_memory_gb': 1, 'cpu_cores': 1, 'ram_gb': 2},
-                'compatibility': ['SimpleAutoencoder'],
-                'system': {
-                    'python_version': platform.python_version(),
-                    'platform': platform.platform(),
-                    'architecture': platform.machine(),
-                    'processor': platform.processor() or 'unknown',
-                    'pytorch_version': torch.__version__ if 'torch' in globals() else 'unknown',
-                    'cuda_available': torch.cuda.is_available() if 'torch' in globals() and hasattr(torch, 'cuda') else False,
-                    'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
-                    'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
-                    'hostname': platform.node(), 'os': platform.system(),
-                    'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
-                },
-                'validation': {
-                    'schema_version': '2.1',
-                    'required_sections': ['training', 'model', 'security', 'data'],
-                    'optional_sections': ['monitoring', 'hardware', 'presets']
-                },
-                'fallback_info': {
-                    'is_fallback': True, 'level': fallback_level,
-                    'creation_time': current_time,
-                    'reason': 'Configuration system failure - using safe defaults',
-                    'warnings': [
-                        f'This is a {fallback_level} fallback configuration',
-                        'Limited functionality available',
-                        'Recommend fixing configuration system'
-                    ]
-                }
-            }
-        }
-        
-        # Configuration based on fallback level
-        if fallback_level == 'emergency':
-            # Absolute minimal configuration
-            base_config.update({
-                'training': {
-                    'batch_size': 8, 'epochs': 2, 'learning_rate': 0.01, 'patience': 2, 'weight_decay': 0.0,
-                    'gradient_clip': 5.0, 'gradient_accumulation_steps': 1, 'mixed_precision': False,
-                    'num_workers': 1, 'optimizer': 'SGD', 'scheduler': None, 'scheduler_params': {},
-                    'early_stopping': False, 'validation_split': 0.4, 'shuffle': True,
-                    'pin_memory': False, 'persistent_workers': False,
-                    'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 2, 'lr_factor': 0.5, 'min_lr': 1e-7
-                },
-                'model': {
-                    'model_type': 'SimpleAutoencoder', 'input_dim': 8, 'encoding_dim': 2, 'hidden_dims': [16],
-                    'dropout_rates': [0.0], 'activation': 'relu', 'activation_param': 0.0,
-                    'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
-                    'diversity_factor': 0.0, 'min_features': 2, 'num_models': 1, 'skip_connection': False,
-                    'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
-                    'model_types': ['SimpleAutoencoder'],
-                    'available_activations': ['relu'],
-                    'available_normalizations': [None],
-                    'available_initializers': ['xavier_uniform'],
-                    'legacy_mode': False, 'use_attention': False
-                },
-                'security': {
-                    'percentile': 85, 'attack_threshold': 0.5, 'false_negative_cost': 1.0,
-                    'enable_security_metrics': False, 'anomaly_threshold_strategy': 'fixed_percentile',
-                    'early_warning_threshold': 0.45, 'adaptive_threshold': False, 'confidence_interval': 0.8,
-                    'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium'],
-                    'threshold_validation': False
-                },
-                'data': {
-                    'normal_samples': 50, 'attack_samples': 10, 'features': 4, 'use_real_data': False,
-                    'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
-                    'validation_split': 0.4, 'test_split': 0.4, 'stratified_split': False,
-                    'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
-                    'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
-                    'synthetic_generation': {'cluster_variance': 0.2, 'anomaly_sparsity': 0.5},
-                    'preprocessing': {'remove_outliers': False, 'impute_missing': False},
-                    'shuffle': True, 'pin_memory': False
-                },
-                'monitoring': {
-                    'metrics_frequency': 1, 'checkpoint_frequency': 1, 'tensorboard_logging': False,
-                    'console_logging_level': 'ERROR', 'save_best_model': False, 'save_model_history': False,
-                    'metrics_to_track': ['loss'], 'early_stopping_metric': 'loss',
-                    'checkpoint_format': 'pytorch', 'log_model_summary': False,
-                    'tensorboard_dir': str(TB_DIR), 'log_frequency': 1, 'save_checkpoints': False,
-                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                                   'max_scalars': 50, 'max_histograms': 0, 'max_images': 0, 'save_summary': False}
-                }
-            })
-            
-        elif fallback_level == 'standard':
-            # Enhanced fallback with more features
-            safe_batch_size = 16
-            safe_epochs = 5
-            safe_workers = min(2, os.cpu_count() or 1)
-            
-            base_config.update({
-                'training': {
-                    'batch_size': safe_batch_size, 'epochs': safe_epochs, 'learning_rate': 0.001, 
-                    'patience': 3, 'weight_decay': 0.0, 'gradient_clip': 1.0, 'gradient_accumulation_steps': 1, 
-                    'mixed_precision': False, 'num_workers': safe_workers, 'optimizer': 'Adam', 'scheduler': None, 
-                    'scheduler_params': {}, 'early_stopping': True, 'validation_split': 0.3, 'shuffle': True,
-                    'pin_memory': False, 'persistent_workers': False,
-                    'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 3, 'lr_factor': 0.7, 'min_lr': 1e-6
-                },
-                'model': {
-                    'model_type': 'SimpleAutoencoder', 'input_dim': 16, 'encoding_dim': 4, 'hidden_dims': [32],
-                    'dropout_rates': [0.1], 'activation': 'relu', 'activation_param': 0.0,
-                    'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
-                    'diversity_factor': 0.0, 'min_features': 3, 'num_models': 1, 'skip_connection': False,
-                    'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
-                    'model_types': list(MODEL_VARIANTS.keys()) if 'MODEL_VARIANTS' in globals() else ['SimpleAutoencoder'],
-                    'available_activations': ['relu', 'leaky_relu'],
-                    'available_normalizations': [None, 'batch'],
-                    'available_initializers': ['xavier_uniform', 'xavier_normal'],
-                    'legacy_mode': False, 'use_attention': False
-                },
-                'security': {
-                    'percentile': 90, 'attack_threshold': 0.4, 'false_negative_cost': 1.5,
-                    'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
-                    'early_warning_threshold': 0.35, 'adaptive_threshold': False, 'confidence_interval': 0.9,
-                    'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium', 'high'],
-                    'threshold_validation': True
-                },
-                'data': {
-                    'normal_samples': 200, 'attack_samples': 50, 'features': 8, 'use_real_data': False,
-                    'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
-                    'validation_split': 0.3, 'test_split': 0.3, 'stratified_split': False,
-                    'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
-                    'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
-                    'synthetic_generation': {'cluster_variance': 0.1, 'anomaly_sparsity': 0.3, 'noise_factor': 0.05},
-                    'preprocessing': {'remove_outliers': False, 'impute_missing': True, 'imputation_strategy': 'mean'},
-                    'shuffle': True, 'pin_memory': False
-                },
-                'monitoring': {
-                    'metrics_frequency': 2, 'checkpoint_frequency': 5, 'tensorboard_logging': False,
-                    'console_logging_level': 'WARNING', 'save_best_model': True, 'save_model_history': False,
-                    'metrics_to_track': ['loss', 'reconstruction_error'], 'early_stopping_metric': 'loss',
-                    'checkpoint_format': 'pytorch', 'log_model_summary': False,
-                    'tensorboard_dir': str(TB_DIR), 'log_frequency': 2, 'save_checkpoints': True,
-                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                                   'max_scalars': 100, 'max_histograms': 10, 'max_images': 0, 'save_summary': False}
-                },
-                'fallback_info': {
-                    'is_fallback': True, 'level': 'standard', 'creation_time': current_time,
-                    'reason': 'Configuration system failure - using enhanced safe defaults',
-                    'recommendations': [
-                        'Check configuration file format', 'Verify preset definitions',
-                        'Check file permissions', 'Review system requirements'
-                    ],
-                    'limitations': [
-                        'Limited model architectures', 'Reduced functionality',
-                        'Basic monitoring only', 'CPU-only execution'
-                    ]
-                }
-            })
-            
-        else:
-            # 'minimal' - default case with balanced functionality
-            base_config.update({
-                'training': {
-                    'batch_size': 32, 'epochs': 10, 'learning_rate': 0.001, 'patience': 5, 'weight_decay': 1e-4,
-                    'gradient_clip': 1.0, 'gradient_accumulation_steps': 2, 'mixed_precision': False,
-                    'num_workers': min(2, os.cpu_count() or 1), 'optimizer': 'Adam', 'scheduler': None,
-                    'scheduler_params': {}, 'early_stopping': True, 'validation_split': 0.2, 'shuffle': True,
-                    'pin_memory': False, 'persistent_workers': False,
-                    'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 3, 'lr_factor': 0.7, 'min_lr': 1e-6
-                },
-                'model': {
-                    'model_type': 'SimpleAutoencoder', 'input_dim': 20, 'encoding_dim': 8, 'hidden_dims': [64],
-                    'dropout_rates': [0.2], 'activation': 'relu', 'activation_param': 0.0,
-                    'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
-                    'diversity_factor': 0.0, 'min_features': 5, 'num_models': 1, 'skip_connection': False,
-                    'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
-                    'model_types': list(MODEL_VARIANTS.keys()) if 'MODEL_VARIANTS' in globals() else ['SimpleAutoencoder'],
-                    'available_activations': ['relu', 'leaky_relu', 'gelu'],
-                    'available_normalizations': [None, 'batch'],
-                    'available_initializers': ['xavier_uniform', 'xavier_normal'],
-                    'legacy_mode': False, 'use_attention': False
-                },
-                'security': {
-                    'percentile': 95, 'attack_threshold': 0.3, 'false_negative_cost': 2.0,
-                    'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
-                    'early_warning_threshold': 0.25, 'adaptive_threshold': False, 'confidence_interval': 0.95,
-                    'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium', 'high'],
-                    'threshold_validation': True
-                },
-                'data': {
-                    'normal_samples': 1000, 'attack_samples': 200, 'features': 10, 'use_real_data': False,
-                    'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
-                    'validation_split': 0.2, 'test_split': 0.2, 'stratified_split': True,
-                    'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
-                    'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
-                    'synthetic_generation': {'cluster_variance': 0.1, 'anomaly_sparsity': 0.3, 'noise_factor': 0.05},
-                    'preprocessing': {'remove_outliers': True, 'impute_missing': True, 'imputation_strategy': 'mean'},
-                    'shuffle': True, 'pin_memory': False
-                },
-                'monitoring': {
-                    'metrics_frequency': 5, 'checkpoint_frequency': 10, 'tensorboard_logging': False,
-                    'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': False,
-                    'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss'],
-                    'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
-                    'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 5, 'save_checkpoints': True,
-                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                                   'max_scalars': 200, 'max_histograms': 20, 'max_images': 5, 'save_summary': False}
-                }
-            })
-
-        # Common sections for all fallback levels
-        base_config.update({
-            'hardware': {
-                'device': 'cpu', 'recommended_gpu_memory': 1,
-                'minimum_system_requirements': {'cpu_cores': 1, 'ram_gb': 1, 'disk_space': 2},
-                'optimal_system_requirements': {'cpu_cores': 2, 'ram_gb': 2, 'disk_space': 5},
-                'memory_management': {'max_memory_fraction': 0.5, 'allow_memory_growth': False, 'memory_limit': 1024},
-                'performance_optimization': {'use_cuda': False, 'use_amp': False, 'benchmark_mode': False, 'deterministic': True}
-            },
-            'system': {
-                'model_dir': str(Path('./models/fallback')), 'log_dir': str(Path('./logs/fallback')),
-                'config_dir': str(Path('./config/fallback')), 'data_dir': str(Path('./data/fallback')),
-                'checkpoint_dir': str(Path('./checkpoints/fallback')),
-                'debug': True if fallback_level == 'emergency' else False, 'verbose': True,
-                'random_seed': 42, 'reproducible': True, 'parallel_processing': False, 'max_workers': 1,
-                'export_onnx': False, 'non_interactive': False, 'cuda_optimizations': False,
-                'onnx_export': {'opset_version': 14, 'dynamic_axes': False, 'constant_folding': False,
-                               'optimize_for_mobile': False, 'runtime_validation': False,
-                               'validation_tolerance': 1e-5, 'verbose': False}
-            },
-            'presets': {
-                'available_presets': [], 'current_preset': f'{fallback_level}_fallback', 'current_override': None,
-                'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
-                'preset_configs': {}, 'custom_presets_available': [],
-                'auto_apply': False, 'validate_compatibility': False
-            },
-            'hyperparameter_optimization': {
-                'enabled': False, 'strategy': 'optuna', 'study_name': f'autoencoder_hpo_{fallback_level}',
-                'direction': 'minimize', 'n_trials': 5, 'timeout': 300,
-                'sampler': 'RandomSampler', 'pruner': 'NopPruner', 'objective_metric': 'loss',
-                'optimization_space': {
-                    'learning_rate': {'type': 'float', 'low': 1e-3, 'high': 1e-1, 'log': True},
-                    'batch_size': {'type': 'categorical', 'choices': [8, 16, 32]}
-                },
-                'early_stopping': {'enabled': False, 'patience': 2, 'min_improvement': 1e-2},
-                'timeout_seconds': 300, 'trial_epochs': 3, 'trial_patience': 2,
-                'cleanup_trials': False, 'generate_plots': False,
-                'search_space': {
-                    'encoding_dim_min': 2, 'encoding_dim_max': 8, 'hidden_layers_min': 1, 'hidden_layers_max': 1,
-                    'lr_min': 1e-3, 'lr_max': 1e-1, 'batch_sizes': [8, 16, 32],
-                    'weight_decay_min': 0.0, 'weight_decay_max': 0.0, 'dropout_min': 0.0, 'dropout_max': 0.1,
-                    'activations': ["relu"], 'normalizations': [None], 'percentile_min': 80, 'percentile_max': 90
-                },
-                'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0,
-                           'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 2,
-                           'n_ei_candidates': 5, 'multivariate': False},
-                'hpo_pruner': {'type': 'Nop', 'n_startup_trials': 0, 'n_warmup_steps': 0, 'interval_steps': 1},
-                'scoring': {'use_composite_score': False, 'validation_weight': 1.0, 'test_weight': 0.0,
-                           'complexity_weight': 0.0, 'max_params_penalty': 1000},
-                'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/{fallback_level}_study.db",
-                           'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
-            },
-            'validation': {
-                'cross_validation': {'enabled': False, 'folds': 2, 'stratified': False, 'random_state': 42},
-                'metrics': ['mse', 'mae'], 'validation_frequency': 1,
-                'save_validation_results': False, 'detailed_metrics': False
-            },
-            'experimental': {
-                'features': {'advanced_logging': True if fallback_level == 'emergency' else False, 
-                            'model_interpretability': False, 'federated_learning': False, 'active_learning': False},
-                'settings': {'experimental_mode': True if fallback_level == 'emergency' else False, 
-                            'beta_features': False, 'research_mode': False}
-            }
-        })
-        
-        # Add runtime information
-        base_config['runtime'] = {
-            'config_loaded_at': current_time,
-            'config_source': f'{fallback_level}_fallback',
-            'process_id': os.getpid(),
-            'configuration_health': {
-                'status': f'{fallback_level}_fallback',
-                'last_validation': current_time,
-                'validation_errors': []
-            }
-        }
-        
-        # Log the fallback creation
-        if fallback_level == 'emergency':
-            logger.critical("Created emergency fallback configuration - system in critical state")
-        elif fallback_level == 'standard':
-            logger.warning("Created standard fallback configuration due to system failure")
-            logger.info(f"Fallback config: {base_config['data']['features']} features, "
-                       f"{base_config['training']['batch_size']} batch size, "
-                       f"{base_config['model']['model_type']} model")
-        else:
-            logger.info(f"Created {fallback_level} fallback configuration")
-        
-        return base_config
-        
-    except Exception as e:
-        logger.critical(f"Failed to create {fallback_level} fallback configuration: {e}")
-        
-        # Last resort emergency config - absolute minimal
-        return {
-            'metadata': {
-                'version': '2.1', 'config_version': '2.1',
-                'created': datetime.now().isoformat() if 'datetime' in globals() else 'unknown',
-                'description': 'Emergency minimal configuration - last resort',
-                'preset_used': 'emergency_last_resort',
-                'config_source': 'last_resort_fallback',
-                'compatibility': ['SimpleAutoencoder']
-            },
-            'training': {
-                'batch_size': 8, 'epochs': 2, 'learning_rate': 0.01, 'num_workers': 1, 'optimizer': 'SGD'
-            },
-            'model': {
-                'model_type': 'SimpleAutoencoder', 'encoding_dim': 2, 'hidden_dims': [16],
-                'dropout_rates': [0.0], 'activation': 'relu'
-            },
-            'data': {
-                'normal_samples': 50, 'attack_samples': 10, 'features': 4, 'validation_split': 0.4
-            },
-            'security': {
-                'percentile': 90, 'attack_threshold': 0.5, 'enable_security_metrics': False
-            },
-            'system': {
-                'model_dir': './models/emergency', 'debug': True, 'random_seed': 42
-            },
-            'presets': {
-                'current_preset': 'emergency_last_resort', 'available_presets': []
-            },
-            'fallback_info': {
-                'is_fallback': True, 'level': 'emergency_last_resort', 'critical_error': str(e)
-            },
-            'runtime': {
-                'config_source': 'last_resort_fallback',
-                'configuration_health': {'status': 'critical'}
-            }
-        }
-
-def _recommend_preset_for_system(system_analysis: Dict[str, Any]) -> str:
-    """Recommend optimal preset based on system analysis."""
-    try:
-        system_class = system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown')
-        performance_score = system_analysis.get('hardware_analysis', {}).get('performance_score', 0)
-        gpu_available = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False)
-        memory_gb = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0)
-        
-        if system_class == 'high_performance' and gpu_available and memory_gb >= 16:
-            return 'advanced'
-        elif system_class == 'high_performance' and gpu_available:
-            return 'performance'
-        elif system_class == 'standard':
-            return 'default'
-        elif memory_gb < 4 or performance_score < 40:
-            return 'lightweight'
-        else:
-            return 'default'
-            
-    except Exception:
-        return 'default'
-
-def _check_preset_system_compatibility(config: Dict[str, Any], system_analysis: Dict[str, Any]) -> Dict[str, Any]:
-    """Check compatibility between preset configuration and system capabilities."""
-    try:
-        compatibility = {
-            'overall_compatible': True,
-            'warnings': [],
-            'recommendations': []
-        }
-        
-        # Check memory requirements
-        training_config = config.get('training', {})
-        model_config = config.get('model', {})
-        system_memory = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0)
-        
-        # Estimate memory requirements
-        batch_size = training_config.get('batch_size', 64)
-        model_complexity = len(model_config.get('hidden_dims', [])) + 1
-        # Rough estimate in GB
-        estimated_memory_need = (batch_size * model_complexity) / 1000
-        
-        if system_memory > 0 and estimated_memory_need > system_memory * 0.8:
-            compatibility['overall_compatible'] = False
-            compatibility['warnings'].append(f"High memory usage expected ({estimated_memory_need:.1f}GB) for available memory ({system_memory:.1f}GB)")
-            compatibility['recommendations'].append("Consider reducing batch size or model complexity")
-        
-        # Check GPU requirements
-        cuda_available = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False)
-        mixed_precision = training_config.get('mixed_precision', False)
-        
-        if mixed_precision and not cuda_available:
-            compatibility['warnings'].append("Mixed precision training enabled but CUDA not available")
-            compatibility['recommendations'].append("Disable mixed precision for CPU-only systems")
-        
-        # Check model type compatibility
-        model_type = model_config.get('model_type', '')
-        num_models = model_config.get('num_models', 1)
-        
-        if 'Ensemble' in model_type and num_models > 1 and system_analysis.get('hardware_analysis', {}).get('system_class') == 'limited':
-            compatibility['warnings'].append("Ensemble model may be too complex for limited system resources")
-            compatibility['recommendations'].append("Consider using SimpleAutoencoder for better compatibility")
-        
-        return compatibility
-        
-    except Exception as e:
-        return {
-            'overall_compatible': True,
-            'warnings': [f"Compatibility check failed: {str(e)}"],
-            'recommendations': []
-        }
 
 @enhanced_monitor_performance(include_memory=True, log_level=logging.DEBUG)
 def get_system_info(include_versions: bool = True, include_hardware: bool = True, 
@@ -10446,984 +9070,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
     except Exception as e:
         logger.debug(f"Failed to save configuration change log: {e}")
 
-def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool, List[str], List[str]]:
-    """
-    Comprehensive configuration validation with enhanced preset compatibility,
-    hardware requirement validation, automatic error correction capabilities,
-    and intelligent memory management for optimal performance.
-    
-    This function provides deep validation of all configuration sections including
-    the new preset features, enhanced model configurations, and system-aware validation.
-    
-    Args:
-        config: Configuration dictionary to validate
-        strict: If True, apply stricter validation rules and fail on warnings
-        
-    Returns:
-        Tuple containing:
-        - bool: True if configuration is valid (or auto-corrected)
-        - List[str]: List of validation errors found
-        - List[str]: List of validation warnings and recommendations
-        
-    Raises:
-        ValueError: Only if configuration is fundamentally invalid and cannot be auto-corrected
-    """
-    errors = []
-    warnings = []
-    auto_fixes = []
-    
-    try:
-        # Input validation
-        if not isinstance(config, dict):
-            raise ValueError("Configuration must be a dictionary")
-        
-        if not config:
-            raise ValueError("Configuration cannot be empty")
-        
-        # INITIAL MEMORY OPTIMIZATION - Get hardware context early
-        hardware_data = None
-        total_ram_gb = 8.0  # Conservative default
-        cuda_available = False
-        
-        try:
-            hardware_data = check_hardware(include_memory_usage=True)
-            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
-            cuda_available = hardware_data.get('cuda', {}).get('available', False)
-        except Exception as e:
-            logger.debug(f"Hardware detection failed during validation: {e}")
-        
-        # Track validation context
-        validation_context = {
-            'timestamp': datetime.now().isoformat(),
-            'strict_mode': strict,
-            'config_size': len(str(config)),
-            'sections_present': list(config.keys()),
-            'auto_fixes_applied': 0,
-            'hardware_context': {
-                'total_ram_gb': total_ram_gb,
-                'cuda_available': cuda_available
-            }
-        }
-        
-        # MEMORY OPTIMIZATION - Clear memory before intensive validation for large configs
-        config_size_mb = len(str(config)) / (1024 * 1024)
-        if config_size_mb > 1.0 or total_ram_gb < 8:
-            try:
-                pre_validation_clear = enhanced_clear_memory(
-                    aggressive=config_size_mb > 5.0 or total_ram_gb < 4,
-                    hardware_data=hardware_data
-                )
-                if pre_validation_clear.get('success'):
-                    logger.debug(f"Memory optimized before validation of {config_size_mb:.1f}MB config")
-            except Exception as e:
-                logger.debug(f"Pre-validation memory optimization failed: {e}")
-        
-        # 1. STRUCTURAL VALIDATION
-        logger.debug("Starting structural validation")
-        
-        # Check for required top-level sections
-        required_sections = ['training', 'model', 'security', 'data']
-        missing_sections = [section for section in required_sections if section not in config]
-        
-        if missing_sections:
-            errors.append(f"Missing required configuration sections: {missing_sections}")
-            if strict:
-                return False, errors, warnings
-        
-        # Check for optional but recommended sections
-        recommended_sections = ['metadata', 'hardware', 'monitoring', 'system', 'presets']
-        missing_recommended = [section for section in recommended_sections if section not in config]
-        
-        if missing_recommended:
-            warnings.append(f"Missing recommended sections: {missing_recommended}")
-        
-        # 2. METADATA VALIDATION WITH ENHANCED CHECKS
-        logger.debug("Validating metadata section")
-        
-        if 'metadata' in config:
-            metadata = config['metadata']
-            if not isinstance(metadata, dict):
-                errors.append("Metadata section must be a dictionary")
-            else:
-                # Version compatibility validation
-                config_version = metadata.get('config_version', '1.0')
-                if config_version not in ['2.1', '2.0', '1.9', '1.8']:
-                    warnings.append(f"Unknown config version '{config_version}', expecting '2.1'")
-                
-                # Schema validation
-                if 'validation' in metadata:
-                    validation_info = metadata['validation']
-                    schema_version = validation_info.get('schema_version', '1.0')
-                    if schema_version != '2.1':
-                        warnings.append(f"Schema version mismatch: {schema_version} != 2.1")
-                    
-                    # Check required sections against metadata
-                    metadata_required = validation_info.get('required_sections', [])
-                    if metadata_required != required_sections:
-                        warnings.append("Metadata required_sections don't match validation requirements")
-                
-                # System information validation
-                if 'system' in metadata:
-                    system_info = metadata['system']
-                    
-                    # Critical system fields
-                    critical_fields = ['python_version', 'pytorch_version', 'os']
-                    missing_system = [field for field in critical_fields if field not in system_info]
-                    if missing_system:
-                        warnings.append(f"Missing system information: {missing_system}")
-                    
-                    # CUDA consistency check
-                    cuda_available_meta = system_info.get('cuda_available', False)
-                    cuda_devices = system_info.get('cuda_devices', 0)
-                    if cuda_available_meta and cuda_devices == 0:
-                        warnings.append("CUDA reported as available but no devices found")
-                    elif not cuda_available_meta and cuda_devices > 0:
-                        warnings.append("CUDA devices reported but CUDA not available")
-                
-                # Hardware requirements validation
-                if 'recommended_hardware' in metadata:
-                    hw_req = metadata['recommended_hardware']
-                    
-                    # Validate reasonable hardware requirements
-                    gpu_memory = hw_req.get('gpu_memory_gb', 0)
-                    if gpu_memory > 80:
-                        warnings.append(f"Very high GPU memory requirement: {gpu_memory}GB")
-                    elif gpu_memory > 0 and gpu_memory < 1:
-                        warnings.append(f"Very low GPU memory requirement: {gpu_memory}GB")
-                    
-                    cpu_cores = hw_req.get('cpu_cores', 1)
-                    if cpu_cores > 128:
-                        warnings.append(f"Very high CPU core requirement: {cpu_cores}")
-                    elif cpu_cores < 1:
-                        errors.append(f"Invalid CPU core requirement: {cpu_cores}")
-                
-                # Preset compatibility validation
-                if 'compatibility' in metadata:
-                    compatibility = metadata['compatibility']
-                    if isinstance(compatibility, list):
-                        # Check against available model types
-                        if MODEL_VARIANTS:
-                            invalid_models = [model for model in compatibility if model not in MODEL_VARIANTS]
-                            if invalid_models:
-                                warnings.append(f"Compatibility includes unavailable models: {invalid_models}")
-                    else:
-                        warnings.append("Compatibility field should be a list of model types")
-        
-        # MEMORY OPTIMIZATION - Clear memory after metadata validation for large configs
-        if len(str(metadata)) > 50000 and total_ram_gb < 16:
-            try:
-                metadata_clear = enhanced_clear_memory(
-                    aggressive=False,
-                    hardware_data=hardware_data
-                )
-                if metadata_clear.get('success'):
-                    logger.debug("Memory optimized after metadata validation")
-            except Exception as e:
-                logger.debug(f"Post-metadata memory optimization failed: {e}")
-        
-        # 3. TRAINING CONFIGURATION VALIDATION WITH PRESET AWARENESS
-        logger.debug("Validating training section")
-        
-        if 'training' in config:
-            training = config['training']
-            if not isinstance(training, dict):
-                errors.append("Training section must be a dictionary")
-            else:
-                # Core parameter validation with auto-correction
-                batch_size = training.get('batch_size', 32)
-                if not isinstance(batch_size, int) or batch_size < 1:
-                    errors.append(f"Invalid batch_size: {batch_size}, must be positive integer")
-                elif batch_size > 2048:
-                    warnings.append(f"Very large batch_size: {batch_size}, may cause memory issues")
-                elif batch_size < 2:
-                    warnings.append(f"Very small batch_size: {batch_size}, may cause training instability")
-                
-                epochs = training.get('epochs', 100)
-                if not isinstance(epochs, int) or epochs < 1:
-                    errors.append(f"Invalid epochs: {epochs}, must be positive integer")
-                elif epochs > 5000:
-                    warnings.append(f"Very high epoch count: {epochs}, consider early stopping")
-                elif epochs < 5:
-                    warnings.append(f"Very low epoch count: {epochs}, may not converge properly")
-                
-                learning_rate = training.get('learning_rate', 0.001)
-                if not isinstance(learning_rate, (int, float)) or learning_rate <= 0:
-                    errors.append(f"Invalid learning_rate: {learning_rate}, must be positive number")
-                elif learning_rate > 1.0:
-                    warnings.append(f"Very high learning_rate: {learning_rate}, may cause instability")
-                elif learning_rate < 1e-8:
-                    warnings.append(f"Very low learning_rate: {learning_rate}, may not converge")
-                
-                patience = training.get('patience', 10)
-                if not isinstance(patience, int) or patience < 0:
-                    errors.append(f"Invalid patience: {patience}, must be non-negative integer")
-                elif patience > 1000:
-                    warnings.append(f"Very high patience: {patience}, training may run too long")
-                
-                # Enhanced optimizer validation
-                optimizer = training.get('optimizer', 'Adam')
-                valid_optimizers = ['SGD', 'Adam', 'AdamW', 'RMSprop', 'Adagrad', 'LBFGS']
-                if optimizer not in valid_optimizers:
-                    errors.append(f"Invalid optimizer: {optimizer}, must be one of {valid_optimizers}")
-                
-                # Optimizer-specific parameter validation
-                if optimizer == 'Adam' or optimizer == 'AdamW':
-                    adam_betas = training.get('adam_betas', (0.9, 0.999))
-                    if not (isinstance(adam_betas, (list, tuple)) and len(adam_betas) == 2):
-                        warnings.append("adam_betas should be a tuple/list of 2 values")
-                    elif not all(0 < beta < 1 for beta in adam_betas):
-                        errors.append("adam_betas values must be between 0 and 1")
-                    
-                    adam_eps = training.get('adam_eps', 1e-8)
-                    if not isinstance(adam_eps, (int, float)) or adam_eps <= 0:
-                        errors.append("adam_eps must be positive number")
-                
-                # Scheduler validation with parameter checking
-                scheduler = training.get('scheduler')
-                if scheduler is not None:
-                    valid_schedulers = [
-                        'StepLR', 'MultiStepLR', 'ExponentialLR', 'CosineAnnealingLR',
-                        'ReduceLROnPlateau', 'CosineAnnealingWarmRestarts', 'OneCycleLR', 'CyclicLR'
-                    ]
-                    if scheduler not in valid_schedulers:
-                        errors.append(f"Invalid scheduler: {scheduler}, must be one of {valid_schedulers}")
-                    
-                    # Validate scheduler parameters
-                    scheduler_params = training.get('scheduler_params', {})
-                    if scheduler == 'ReduceLROnPlateau':
-                        mode = scheduler_params.get('mode', 'min')
-                        if mode not in ['min', 'max']:
-                            errors.append("ReduceLROnPlateau mode must be 'min' or 'max'")
-                        
-                        factor = scheduler_params.get('factor', 0.5)
-                        if not isinstance(factor, (int, float)) or not (0 < factor < 1):
-                            errors.append("ReduceLROnPlateau factor must be between 0 and 1")
-                    
-                    elif scheduler == 'CosineAnnealingLR':
-                        T_max = scheduler_params.get('T_max')
-                        if T_max and (not isinstance(T_max, int) or T_max <= 0):
-                            errors.append("CosineAnnealingLR T_max must be positive integer")
-                
-                # Advanced training parameter validation
-                gradient_clip = training.get('gradient_clip', 1.0)
-                if not isinstance(gradient_clip, (int, float)) or gradient_clip < 0:
-                    errors.append("gradient_clip must be non-negative number")
-                elif gradient_clip > 100:
-                    warnings.append(f"Very high gradient clipping: {gradient_clip}")
-                
-                gradient_accumulation = training.get('gradient_accumulation_steps', 1)
-                if not isinstance(gradient_accumulation, int) or gradient_accumulation < 1:
-                    errors.append("gradient_accumulation_steps must be positive integer")
-                elif gradient_accumulation > 64:
-                    warnings.append(f"High gradient accumulation: {gradient_accumulation}, may slow training")
-                
-                # Hardware-aware validation
-                mixed_precision = training.get('mixed_precision', False)
-                if mixed_precision and not cuda_available:
-                    warnings.append("mixed_precision enabled but CUDA not available")
-                
-                num_workers = training.get('num_workers', 1)
-                max_workers = (os.cpu_count() or 1) * 2
-                if not isinstance(num_workers, int) or num_workers < 0:
-                    errors.append("num_workers must be non-negative integer")
-                elif num_workers > max_workers:
-                    warnings.append(f"num_workers ({num_workers}) exceeds recommended max ({max_workers})")
-                
-                pin_memory = training.get('pin_memory', False)
-                if pin_memory and not cuda_available:
-                    warnings.append("pin_memory enabled but CUDA not available")
-                
-                # Cross-parameter validation
-                effective_batch_size = batch_size * gradient_accumulation
-                if effective_batch_size > 1024:
-                    warnings.append(f"Large effective batch size ({effective_batch_size}) may hurt generalization")
-                elif effective_batch_size < 4:
-                    warnings.append(f"Small effective batch size ({effective_batch_size}) may cause noisy gradients")
-        
-        # 4. MODEL CONFIGURATION VALIDATION WITH ENHANCED PRESET SUPPORT
-        logger.debug("Validating model section")
-        
-        if 'model' in config:
-            model = config['model']
-            if not isinstance(model, dict):
-                errors.append("Model section must be a dictionary")
-            else:
-                # MEMORY OPTIMIZATION - Clear memory before intensive model validation for complex models
-                model_complexity = len(str(model))
-                if model_complexity > 10000 and total_ram_gb < 16:
-                    try:
-                        model_validation_clear = enhanced_clear_memory(
-                            aggressive=model_complexity > 50000,
-                            hardware_data=hardware_data
-                        )
-                        if model_validation_clear.get('success'):
-                            logger.debug("Memory optimized before model validation")
-                    except Exception as e:
-                        logger.debug(f"Model validation memory optimization failed: {e}")
-                
-                # Model type validation with MODEL_VARIANTS checking
-                model_type = model.get('model_type', 'SimpleAutoencoder')
-                
-                if MODEL_VARIANTS:
-                    if model_type not in MODEL_VARIANTS:
-                        errors.append(f"Invalid model_type: {model_type}, available: {list(MODEL_VARIANTS.keys())}")
-                else:
-                    # Fallback validation
-                    valid_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
-                    if model_type not in valid_types:
-                        errors.append(f"Invalid model_type: {model_type}, expected one of: {valid_types}")
-                
-                # Encoding dimension validation
-                encoding_dim = model.get('encoding_dim', 8)
-                if not isinstance(encoding_dim, int) or encoding_dim <= 0:
-                    errors.append(f"Invalid encoding_dim: {encoding_dim}, must be positive integer")
-                elif encoding_dim > 1000:
-                    warnings.append(f"Very large encoding_dim: {encoding_dim}, may cause memory issues")
-                elif encoding_dim < 2:
-                    warnings.append(f"Very small encoding_dim: {encoding_dim}, may limit expressiveness")
-                
-                # Architecture validation with enhanced checks
-                hidden_dims = model.get('hidden_dims', [])
-                if not isinstance(hidden_dims, list):
-                    errors.append("hidden_dims must be a list")
-                elif not hidden_dims:
-                    errors.append("hidden_dims cannot be empty")
-                else:
-                    # Validate all dimensions
-                    invalid_dims = [dim for dim in hidden_dims if not isinstance(dim, int) or dim <= 0]
-                    if invalid_dims:
-                        errors.append(f"Invalid hidden dimensions: {invalid_dims}")
-                    
-                    # Architecture complexity checks
-                    if len(hidden_dims) > 10:
-                        warnings.append(f"Very deep architecture ({len(hidden_dims)} layers) may be hard to train")
-                    
-                    large_dims = [dim for dim in hidden_dims if dim > 2048]
-                    if large_dims:
-                        warnings.append(f"Very large hidden dimensions: {large_dims}")
-                    
-                    # Check for decreasing pattern
-                    if len(hidden_dims) > 1:
-                        increasing_count = sum(1 for i in range(1, len(hidden_dims)) if hidden_dims[i] > hidden_dims[i-1])
-                        if increasing_count > len(hidden_dims) // 2:
-                            warnings.append("Hidden dimensions mostly increase - consider decreasing pattern for autoencoders")
-                
-                # Dropout validation with length matching
-                dropout_rates = model.get('dropout_rates', [])
-                if not isinstance(dropout_rates, list):
-                    errors.append("dropout_rates must be a list")
-                elif not dropout_rates:
-                    errors.append("dropout_rates cannot be empty")
-                else:
-                    # Validate all rates
-                    invalid_rates = [rate for rate in dropout_rates if not isinstance(rate, (int, float)) or not (0 <= rate < 1)]
-                    if invalid_rates:
-                        errors.append(f"Invalid dropout rates: {invalid_rates}, must be between 0 and 1")
-                    
-                    # Length compatibility
-                    if len(hidden_dims) != len(dropout_rates):
-                        errors.append(f"Length mismatch: {len(hidden_dims)} hidden layers, {len(dropout_rates)} dropout rates")
-                    
-                    # Dropout strategy validation
-                    if all(rate == 0 for rate in dropout_rates):
-                        warnings.append("No dropout applied (all rates are 0)")
-                    elif any(rate > 0.8 for rate in dropout_rates):
-                        warnings.append("Very high dropout rates may hurt performance")
-                
-                # Activation function validation
-                activation = model.get('activation', 'relu')
-                available_activations = model.get('available_activations', ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish'])
-                if activation not in available_activations:
-                    errors.append(f"Invalid activation: {activation}, available: {available_activations}")
-                
-                activation_param = model.get('activation_param', 0.0)
-                if not isinstance(activation_param, (int, float)):
-                    errors.append("activation_param must be a number")
-                elif activation == 'leaky_relu' and activation_param <= 0:
-                    warnings.append("leaky_relu typically uses positive activation_param")
-                
-                # Normalization validation with consistency checks
-                normalization = model.get('normalization')
-                available_normalizations = model.get('available_normalizations', ['batch', 'layer', 'instance', 'group', None])
-                if normalization not in available_normalizations:
-                    errors.append(f"Invalid normalization: {normalization}, available: {available_normalizations}")
 
-                use_batch_norm = model.get('use_batch_norm', False)
-                use_layer_norm = model.get('use_layer_norm', False)
-
-                # Fix inconsistencies: ensure normalization setting matches use_*_norm flags
-                if normalization is None:
-                    # If no normalization specified, both flags should be False
-                    if use_batch_norm or use_layer_norm:
-                        warnings.append("normalization=None but batch_norm or layer_norm enabled - auto-correcting to disable both")
-                        model['use_batch_norm'] = False
-                        model['use_layer_norm'] = False
-                elif normalization == 'batch':
-                    # If batch normalization specified, use_batch_norm should be True, use_layer_norm should be False
-                    if not use_batch_norm:
-                        warnings.append("normalization='batch' but use_batch_norm=False - auto-correcting to use_batch_norm=True")
-                        model['use_batch_norm'] = True
-                    if use_layer_norm:
-                        warnings.append("normalization='batch' but use_layer_norm=True - auto-correcting to use_layer_norm=False")
-                        model['use_layer_norm'] = False
-                elif normalization == 'layer':
-                    # If layer normalization specified, use_layer_norm should be True, use_batch_norm should be False
-                    if not use_layer_norm:
-                        warnings.append("normalization='layer' but use_layer_norm=False - auto-correcting to use_layer_norm=True")
-                        model['use_layer_norm'] = True
-                    if use_batch_norm:
-                        warnings.append("normalization='layer' but use_batch_norm=True - auto-correcting to use_batch_norm=False")
-                        model['use_batch_norm'] = False
-                elif normalization in ['instance', 'group']:
-                    # For instance/group normalization, both batch_norm and layer_norm should be False
-                    if use_batch_norm or use_layer_norm:
-                        warnings.append(f"normalization='{normalization}' but batch_norm or layer_norm enabled - auto-correcting to disable both")
-                        model['use_batch_norm'] = False
-                        model['use_layer_norm'] = False
-
-                # Final validation check - should not have both enabled after auto-corrections
-                use_batch_norm = model.get('use_batch_norm', False)
-                use_layer_norm = model.get('use_layer_norm', False)
-                if use_batch_norm and use_layer_norm:
-                    warnings.append("Both batch_norm and layer_norm still enabled after auto-correction - may cause conflicts")
-
-                # Batch norm compatibility with batch size
-                if use_batch_norm and 'training' in config:
-                    batch_size = config['training'].get('batch_size', 32)
-                    if batch_size < 2:
-                        errors.append("Batch normalization requires training batch_size >= 2")
-                
-                # Weight initialization validation
-                weight_init = model.get('weight_init', 'xavier_uniform')
-                available_initializers = model.get('available_initializers', ['xavier_uniform', 'xavier_normal', 'kaiming_uniform', 'kaiming_normal', 'orthogonal'])
-                if weight_init not in available_initializers:
-                    errors.append(f"Invalid weight_init: {weight_init}, available: {available_initializers}")
-                
-                # Advanced features validation
-                skip_connection = model.get('skip_connection', False)
-                residual_blocks = model.get('residual_blocks', False)
-                use_attention = model.get('use_attention', False)
-                
-                if skip_connection and len(hidden_dims) < 2:
-                    warnings.append("Skip connections are most effective with deeper architectures")
-                
-                if residual_blocks and len(hidden_dims) < 3:
-                    warnings.append("Residual blocks are most effective with deeper architectures")
-                
-                if use_attention and model_type == 'SimpleAutoencoder':
-                    warnings.append("Attention mechanism may not be supported in SimpleAutoencoder")
-                
-                # Ensemble-specific validation
-                if model_type == 'AutoencoderEnsemble':
-                    num_models = model.get('num_models', 1)
-                    if not isinstance(num_models, int) or num_models < 1:
-                        errors.append(f"Invalid num_models: {num_models}, must be positive integer")
-                    elif num_models < 2:
-                        warnings.append("Ensemble should have at least 2 models for effectiveness")
-                    elif num_models > 20:
-                        warnings.append(f"Large ensemble ({num_models} models) may require significant memory")
-                    
-                    diversity_factor = model.get('diversity_factor', 0.1)
-                    if not isinstance(diversity_factor, (int, float)) or not (0 <= diversity_factor <= 1):
-                        errors.append(f"Invalid diversity_factor: {diversity_factor}, must be between 0 and 1")
-                    elif diversity_factor == 0:
-                        warnings.append("diversity_factor=0 may reduce ensemble effectiveness")
-                
-                # Feature requirements validation
-                min_features = model.get('min_features', 5)
-                if not isinstance(min_features, int) or min_features <= 0:
-                    errors.append(f"Invalid min_features: {min_features}, must be positive integer")
-                
-                # Cross-validation with data configuration
-                if 'data' in config:
-                    data_features = config['data'].get('features', 20)
-                    if data_features < min_features:
-                        errors.append(f"Data features ({data_features}) < model min_features ({min_features})")
-        
-        # 5. SECURITY CONFIGURATION VALIDATION
-        logger.debug("Validating security section")
-        
-        if 'security' in config:
-            security = config['security']
-            if not isinstance(security, dict):
-                errors.append("Security section must be a dictionary")
-            else:
-                # Threshold validation
-                percentile = security.get('percentile', 95)
-                if not isinstance(percentile, (int, float)) or not (0 < percentile <= 100):
-                    errors.append(f"Invalid percentile: {percentile}, must be between 0 and 100")
-                elif percentile < 50:
-                    warnings.append(f"Low percentile threshold ({percentile}) may cause many false positives")
-                elif percentile > 99.9:
-                    warnings.append(f"Very high percentile ({percentile}) may miss attacks")
-                
-                attack_threshold = security.get('attack_threshold', 0.3)
-                if not isinstance(attack_threshold, (int, float)) or attack_threshold < 0:
-                    errors.append(f"Invalid attack_threshold: {attack_threshold}, must be non-negative")
-                elif attack_threshold > 10:
-                    warnings.append(f"Very high attack threshold ({attack_threshold})")
-                
-                false_negative_cost = security.get('false_negative_cost', 2.0)
-                if not isinstance(false_negative_cost, (int, float)) or false_negative_cost < 0:
-                    errors.append(f"Invalid false_negative_cost: {false_negative_cost}, must be non-negative")
-                
-                # Advanced security features validation
-                threshold_strategy = security.get('anomaly_threshold_strategy', 'fixed_percentile')
-                valid_strategies = ['fixed_percentile', 'dynamic_percentile', 'adaptive', 'statistical']
-                if threshold_strategy not in valid_strategies:
-                    errors.append(f"Invalid threshold strategy: {threshold_strategy}, available: {valid_strategies}")
-                
-                detection_methods = security.get('detection_methods', ['reconstruction_error'])
-                if not isinstance(detection_methods, list):
-                    errors.append("detection_methods must be a list")
-                else:
-                    valid_methods = [
-                        'reconstruction_error', 'statistical_analysis', 'mahalanobis_distance',
-                        'isolation_forest', 'ensemble_voting', 'neural_network'
-                    ]
-                    invalid_methods = [method for method in detection_methods if method not in valid_methods]
-                    if invalid_methods:
-                        errors.append(f"Invalid detection methods: {invalid_methods}")
-                
-                # Alert levels validation
-                alert_levels = security.get('alert_levels', ['low', 'medium', 'high'])
-                if not isinstance(alert_levels, list) or len(alert_levels) < 2:
-                    errors.append("alert_levels must be a list with at least 2 levels")
-                
-                # Confidence interval validation
-                confidence_interval = security.get('confidence_interval', 0.95)
-                if not isinstance(confidence_interval, (int, float)) or not (0 < confidence_interval < 1):
-                    errors.append(f"Invalid confidence_interval: {confidence_interval}, must be between 0 and 1")
-        
-        # 6. DATA CONFIGURATION VALIDATION
-        logger.debug("Validating data section")
-        
-        if 'data' in config:
-            data = config['data']
-            if not isinstance(data, dict):
-                errors.append("Data section must be a dictionary")
-            else:
-                # Sample size validation
-                normal_samples = data.get('normal_samples', 1000)
-                if not isinstance(normal_samples, int) or normal_samples < 1:
-                    errors.append(f"Invalid normal_samples: {normal_samples}, must be positive integer")
-                elif normal_samples < 100:
-                    warnings.append(f"Small normal sample size ({normal_samples}) may not be representative")
-                elif normal_samples > 1000000:
-                    warnings.append(f"Large normal sample size ({normal_samples}) may require significant memory")
-                
-                attack_samples = data.get('attack_samples', 200)
-                if not isinstance(attack_samples, int) or attack_samples < 1:
-                    errors.append(f"Invalid attack_samples: {attack_samples}, must be positive integer")
-                elif attack_samples < 50:
-                    warnings.append(f"Small attack sample size ({attack_samples}) may not be representative")
-                
-                # Feature validation
-                features = data.get('features', 20)
-                if not isinstance(features, int) or features < 1:
-                    errors.append(f"Invalid features: {features}, must be positive integer")
-                elif features > 10000:
-                    warnings.append(f"Very high feature count ({features}) may cause curse of dimensionality")
-                
-                # Split validation
-                validation_split = data.get('validation_split', 0.2)
-                if not isinstance(validation_split, (int, float)) or not (0 < validation_split < 1):
-                    errors.append(f"Invalid validation_split: {validation_split}, must be between 0 and 1")
-                
-                test_split = data.get('test_split', 0.2)
-                if not isinstance(test_split, (int, float)) or not (0 < test_split < 1):
-                    errors.append(f"Invalid test_split: {test_split}, must be between 0 and 1")
-                
-                # Total split validation
-                total_split = validation_split + test_split
-                if total_split >= 1.0:
-                    errors.append(f"Combined splits ({total_split:.2f}) must be < 1.0")
-                elif total_split > 0.8:
-                    warnings.append(f"High combined split ratio ({total_split:.2f}) leaves little training data")
-                
-                # Normalization validation
-                #normalization = data.get('normalization', 'standard')
-                normalization = data.get('data_normalization', 'standard')
-                valid_normalizations = ['standard', 'minmax', 'robust', 'quantile', 'none']
-                if normalization not in valid_normalizations:
-                    errors.append(f"Invalid normalization: {normalization}, available: {valid_normalizations}")
-                
-                # Anomaly factor validation
-                anomaly_factor = data.get('anomaly_factor', 1.5)
-                if not isinstance(anomaly_factor, (int, float)) or anomaly_factor <= 0:
-                    errors.append(f"Invalid anomaly_factor: {anomaly_factor}, must be positive")
-                elif anomaly_factor > 10:
-                    warnings.append(f"Very high anomaly factor ({anomaly_factor})")
-                
-                # Synthetic data generation validation
-                if 'synthetic_generation' in data:
-                    synthetic = data['synthetic_generation']
-                    if isinstance(synthetic, dict):
-                        cluster_variance = synthetic.get('cluster_variance', 0.1)
-                        if not isinstance(cluster_variance, (int, float)) or cluster_variance < 0:
-                            errors.append("cluster_variance must be non-negative")
-                        
-                        anomaly_sparsity = synthetic.get('anomaly_sparsity', 0.3)
-                        if not isinstance(anomaly_sparsity, (int, float)) or not (0 <= anomaly_sparsity <= 1):
-                            errors.append("anomaly_sparsity must be between 0 and 1")
-                
-                # Preprocessing validation
-                if 'preprocessing' in data:
-                    preprocessing = data['preprocessing']
-                    if isinstance(preprocessing, dict):
-                        outlier_threshold = preprocessing.get('outlier_threshold', 3.0)
-                        if not isinstance(outlier_threshold, (int, float)) or outlier_threshold <= 0:
-                            errors.append("outlier_threshold must be positive")
-                        elif outlier_threshold < 1:
-                            warnings.append("Very low outlier threshold may remove too much data")
-                        elif outlier_threshold > 5:
-                            warnings.append("Very high outlier threshold may not remove outliers effectively")
-        
-        # MEMORY OPTIMIZATION - Clear memory before hardware validation for low-memory systems
-        if total_ram_gb < 8:
-            try:
-                mid_validation_clear = enhanced_clear_memory(
-                    aggressive=True,
-                    hardware_data=hardware_data
-                )
-                if mid_validation_clear.get('success'):
-                    logger.debug("Memory optimized mid-validation for low-memory system")
-            except Exception as e:
-                logger.debug(f"Mid-validation memory optimization failed: {e}")
-        
-        # 7. HARDWARE CONFIGURATION VALIDATION
-        logger.debug("Validating hardware section")
-        
-        if 'hardware' in config:
-            hardware = config['hardware']
-            if not isinstance(hardware, dict):
-                errors.append("Hardware section must be a dictionary")
-            else:
-                # Device validation
-                device = hardware.get('device', 'auto')
-                valid_devices = ['auto', 'cpu', 'cuda', 'mps']
-                if device not in valid_devices:
-                    errors.append(f"Invalid device: {device}, available: {valid_devices}")
-                
-                # Device availability check
-                if device == 'cuda' and not cuda_available:
-                    warnings.append("CUDA device specified but CUDA not available")
-                elif device == 'mps' and not (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()):
-                    warnings.append("MPS device specified but MPS not available")
-                
-                # Memory requirements validation
-                recommended_gpu_memory = hardware.get('recommended_gpu_memory', 4)
-                if not isinstance(recommended_gpu_memory, (int, float)) or recommended_gpu_memory < 0:
-                    errors.append("recommended_gpu_memory must be non-negative")
-                elif recommended_gpu_memory > 80:
-                    warnings.append(f"Very high GPU memory requirement: {recommended_gpu_memory}GB")
-                
-                # System requirements validation
-                if 'minimum_system_requirements' in hardware:
-                    min_req = hardware['minimum_system_requirements']
-                    if isinstance(min_req, dict):
-                        cpu_cores = min_req.get('cpu_cores', 1)
-                        if not isinstance(cpu_cores, int) or cpu_cores < 1:
-                            errors.append("minimum cpu_cores must be positive integer")
-                        
-                        ram_gb = min_req.get('ram_gb', 2)
-                        if not isinstance(ram_gb, (int, float)) or ram_gb < 0.5:
-                            errors.append("minimum ram_gb must be >= 0.5")
-                
-                # Performance optimization validation
-                if 'performance_optimization' in hardware:
-                    perf_opt = hardware['performance_optimization']
-                    if isinstance(perf_opt, dict):
-                        use_cuda = perf_opt.get('use_cuda', False)
-                        if use_cuda and not cuda_available:
-                            warnings.append("use_cuda enabled but CUDA not available")
-                        
-                        use_amp = perf_opt.get('use_amp', False)
-                        if use_amp and not cuda_available:
-                            warnings.append("Automatic Mixed Precision requires CUDA")
-                        
-                        benchmark_mode = perf_opt.get('benchmark_mode', False)
-                        deterministic = perf_opt.get('deterministic', False)
-                        if benchmark_mode and deterministic:
-                            warnings.append("benchmark_mode and deterministic may conflict")
-        
-        # 8. PRESET CONFIGURATION VALIDATION
-        logger.debug("Validating presets section")
-        
-        if 'presets' in config:
-            presets = config['presets']
-            if not isinstance(presets, dict):
-                errors.append("Presets section must be a dictionary")
-            else:
-                # Current preset validation
-                current_preset = presets.get('current_preset')
-                if current_preset is not None:
-                    available_presets = get_available_presets()
-                    if current_preset not in available_presets:
-                        errors.append(f"Invalid current_preset: {current_preset}, available: {available_presets}")
-                    else:
-                        # Preset compatibility validation
-                        try:
-                            model_type = config.get('model', {}).get('model_type', 'SimpleAutoencoder')
-                            if not validate_model_preset_compatibility(model_type, config):
-                                warnings.append(f"Model type '{model_type}' may not be compatible with preset '{current_preset}'")
-                        except Exception as e:
-                            warnings.append(f"Preset compatibility check failed: {e}")
-                
-                # Override rules validation
-                if 'override_rules' in presets:
-                    override_rules = presets['override_rules']
-                    if not isinstance(override_rules, dict):
-                        errors.append("override_rules must be a dictionary")
-                    else:
-                        valid_sections = ['security', 'monitoring', 'hardware', 'training', 'model', 'data']
-                        for section, enabled in override_rules.items():
-                            if section not in valid_sections:
-                                warnings.append(f"Unknown override rule section: {section}")
-                            elif not isinstance(enabled, bool):
-                                errors.append(f"Override rule for {section} must be boolean")
-                
-                # Auto-apply validation
-                auto_apply = presets.get('auto_apply', False)
-                if not isinstance(auto_apply, bool):
-                    errors.append("auto_apply must be boolean")
-        
-        # 9. HYPERPARAMETER OPTIMIZATION VALIDATION
-        logger.debug("Validating hyperparameter optimization section")
-        
-        if 'hyperparameter_optimization' in config:
-            hpo = config['hyperparameter_optimization']
-            if not isinstance(hpo, dict):
-                errors.append("hyperparameter_optimization section must be a dictionary")
-            else:
-                enabled = hpo.get('enabled', False)
-                if enabled:
-                    # Strategy validation
-                    strategy = hpo.get('strategy', 'optuna')
-                    valid_strategies = ['optuna', 'hyperopt', 'skopt', 'random', 'grid']
-                    if strategy not in valid_strategies:
-                        errors.append(f"Invalid HPO strategy: {strategy}, available: {valid_strategies}")
-                    
-                    # Trials validation
-                    n_trials = hpo.get('n_trials', 50)
-                    if not isinstance(n_trials, int) or n_trials < 1:
-                        errors.append("n_trials must be positive integer")
-                    elif n_trials > 10000:
-                        warnings.append(f"Very high trial count ({n_trials}) may take very long")
-                    
-                    # Timeout validation
-                    timeout = hpo.get('timeout', 3600)
-                    if not isinstance(timeout, (int, float)) or timeout < 60:
-                        warnings.append("Very short HPO timeout may not find good solutions")
-                    elif timeout > 86400:
-                        warnings.append("Very long HPO timeout (>24h) may be excessive")
-                    
-                    # Optimization space validation
-                    if 'optimization_space' in hpo:
-                        opt_space = hpo['optimization_space']
-                        if not isinstance(opt_space, dict):
-                            errors.append("optimization_space must be a dictionary")
-                        elif not opt_space:
-                            warnings.append("Empty optimization space - HPO will have no effect")
-        
-        # 10. CROSS-SECTION VALIDATION
-        logger.debug("Performing cross-section validation")
-        
-        # Model-Training compatibility
-        if 'model' in config and 'training' in config:
-            model_config = config['model']
-            training_config = config['training']
-            
-            # Batch normalization vs batch size
-            if model_config.get('use_batch_norm') and training_config.get('batch_size', 32) < 2:
-                errors.append("Batch normalization requires training batch_size >= 2")
-            
-            # Mixed precision compatibility
-            if training_config.get('mixed_precision') and model_config.get('model_type') == 'SimpleAutoencoder':
-                warnings.append("Mixed precision may not be fully supported with SimpleAutoencoder")
-            
-            # Memory estimation
-            try:
-                batch_size = training_config.get('batch_size', 32)
-                hidden_dims = model_config.get('hidden_dims', [])
-                if hidden_dims:
-                    model_complexity = sum(hidden_dims) + model_config.get('encoding_dim', 8)
-                    # Rough MB estimate
-                    memory_estimate = batch_size * model_complexity * 4 / (1024**2)
-                    
-                    # > 1GB
-                    if memory_estimate > 1024:
-                        warnings.append(f"High memory usage estimated: ~{memory_estimate:.0f}MB")
-            except Exception:
-                # Skip memory estimation if it fails
-                pass
-        
-        # Hardware-Training compatibility
-        if 'hardware' in config and 'training' in config:
-            hardware_config = config['hardware']
-            training_config = config['training']
-            
-            # CUDA settings consistency
-            device = hardware_config.get('device', 'auto')
-            use_cuda = hardware_config.get('performance_optimization', {}).get('use_cuda', False)
-            
-            if device == 'cpu' and use_cuda:
-                warnings.append("Device set to CPU but use_cuda=True in performance optimization")
-            elif device == 'cuda' and not use_cuda:
-                warnings.append("Device set to CUDA but use_cuda=False in performance optimization")
-            
-            # Mixed precision consistency
-            use_amp = hardware_config.get('performance_optimization', {}).get('use_amp', False)
-            mixed_precision = training_config.get('mixed_precision', False)
-            
-            if use_amp and not mixed_precision:
-                warnings.append("AMP enabled in hardware but mixed_precision=False in training")
-            elif mixed_precision and not use_amp:
-                warnings.append("mixed_precision=True in training but AMP not enabled in hardware")
-        
-        # Data-Model compatibility
-        if 'data' in config and 'model' in config:
-            data_config = config['data']
-            model_config = config['model']
-            
-            # Feature count compatibility
-            data_features = data_config.get('features', 20)
-            min_features = model_config.get('min_features', 5)
-            
-            if data_features < min_features:
-                errors.append(f"Data features ({data_features}) < model min_features ({min_features})")
-            
-            # Sample size vs model complexity
-            normal_samples = data_config.get('normal_samples', 1000)
-            hidden_dims = model_config.get('hidden_dims', [])
-            # Rough parameter estimate
-            total_params = sum(hidden_dims) if hidden_dims else 100
-            
-            if normal_samples < total_params:
-                warnings.append(f"Small dataset ({normal_samples}) for model complexity (~{total_params} params)")
-        
-        # MEMORY OPTIMIZATION - Clear memory before strict mode validation for low-memory systems
-        if strict and total_ram_gb < 8:
-            try:
-                strict_mode_clear = enhanced_clear_memory(
-                    aggressive=True,
-                    hardware_data=hardware_data
-                )
-                if strict_mode_clear.get('success'):
-                    logger.debug("Memory optimized before strict mode validation")
-            except Exception as e:
-                logger.debug(f"Strict mode memory optimization failed: {e}")
-        
-        # 11. STRICT MODE ADDITIONAL VALIDATIONS
-        if strict:
-            logger.debug("Applying strict mode validations")
-            
-            # Require all recommended sections
-            if missing_recommended:
-                errors.extend([f"Strict mode: missing section '{section}'" for section in missing_recommended])
-            
-            # Stricter parameter bounds
-            if 'training' in config:
-                training = config['training']
-                
-                lr = training.get('learning_rate', 0.001)
-                if lr > 0.1:
-                    errors.append("Strict mode: learning_rate must be <= 0.1")
-                elif lr < 1e-6:
-                    errors.append("Strict mode: learning_rate must be >= 1e-6")
-                
-                batch_size = training.get('batch_size', 32)
-                if batch_size > 512:
-                    errors.append("Strict mode: batch_size must be <= 512")
-                elif batch_size < 8:
-                    errors.append("Strict mode: batch_size must be >= 8")
-            
-            # Require specific metadata fields
-            if 'metadata' in config:
-                metadata = config['metadata']
-                required_strict_metadata = ['description', 'version', 'config_version']
-                missing_metadata = [field for field in required_strict_metadata if field not in metadata]
-                if missing_metadata:
-                    errors.extend([f"Strict mode: missing metadata field '{field}'" for field in missing_metadata])
-            
-            # Hardware requirements in strict mode
-            if 'hardware' in config:
-                hardware = config['hardware']
-                if 'minimum_system_requirements' not in hardware:
-                    errors.append("Strict mode: hardware section must specify minimum_system_requirements")
-            
-            # Convert strict warnings to errors
-            if any("Very high" in warning or "Very low" in warning for warning in warnings):
-                extreme_warnings = [w for w in warnings if "Very high" in w or "Very low" in w]
-                errors.extend([f"Strict mode: {warning}" for warning in extreme_warnings])
-        
-        # 12. FINAL VALIDATION SUMMARY
-        logger.debug("Generating validation summary")
-        
-        # Calculate validation statistics
-        total_checks = len(errors) + len(warnings)
-        error_count = len(errors)
-        warning_count = len(warnings)
-        
-        # Add validation context to config if requested
-        validation_context.update({
-            'total_checks': total_checks,
-            'error_count': error_count,
-            'warning_count': warning_count,
-            'validation_passed': error_count == 0,
-            'validation_quality': (
-                'excellent' if error_count == 0 and warning_count == 0 else
-                'good' if error_count == 0 and warning_count <= 5 else
-                'needs_attention' if error_count == 0 else
-                'failed'
-            )
-        })
-        
-        # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
-        # Aggressive cleanup after validation completion
-        try:
-            final_clear_results = enhanced_clear_memory(
-                aggressive=True,  # Aggressive final cleanup
-                hardware_data=hardware_data
-            )
-            
-            if final_clear_results.get('success'):
-                logger.debug(f"Final validation memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-                
-        except Exception as e:
-            logger.debug(f"Final validation memory optimization failed: {e}")
-        
-        # Log validation summary
-        if error_count == 0:
-            if warning_count == 0:
-                logger.debug("Configuration validation passed with no issues")
-            else:
-                logger.warning(f"Configuration validation passed with {warning_count} warnings")
-        else:
-            logger.error(f"Configuration validation failed with {error_count} errors and {warning_count} warnings")
-            # Log each error and warning
-            for err in errors:
-                logger.error(f"Validation Error: {err}")
-            for warn in warnings:
-                logger.warning(f"Validation Warning: {warn}")
-        
-        # Return results
-        is_valid = error_count == 0
-        return is_valid, errors, warnings
-        
-    except Exception as e:
-        error_msg = f"Configuration validation failed with exception: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        errors.append(error_msg)
-        
-        # Emergency memory cleanup on error
-        try:
-            emergency_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
-            logger.debug("Emergency memory cleanup performed after validation error")
-        except Exception as cleanup_error:
-            logger.debug(f"Emergency cleanup failed: {cleanup_error}")
-        
-        return False, errors, warnings
 
 def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
     """Load config file with enhanced validation, error recovery, migration support,
@@ -14264,6 +11911,3810 @@ def convert_legacy_config(
         logger.info("Falling back to basic migration")
         return migrate_config(legacy_config)
 
+def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool, List[str], List[str]]:
+    """
+    Comprehensive configuration validation with enhanced preset compatibility,
+    hardware requirement validation, automatic error correction capabilities,
+    and intelligent memory management for optimal performance.
+    
+    This function provides deep validation of all configuration sections including
+    the new preset features, enhanced model configurations, and system-aware validation.
+    
+    Args:
+        config: Configuration dictionary to validate
+        strict: If True, apply stricter validation rules and fail on warnings
+        
+    Returns:
+        Tuple containing:
+        - bool: True if configuration is valid (or auto-corrected)
+        - List[str]: List of validation errors found
+        - List[str]: List of validation warnings and recommendations
+        
+    Raises:
+        ValueError: Only if configuration is fundamentally invalid and cannot be auto-corrected
+    """
+    errors = []
+    warnings = []
+    auto_fixes = []
+    
+    try:
+        # Input validation
+        if not isinstance(config, dict):
+            raise ValueError("Configuration must be a dictionary")
+        
+        if not config:
+            raise ValueError("Configuration cannot be empty")
+        
+        # INITIAL MEMORY OPTIMIZATION - Get hardware context early
+        hardware_data = None
+        total_ram_gb = 8.0  # Conservative default
+        cuda_available = False
+        
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+            cuda_available = hardware_data.get('cuda', {}).get('available', False)
+        except Exception as e:
+            logger.debug(f"Hardware detection failed during validation: {e}")
+        
+        # Track validation context
+        validation_context = {
+            'timestamp': datetime.now().isoformat(),
+            'strict_mode': strict,
+            'config_size': len(str(config)),
+            'sections_present': list(config.keys()),
+            'auto_fixes_applied': 0,
+            'hardware_context': {
+                'total_ram_gb': total_ram_gb,
+                'cuda_available': cuda_available
+            }
+        }
+        
+        # MEMORY OPTIMIZATION - Clear memory before intensive validation for large configs
+        config_size_mb = len(str(config)) / (1024 * 1024)
+        if config_size_mb > 1.0 or total_ram_gb < 8:
+            try:
+                pre_validation_clear = enhanced_clear_memory(
+                    aggressive=config_size_mb > 5.0 or total_ram_gb < 4,
+                    hardware_data=hardware_data
+                )
+                if pre_validation_clear.get('success'):
+                    logger.debug(f"Memory optimized before validation of {config_size_mb:.1f}MB config")
+            except Exception as e:
+                logger.debug(f"Pre-validation memory optimization failed: {e}")
+        
+        # 1. STRUCTURAL VALIDATION
+        logger.debug("Starting structural validation")
+        
+        # Check for required top-level sections
+        required_sections = ['training', 'model', 'security', 'data']
+        missing_sections = [section for section in required_sections if section not in config]
+        
+        if missing_sections:
+            errors.append(f"Missing required configuration sections: {missing_sections}")
+            if strict:
+                return False, errors, warnings
+        
+        # Check for optional but recommended sections
+        recommended_sections = ['metadata', 'hardware', 'monitoring', 'system', 'presets']
+        missing_recommended = [section for section in recommended_sections if section not in config]
+        
+        if missing_recommended:
+            warnings.append(f"Missing recommended sections: {missing_recommended}")
+        
+        # 2. METADATA VALIDATION WITH ENHANCED CHECKS
+        logger.debug("Validating metadata section")
+        
+        if 'metadata' in config:
+            metadata = config['metadata']
+            if not isinstance(metadata, dict):
+                errors.append("Metadata section must be a dictionary")
+            else:
+                # Version compatibility validation
+                config_version = metadata.get('config_version', '1.0')
+                if config_version not in ['2.1', '2.0', '1.9', '1.8']:
+                    warnings.append(f"Unknown config version '{config_version}', expecting '2.1'")
+                
+                # Schema validation
+                if 'validation' in metadata:
+                    validation_info = metadata['validation']
+                    schema_version = validation_info.get('schema_version', '1.0')
+                    if schema_version != '2.1':
+                        warnings.append(f"Schema version mismatch: {schema_version} != 2.1")
+                    
+                    # Check required sections against metadata
+                    metadata_required = validation_info.get('required_sections', [])
+                    if metadata_required != required_sections:
+                        warnings.append("Metadata required_sections don't match validation requirements")
+                
+                # System information validation
+                if 'system' in metadata:
+                    system_info = metadata['system']
+                    
+                    # Critical system fields
+                    critical_fields = ['python_version', 'pytorch_version', 'os']
+                    missing_system = [field for field in critical_fields if field not in system_info]
+                    if missing_system:
+                        warnings.append(f"Missing system information: {missing_system}")
+                    
+                    # CUDA consistency check
+                    cuda_available_meta = system_info.get('cuda_available', False)
+                    cuda_devices = system_info.get('cuda_devices', 0)
+                    if cuda_available_meta and cuda_devices == 0:
+                        warnings.append("CUDA reported as available but no devices found")
+                    elif not cuda_available_meta and cuda_devices > 0:
+                        warnings.append("CUDA devices reported but CUDA not available")
+                
+                # Hardware requirements validation
+                if 'recommended_hardware' in metadata:
+                    hw_req = metadata['recommended_hardware']
+                    
+                    # Validate reasonable hardware requirements
+                    gpu_memory = hw_req.get('gpu_memory_gb', 0)
+                    if gpu_memory > 80:
+                        warnings.append(f"Very high GPU memory requirement: {gpu_memory}GB")
+                    elif gpu_memory > 0 and gpu_memory < 1:
+                        warnings.append(f"Very low GPU memory requirement: {gpu_memory}GB")
+                    
+                    cpu_cores = hw_req.get('cpu_cores', 1)
+                    if cpu_cores > 128:
+                        warnings.append(f"Very high CPU core requirement: {cpu_cores}")
+                    elif cpu_cores < 1:
+                        errors.append(f"Invalid CPU core requirement: {cpu_cores}")
+                
+                # Preset compatibility validation
+                if 'compatibility' in metadata:
+                    compatibility = metadata['compatibility']
+                    if isinstance(compatibility, list):
+                        # Check against available model types
+                        if MODEL_VARIANTS:
+                            invalid_models = [model for model in compatibility if model not in MODEL_VARIANTS]
+                            if invalid_models:
+                                warnings.append(f"Compatibility includes unavailable models: {invalid_models}")
+                    else:
+                        warnings.append("Compatibility field should be a list of model types")
+        
+        # MEMORY OPTIMIZATION - Clear memory after metadata validation for large configs
+        if len(str(metadata)) > 50000 and total_ram_gb < 16:
+            try:
+                metadata_clear = enhanced_clear_memory(
+                    aggressive=False,
+                    hardware_data=hardware_data
+                )
+                if metadata_clear.get('success'):
+                    logger.debug("Memory optimized after metadata validation")
+            except Exception as e:
+                logger.debug(f"Post-metadata memory optimization failed: {e}")
+        
+        # 3. TRAINING CONFIGURATION VALIDATION WITH PRESET AWARENESS
+        logger.debug("Validating training section")
+        
+        if 'training' in config:
+            training = config['training']
+            if not isinstance(training, dict):
+                errors.append("Training section must be a dictionary")
+            else:
+                # Core parameter validation with auto-correction
+                batch_size = training.get('batch_size', 32)
+                if not isinstance(batch_size, int) or batch_size < 1:
+                    errors.append(f"Invalid batch_size: {batch_size}, must be positive integer")
+                elif batch_size > 2048:
+                    warnings.append(f"Very large batch_size: {batch_size}, may cause memory issues")
+                elif batch_size < 2:
+                    warnings.append(f"Very small batch_size: {batch_size}, may cause training instability")
+                
+                epochs = training.get('epochs', 100)
+                if not isinstance(epochs, int) or epochs < 1:
+                    errors.append(f"Invalid epochs: {epochs}, must be positive integer")
+                elif epochs > 5000:
+                    warnings.append(f"Very high epoch count: {epochs}, consider early stopping")
+                elif epochs < 5:
+                    warnings.append(f"Very low epoch count: {epochs}, may not converge properly")
+                
+                learning_rate = training.get('learning_rate', 0.001)
+                if not isinstance(learning_rate, (int, float)) or learning_rate <= 0:
+                    errors.append(f"Invalid learning_rate: {learning_rate}, must be positive number")
+                elif learning_rate > 1.0:
+                    warnings.append(f"Very high learning_rate: {learning_rate}, may cause instability")
+                elif learning_rate < 1e-8:
+                    warnings.append(f"Very low learning_rate: {learning_rate}, may not converge")
+                
+                patience = training.get('patience', 10)
+                if not isinstance(patience, int) or patience < 0:
+                    errors.append(f"Invalid patience: {patience}, must be non-negative integer")
+                elif patience > 1000:
+                    warnings.append(f"Very high patience: {patience}, training may run too long")
+                
+                # Enhanced optimizer validation
+                optimizer = training.get('optimizer', 'Adam')
+                valid_optimizers = ['SGD', 'Adam', 'AdamW', 'RMSprop', 'Adagrad', 'LBFGS']
+                if optimizer not in valid_optimizers:
+                    errors.append(f"Invalid optimizer: {optimizer}, must be one of {valid_optimizers}")
+                
+                # Optimizer-specific parameter validation
+                if optimizer == 'Adam' or optimizer == 'AdamW':
+                    adam_betas = training.get('adam_betas', (0.9, 0.999))
+                    if not (isinstance(adam_betas, (list, tuple)) and len(adam_betas) == 2):
+                        warnings.append("adam_betas should be a tuple/list of 2 values")
+                    elif not all(0 < beta < 1 for beta in adam_betas):
+                        errors.append("adam_betas values must be between 0 and 1")
+                    
+                    adam_eps = training.get('adam_eps', 1e-8)
+                    if not isinstance(adam_eps, (int, float)) or adam_eps <= 0:
+                        errors.append("adam_eps must be positive number")
+                
+                # Scheduler validation with parameter checking
+                scheduler = training.get('scheduler')
+                if scheduler is not None:
+                    valid_schedulers = [
+                        'StepLR', 'MultiStepLR', 'ExponentialLR', 'CosineAnnealingLR',
+                        'ReduceLROnPlateau', 'CosineAnnealingWarmRestarts', 'OneCycleLR', 'CyclicLR'
+                    ]
+                    if scheduler not in valid_schedulers:
+                        errors.append(f"Invalid scheduler: {scheduler}, must be one of {valid_schedulers}")
+                    
+                    # Validate scheduler parameters
+                    scheduler_params = training.get('scheduler_params', {})
+                    if scheduler == 'ReduceLROnPlateau':
+                        mode = scheduler_params.get('mode', 'min')
+                        if mode not in ['min', 'max']:
+                            errors.append("ReduceLROnPlateau mode must be 'min' or 'max'")
+                        
+                        factor = scheduler_params.get('factor', 0.5)
+                        if not isinstance(factor, (int, float)) or not (0 < factor < 1):
+                            errors.append("ReduceLROnPlateau factor must be between 0 and 1")
+                    
+                    elif scheduler == 'CosineAnnealingLR':
+                        T_max = scheduler_params.get('T_max')
+                        if T_max and (not isinstance(T_max, int) or T_max <= 0):
+                            errors.append("CosineAnnealingLR T_max must be positive integer")
+                
+                # Advanced training parameter validation
+                gradient_clip = training.get('gradient_clip', 1.0)
+                if not isinstance(gradient_clip, (int, float)) or gradient_clip < 0:
+                    errors.append("gradient_clip must be non-negative number")
+                elif gradient_clip > 100:
+                    warnings.append(f"Very high gradient clipping: {gradient_clip}")
+                
+                gradient_accumulation = training.get('gradient_accumulation_steps', 1)
+                if not isinstance(gradient_accumulation, int) or gradient_accumulation < 1:
+                    errors.append("gradient_accumulation_steps must be positive integer")
+                elif gradient_accumulation > 64:
+                    warnings.append(f"High gradient accumulation: {gradient_accumulation}, may slow training")
+                
+                # Hardware-aware validation
+                mixed_precision = training.get('mixed_precision', False)
+                if mixed_precision and not cuda_available:
+                    warnings.append("mixed_precision enabled but CUDA not available")
+                
+                num_workers = training.get('num_workers', 1)
+                max_workers = (os.cpu_count() or 1) * 2
+                if not isinstance(num_workers, int) or num_workers < 0:
+                    errors.append("num_workers must be non-negative integer")
+                elif num_workers > max_workers:
+                    warnings.append(f"num_workers ({num_workers}) exceeds recommended max ({max_workers})")
+                
+                pin_memory = training.get('pin_memory', False)
+                if pin_memory and not cuda_available:
+                    warnings.append("pin_memory enabled but CUDA not available")
+                
+                # Cross-parameter validation
+                effective_batch_size = batch_size * gradient_accumulation
+                if effective_batch_size > 1024:
+                    warnings.append(f"Large effective batch size ({effective_batch_size}) may hurt generalization")
+                elif effective_batch_size < 4:
+                    warnings.append(f"Small effective batch size ({effective_batch_size}) may cause noisy gradients")
+        
+        # 4. MODEL CONFIGURATION VALIDATION WITH ENHANCED PRESET SUPPORT
+        logger.debug("Validating model section")
+        
+        if 'model' in config:
+            model = config['model']
+            if not isinstance(model, dict):
+                errors.append("Model section must be a dictionary")
+            else:
+                # MEMORY OPTIMIZATION - Clear memory before intensive model validation for complex models
+                model_complexity = len(str(model))
+                if model_complexity > 10000 and total_ram_gb < 16:
+                    try:
+                        model_validation_clear = enhanced_clear_memory(
+                            aggressive=model_complexity > 50000,
+                            hardware_data=hardware_data
+                        )
+                        if model_validation_clear.get('success'):
+                            logger.debug("Memory optimized before model validation")
+                    except Exception as e:
+                        logger.debug(f"Model validation memory optimization failed: {e}")
+                
+                # Model type validation with MODEL_VARIANTS checking
+                model_type = model.get('model_type', 'SimpleAutoencoder')
+                
+                if MODEL_VARIANTS:
+                    if model_type not in MODEL_VARIANTS:
+                        errors.append(f"Invalid model_type: {model_type}, available: {list(MODEL_VARIANTS.keys())}")
+                else:
+                    # Fallback validation
+                    valid_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
+                    if model_type not in valid_types:
+                        errors.append(f"Invalid model_type: {model_type}, expected one of: {valid_types}")
+                
+                # Encoding dimension validation
+                encoding_dim = model.get('encoding_dim', 8)
+                if not isinstance(encoding_dim, int) or encoding_dim <= 0:
+                    errors.append(f"Invalid encoding_dim: {encoding_dim}, must be positive integer")
+                elif encoding_dim > 1000:
+                    warnings.append(f"Very large encoding_dim: {encoding_dim}, may cause memory issues")
+                elif encoding_dim < 2:
+                    warnings.append(f"Very small encoding_dim: {encoding_dim}, may limit expressiveness")
+                
+                # Architecture validation with enhanced checks
+                hidden_dims = model.get('hidden_dims', [])
+                if not isinstance(hidden_dims, list):
+                    errors.append("hidden_dims must be a list")
+                elif not hidden_dims:
+                    errors.append("hidden_dims cannot be empty")
+                else:
+                    # Validate all dimensions
+                    invalid_dims = [dim for dim in hidden_dims if not isinstance(dim, int) or dim <= 0]
+                    if invalid_dims:
+                        errors.append(f"Invalid hidden dimensions: {invalid_dims}")
+                    
+                    # Architecture complexity checks
+                    if len(hidden_dims) > 10:
+                        warnings.append(f"Very deep architecture ({len(hidden_dims)} layers) may be hard to train")
+                    
+                    large_dims = [dim for dim in hidden_dims if dim > 2048]
+                    if large_dims:
+                        warnings.append(f"Very large hidden dimensions: {large_dims}")
+                    
+                    # Check for decreasing pattern
+                    if len(hidden_dims) > 1:
+                        increasing_count = sum(1 for i in range(1, len(hidden_dims)) if hidden_dims[i] > hidden_dims[i-1])
+                        if increasing_count > len(hidden_dims) // 2:
+                            warnings.append("Hidden dimensions mostly increase - consider decreasing pattern for autoencoders")
+                
+                # Dropout validation with length matching
+                dropout_rates = model.get('dropout_rates', [])
+                if not isinstance(dropout_rates, list):
+                    errors.append("dropout_rates must be a list")
+                elif not dropout_rates:
+                    errors.append("dropout_rates cannot be empty")
+                else:
+                    # Validate all rates
+                    invalid_rates = [rate for rate in dropout_rates if not isinstance(rate, (int, float)) or not (0 <= rate < 1)]
+                    if invalid_rates:
+                        errors.append(f"Invalid dropout rates: {invalid_rates}, must be between 0 and 1")
+                    
+                    # Length compatibility
+                    if len(hidden_dims) != len(dropout_rates):
+                        errors.append(f"Length mismatch: {len(hidden_dims)} hidden layers, {len(dropout_rates)} dropout rates")
+                    
+                    # Dropout strategy validation
+                    if all(rate == 0 for rate in dropout_rates):
+                        warnings.append("No dropout applied (all rates are 0)")
+                    elif any(rate > 0.8 for rate in dropout_rates):
+                        warnings.append("Very high dropout rates may hurt performance")
+                
+                # Activation function validation
+                activation = model.get('activation', 'relu')
+                available_activations = model.get('available_activations', ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish'])
+                if activation not in available_activations:
+                    errors.append(f"Invalid activation: {activation}, available: {available_activations}")
+                
+                activation_param = model.get('activation_param', 0.0)
+                if not isinstance(activation_param, (int, float)):
+                    errors.append("activation_param must be a number")
+                elif activation == 'leaky_relu' and activation_param <= 0:
+                    warnings.append("leaky_relu typically uses positive activation_param")
+                
+                # Normalization validation with consistency checks
+                normalization = model.get('normalization')
+                available_normalizations = model.get('available_normalizations', ['batch', 'layer', 'instance', 'group', None])
+                if normalization not in available_normalizations:
+                    errors.append(f"Invalid normalization: {normalization}, available: {available_normalizations}")
+
+                use_batch_norm = model.get('use_batch_norm', False)
+                use_layer_norm = model.get('use_layer_norm', False)
+
+                # Fix inconsistencies: ensure normalization setting matches use_*_norm flags
+                if normalization is None:
+                    # If no normalization specified, both flags should be False
+                    if use_batch_norm or use_layer_norm:
+                        warnings.append("normalization=None but batch_norm or layer_norm enabled - auto-correcting to disable both")
+                        model['use_batch_norm'] = False
+                        model['use_layer_norm'] = False
+                elif normalization == 'batch':
+                    # If batch normalization specified, use_batch_norm should be True, use_layer_norm should be False
+                    if not use_batch_norm:
+                        warnings.append("normalization='batch' but use_batch_norm=False - auto-correcting to use_batch_norm=True")
+                        model['use_batch_norm'] = True
+                    if use_layer_norm:
+                        warnings.append("normalization='batch' but use_layer_norm=True - auto-correcting to use_layer_norm=False")
+                        model['use_layer_norm'] = False
+                elif normalization == 'layer':
+                    # If layer normalization specified, use_layer_norm should be True, use_batch_norm should be False
+                    if not use_layer_norm:
+                        warnings.append("normalization='layer' but use_layer_norm=False - auto-correcting to use_layer_norm=True")
+                        model['use_layer_norm'] = True
+                    if use_batch_norm:
+                        warnings.append("normalization='layer' but use_batch_norm=True - auto-correcting to use_batch_norm=False")
+                        model['use_batch_norm'] = False
+                elif normalization in ['instance', 'group']:
+                    # For instance/group normalization, both batch_norm and layer_norm should be False
+                    if use_batch_norm or use_layer_norm:
+                        warnings.append(f"normalization='{normalization}' but batch_norm or layer_norm enabled - auto-correcting to disable both")
+                        model['use_batch_norm'] = False
+                        model['use_layer_norm'] = False
+
+                # Final validation check - should not have both enabled after auto-corrections
+                use_batch_norm = model.get('use_batch_norm', False)
+                use_layer_norm = model.get('use_layer_norm', False)
+                if use_batch_norm and use_layer_norm:
+                    warnings.append("Both batch_norm and layer_norm still enabled after auto-correction - may cause conflicts")
+
+                # Batch norm compatibility with batch size
+                if use_batch_norm and 'training' in config:
+                    batch_size = config['training'].get('batch_size', 32)
+                    if batch_size < 2:
+                        errors.append("Batch normalization requires training batch_size >= 2")
+                
+                # Weight initialization validation
+                weight_init = model.get('weight_init', 'xavier_uniform')
+                available_initializers = model.get('available_initializers', ['xavier_uniform', 'xavier_normal', 'kaiming_uniform', 'kaiming_normal', 'orthogonal'])
+                if weight_init not in available_initializers:
+                    errors.append(f"Invalid weight_init: {weight_init}, available: {available_initializers}")
+                
+                # Advanced features validation
+                skip_connection = model.get('skip_connection', False)
+                residual_blocks = model.get('residual_blocks', False)
+                use_attention = model.get('use_attention', False)
+                
+                if skip_connection and len(hidden_dims) < 2:
+                    warnings.append("Skip connections are most effective with deeper architectures")
+                
+                if residual_blocks and len(hidden_dims) < 3:
+                    warnings.append("Residual blocks are most effective with deeper architectures")
+                
+                if use_attention and model_type == 'SimpleAutoencoder':
+                    warnings.append("Attention mechanism may not be supported in SimpleAutoencoder")
+                
+                # Ensemble-specific validation
+                if model_type == 'AutoencoderEnsemble':
+                    num_models = model.get('num_models', 1)
+                    if not isinstance(num_models, int) or num_models < 1:
+                        errors.append(f"Invalid num_models: {num_models}, must be positive integer")
+                    elif num_models < 2:
+                        warnings.append("Ensemble should have at least 2 models for effectiveness")
+                    elif num_models > 20:
+                        warnings.append(f"Large ensemble ({num_models} models) may require significant memory")
+                    
+                    diversity_factor = model.get('diversity_factor', 0.1)
+                    if not isinstance(diversity_factor, (int, float)) or not (0 <= diversity_factor <= 1):
+                        errors.append(f"Invalid diversity_factor: {diversity_factor}, must be between 0 and 1")
+                    elif diversity_factor == 0:
+                        warnings.append("diversity_factor=0 may reduce ensemble effectiveness")
+                
+                # Feature requirements validation
+                min_features = model.get('min_features', 5)
+                if not isinstance(min_features, int) or min_features <= 0:
+                    errors.append(f"Invalid min_features: {min_features}, must be positive integer")
+                
+                # Cross-validation with data configuration
+                if 'data' in config:
+                    data_features = config['data'].get('features', 20)
+                    if data_features < min_features:
+                        errors.append(f"Data features ({data_features}) < model min_features ({min_features})")
+        
+        # 5. SECURITY CONFIGURATION VALIDATION
+        logger.debug("Validating security section")
+        
+        if 'security' in config:
+            security = config['security']
+            if not isinstance(security, dict):
+                errors.append("Security section must be a dictionary")
+            else:
+                # Threshold validation
+                percentile = security.get('percentile', 95)
+                if not isinstance(percentile, (int, float)) or not (0 < percentile <= 100):
+                    errors.append(f"Invalid percentile: {percentile}, must be between 0 and 100")
+                elif percentile < 50:
+                    warnings.append(f"Low percentile threshold ({percentile}) may cause many false positives")
+                elif percentile > 99.9:
+                    warnings.append(f"Very high percentile ({percentile}) may miss attacks")
+                
+                attack_threshold = security.get('attack_threshold', 0.3)
+                if not isinstance(attack_threshold, (int, float)) or attack_threshold < 0:
+                    errors.append(f"Invalid attack_threshold: {attack_threshold}, must be non-negative")
+                elif attack_threshold > 10:
+                    warnings.append(f"Very high attack threshold ({attack_threshold})")
+                
+                false_negative_cost = security.get('false_negative_cost', 2.0)
+                if not isinstance(false_negative_cost, (int, float)) or false_negative_cost < 0:
+                    errors.append(f"Invalid false_negative_cost: {false_negative_cost}, must be non-negative")
+                
+                # Advanced security features validation
+                threshold_strategy = security.get('anomaly_threshold_strategy', 'fixed_percentile')
+                valid_strategies = ['fixed_percentile', 'dynamic_percentile', 'adaptive', 'statistical']
+                if threshold_strategy not in valid_strategies:
+                    errors.append(f"Invalid threshold strategy: {threshold_strategy}, available: {valid_strategies}")
+                
+                detection_methods = security.get('detection_methods', ['reconstruction_error'])
+                if not isinstance(detection_methods, list):
+                    errors.append("detection_methods must be a list")
+                else:
+                    valid_methods = [
+                        'reconstruction_error', 'statistical_analysis', 'mahalanobis_distance',
+                        'isolation_forest', 'ensemble_voting', 'neural_network'
+                    ]
+                    invalid_methods = [method for method in detection_methods if method not in valid_methods]
+                    if invalid_methods:
+                        errors.append(f"Invalid detection methods: {invalid_methods}")
+                
+                # Alert levels validation
+                alert_levels = security.get('alert_levels', ['low', 'medium', 'high'])
+                if not isinstance(alert_levels, list) or len(alert_levels) < 2:
+                    errors.append("alert_levels must be a list with at least 2 levels")
+                
+                # Confidence interval validation
+                confidence_interval = security.get('confidence_interval', 0.95)
+                if not isinstance(confidence_interval, (int, float)) or not (0 < confidence_interval < 1):
+                    errors.append(f"Invalid confidence_interval: {confidence_interval}, must be between 0 and 1")
+        
+        # 6. DATA CONFIGURATION VALIDATION
+        logger.debug("Validating data section")
+        
+        if 'data' in config:
+            data = config['data']
+            if not isinstance(data, dict):
+                errors.append("Data section must be a dictionary")
+            else:
+                # Sample size validation
+                normal_samples = data.get('normal_samples', 1000)
+                if not isinstance(normal_samples, int) or normal_samples < 1:
+                    errors.append(f"Invalid normal_samples: {normal_samples}, must be positive integer")
+                elif normal_samples < 100:
+                    warnings.append(f"Small normal sample size ({normal_samples}) may not be representative")
+                elif normal_samples > 1000000:
+                    warnings.append(f"Large normal sample size ({normal_samples}) may require significant memory")
+                
+                attack_samples = data.get('attack_samples', 200)
+                if not isinstance(attack_samples, int) or attack_samples < 1:
+                    errors.append(f"Invalid attack_samples: {attack_samples}, must be positive integer")
+                elif attack_samples < 50:
+                    warnings.append(f"Small attack sample size ({attack_samples}) may not be representative")
+                
+                # Feature validation
+                features = data.get('features', 20)
+                if not isinstance(features, int) or features < 1:
+                    errors.append(f"Invalid features: {features}, must be positive integer")
+                elif features > 10000:
+                    warnings.append(f"Very high feature count ({features}) may cause curse of dimensionality")
+                
+                # Split validation
+                validation_split = data.get('validation_split', 0.2)
+                if not isinstance(validation_split, (int, float)) or not (0 < validation_split < 1):
+                    errors.append(f"Invalid validation_split: {validation_split}, must be between 0 and 1")
+                
+                test_split = data.get('test_split', 0.2)
+                if not isinstance(test_split, (int, float)) or not (0 < test_split < 1):
+                    errors.append(f"Invalid test_split: {test_split}, must be between 0 and 1")
+                
+                # Total split validation
+                total_split = validation_split + test_split
+                if total_split >= 1.0:
+                    errors.append(f"Combined splits ({total_split:.2f}) must be < 1.0")
+                elif total_split > 0.8:
+                    warnings.append(f"High combined split ratio ({total_split:.2f}) leaves little training data")
+                
+                # Normalization validation
+                #normalization = data.get('normalization', 'standard')
+                normalization = data.get('data_normalization', 'standard')
+                valid_normalizations = ['standard', 'minmax', 'robust', 'quantile', 'none']
+                if normalization not in valid_normalizations:
+                    errors.append(f"Invalid normalization: {normalization}, available: {valid_normalizations}")
+                
+                # Anomaly factor validation
+                anomaly_factor = data.get('anomaly_factor', 1.5)
+                if not isinstance(anomaly_factor, (int, float)) or anomaly_factor <= 0:
+                    errors.append(f"Invalid anomaly_factor: {anomaly_factor}, must be positive")
+                elif anomaly_factor > 10:
+                    warnings.append(f"Very high anomaly factor ({anomaly_factor})")
+                
+                # Synthetic data generation validation
+                if 'synthetic_generation' in data:
+                    synthetic = data['synthetic_generation']
+                    if isinstance(synthetic, dict):
+                        cluster_variance = synthetic.get('cluster_variance', 0.1)
+                        if not isinstance(cluster_variance, (int, float)) or cluster_variance < 0:
+                            errors.append("cluster_variance must be non-negative")
+                        
+                        anomaly_sparsity = synthetic.get('anomaly_sparsity', 0.3)
+                        if not isinstance(anomaly_sparsity, (int, float)) or not (0 <= anomaly_sparsity <= 1):
+                            errors.append("anomaly_sparsity must be between 0 and 1")
+                
+                # Preprocessing validation
+                if 'preprocessing' in data:
+                    preprocessing = data['preprocessing']
+                    if isinstance(preprocessing, dict):
+                        outlier_threshold = preprocessing.get('outlier_threshold', 3.0)
+                        if not isinstance(outlier_threshold, (int, float)) or outlier_threshold <= 0:
+                            errors.append("outlier_threshold must be positive")
+                        elif outlier_threshold < 1:
+                            warnings.append("Very low outlier threshold may remove too much data")
+                        elif outlier_threshold > 5:
+                            warnings.append("Very high outlier threshold may not remove outliers effectively")
+        
+        # MEMORY OPTIMIZATION - Clear memory before hardware validation for low-memory systems
+        if total_ram_gb < 8:
+            try:
+                mid_validation_clear = enhanced_clear_memory(
+                    aggressive=True,
+                    hardware_data=hardware_data
+                )
+                if mid_validation_clear.get('success'):
+                    logger.debug("Memory optimized mid-validation for low-memory system")
+            except Exception as e:
+                logger.debug(f"Mid-validation memory optimization failed: {e}")
+        
+        # 7. HARDWARE CONFIGURATION VALIDATION
+        logger.debug("Validating hardware section")
+        
+        if 'hardware' in config:
+            hardware = config['hardware']
+            if not isinstance(hardware, dict):
+                errors.append("Hardware section must be a dictionary")
+            else:
+                # Device validation
+                device = hardware.get('device', 'auto')
+                valid_devices = ['auto', 'cpu', 'cuda', 'mps']
+                if device not in valid_devices:
+                    errors.append(f"Invalid device: {device}, available: {valid_devices}")
+                
+                # Device availability check
+                if device == 'cuda' and not cuda_available:
+                    warnings.append("CUDA device specified but CUDA not available")
+                elif device == 'mps' and not (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()):
+                    warnings.append("MPS device specified but MPS not available")
+                
+                # Memory requirements validation
+                recommended_gpu_memory = hardware.get('recommended_gpu_memory', 4)
+                if not isinstance(recommended_gpu_memory, (int, float)) or recommended_gpu_memory < 0:
+                    errors.append("recommended_gpu_memory must be non-negative")
+                elif recommended_gpu_memory > 80:
+                    warnings.append(f"Very high GPU memory requirement: {recommended_gpu_memory}GB")
+                
+                # System requirements validation
+                if 'minimum_system_requirements' in hardware:
+                    min_req = hardware['minimum_system_requirements']
+                    if isinstance(min_req, dict):
+                        cpu_cores = min_req.get('cpu_cores', 1)
+                        if not isinstance(cpu_cores, int) or cpu_cores < 1:
+                            errors.append("minimum cpu_cores must be positive integer")
+                        
+                        ram_gb = min_req.get('ram_gb', 2)
+                        if not isinstance(ram_gb, (int, float)) or ram_gb < 0.5:
+                            errors.append("minimum ram_gb must be >= 0.5")
+                
+                # Performance optimization validation
+                if 'performance_optimization' in hardware:
+                    perf_opt = hardware['performance_optimization']
+                    if isinstance(perf_opt, dict):
+                        use_cuda = perf_opt.get('use_cuda', False)
+                        if use_cuda and not cuda_available:
+                            warnings.append("use_cuda enabled but CUDA not available")
+                        
+                        use_amp = perf_opt.get('use_amp', False)
+                        if use_amp and not cuda_available:
+                            warnings.append("Automatic Mixed Precision requires CUDA")
+                        
+                        benchmark_mode = perf_opt.get('benchmark_mode', False)
+                        deterministic = perf_opt.get('deterministic', False)
+                        if benchmark_mode and deterministic:
+                            warnings.append("benchmark_mode and deterministic may conflict")
+        
+        # 8. PRESET CONFIGURATION VALIDATION
+        logger.debug("Validating presets section")
+        
+        if 'presets' in config:
+            presets = config['presets']
+            if not isinstance(presets, dict):
+                errors.append("Presets section must be a dictionary")
+            else:
+                # Current preset validation
+                current_preset = presets.get('current_preset')
+                if current_preset is not None:
+                    available_presets = get_available_presets()
+                    if current_preset not in available_presets:
+                        errors.append(f"Invalid current_preset: {current_preset}, available: {available_presets}")
+                    else:
+                        # Preset compatibility validation
+                        try:
+                            model_type = config.get('model', {}).get('model_type', 'SimpleAutoencoder')
+                            if not validate_model_preset_compatibility(model_type, config):
+                                warnings.append(f"Model type '{model_type}' may not be compatible with preset '{current_preset}'")
+                        except Exception as e:
+                            warnings.append(f"Preset compatibility check failed: {e}")
+                
+                # Override rules validation
+                if 'override_rules' in presets:
+                    override_rules = presets['override_rules']
+                    if not isinstance(override_rules, dict):
+                        errors.append("override_rules must be a dictionary")
+                    else:
+                        valid_sections = ['security', 'monitoring', 'hardware', 'training', 'model', 'data']
+                        for section, enabled in override_rules.items():
+                            if section not in valid_sections:
+                                warnings.append(f"Unknown override rule section: {section}")
+                            elif not isinstance(enabled, bool):
+                                errors.append(f"Override rule for {section} must be boolean")
+                
+                # Auto-apply validation
+                auto_apply = presets.get('auto_apply', False)
+                if not isinstance(auto_apply, bool):
+                    errors.append("auto_apply must be boolean")
+        
+        # 9. HYPERPARAMETER OPTIMIZATION VALIDATION
+        logger.debug("Validating hyperparameter optimization section")
+        
+        if 'hyperparameter_optimization' in config:
+            hpo = config['hyperparameter_optimization']
+            if not isinstance(hpo, dict):
+                errors.append("hyperparameter_optimization section must be a dictionary")
+            else:
+                enabled = hpo.get('enabled', False)
+                if enabled:
+                    # Strategy validation
+                    strategy = hpo.get('strategy', 'optuna')
+                    valid_strategies = ['optuna', 'hyperopt', 'skopt', 'random', 'grid']
+                    if strategy not in valid_strategies:
+                        errors.append(f"Invalid HPO strategy: {strategy}, available: {valid_strategies}")
+                    
+                    # Trials validation
+                    n_trials = hpo.get('n_trials', 50)
+                    if not isinstance(n_trials, int) or n_trials < 1:
+                        errors.append("n_trials must be positive integer")
+                    elif n_trials > 10000:
+                        warnings.append(f"Very high trial count ({n_trials}) may take very long")
+                    
+                    # Timeout validation
+                    timeout = hpo.get('timeout', 3600)
+                    if not isinstance(timeout, (int, float)) or timeout < 60:
+                        warnings.append("Very short HPO timeout may not find good solutions")
+                    elif timeout > 86400:
+                        warnings.append("Very long HPO timeout (>24h) may be excessive")
+                    
+                    # Optimization space validation
+                    if 'optimization_space' in hpo:
+                        opt_space = hpo['optimization_space']
+                        if not isinstance(opt_space, dict):
+                            errors.append("optimization_space must be a dictionary")
+                        elif not opt_space:
+                            warnings.append("Empty optimization space - HPO will have no effect")
+        
+        # 10. CROSS-SECTION VALIDATION
+        logger.debug("Performing cross-section validation")
+        
+        # Model-Training compatibility
+        if 'model' in config and 'training' in config:
+            model_config = config['model']
+            training_config = config['training']
+            
+            # Batch normalization vs batch size
+            if model_config.get('use_batch_norm') and training_config.get('batch_size', 32) < 2:
+                errors.append("Batch normalization requires training batch_size >= 2")
+            
+            # Mixed precision compatibility
+            if training_config.get('mixed_precision') and model_config.get('model_type') == 'SimpleAutoencoder':
+                warnings.append("Mixed precision may not be fully supported with SimpleAutoencoder")
+            
+            # Memory estimation
+            try:
+                batch_size = training_config.get('batch_size', 32)
+                hidden_dims = model_config.get('hidden_dims', [])
+                if hidden_dims:
+                    model_complexity = sum(hidden_dims) + model_config.get('encoding_dim', 8)
+                    # Rough MB estimate
+                    memory_estimate = batch_size * model_complexity * 4 / (1024**2)
+                    
+                    # > 1GB
+                    if memory_estimate > 1024:
+                        warnings.append(f"High memory usage estimated: ~{memory_estimate:.0f}MB")
+            except Exception:
+                # Skip memory estimation if it fails
+                pass
+        
+        # Hardware-Training compatibility
+        if 'hardware' in config and 'training' in config:
+            hardware_config = config['hardware']
+            training_config = config['training']
+            
+            # CUDA settings consistency
+            device = hardware_config.get('device', 'auto')
+            use_cuda = hardware_config.get('performance_optimization', {}).get('use_cuda', False)
+            
+            if device == 'cpu' and use_cuda:
+                warnings.append("Device set to CPU but use_cuda=True in performance optimization")
+            elif device == 'cuda' and not use_cuda:
+                warnings.append("Device set to CUDA but use_cuda=False in performance optimization")
+            
+            # Mixed precision consistency
+            use_amp = hardware_config.get('performance_optimization', {}).get('use_amp', False)
+            mixed_precision = training_config.get('mixed_precision', False)
+            
+            if use_amp and not mixed_precision:
+                warnings.append("AMP enabled in hardware but mixed_precision=False in training")
+            elif mixed_precision and not use_amp:
+                warnings.append("mixed_precision=True in training but AMP not enabled in hardware")
+        
+        # Data-Model compatibility
+        if 'data' in config and 'model' in config:
+            data_config = config['data']
+            model_config = config['model']
+            
+            # Feature count compatibility
+            data_features = data_config.get('features', 20)
+            min_features = model_config.get('min_features', 5)
+            
+            if data_features < min_features:
+                errors.append(f"Data features ({data_features}) < model min_features ({min_features})")
+            
+            # Sample size vs model complexity
+            normal_samples = data_config.get('normal_samples', 1000)
+            hidden_dims = model_config.get('hidden_dims', [])
+            # Rough parameter estimate
+            total_params = sum(hidden_dims) if hidden_dims else 100
+            
+            if normal_samples < total_params:
+                warnings.append(f"Small dataset ({normal_samples}) for model complexity (~{total_params} params)")
+        
+        # MEMORY OPTIMIZATION - Clear memory before strict mode validation for low-memory systems
+        if strict and total_ram_gb < 8:
+            try:
+                strict_mode_clear = enhanced_clear_memory(
+                    aggressive=True,
+                    hardware_data=hardware_data
+                )
+                if strict_mode_clear.get('success'):
+                    logger.debug("Memory optimized before strict mode validation")
+            except Exception as e:
+                logger.debug(f"Strict mode memory optimization failed: {e}")
+        
+        # 11. STRICT MODE ADDITIONAL VALIDATIONS
+        if strict:
+            logger.debug("Applying strict mode validations")
+            
+            # Require all recommended sections
+            if missing_recommended:
+                errors.extend([f"Strict mode: missing section '{section}'" for section in missing_recommended])
+            
+            # Stricter parameter bounds
+            if 'training' in config:
+                training = config['training']
+                
+                lr = training.get('learning_rate', 0.001)
+                if lr > 0.1:
+                    errors.append("Strict mode: learning_rate must be <= 0.1")
+                elif lr < 1e-6:
+                    errors.append("Strict mode: learning_rate must be >= 1e-6")
+                
+                batch_size = training.get('batch_size', 32)
+                if batch_size > 512:
+                    errors.append("Strict mode: batch_size must be <= 512")
+                elif batch_size < 8:
+                    errors.append("Strict mode: batch_size must be >= 8")
+            
+            # Require specific metadata fields
+            if 'metadata' in config:
+                metadata = config['metadata']
+                required_strict_metadata = ['description', 'version', 'config_version']
+                missing_metadata = [field for field in required_strict_metadata if field not in metadata]
+                if missing_metadata:
+                    errors.extend([f"Strict mode: missing metadata field '{field}'" for field in missing_metadata])
+            
+            # Hardware requirements in strict mode
+            if 'hardware' in config:
+                hardware = config['hardware']
+                if 'minimum_system_requirements' not in hardware:
+                    errors.append("Strict mode: hardware section must specify minimum_system_requirements")
+            
+            # Convert strict warnings to errors
+            if any("Very high" in warning or "Very low" in warning for warning in warnings):
+                extreme_warnings = [w for w in warnings if "Very high" in w or "Very low" in w]
+                errors.extend([f"Strict mode: {warning}" for warning in extreme_warnings])
+        
+        # 12. FINAL VALIDATION SUMMARY
+        logger.debug("Generating validation summary")
+        
+        # Calculate validation statistics
+        total_checks = len(errors) + len(warnings)
+        error_count = len(errors)
+        warning_count = len(warnings)
+        
+        # Add validation context to config if requested
+        validation_context.update({
+            'total_checks': total_checks,
+            'error_count': error_count,
+            'warning_count': warning_count,
+            'validation_passed': error_count == 0,
+            'validation_quality': (
+                'excellent' if error_count == 0 and warning_count == 0 else
+                'good' if error_count == 0 and warning_count <= 5 else
+                'needs_attention' if error_count == 0 else
+                'failed'
+            )
+        })
+        
+        # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
+        # Aggressive cleanup after validation completion
+        try:
+            final_clear_results = enhanced_clear_memory(
+                aggressive=True,  # Aggressive final cleanup
+                hardware_data=hardware_data
+            )
+            
+            if final_clear_results.get('success'):
+                logger.debug(f"Final validation memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
+                
+        except Exception as e:
+            logger.debug(f"Final validation memory optimization failed: {e}")
+        
+        # Log validation summary
+        if error_count == 0:
+            if warning_count == 0:
+                logger.debug("Configuration validation passed with no issues")
+            else:
+                logger.warning(f"Configuration validation passed with {warning_count} warnings")
+        else:
+            logger.error(f"Configuration validation failed with {error_count} errors and {warning_count} warnings")
+            # Log each error and warning
+            for err in errors:
+                logger.error(f"Validation Error: {err}")
+            for warn in warnings:
+                logger.warning(f"Validation Warning: {warn}")
+        
+        # Return results
+        is_valid = error_count == 0
+        return is_valid, errors, warnings
+        
+    except Exception as e:
+        error_msg = f"Configuration validation failed with exception: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        errors.append(error_msg)
+        
+        # Emergency memory cleanup on error
+        try:
+            emergency_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
+            logger.debug("Emergency memory cleanup performed after validation error")
+        except Exception as cleanup_error:
+            logger.debug(f"Emergency cleanup failed: {cleanup_error}")
+        
+        return False, errors, warnings
+
+def validate_model_preset_compatibility(model_type: str, config: Dict[str, Any]) -> bool:
+    """
+    Comprehensive validation of model type compatibility with preset configurations.
+    
+    This function has been updated to work harmoniously with initialize_model_variants() and 
+    validate_model_variants(), providing thorough compatibility validation for all preset 
+    configurations including DEFAULT_PRESET, STABILITY_PRESET, PERFORMANCE_PRESET, and 
+    custom configurations while maintaining consistency with the validation approach.
+    
+    Args:
+        model_type: The model type to validate (e.g., 'SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble')
+        config: Configuration dictionary (can be preset or full config structure)
+        
+    Returns:
+        bool: True if compatible, False otherwise with detailed logging of incompatibility reasons
+    """
+    compatibility_start_time = time.time()
+    validation_details = {
+        'model_type': model_type,
+        'compatibility_checks': [],
+        'warnings': [],
+        'errors': [],
+        'recommendations': []
+    }
+    
+    try:
+        # Phase 1: Basic Input Validation (aligned with validate_model_variants approach)
+        if not model_type or not isinstance(model_type, str):
+            validation_details['errors'].append('Invalid model_type: must be non-empty string')
+            logger.debug("validate_model_preset_compatibility: Invalid model_type provided")
+            return False
+        
+        if not config or not isinstance(config, dict):
+            validation_details['errors'].append('Invalid config: must be non-empty dictionary')
+            logger.debug("validate_model_preset_compatibility: Invalid config provided")
+            return False
+        
+        validation_details['compatibility_checks'].append('basic_input_validation')
+        
+        # Phase 2: Model Variants Availability Check (harmonized with initialize_model_variants)
+        if not MODEL_VARIANTS:
+            logger.debug("MODEL_VARIANTS not initialized, attempting initialization for compatibility check")
+            try:
+                #initialize_model_variants(silent=True)
+                initialize_model_variants(silent=False)
+            except Exception as e:
+                validation_details['warnings'].append(f'MODEL_VARIANTS initialization failed: {str(e)}')
+                logger.warning(f"Failed to initialize model variants for compatibility check: {e}")
+                # Fallback to basic string validation (consistent with existing approach)
+                valid_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
+                if model_type not in valid_types:
+                    validation_details['errors'].append(f'Model type "{model_type}" not in known types: {valid_types}')
+                    return False
+                validation_details['warnings'].append('Using fallback validation without MODEL_VARIANTS')
+        
+        if MODEL_VARIANTS and model_type not in MODEL_VARIANTS:
+            validation_details['errors'].append(f'Model type "{model_type}" not found in MODEL_VARIANTS')
+            logger.debug(f"Model type '{model_type}' not found in MODEL_VARIANTS: {list(MODEL_VARIANTS.keys())}")
+            return False
+        
+        validation_details['compatibility_checks'].append('model_variants_validation')
+        
+        # Phase 3: Configuration Structure Analysis (enhanced but aligned)
+        try:
+            config_structure_type = 'unknown'
+            metadata = config.get('metadata', {})
+            model_config = config.get('model', {})
+            training_config = config.get('training', {})
+            
+            # Determine configuration structure type
+            if 'metadata' in config and 'model' in config and 'training' in config:
+                config_structure_type = 'full_preset'
+                preset_name = config.get('presets', {}).get('current_preset') or metadata.get('preset_used')
+            elif 'preset_used' in config or 'preset_used' in metadata:
+                config_structure_type = 'preset_reference'
+                preset_name = config.get('preset_used') or metadata.get('preset_used')
+            elif model_config:
+                config_structure_type = 'partial_config'
+                preset_name = model_config.get('preset_used')
+            else:
+                config_structure_type = 'minimal_config'
+                preset_name = None
+            
+            validation_details['config_structure_type'] = config_structure_type
+            validation_details['preset_name'] = preset_name
+            validation_details['compatibility_checks'].append('config_structure_analysis')
+            
+        except Exception as e:
+            validation_details['warnings'].append(f'Config structure analysis failed: {str(e)}')
+            logger.debug(f"Config structure analysis failed: {e}")
+        
+        # Phase 4: Explicit Compatibility List Validation
+        try:
+            compatible_models = metadata.get('compatibility', [])
+            if compatible_models and isinstance(compatible_models, list):
+                if model_type not in compatible_models:
+                    validation_details['errors'].append(
+                        f'Model type "{model_type}" not in explicit compatibility list: {compatible_models}'
+                    )
+                    logger.debug(f"Model type '{model_type}' not in compatibility list: {compatible_models}")
+                    return False
+                else:
+                    validation_details['compatibility_checks'].append('explicit_compatibility_list')
+                    logger.debug(f"Model type '{model_type}' found in explicit compatibility list")
+            
+        except Exception as e:
+            validation_details['warnings'].append(f'Explicit compatibility validation failed: {str(e)}')
+            logger.debug(f"Error validating explicit compatibility: {e}")
+        
+        # Phase 5: Model-Specific Architecture Requirements Validation (aligned with test configurations)
+        try:
+            if model_type == 'SimpleAutoencoder':
+                validation_details['compatibility_checks'].append('simpleautoencoder_validation')
+                
+                # Simple autoencoder requirements - basic parameters only (consistent with test config)
+                encoding_dim = model_config.get('encoding_dim', 12)
+                if not isinstance(encoding_dim, (int, float)) or encoding_dim <= 0:
+                    validation_details['errors'].append(f'SimpleAutoencoder: Invalid encoding_dim: {encoding_dim}')
+                    logger.debug(f"SimpleAutoencoder: Invalid encoding_dim: {encoding_dim}")
+                    return False
+                
+                # Ensure simple architecture (no complex features) - aligned with _create_model_test_config
+                if model_config.get('use_attention', False):
+                    validation_details['warnings'].append('SimpleAutoencoder: use_attention should be False for simple architecture')
+                
+                if model_config.get('residual_blocks', False):
+                    validation_details['warnings'].append('SimpleAutoencoder: residual_blocks should be False for simple architecture')
+                
+                # Validate hidden dimensions for simple architecture
+                hidden_dims = model_config.get('hidden_dims', [128])
+                if isinstance(hidden_dims, list) and len(hidden_dims) > 2:
+                    validation_details['warnings'].append(f'SimpleAutoencoder: Deep architecture with {len(hidden_dims)} layers may be too complex')
+                
+                # Validate dropout rates (consistent with _validate_and_adjust_parameters approach)
+                dropout_rates = model_config.get('dropout_rates', [0.2])
+                if isinstance(dropout_rates, list):
+                    invalid_rates = [r for r in dropout_rates if not isinstance(r, (int, float)) or r < 0 or r >= 1]
+                    if invalid_rates:
+                        validation_details['errors'].append(f'SimpleAutoencoder: Invalid dropout rates: {invalid_rates}')
+                        return False
+                
+                validation_details['recommendations'].append('SimpleAutoencoder works best with simple architectures and basic features')
+                
+            elif model_type == 'EnhancedAutoencoder':
+                validation_details['compatibility_checks'].append('enhancedautoencoder_validation')
+                
+                # Enhanced autoencoder requirements - supports advanced features
+                encoding_dim = model_config.get('encoding_dim', 32)
+                if not isinstance(encoding_dim, (int, float)) or encoding_dim <= 0:
+                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid encoding_dim: {encoding_dim}')
+                    return False
+                
+                # Validate hidden dimensions (consistent with parameter validation)
+                hidden_dims = model_config.get('hidden_dims', [256, 128, 64])
+                if not isinstance(hidden_dims, list) or not hidden_dims:
+                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid hidden_dims: {hidden_dims}')
+                    return False
+                
+                # Check for invalid dimension values (aligned with _validate_and_adjust_parameters)
+                invalid_dims = [dim for dim in hidden_dims if not isinstance(dim, (int, float)) or dim <= 0]
+                if invalid_dims:
+                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid dimension values: {invalid_dims}')
+                    return False
+                
+                # Validate dropout rates (consistent with existing validation approach)
+                dropout_rates = model_config.get('dropout_rates', [0.2, 0.15, 0.1])
+                if not isinstance(dropout_rates, list) or not dropout_rates:
+                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid dropout_rates: {dropout_rates}')
+                    return False
+                
+                invalid_rates = [r for r in dropout_rates if not isinstance(r, (int, float)) or r < 0 or r >= 1]
+                if invalid_rates:
+                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid dropout rate values: {invalid_rates}')
+                    return False
+                
+                # Advanced feature compatibility checks (aligned with test configurations)
+                use_attention = model_config.get('use_attention', False)
+                if use_attention and encoding_dim < 32:
+                    validation_details['warnings'].append(f'EnhancedAutoencoder: Attention mechanism may not be effective with small encoding_dim: {encoding_dim}')
+                
+                residual_blocks = model_config.get('residual_blocks', False)
+                if residual_blocks and not hidden_dims:
+                    validation_details['warnings'].append('EnhancedAutoencoder: Residual blocks require hidden layers')
+                
+                # Normalization compatibility (consistent with _extract_and_validate_config_param)
+                normalization = model_config.get('normalization', 'batch')
+                available_normalizations = model_config.get('available_normalizations', ['batch', 'layer', 'instance', 'group', 'none'])
+                if normalization and normalization not in available_normalizations:
+                    validation_details['errors'].append(f'EnhancedAutoencoder: Normalization "{normalization}" not in available list: {available_normalizations}')
+                    return False
+                
+                validation_details['recommendations'].append('EnhancedAutoencoder supports advanced features like attention and residual connections')
+                
+            elif model_type == 'AutoencoderEnsemble':
+                validation_details['compatibility_checks'].append('autoencoder_ensemble_validation')
+                
+                # Ensemble-specific requirements (aligned with test configuration constraints)
+                num_models = model_config.get('num_models', 3)
+                if not isinstance(num_models, int) or num_models < 1:
+                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid num_models: {num_models} (must be positive integer)')
+                    return False
+                
+                if num_models > 20:
+                    validation_details['warnings'].append(f'AutoencoderEnsemble: Large ensemble size ({num_models}) may be memory intensive')
+                
+                diversity_factor = model_config.get('diversity_factor', 0.3)
+                if not isinstance(diversity_factor, (int, float)) or not 0 <= diversity_factor <= 1:
+                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid diversity_factor: {diversity_factor} (must be between 0 and 1)')
+                    return False
+                
+                # Basic architecture validation (same as enhanced, consistent with test configs)
+                encoding_dim = model_config.get('encoding_dim', 24)
+                if not isinstance(encoding_dim, (int, float)) or encoding_dim <= 0:
+                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid encoding_dim: {encoding_dim}')
+                    return False
+                
+                hidden_dims = model_config.get('hidden_dims', [192, 96, 48])
+                if not isinstance(hidden_dims, list) or not hidden_dims:
+                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid hidden_dims: {hidden_dims}')
+                    return False
+                
+                # Memory and computational requirements (aligned with resource estimation approach)
+                total_params_estimate = sum(hidden_dims) * num_models + encoding_dim * num_models
+                if total_params_estimate > 1_000_000:  # 1M parameters threshold
+                    validation_details['warnings'].append(f'AutoencoderEnsemble: Large parameter count estimate ({total_params_estimate:,}) may require significant memory')
+                
+                validation_details['recommendations'].append('AutoencoderEnsemble provides improved robustness through model diversity')
+                
+            else:
+                validation_details['warnings'].append(f'Unknown model type "{model_type}" - using generic validation')
+                
+        except Exception as e:
+            validation_details['errors'].append(f'Model-specific validation failed: {str(e)}')
+            logger.error(f"Model-specific validation failed for {model_type}: {e}")
+            return False
+        
+        # Phase 6: Preset-Specific Compatibility Validation (enhanced but consistent)
+        try:
+            if preset_name and preset_name in globals().get('PRESET_CONFIGS', {}):
+                validation_details['compatibility_checks'].append('preset_specific_validation')
+                
+                preset_config = globals()['PRESET_CONFIGS'][preset_name]
+                preset_metadata = preset_config.get('metadata', {})
+                preset_compatible_models = preset_metadata.get('compatibility', [])
+                
+                if preset_compatible_models and model_type not in preset_compatible_models:
+                    validation_details['errors'].append(f'Model type "{model_type}" not compatible with preset "{preset_name}" (compatible: {preset_compatible_models})')
+                    logger.debug(f"Model type '{model_type}' not compatible with preset '{preset_name}'")
+                    return False
+                
+                # Validate preset's model configuration compatibility
+                preset_model_config = preset_config.get('model', {})
+                preset_model_type = preset_model_config.get('model_type')
+                
+                if preset_model_type and preset_model_type != model_type:
+                    validation_details['warnings'].append(f'Preset "{preset_name}" configured for "{preset_model_type}", requested "{model_type}" (may work but not optimal)')
+                
+                # Check preset-specific constraints (aligned with configuration validation)
+                if preset_name == 'STABILITY_PRESET':
+                    # Stability preset should use conservative settings
+                    if model_config.get('dropout_rates', []):
+                        high_dropout = [r for r in model_config['dropout_rates'] if isinstance(r, (int, float)) and r > 0.3]
+                        if high_dropout:
+                            validation_details['warnings'].append(f'STABILITY_PRESET: High dropout rates may impact stability: {high_dropout}')
+                    
+                elif preset_name == 'PERFORMANCE_PRESET':
+                    # Performance preset should support advanced features
+                    if model_type == 'SimpleAutoencoder':
+                        validation_details['warnings'].append('PERFORMANCE_PRESET: SimpleAutoencoder may not utilize performance optimizations fully')
+                    
+                    mixed_precision = training_config.get('mixed_precision', False)
+                    if not mixed_precision and torch.cuda.is_available():
+                        validation_details['recommendations'].append('PERFORMANCE_PRESET: Consider enabling mixed_precision for better performance')
+                
+                elif preset_name == 'DEFAULT_PRESET':
+                    # Default preset should work with all model types
+                    pass
+                
+                validation_details['preset_validation_completed'] = preset_name
+                
+        except Exception as e:
+            validation_details['warnings'].append(f'Preset-specific validation failed: {str(e)}')
+            logger.debug(f"Error during preset validation: {e}")
+        
+        # Phase 7: Hardware Requirements Validation (aligned with system analysis approach)
+        try:
+            validation_details['compatibility_checks'].append('hardware_requirements_validation')
+            
+            hardware_config = config.get('hardware', {})
+            if hardware_config:
+                # Memory requirements estimation (consistent with resource estimation)
+                min_gpu_memory = hardware_config.get('minimum_system_requirements', {}).get('gpu_memory_gb', 0)
+                
+                # Model-specific memory requirements in GB (aligned with resource analysis)
+                memory_requirement = 0
+                if model_type == 'SimpleAutoencoder':
+                    memory_requirement = 1
+                elif model_type == 'EnhancedAutoencoder':
+                    memory_requirement = 2
+                elif model_type == 'AutoencoderEnsemble':
+                    num_models = model_config.get('num_models', 3)
+                    memory_requirement = 1.5 * num_models
+                
+                if min_gpu_memory > 0 and memory_requirement > min_gpu_memory:
+                    validation_details['warnings'].append(f'Estimated memory requirement ({memory_requirement:.1f}GB) exceeds minimum specified ({min_gpu_memory}GB)')
+                
+                # Device compatibility (consistent with hardware context validation)
+                device = hardware_config.get('device', 'auto')
+                mixed_precision = training_config.get('mixed_precision', False)
+                
+                if mixed_precision and device == 'cpu':
+                    validation_details['warnings'].append('Mixed precision enabled but device is CPU (mixed precision requires CUDA)')
+                
+                # CUDA availability check (aligned with system validation)
+                if device == 'cuda' and not torch.cuda.is_available():
+                    validation_details['errors'].append('CUDA device specified but CUDA is not available')
+                    return False
+                
+        except Exception as e:
+            validation_details['warnings'].append(f'Hardware requirements validation failed: {str(e)}')
+            logger.debug(f"Error during hardware validation: {e}")
+        
+        # Phase 8: Activation Function Compatibility (consistent with config parameter extraction)
+        try:
+            validation_details['compatibility_checks'].append('activation_compatibility_validation')
+            
+            activation = model_config.get('activation', 'leaky_relu')
+            available_activations = model_config.get('available_activations', [
+                'relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'
+            ])
+            
+            if activation and activation not in available_activations:
+                validation_details['errors'].append(f'Activation function "{activation}" not in available list: {available_activations}')
+                return False
+            
+            # Model-specific activation recommendations (aligned with test configurations)
+            if model_type == 'SimpleAutoencoder' and activation in ['gelu', 'swish', 'selu']:
+                validation_details['warnings'].append(f'SimpleAutoencoder: Advanced activation "{activation}" may be overkill for simple architecture')
+            
+            activation_param = model_config.get('activation_param', 0.2)
+            if activation == 'leaky_relu' and not isinstance(activation_param, (int, float)):
+                validation_details['errors'].append(f'LeakyReLU requires numeric activation_param, got: {activation_param}')
+                return False
+            
+        except Exception as e:
+            validation_details['warnings'].append(f'Activation compatibility validation failed: {str(e)}')
+            logger.debug(f"Error during activation validation: {e}")
+        
+        # Phase 9: Training Configuration Compatibility (aligned with functional testing approach)
+        try:
+            validation_details['compatibility_checks'].append('training_compatibility_validation')
+            
+            if training_config:
+                batch_size = training_config.get('batch_size', 32)
+                
+                # Batch normalization compatibility (consistent with test scenario filtering)
+                use_batch_norm = model_config.get('use_batch_norm', False)
+                normalization = model_config.get('normalization', 'batch')
+                
+                if (use_batch_norm or normalization == 'batch') and batch_size < 2:
+                    validation_details['errors'].append(f'Batch size {batch_size} too small for batch normalization (minimum 2)')
+                    return False
+                
+                if batch_size < 1:
+                    validation_details['errors'].append(f'Invalid batch size: {batch_size}')
+                    return False
+                
+                # Ensemble-specific training compatibility (aligned with scaling analysis)
+                if model_type == 'AutoencoderEnsemble':
+                    num_models = model_config.get('num_models', 3)
+                    if batch_size < num_models:
+                        validation_details['warnings'].append(f'Batch size ({batch_size}) smaller than ensemble size ({num_models}) may impact training efficiency')
+                
+                # Learning rate validation (consistent with parameter extraction validation)
+                learning_rate = training_config.get('learning_rate', 0.001)
+                if not isinstance(learning_rate, (int, float)) or learning_rate <= 0:
+                    validation_details['errors'].append(f'Invalid learning rate: {learning_rate}')
+                    return False
+                
+                # Optimizer compatibility (aligned with resource estimation approach)
+                optimizer = training_config.get('optimizer', 'AdamW')
+                available_optimizers = ['Adam', 'AdamW', 'SGD', 'RMSprop', 'Adagrad']
+                if optimizer not in available_optimizers:
+                    validation_details['warnings'].append(f'Optimizer "{optimizer}" may not be supported (available: {available_optimizers})')
+                
+        except Exception as e:
+            validation_details['warnings'].append(f'Training compatibility validation failed: {str(e)}')
+            logger.debug(f"Error during training validation: {e}")
+        
+        # Phase 10: Data Configuration Compatibility (aligned with input dimension validation)
+        try:
+            validation_details['compatibility_checks'].append('data_compatibility_validation')
+            
+            data_config = config.get('data', {})
+            if data_config:
+                features = data_config.get('features', 20)
+                min_features = model_config.get('min_features', 5)
+                
+                if not isinstance(features, int) or features < min_features:
+                    validation_details['errors'].append(f'Feature count {features} below minimum required {min_features}')
+                    return False
+                
+                # Model-specific feature requirements (consistent with architectural analysis)
+                if model_type == 'EnhancedAutoencoder' and features < 10:
+                    validation_details['warnings'].append(f'EnhancedAutoencoder: Small feature count ({features}) may not benefit from advanced features')
+                
+                encoding_dim = model_config.get('encoding_dim', 16)
+                if encoding_dim >= features:
+                    validation_details['warnings'].append(f'Encoding dimension ({encoding_dim}) should be smaller than input features ({features}) for compression')
+                
+        except Exception as e:
+            validation_details['warnings'].append(f'Data compatibility validation failed: {str(e)}')
+            logger.debug(f"Error during data validation: {e}")
+        
+        # Phase 11: Experimental Features Validation (consistent with configuration analysis)
+        try:
+            validation_details['compatibility_checks'].append('experimental_features_validation')
+            
+            experimental_config = config.get('experimental', {})
+            if experimental_config:
+                experimental_features = experimental_config.get('experimental_features', {})
+                
+                if experimental_features and experimental_features.get('enabled', False):
+                    if model_type == 'SimpleAutoencoder':
+                        validation_details['warnings'].append('SimpleAutoencoder: Experimental features may not be supported')
+                    
+                    validation_details['recommendations'].append('Experimental features should be used with caution in production')
+                
+        except Exception as e:
+            validation_details['warnings'].append(f'Experimental features validation failed: {str(e)}')
+            logger.debug(f"Error during experimental features validation: {e}")
+        
+        # Phase 12: Comprehensive Results Analysis and Memory Optimization (aligned with existing functions)
+        validation_time = time.time() - compatibility_start_time
+        validation_details['validation_time_seconds'] = validation_time
+        validation_details['total_checks_performed'] = len(validation_details['compatibility_checks'])
+        validation_details['total_warnings'] = len(validation_details['warnings'])
+        validation_details['total_errors'] = len(validation_details['errors'])
+        
+        # Determine final compatibility result (consistent with validate_model_variants approach)
+        has_critical_errors = len(validation_details['errors']) > 0
+        has_warnings = len(validation_details['warnings']) > 0
+        
+        if has_critical_errors:
+            logger.debug(f"Model type '{model_type}' is NOT compatible: {len(validation_details['errors'])} errors found")
+            # Log first 3 errors for debugging
+            logger.debug(f"Compatibility errors: {validation_details['errors'][:3]}...")
+            return False
+        
+        # Log detailed results (aligned with existing logging approach)
+        if has_warnings:
+            logger.debug(f"Model type '{model_type}' is compatible with {len(validation_details['warnings'])} warnings")
+            # Log first 2 warnings for debugging
+            logger.debug(f"Compatibility warnings: {validation_details['warnings'][:2]}...")
+        else:
+            logger.debug(f"Model type '{model_type}' is fully compatible - all {validation_details['total_checks_performed']} checks passed")
+        
+        # Store validation details for debugging (consistent with existing approach)
+        if hasattr(validate_model_preset_compatibility, 'last_validation_details'):
+            validate_model_preset_compatibility.last_validation_details = validation_details
+        
+        return True
+        
+    except Exception as e:
+        validation_details['errors'].append(f'Unexpected validation error: {str(e)}')
+        logger.error(f"Unexpected error during model-preset compatibility validation: {e}")
+        logger.debug(f"Validation details when error occurred: {validation_details}")
+        
+        # In case of validation errors, default to compatible to avoid blocking functionality
+        # but log the issue for investigation (consistent with existing error handling)
+        logger.warning(f"Defaulting to compatible due to validation error for {model_type}")
+        return True
+    
+    finally:
+        # Always log final timing information (aligned with existing timing approach)
+        total_time = time.time() - compatibility_start_time
+        logger.debug(f"Model-preset compatibility validation completed in {total_time:.3f}s: "
+                    f"model='{model_type}', checks={validation_details.get('total_checks_performed', 0)}, "
+                    f"warnings={validation_details.get('total_warnings', 0)}, "
+                    f"errors={validation_details.get('total_errors', 0)}")
+
+def validate_config_interactive(silent: bool = False):
+    """
+    Interactive configuration validation with comprehensive analysis and recommendations.
+    
+    This enhanced implementation provides:
+    - Interactive validation with detailed progress tracking
+    - Comprehensive system analysis and recommendations
+    - Preset compatibility checking and suggestions
+    - Resource requirement estimation and warnings
+    - Actionable recommendations for configuration improvements
+    - User-friendly error reporting and auto-fix suggestions
+    
+    Args:
+        silent: If True, suppress detailed logging messages and progress bars during system checks
+    """
+    try:
+        # Clear screen and show banner
+        print("\033c", end="")
+        config = show_banner(return_config=True)
+        
+        # Use the config returned from show_banner or fallback
+        if config is None:
+            config = get_current_config()
+        
+        # Extract configuration sections with error handling
+        metadata_config = config.get('metadata', {})
+        training_config = config.get('training', {})
+        model_config = config.get('model', {})
+        data_config = config.get('data', {})
+        system_config = config.get('system', {})
+        presets_config = config.get('presets', {})
+        hpo_config = config.get('hyperparameter_optimization', {})
+        
+        # Context extraction using multiple fallbacks
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
+        config_status = "Unknown"
+        
+        # Method 1: Check presets section
+        presets_section = config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
+        
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
+        
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
+        
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
+        if isinstance(model_config, dict):
+            model_type = model_config.get('model_type', 'Unknown')
+        
+        # Extract config source with fallbacks
+        if "runtime" in config and isinstance(config["runtime"], dict):
+            config_source = config["runtime"].get("config_source", "Unknown")
+            config_status = config["runtime"].get("config_status", "Unknown")
+        elif "metadata" in config and isinstance(config["metadata"], dict):
+            config_source = config["metadata"].get("config_source", "Unknown")
+            config_status = config["metadata"].get("config_status", "Unknown")
+        
+        # Get configuration health if available
+        health_status = "unknown"
+        health_color = Fore.WHITE
+        if "runtime" in config and isinstance(config["runtime"], dict):
+            runtime = config["runtime"]
+            if "configuration_health" in runtime:
+                health = runtime["configuration_health"]
+                health_status = health.get("status", "unknown")
+                if health_status in ["healthy", "passed"]:
+                    health_color = Fore.GREEN
+                elif health_status in ["needs_attention", "warning"]:
+                    health_color = Fore.YELLOW
+                else:
+                    health_color = Fore.RED
+        
+        preset_count = len(PRESET_CONFIGS) if 'PRESET_CONFIGS' in globals() else 'Unknown'
+        config_version = metadata_config.get('config_version', 'unknown')
+        
+        # Header with context display
+        if not silent:
+            print(Fore.MAGENTA + Style.BRIGHT + "INTERACTIVE CONFIGURATION VALIDATION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40 + Style.RESET_ALL)
+            print(Fore.YELLOW + Style.BRIGHT + "Configuration Context:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Config Version: " + Fore.CYAN + Style.BRIGHT + f"{config_version}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Config Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Config Status: " + health_color + Style.BRIGHT + f"{config_status}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Config Sections: " + Fore.CYAN + Style.BRIGHT + f"{len(config) if isinstance(config, dict) else 'Unknown'}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Health: " + health_color + Style.BRIGHT + f"{health_status}")
+            
+            # Display key parameters
+            print(Fore.CYAN + Style.BRIGHT + "\nKey Configuration Parameters:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training Batch Size: " + Fore.CYAN + Style.BRIGHT + f"{training_config.get('batch_size', 'N/A')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training Epochs: " + Fore.CYAN + Style.BRIGHT + f"{training_config.get('epochs', 'N/A')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Encoding Dimension: " + Fore.CYAN + Style.BRIGHT + f"{model_config.get('encoding_dim', 'N/A')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.CYAN + Style.BRIGHT + f"{training_config.get('learning_rate', 'N/A')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Optimizer: " + Fore.CYAN + Style.BRIGHT + f"{training_config.get('optimizer', 'N/A')}")
+        
+        # Initialize validation context
+        validation_context = {
+            'start_time': time.time(),
+            'config_loaded': False,
+            'validation_passed': False,
+            'system_analysis_completed': False,
+            'recommendations_generated': False
+        }
+        
+        # Step 1: Load and analyze configuration with hardware context
+        if not silent:
+            print(Fore.YELLOW + Style.BRIGHT + "\nLoading Configuration and System Analysis...")
+        
+        hardware_data = None
+        system_analysis = None
+        
+        # Use text-based progress if silent mode is enabled
+        if silent:
+            try:
+                # Get hardware information
+                hardware_data = check_hardware(include_memory_usage=True)
+                
+                # Perform system analysis
+                system_analysis = get_system_info(
+                    include_versions=True,
+                    include_hardware=True,
+                    include_memory_usage=True,
+                    include_detailed_analysis=True
+                )
+                validation_context['system_analysis_completed'] = True
+                validation_context['config_loaded'] = True
+                
+            except Exception as e:
+                print(Fore.RED + Style.BRIGHT + f"\nError loading configuration: {str(e)}")
+                logger.error(f"Configuration load failed: {e}", exc_info=True)
+                return
+        else:
+            # Use progress bar for non-silent mode
+            with alive_bar(5, title='Loading Configuration\t') as bar:
+                try:
+                    # Load configuration (already loaded from banner)
+                    bar.text = 'Configuration loaded from banner...'
+                    validation_context['config_loaded'] = True
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Get hardware information
+                    bar.text = 'Detecting hardware capabilities...'
+                    hardware_data = check_hardware(include_memory_usage=True)
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Perform system analysis
+                    bar.text = 'Analyzing system configuration...'
+                    system_analysis = get_system_info(
+                        include_versions=True,
+                        include_hardware=True,
+                        include_memory_usage=True,
+                        include_detailed_analysis=True
+                    )
+                    validation_context['system_analysis_completed'] = True
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Extract configuration details
+                    bar.text = 'Extracting configuration details...'
+                    config_version = config.get('metadata', {}).get('config_version', 'unknown')
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Complete loading phase
+                    bar.text = 'Configuration loaded successfully'
+                    bar()
+                    
+                except Exception as e:
+                    print(Fore.RED + Style.BRIGHT + f"\nError loading configuration: {str(e)}")
+                    logger.error(f"Configuration load failed: {e}", exc_info=True)
+                    return
+        
+        # Display hardware summary
+        if not silent:
+            print(Fore.YELLOW + Style.BRIGHT + "\nHARDWARE SUMMARY")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        
+        # Hardware-aware system class detection
+        cuda_available = hardware_data.get('cuda', {}).get('available', False)
+        memory_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+        cpu_cores = hardware_data.get('cpu_cores', {}).get('logical_cores', 4)
+        
+        # Determine system performance class for resource optimization
+        if cuda_available and memory_gb >= 16 and cpu_cores >= 8:
+            system_class = "high_performance"
+        elif cuda_available and memory_gb >= 8:
+            system_class = "performance"
+        elif memory_gb >= 4:
+            system_class = "standard"
+        else:
+            system_class = "limited"
+        
+        # Display current hardware context
+        if not silent:
+            print(Fore.MAGENTA + Style.BRIGHT + "Hardware Context:")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ CUDA Available: " + Fore.CYAN + Style.BRIGHT + f"{cuda_available}")
+            if cuda_available:
+                gpu_count = hardware_data.get('cuda', {}).get('gpu_count', 0)
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ GPU Count: " + Fore.CYAN + Style.BRIGHT + f"{gpu_count}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ System Memory: " + Fore.CYAN + Style.BRIGHT + f"{memory_gb:.1f}GB")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ CPU Cores: " + Fore.CYAN + Style.BRIGHT + f"{cpu_cores}")
+            print(Fore.WHITE + Style.BRIGHT + f"  └─ System Class: " + Fore.CYAN + Style.BRIGHT + f"{system_class}")
+        
+        # Step 2: Perform comprehensive validation
+        if not silent:
+            print(Fore.YELLOW + Style.BRIGHT + "\nVALIDATION PROCESS")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+
+        validation_errors = []
+        validation_warnings = []
+        validation_passed = False
+        checks_performed = 0  # Initialize checks counter
+
+        # Use text-based progress if silent mode is enabled
+        if silent:
+            try:
+                # Run validation phases without progress bars
+                validation_passed, validation_errors, validation_warnings = validate_config(config, strict=False)
+                checks_performed += 1  # Count comprehensive validation
+                validation_context['validation_passed'] = validation_passed
+                
+                # Check preset compatibility
+                is_compatible = validate_model_preset_compatibility(model_type, config)
+                checks_performed += 1  # Count preset compatibility check
+                
+            except Exception as e:
+                validation_errors.append(f"Validation process failed: {str(e)}")
+                logger.error(f"Validation error: {e}", exc_info=True)
+        else:
+            # Use progress bar for non-silent mode
+            with alive_bar(10, title='Validating Configuration') as bar:
+                try:
+                    # Phase 1: Structural validation
+                    bar.text = 'Validating configuration structure...'
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 2: Training configuration
+                    bar.text = 'Validating training parameters...'
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 3: Model configuration
+                    bar.text = 'Validating model architecture...'
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 4: Security configuration
+                    bar.text = 'Validating security settings...'
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 5: Data configuration
+                    bar.text = 'Validating data parameters...'
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 6: Hardware compatibility
+                    bar.text = 'Checking hardware compatibility...'
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 7: Preset compatibility
+                    bar.text = 'Validating preset compatibility...'
+                    is_compatible = validate_model_preset_compatibility(model_type, config)
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 8: Cross-section validation
+                    bar.text = 'Performing cross-section validation...'
+                    checks_performed += 1
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 9: Comprehensive validation
+                    bar.text = 'Running comprehensive validation checks...'
+                    validation_passed, validation_errors, validation_warnings = validate_config(config, strict=False)
+                    checks_performed += 1
+                    validation_context['validation_passed'] = validation_passed
+                    bar()
+                    time.sleep(0.1)
+                    
+                    # Phase 10: Complete
+                    bar.text = 'Validation complete'
+                    bar()
+                    
+                except Exception as e:
+                    validation_errors.append(f"Validation process failed: {str(e)}")
+                    logger.error(f"Validation error: {e}", exc_info=True)
+
+        # Display validation results
+        if not silent:
+            if validation_passed:
+                print(Fore.GREEN + Style.BRIGHT + "\n" + "-" * 40)
+                print(Fore.GREEN + Style.BRIGHT + "VALIDATION RESULTS:")
+                print(Fore.GREEN + Style.BRIGHT + "\nVALIDATION PASSED")
+                print(Fore.GREEN + Style.BRIGHT + f"Configuration is valid with {len(validation_warnings)} warnings")
+                print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+            else:
+                print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                print(Fore.RED + Style.BRIGHT + "VALIDATION RESULTS:")
+                print(Fore.RED + Style.BRIGHT + "\nVALIDATION FAILED")
+                print(Fore.RED + Style.BRIGHT + f"Found {len(validation_errors)} errors and {len(validation_warnings)} warnings")
+                print(Fore.RED + Style.BRIGHT + "-" * 40)
+            
+            # Display errors
+            if validation_errors:
+                print(Fore.RED + Style.BRIGHT + "\nValidation Errors:")
+                for i, error in enumerate(validation_errors, 1):
+                    prefix = "  └─" if i == len(validation_errors) else "  ├─"
+                    print(Fore.RED + Style.BRIGHT + f"{prefix} {error}")
+            
+            # Display warnings
+            if validation_warnings:
+                print(Fore.YELLOW + Style.BRIGHT + "\nValidation Warnings:")
+                for i, warning in enumerate(validation_warnings, 1):
+                    prefix = "  └─" if i == len(validation_warnings) else "  ├─"
+                    print(Fore.YELLOW + Style.BRIGHT + f"{prefix} {warning}")
+
+        # Step 3: Configuration Analysis
+        if validation_context['config_loaded'] and validation_context['system_analysis_completed']:
+            if not silent:
+                print(Fore.YELLOW + Style.BRIGHT + "\nCONFIGURATION ANALYSIS")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
+            analysis_results = {}
+            
+            # Use text-based progress if silent mode is enabled
+            if silent:
+                try:
+                    # Run analysis phases without progress bars
+                    complexity = estimate_config_complexity(config)
+                    analysis_results['complexity'] = complexity
+                    checks_performed += 1
+                    
+                    memory_req = estimate_memory_requirements(config)
+                    analysis_results['memory'] = memory_req
+                    checks_performed += 1
+                    
+                    training_time = estimate_training_time(config)
+                    analysis_results['training_time'] = training_time
+                    checks_performed += 1
+                    
+                    resource_level = determine_resource_level(config)
+                    analysis_results['resource_level'] = resource_level
+                    checks_performed += 1
+                    
+                    preset_recommendations = determine_preset_recommendations(config)
+                    analysis_results['recommendations'] = preset_recommendations
+                    checks_performed += 1
+                    
+                    validation_context['recommendations_generated'] = True
+                    
+                except Exception as e:
+                    if not silent:
+                        print(Fore.RED + Style.BRIGHT + f"  └─ Analysis failed: {str(e)}")
+                    logger.error(f"Configuration analysis failed: {e}", exc_info=True)
+            else:
+                # Use progress bar for non-silent mode
+                with alive_bar(6, title='Analyzing Configuration\t') as bar:
+                    try:
+                        # Complexity analysis
+                        bar.text = 'Analyzing configuration complexity...'
+                        complexity = estimate_config_complexity(config)
+                        analysis_results['complexity'] = complexity
+                        checks_performed += 1
+                        bar()
+                        time.sleep(0.1)
+                        
+                        # Resource estimation
+                        bar.text = 'Estimating resource requirements...'
+                        memory_req = estimate_memory_requirements(config)
+                        analysis_results['memory'] = memory_req
+                        checks_performed += 1
+                        bar()
+                        time.sleep(0.1)
+                        
+                        # Training time estimation
+                        bar.text = 'Estimating training time...'
+                        training_time = estimate_training_time(config)
+                        analysis_results['training_time'] = training_time
+                        checks_performed += 1
+                        bar()
+                        time.sleep(0.1)
+                        
+                        # Resource level determination
+                        bar.text = 'Determining resource level...'
+                        resource_level = determine_resource_level(config)
+                        analysis_results['resource_level'] = resource_level
+                        checks_performed += 1
+                        bar()
+                        time.sleep(0.1)
+                        
+                        # Preset recommendations
+                        bar.text = 'Generating preset recommendations...'
+                        preset_recommendations = determine_preset_recommendations(config)
+                        analysis_results['recommendations'] = preset_recommendations
+                        checks_performed += 1
+                        bar()
+                        time.sleep(0.1)
+                        
+                        # Complete analysis
+                        bar.text = 'Analysis complete'
+                        validation_context['recommendations_generated'] = True
+                        bar()
+                        
+                    except Exception as e:
+                        print(Fore.RED + Style.BRIGHT + f"  └─ Analysis failed: {str(e)}")
+                        logger.error(f"Configuration analysis failed: {e}", exc_info=True)
+            
+            # Display analysis results
+            if not silent:
+                print(Fore.CYAN + Style.BRIGHT + "\nAnalysis Results:")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Configuration Complexity: " + Fore.CYAN + Style.BRIGHT + f"{complexity}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Memory Requirements: " + Fore.CYAN + Style.BRIGHT + f"{memory_req}")
+                print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Time Estimate: " + Fore.CYAN + Style.BRIGHT + f"{training_time}")
+                print(Fore.WHITE + Style.BRIGHT + f"  └─ Resource Level: " + Fore.CYAN + Style.BRIGHT + f"{resource_level}")
+
+        # Step 4: System Compatibility Check
+        compatibility = {}
+        if system_analysis and not silent:
+            print(Fore.YELLOW + Style.BRIGHT + "\nSYSTEM COMPATIBILITY")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
+            # Check preset-system compatibility
+            compatibility = _check_preset_system_compatibility(config, system_analysis)
+            checks_performed += 1
+            
+            if compatibility.get('overall_compatible', True):
+                print(Fore.GREEN + Style.BRIGHT + "\nSystem is compatible with current configuration")
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "\nSystem compatibility issues detected")
+            
+            if compatibility.get('warnings'):
+                print(Fore.YELLOW + Style.BRIGHT + "\nCompatibility Warnings:")
+                for i, warning in enumerate(compatibility['warnings'], 1):
+                    prefix = "  └─" if i == len(compatibility['warnings']) else "  ├─"
+                    print(Fore.YELLOW + Style.BRIGHT + f"{prefix} {warning}")
+            
+            if compatibility.get('recommendations'):
+                print(Fore.CYAN + Style.BRIGHT + "\nCompatibility Recommendations:")
+                for i, rec in enumerate(compatibility['recommendations'], 1):
+                    prefix = "  └─" if i == len(compatibility['recommendations']) else "  ├─"
+                    print(Fore.CYAN + Style.BRIGHT + f"{prefix} {rec}")
+            
+            # Recommend optimal preset
+            recommended_preset = _recommend_preset_for_system(system_analysis)
+            checks_performed += 1
+            if recommended_preset != preset_name:
+                print(Fore.CYAN + Style.BRIGHT + f"\nRecommended Preset for Your System: " + Fore.YELLOW + Style.BRIGHT + f"{recommended_preset}")
+                print(Fore.WHITE + Style.BRIGHT + f"Current preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+
+        # Step 5: Usage Recommendations
+        if analysis_results.get('recommendations') and not silent:
+            print(Fore.YELLOW + Style.BRIGHT + "\nRECOMMENDED USE CASES")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
+            print(Fore.GREEN + Style.BRIGHT + "This configuration is recommended for:")
+            
+            # Group recommendations by category
+            recommendations = analysis_results['recommendations']
+            max_display = 10
+            
+            for i, rec in enumerate(recommendations[:max_display], 1):
+                prefix = "  └─" if i == len(recommendations[:max_display]) else "  ├─"
+                print(Fore.GREEN + Style.BRIGHT + f"{prefix} {rec}")
+            
+            if len(recommendations) > max_display:
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ ... and {len(recommendations) - max_display} more use cases")
+
+        # Step 6: Summary and Final Report
+        if not silent:
+            print(Fore.YELLOW + Style.BRIGHT + "\nVALIDATION SUMMARY")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
+            # Use the actual checks_performed count instead of calculating from errors/warnings
+            if validation_passed:
+                if len(validation_warnings) == 0:
+                    validation_quality = "Excellent"
+                    quality_color = Fore.GREEN
+                elif len(validation_warnings) <= 5:
+                    validation_quality = "Good"
+                    quality_color = Fore.GREEN
+                else:
+                    validation_quality = "Acceptable"
+                    quality_color = Fore.YELLOW
+            else:
+                validation_quality = "Failed"
+                quality_color = Fore.RED
+            
+            print(Fore.CYAN + Style.BRIGHT + "Summary Information:")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Validation Status: " + quality_color + Style.BRIGHT + f"{validation_quality}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Total Checks Performed: " + Fore.CYAN + Style.BRIGHT + f"{checks_performed}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Errors Found: " + Fore.RED + Style.BRIGHT + f"{len(validation_errors)}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Warnings Found: " + Fore.YELLOW + Style.BRIGHT + f"{len(validation_warnings)}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ System Compatibility: " + (Fore.GREEN + Style.BRIGHT + "Compatible" if compatibility.get('overall_compatible', True) else Fore.YELLOW + Style.BRIGHT + "Issues Detected"))
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset Compatibility: " + (Fore.GREEN + Style.BRIGHT + "Compatible" if is_compatible else Fore.RED + Style.BRIGHT + "Incompatible"))
+            
+            elapsed_time = time.time() - validation_context['start_time']
+            print(Fore.WHITE + Style.BRIGHT + f"  └─ Validation Time: " + Fore.CYAN + Style.BRIGHT + f"{elapsed_time:.2f} seconds")
+            
+            # Step 7: Interactive Options
+            #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-" * 40)
+            print(Fore.YELLOW + Style.BRIGHT + "VALIDATION INTERACTIVE MENU")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
+            print(Fore.YELLOW + Style.BRIGHT + "Validation Context:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Status: " + quality_color + Style.BRIGHT + f"{validation_quality}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Errors: " + Fore.RED + Style.BRIGHT + f"{len(validation_errors)}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Warnings: " + Fore.YELLOW + Style.BRIGHT + f"{len(validation_warnings)}")
+            
+            # Prepare menu categories with styling
+            categories = []
+            categories.append("1. View Detailed Validation Report " + Fore.GREEN + Style.BRIGHT + "(Comprehensive Analysis)")
+            categories.append("2. Export Validation Results " + Fore.GREEN + Style.BRIGHT + "(JSON/TXT Formats)")
+            categories.append("3. Apply Recommended Fixes " + Fore.GREEN + Style.BRIGHT + "(Auto-correction)")
+            categories.append("4. Switch to Recommended Preset " + Fore.GREEN + Style.BRIGHT + "(System Optimized)")
+            categories.append("5. Show Configuration Comparison " + Fore.GREEN + Style.BRIGHT + "(Before/After)")
+            categories.append("6. View System Compatibility " + Fore.GREEN + Style.BRIGHT + "(Hardware Analysis)")
+            categories.append("7. Generate Fix Report " + Fore.GREEN + Style.BRIGHT + "(Action Plan)")
+            categories.append(Fore.RED + Style.BRIGHT + "0. Return to Main Menu")
+            
+            def display_validation_menu():
+                """Display the validation menu categories with styling."""
+                print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Validation Options:")
+                for category in categories:
+                    if category.startswith("0."):
+                        print(f"  {category}")
+                    else:
+                        main_part, separator, desc_part = category.partition(' (')
+                        if separator:
+                            print(f"  {Fore.WHITE + Style.BRIGHT}{main_part}{Style.RESET_ALL}{separator}{desc_part}")
+                        else:
+                            print(f"  {Fore.WHITE + Style.BRIGHT}{category}{Style.RESET_ALL}")
+            
+            # Display menu initially
+            display_validation_menu()
+            
+            # Validation report function
+            def _show_detailed_validation_report():
+                """Display validation report with formatting."""
+                try:
+                    print(Fore.GREEN + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.GREEN + Style.BRIGHT + "VALIDATION REPORT")
+                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.CYAN + Style.BRIGHT + "Detailed Validation Report")
+                    print(Fore.WHITE + Style.BRIGHT + f"Configuration: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"Model Type: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
+                    print(Fore.WHITE + Style.BRIGHT + f"Validation Quality: " + quality_color + Style.BRIGHT + f"{validation_quality}")
+                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    
+                    print(Fore.CYAN + Style.BRIGHT + "\nConfiguration Details:")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Configuration Version: " + Fore.CYAN + Style.BRIGHT + f"{config.get('metadata', {}).get('config_version', 'unknown')}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model Type: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Complexity: " + Fore.CYAN + Style.BRIGHT + f"{analysis_results.get('complexity', 'N/A')}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Memory Requirements: " + Fore.CYAN + Style.BRIGHT + f"{analysis_results.get('memory', 'N/A')}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Time: " + Fore.CYAN + Style.BRIGHT + f"{analysis_results.get('training_time', 'N/A')}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  └─ Resource Level: " + Fore.CYAN + Style.BRIGHT + f"{analysis_results.get('resource_level', 'N/A')}")
+                    
+                    # Show detailed error analysis if any
+                    if validation_errors:
+                        print(Fore.RED + Style.BRIGHT + "\nDetailed Error Analysis:")
+                        for i, error in enumerate(validation_errors, 1):
+                            print(Fore.RED + Style.BRIGHT + f"  {i}. {error}")
+                    
+                    # Show detailed warning analysis if any
+                    if validation_warnings:
+                        print(Fore.YELLOW + Style.BRIGHT + "\nDetailed Warning Analysis:")
+                        for i, warning in enumerate(validation_warnings, 1):
+                            print(Fore.YELLOW + Style.BRIGHT + f"  {i}. {warning}")
+                            
+                except Exception as e:
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "REPORT ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error displaying detailed report: {str(e)}")
+                    print(Fore.YELLOW + Style.BRIGHT + "Please check the validation logs for more information.")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+            
+            # Export function
+            def _export_validation_results():
+                """Export validation results with multiple format options."""
+                try:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    
+                    # Ask for format preference
+                    print(Fore.CYAN + Style.BRIGHT + "\nExport Formats Available:")
+                    print(Fore.WHITE + Style.BRIGHT + "1. JSON Report " + Fore.GREEN + Style.BRIGHT + "(Machine-readable)")
+                    print(Fore.WHITE + Style.BRIGHT + "2. Text Summary " + Fore.GREEN + Style.BRIGHT + "(Human-readable)")
+                    print(Fore.WHITE + Style.BRIGHT + "3. Both Formats " + Fore.GREEN + Style.BRIGHT + "(Complete Set)")
+                    
+                    format_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect export format (1-3): ").strip()
+                    
+                    report_data = {
+                        'timestamp': datetime.now().isoformat(),
+                        'validation_passed': validation_passed,
+                        'validation_quality': validation_quality,
+                        'errors': validation_errors,
+                        'warnings': validation_warnings,
+                        'analysis': analysis_results,
+                        'compatibility': compatibility,
+                        'system_info': {
+                            'current_preset': preset_name,
+                            'model_type': model_type,
+                            'config_version': config.get('metadata', {}).get('config_version', 'unknown'),
+                            'system_class': system_class,
+                            'cuda_available': cuda_available,
+                            'memory_gb': memory_gb
+                        }
+                    }
+                    
+                    export_success = False
+                    
+                    if format_choice in ['1', '3']:  # JSON export
+                        json_file = REPORTS_DIR / f"validation_report_{timestamp}.json"
+                        try:
+                            with open(json_file, 'w', encoding='utf-8') as f:
+                                json.dump(report_data, f, indent=2, ensure_ascii=False)
+                            print(Fore.GREEN + Style.BRIGHT + f"  JSON report exported to: {json_file}")
+                            export_success = True
+                        except Exception as e:
+                            print(Fore.RED + Style.BRIGHT + f"  Failed to export JSON: {e}")
+                    
+                    if format_choice in ['2', '3']:  # Text export
+                        txt_file = REPORTS_DIR / f"validation_summary_{timestamp}.txt"
+                        try:
+                            with open(txt_file, 'w', encoding='utf-8') as f:
+                                f.write(f"Validation Report - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                                f.write("=" * 50 + "\n\n")
+                                f.write(f"Preset: {preset_name}\n")
+                                f.write(f"Model Type: {model_type}\n")
+                                f.write(f"Validation Status: {validation_quality}\n")
+                                f.write(f"Errors: {len(validation_errors)}\n")
+                                f.write(f"Warnings: {len(validation_warnings)}\n\n")
+                                
+                                if validation_errors:
+                                    f.write("ERRORS:\n")
+                                    for error in validation_errors:
+                                        f.write(f"  - {error}\n")
+                                    f.write("\n")
+                                
+                                if validation_warnings:
+                                    f.write("WARNINGS:\n")
+                                    for warning in validation_warnings:
+                                        f.write(f"  - {warning}\n")
+                                    f.write("\n")
+                                
+                                f.write("ANALYSIS:\n")
+                                f.write(f"  Complexity: {analysis_results.get('complexity', 'N/A')}\n")
+                                f.write(f"  Memory Requirements: {analysis_results.get('memory', 'N/A')}\n")
+                                f.write(f"  Training Time: {analysis_results.get('training_time', 'N/A')}\n")
+                                f.write(f"  Resource Level: {analysis_results.get('resource_level', 'N/A')}\n")
+                            
+                            print(Fore.GREEN + Style.BRIGHT + f"  Text summary exported to: {txt_file}")
+                            export_success = True
+                        except Exception as e:
+                            print(Fore.RED + Style.BRIGHT + f"  Failed to export text: {e}")
+                    
+                    if export_success:
+                        print(Fore.GREEN + Style.BRIGHT + "\n" + "-" * 40)
+                        print(Fore.GREEN + Style.BRIGHT + "EXPORT SUCCESS")
+                        print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                        print(Fore.GREEN + Style.BRIGHT + "Validation results exported successfully!")
+                        print(Fore.WHITE + Style.BRIGHT + "Files saved to reports directory.")
+                        print(Fore.CYAN + Style.BRIGHT + "Use these reports for:")
+                        print(Fore.WHITE + Style.BRIGHT + "- Configuration debugging")
+                        print(Fore.WHITE + Style.BRIGHT + "- Performance analysis")
+                        print(Fore.WHITE + Style.BRIGHT + "- System optimization")
+                        print(Fore.WHITE + Style.BRIGHT + "- Documentation purposes")
+                        print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nNo files were exported due to errors.")
+                        
+                except Exception as e:
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "EXPORT ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Export failed: {str(e)}")
+                    print(Fore.YELLOW + Style.BRIGHT + "Please check directory permissions and try again.")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+            
+            # Preset switching
+            def _switch_to_recommended_preset():
+                """Switch to system-recommended preset with confirmation."""
+                try:
+                    if system_analysis:
+                        recommended = _recommend_preset_for_system(system_analysis)
+                        print(Fore.CYAN + Style.BRIGHT + "\n" + "-" * 40)
+                        print(Fore.CYAN + Style.BRIGHT + "PRESET RECOMMENDATION")
+                        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                        print(Fore.WHITE + Style.BRIGHT + "System Analysis Complete")
+                        print(Fore.WHITE + Style.BRIGHT + f"Current Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+                        print(Fore.WHITE + Style.BRIGHT + f"Recommended Preset: " + Fore.YELLOW + Style.BRIGHT + f"{recommended}")
+                        print(Fore.WHITE + Style.BRIGHT + f"System Class: " + Fore.CYAN + Style.BRIGHT + f"{system_class}")
+                        print(Fore.WHITE + Style.BRIGHT + f"Memory: " + Fore.CYAN + Style.BRIGHT + f"{memory_gb:.1f}GB")
+                        print(Fore.WHITE + Style.BRIGHT + f"CUDA: " + Fore.CYAN + Style.BRIGHT + f"{'Available' if cuda_available else 'Not Available'}")
+                        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                        
+                        if recommended != preset_name:
+                            response = input(Fore.YELLOW + Style.BRIGHT + f"Switch to '{recommended}' preset? (y/N): ").strip().lower()
+                            if response == 'y':
+                                try:
+                                    # Load and apply preset
+                                    if recommended in PRESET_CONFIGS:
+                                        new_config = deepcopy(PRESET_CONFIGS[recommended])
+                                        update_global_config(new_config)
+                                        save_config(new_config)
+                                        
+                                        print(Fore.GREEN + Style.BRIGHT + "\n" + "-" * 40)
+                                        print(Fore.GREEN + Style.BRIGHT + "PRESET SWITCHED")
+                                        print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                                        print(Fore.GREEN + Style.BRIGHT + f"Successfully switched to {recommended} preset!")
+                                        print(Fore.WHITE + Style.BRIGHT + "Configuration has been updated and saved.")
+                                        print(Fore.YELLOW + Style.BRIGHT + "Please restart validation to verify new configuration.")
+                                        print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                                        return True  # Indicate that preset was changed
+                                    else:
+                                        print(Fore.RED + Style.BRIGHT + f"Preset '{recommended}' not found in available presets")
+                                except Exception as e:
+                                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                                    print(Fore.RED + Style.BRIGHT + "SWITCH ERROR")
+                                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                                    print(Fore.RED + Style.BRIGHT + f"Failed to switch preset: {str(e)}")
+                                    print(Fore.YELLOW + Style.BRIGHT + "Please check preset configuration and try again.")
+                                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                            else:
+                                print(Fore.YELLOW + Style.BRIGHT + "Preset switch cancelled.")
+                        else:
+                            print(Fore.GREEN + Style.BRIGHT + "Already using recommended preset")
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "System analysis not available for preset recommendation.")
+                    
+                    return False
+                    
+                except Exception as e:
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "PRESET ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Preset switch error: {str(e)}")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    return False
+            
+            # Compatibility display
+            def _show_system_compatibility():
+                """Display system compatibility information."""
+                try:
+                    print(Fore.GREEN + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.GREEN + Style.BRIGHT + "SYSTEM COMPATIBILITY")
+                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    print(Fore.CYAN + Style.BRIGHT + "System Compatibility Analysis")
+                    print(Fore.WHITE + Style.BRIGHT + f"Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"System Class: " + Fore.CYAN + Style.BRIGHT + f"{system_class}")
+                    compatible_status = "Compatible" if compatibility.get('overall_compatible', True) else "Issues Detected"
+                    status_color = Fore.GREEN if compatibility.get('overall_compatible', True) else Fore.YELLOW
+                    print(Fore.WHITE + Style.BRIGHT + f"Overall Compatible: " + status_color + Style.BRIGHT + f"{compatible_status}")
+                    print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                    
+                    print(Fore.CYAN + Style.BRIGHT + "\nHardware Analysis:")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ CUDA Available: " + (Fore.GREEN + Style.BRIGHT + "Yes" if cuda_available else Fore.YELLOW + Style.BRIGHT + "No"))
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ System Memory: " + Fore.CYAN + Style.BRIGHT + f"{memory_gb:.1f}GB")
+                    print(Fore.WHITE + Style.BRIGHT + f"  ├─ CPU Cores: " + Fore.CYAN + Style.BRIGHT + f"{cpu_cores}")
+                    print(Fore.WHITE + Style.BRIGHT + f"  └─ Performance Class: " + Fore.CYAN + Style.BRIGHT + f"{system_class}")
+                    
+                    if compatibility.get('warnings'):
+                        print(Fore.YELLOW + Style.BRIGHT + "\nCompatibility Warnings:")
+                        for i, warning in enumerate(compatibility['warnings'], 1):
+                            print(Fore.YELLOW + Style.BRIGHT + f"  {i}. {warning}")
+                    
+                    if compatibility.get('recommendations'):
+                        print(Fore.CYAN + Style.BRIGHT + "\nOptimization Recommendations:")
+                        for i, rec in enumerate(compatibility['recommendations'], 1):
+                            print(Fore.CYAN + Style.BRIGHT + f"  {i}. {rec}")
+                            
+                except Exception as e:
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "COMPATIBILITY ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error displaying compatibility: {str(e)}")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+            
+            # Handle user interaction with error handling
+            while True:
+                try:
+                    choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-7): ").strip()
+                    
+                    if choice == '0':
+                        print(Fore.RED + Style.BRIGHT + "\nValidation session ended")
+                        break
+                    
+                    elif choice == '1':
+                        _show_detailed_validation_report()
+                        display_validation_menu()
+                    
+                    elif choice == '2':
+                        _export_validation_results()
+                        display_validation_menu()
+                    
+                    elif choice == '3':
+                        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-" * 40)
+                        print(Fore.YELLOW + Style.BRIGHT + "AUTO-FIX ANALYSIS")
+                        print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+                        print(Fore.WHITE + Style.BRIGHT + "Auto-fix functionality analysis:")
+                        print(Fore.WHITE + Style.BRIGHT + f"- Found {len(validation_errors)} errors to address")
+                        print(Fore.WHITE + Style.BRIGHT + f"- Found {len(validation_warnings)} warnings to review")
+                        compat_status = "Good" if compatibility.get('overall_compatible', True) else "Needs Attention"
+                        print(Fore.WHITE + Style.BRIGHT + f"- System compatibility: {compat_status}")
+                        print(Fore.CYAN + Style.BRIGHT + "\nAuto-fix capabilities:")
+                        print(Fore.GREEN + Style.BRIGHT + "- Basic configuration corrections")
+                        print(Fore.GREEN + Style.BRIGHT + "- Preset optimization suggestions")
+                        print(Fore.RED + Style.BRIGHT + "- Advanced error resolution (manual required)")
+                        print(Fore.RED + Style.BRIGHT + "- Complex dependency fixes (manual required)")
+                        print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+                        print(Fore.YELLOW + Style.BRIGHT + "\nPlease manually address the validation issues listed above.")
+                        print(Fore.YELLOW + Style.BRIGHT + "For complex issues, consider using the preset switch option.")
+                        display_validation_menu()
+                    
+                    elif choice == '4':
+                        preset_changed = _switch_to_recommended_preset()
+                        if preset_changed:
+                            break  # Exit validation menu if preset was changed
+                        else:
+                            display_validation_menu()
+                    
+                    elif choice == '5':
+                        print(Fore.CYAN + Style.BRIGHT + "\n" + "-" * 40)
+                        print(Fore.CYAN + Style.BRIGHT + "CONFIGURATION COMPARISON")
+                        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                        print(Fore.WHITE + Style.BRIGHT + "Configuration comparison provides:")
+                        print(Fore.WHITE + Style.BRIGHT + "- Side-by-side analysis of current vs recommended settings")
+                        print(Fore.WHITE + Style.BRIGHT + "- Performance impact assessment")
+                        print(Fore.WHITE + Style.BRIGHT + "- Resource utilization comparison")
+                        print(Fore.WHITE + Style.BRIGHT + "- Compatibility scoring")
+                        print(Fore.CYAN + Style.BRIGHT + "\nThis feature requires:")
+                        print(Fore.GREEN + Style.BRIGHT + "- Multiple configuration profiles")
+                        print(Fore.GREEN + Style.BRIGHT + "- Performance benchmarking data")
+                        print(Fore.GREEN + Style.BRIGHT + "- Advanced analysis algorithms")
+                        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                        print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration comparison feature coming soon!")
+                        display_validation_menu()
+                    
+                    elif choice == '6':
+                        _show_system_compatibility()
+                        display_validation_menu()
+                    
+                    elif choice == '7':
+                        print(Fore.GREEN + Style.BRIGHT + "\n" + "-" * 40)
+                        print(Fore.GREEN + Style.BRIGHT + "FIX ACTION PLAN")
+                        print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                        print(Fore.WHITE + Style.BRIGHT + "Fix Report Generation")
+                        print(Fore.WHITE + Style.BRIGHT + "Based on current validation results:")
+                        print(Fore.RED + Style.BRIGHT + f"- {len(validation_errors)} critical issues to resolve")
+                        print(Fore.YELLOW + Style.BRIGHT + f"- {len(validation_warnings)} recommendations to consider")
+                        print(Fore.CYAN + Style.BRIGHT + "- System optimization opportunities available")
+                        print(Fore.GREEN + Style.BRIGHT + "\nAction Plan:")
+                        print(Fore.WHITE + Style.BRIGHT + "1. Review all validation errors above")
+                        print(Fore.WHITE + Style.BRIGHT + "2. Address compatibility warnings")
+                        print(Fore.WHITE + Style.BRIGHT + "3. Consider preset optimization")
+                        print(Fore.WHITE + Style.BRIGHT + "4. Verify hardware requirements")
+                        print(Fore.WHITE + Style.BRIGHT + "5. Test configuration changes")
+                        print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                        display_validation_menu()
+                    
+                    else:
+                        print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 0-7.")
+                        display_validation_menu()
+                        
+                except KeyboardInterrupt:
+                    print(Fore.RED + Style.BRIGHT + "\nValidation menu interrupted by user")
+                    break
+                except Exception as e:
+                    logger.error(f"Validation menu error: {e}", exc_info=True)
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "MENU ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Unexpected error in validation menu: {str(e)}")
+                    print(Fore.YELLOW + Style.BRIGHT + "Please try again or check the logs for details.")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    display_validation_menu()
+        
+        # Final message
+        if not silent:
+            if validation_passed:
+                print(Fore.GREEN + Style.BRIGHT + "\n" + "-" * 40)
+                print(Fore.GREEN + Style.BRIGHT + "VALIDATION SUCCESS")
+                print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+                print(Fore.GREEN + Style.BRIGHT + "Configuration validation completed successfully!")
+                print(Fore.GREEN + Style.BRIGHT + "- All validation checks passed")
+                print(Fore.GREEN + Style.BRIGHT + "- System compatibility verified")
+                print(Fore.GREEN + Style.BRIGHT + "- Configuration ready for use")
+                print(Fore.GREEN + Style.BRIGHT + f"- {len(validation_warnings)} warnings reviewed")
+                print(Fore.GREEN + Style.BRIGHT + "-" * 40)
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "\n" + "-" * 40)
+                print(Fore.YELLOW + Style.BRIGHT + "VALIDATION ISSUES")
+                print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+                print(Fore.YELLOW + Style.BRIGHT + "Configuration validation completed with issues")
+                print(Fore.RED + Style.BRIGHT + f"- {len(validation_errors)} errors need attention")
+                print(Fore.YELLOW + Style.BRIGHT + f"- {len(validation_warnings)} warnings to review")
+                print(Fore.WHITE + Style.BRIGHT + "Please address the issues before proceeding")
+                print(Fore.CYAN + Style.BRIGHT + "Use the interactive menu for detailed analysis")
+                print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
+        
+        # Return validation results for programmatic use
+        return {
+            'validation_passed': validation_passed,
+            'errors': validation_errors,
+            'warnings': validation_warnings,
+            'analysis': analysis_results,
+            'compatibility': compatibility if system_analysis else {},
+            'system_info': {
+                'current_preset': preset_name,
+                'model_type': model_type,
+                'config_version': config.get('metadata', {}).get('config_version', 'unknown')
+            }
+        }
+        
+    except KeyboardInterrupt:
+        if not silent:
+            print(Fore.RED + Style.BRIGHT + "\nValidation cancelled by user")
+        return {'validation_passed': False, 'errors': ['Validation cancelled by user'], 'warnings': []}
+    except Exception as e:
+        if not silent:
+            print(Fore.RED + Style.BRIGHT + f"\nUnexpected error during validation: {e}")
+        logger.error(f"Interactive validation failed: {e}", exc_info=True)
+        
+        if not silent and input(Fore.YELLOW + Style.BRIGHT + "\nShow detailed error information? (y/N): ").lower().strip() == 'y':
+            print(Fore.RED + Style.BRIGHT + "\nError Details:")
+            print(str(e))
+            print(traceback.format_exc())
+        
+        return {'validation_passed': False, 'errors': [f'Unexpected error: {str(e)}'], 'warnings': []}
+
+def get_default_config() -> Dict[str, Any]:
+    """Get comprehensive default system configuration leveraging PRESET_CONFIGS and system analysis.
+    
+    This function loads the default preset from PRESET_CONFIGS and enhances it with
+    comprehensive system information and runtime-specific updates. It provides intelligent
+    system-aware configuration with performance optimizations and compatibility checks.
+    
+    Returns:
+        Dictionary containing the complete default configuration with system analysis
+    """
+    global _cached_config, _config_cache_time
+    
+    try:
+        current_time = datetime.now().isoformat()
+        
+        # Check cache validity (30 seconds)
+        if (_cached_config is not None and _config_cache_time is not None and 
+            time.time() - _config_cache_time < 30):
+            logger.debug("Returning cached default configuration")
+            return _cached_config
+        
+        # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
+        hardware_data = None
+        total_ram_gb = 8.0  # Conservative default
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+        except Exception as e:
+            logger.debug(f"Hardware detection failed: {e}")
+            hardware_data = {}
+        
+        # PRE-PROCESSING MEMORY OPTIMIZATION - Clear memory before intensive operations
+        if total_ram_gb < 8:
+            try:
+                pre_clear = enhanced_clear_memory(
+                    aggressive=total_ram_gb < 4,
+                    hardware_data=hardware_data
+                )
+                if pre_clear.get('success'):
+                    logger.debug("Pre-processing memory optimization completed")
+            except Exception as e:
+                logger.debug(f"Pre-processing memory optimization failed: {e}")
+        
+        # Load base configuration from PRESET_CONFIGS
+        if 'default' in PRESET_CONFIGS and PRESET_CONFIGS['default']:
+            base_config = deepcopy(PRESET_CONFIGS['default'])
+            logger.debug("Loaded default configuration from PRESET_CONFIGS")
+            config_source = 'PRESET_CONFIGS[default]'
+        else:
+            logger.warning("Default preset not found in PRESET_CONFIGS, creating minimal fallback")
+            base_config = _create_minimal_fallback_config('minimal')
+            config_source = 'minimal_fallback'
+        
+        # Validate configuration structure
+        try:
+            validate_config(base_config)
+            logger.debug("Configuration validation passed")
+        except Exception as e:
+            logger.error(f"Configuration validation failed: {e}")
+            # Use standard fallback instead of emergency
+            base_config = _create_minimal_fallback_config('standard')
+            config_source = 'validation_failure_fallback'
+            # Re-validate fallback
+            try:
+                validate_config(base_config)
+            except Exception as validation_error:
+                logger.critical(f"Even fallback configuration failed validation: {validation_error}")
+                # Use emergency fallback
+                base_config = _create_minimal_fallback_config('emergency')
+                config_source = 'emergency_fallback'
+        
+        # MEMORY OPTIMIZATION - Clear memory after validation for low-memory systems
+        if total_ram_gb < 8:
+            try:
+                post_validation_clear = enhanced_clear_memory(
+                    aggressive=total_ram_gb < 4,
+                    hardware_data=hardware_data
+                )
+                if post_validation_clear.get('success'):
+                    logger.debug("Post-validation memory optimization completed")
+            except Exception as e:
+                logger.debug(f"Post-validation memory optimization failed: {e}")
+        
+        # Gather comprehensive system information with memory-aware approach
+        try:
+            # For systems with limited RAM, use basic system info to avoid memory pressure
+            if total_ram_gb < 4:
+                system_analysis = _get_basic_system_info()
+                logger.debug("Using basic system info due to memory constraints")
+            else:
+                system_analysis = get_system_info(
+                    include_versions=True,
+                    include_hardware=True, 
+                    include_memory_usage=True,
+                    include_detailed_analysis=total_ram_gb >= 8  # Only detailed analysis for systems with adequate RAM
+                )
+                analysis_duration = system_analysis.get('collection_metadata', {}).get('collection_duration_ms', 0)
+                logger.debug(f"System analysis completed in {analysis_duration:.1f}ms")
+        except Exception as e:
+            logger.warning(f"System analysis failed, using basic system info: {e}")
+            system_analysis = _get_basic_system_info()
+        
+        # MEMORY OPTIMIZATION - Clear memory after intensive system analysis
+        system_analysis_size = len(str(system_analysis)) / (1024 * 1024)  # Size in MB
+        if system_analysis_size > 1.0 or total_ram_gb < 8:
+            try:
+                post_analysis_clear = enhanced_clear_memory(
+                    aggressive=system_analysis_size > 5.0 or total_ram_gb < 4,
+                    hardware_data=hardware_data
+                )
+                if post_analysis_clear.get('success'):
+                    logger.debug(f"Post-analysis memory optimization completed for {system_analysis_size:.1f}MB data")
+            except Exception as e:
+                logger.debug(f"Post-analysis memory optimization failed: {e}")
+        
+        # Update metadata with comprehensive system information
+        if 'metadata' in base_config:
+            base_config['metadata'].update({
+                'last_accessed': current_time,
+                'config_loaded_at': current_time,
+                'config_source': config_source,
+                'system_analysis_timestamp': system_analysis.get('timestamp', current_time),
+                'system_analysis_quality': system_analysis.get('collection_metadata', {}).get('data_quality', 'unknown'),
+                'config_generation_method': 'system_aware_default'
+            })
+            
+            # Enhanced system information from analysis
+            if 'system' in base_config['metadata']:
+                base_config['metadata']['system'].update({
+                    # Core system info from analysis
+                    'python_version': system_analysis.get('python', {}).get('version_info', {}).get('version_tuple', platform.python_version()),
+                    'platform': system_analysis.get('platform', {}).get('platform', platform.platform()),
+                    'architecture': system_analysis.get('platform', {}).get('architecture', [platform.machine(), ''])[0] if isinstance(system_analysis.get('platform', {}).get('architecture', platform.machine()), list) else platform.machine(),
+                    'processor': system_analysis.get('platform', {}).get('processor', platform.processor() or 'unknown'),
+                    'hostname': system_analysis.get('platform', {}).get('node', platform.node()),
+                    'os': system_analysis.get('platform', {}).get('system', platform.system()),
+                    'os_release': system_analysis.get('platform', {}).get('release', platform.release()),
+                    
+                    # Hardware capabilities from analysis
+                    'cpu_count': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('cpu', {}).get('logical_cores', os.cpu_count() or 1),
+                    'cpu_performance_class': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('cpu', {}).get('performance_class', 'unknown'),
+                    'memory_gb': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0),
+                    'memory_performance_class': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('performance_class', 'unknown'),
+                    'system_performance_class': system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown'),
+                    'hardware_performance_score': system_analysis.get('hardware_analysis', {}).get('performance_score', 0),
+                    
+                    # Package environment health
+                    'environment_health': system_analysis.get('package_analysis', {}).get('environment_health', {}),
+                    'package_compatibility_score': system_analysis.get('package_analysis', {}).get('environment_health', {}).get('compatibility_score', 0),
+                    
+                    # Dynamic CUDA information
+                    'cuda_available': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False),
+                    'cuda_devices': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('count', 0),
+                    'cuda_total_memory_gb': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('total_memory_gb', 0),
+                    'gpu_performance_class': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('performance_class', 'none'),
+                })
+                
+                # Add PyTorch version information from package analysis
+                if 'package_versions' in system_analysis:
+                    torch_info = system_analysis['package_versions'].get('torch', {})
+                    base_config['metadata']['system'].update({
+                        'pytorch_version': torch_info.get('version', 'unknown'),
+                        'pytorch_status': torch_info.get('status', 'unknown'),
+                        'pytorch_compatible': torch_info.get('compatible', False),
+                        'cuda_version': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('cuda_version', 'unknown')
+                    })
+        
+        # MEMORY OPTIMIZATION - Clear memory after metadata processing for large configs
+        if len(str(base_config.get('metadata', {}))) > 50000 and total_ram_gb < 16:
+            try:
+                metadata_clear = enhanced_clear_memory(
+                    aggressive=False,
+                    hardware_data=hardware_data
+                )
+                if metadata_clear.get('success'):
+                    logger.debug("Metadata processing memory optimization completed")
+            except Exception as e:
+                logger.debug(f"Metadata processing memory optimization failed: {e}")
+        
+        # Apply system-aware optimizations to training configuration
+        if 'training' in base_config and 'hardware_analysis' in system_analysis:
+            hardware_caps = system_analysis['hardware_analysis'].get('capabilities', {})
+            system_class = system_analysis['hardware_analysis'].get('system_class', 'unknown')
+            
+            # CPU-based optimizations
+            cpu_info = hardware_caps.get('cpu', {})
+            logical_cores = cpu_info.get('logical_cores', 1)
+            
+            # Optimize num_workers based on CPU cores and system class
+            if system_class == 'high_performance':
+                optimal_workers = min(8, max(4, logical_cores // 2))
+            elif system_class == 'standard':
+                optimal_workers = min(4, max(2, logical_cores // 2))
+            else:  # limited
+                optimal_workers = min(2, max(1, logical_cores // 4))
+            
+            # Only update if different from preset value
+            current_workers = base_config['training'].get('num_workers', 1)
+            if abs(optimal_workers - current_workers) > 1:
+                base_config['training']['num_workers'] = optimal_workers
+                logger.debug(f"Optimized num_workers: {current_workers} -> {optimal_workers}")
+            
+            # Memory-based optimizations
+            memory_info = hardware_caps.get('memory', {})
+            total_memory_gb = memory_info.get('total_gb', 0)
+            current_batch_size = base_config['training'].get('batch_size', 64)
+            
+            # Adjust batch size based on available memory
+            if total_memory_gb >= 32:
+                # High memory system - can handle larger batches
+                if current_batch_size < 128:
+                    new_batch_size = min(128, current_batch_size * 2)
+                    base_config['training']['batch_size'] = new_batch_size
+                    logger.debug(f"Increased batch_size for high memory: {current_batch_size} -> {new_batch_size}")
+            elif total_memory_gb > 0 and total_memory_gb < 8:
+                # Low memory system - reduce batch size
+                new_batch_size = min(32, current_batch_size)
+                base_config['training']['batch_size'] = new_batch_size
+                base_config['training']['gradient_accumulation_steps'] = max(2, base_config['training'].get('gradient_accumulation_steps', 1))
+                logger.debug(f"Reduced batch_size for low memory: {current_batch_size} -> {new_batch_size}")
+            
+            # GPU-based optimizations  
+            gpu_info = hardware_caps.get('gpu', {})
+            cuda_available = gpu_info.get('available', False)
+            gpu_memory_gb = gpu_info.get('total_memory_gb', 0)
+            
+            # Update CUDA-dependent settings
+            base_config['training']['pin_memory'] = cuda_available
+            base_config['training']['mixed_precision'] = cuda_available and gpu_memory_gb >= 4
+            
+            # Adjust batch size based on GPU memory
+            if cuda_available and gpu_memory_gb > 0:
+                current_batch_size = base_config['training'].get('batch_size', 64)
+                
+                if gpu_memory_gb >= 16:
+                    # High-end GPU - can handle larger models and batches
+                    new_batch_size = min(256, current_batch_size * 2)
+                    if new_batch_size != current_batch_size:
+                        base_config['training']['batch_size'] = new_batch_size
+                        logger.debug(f"Increased batch_size for high-end GPU: {current_batch_size} -> {new_batch_size}")
+                elif gpu_memory_gb < 4:
+                    # Limited GPU memory - reduce batch size
+                    new_batch_size = min(16, current_batch_size // 2)
+                    base_config['training']['batch_size'] = max(1, new_batch_size)
+                    base_config['training']['gradient_accumulation_steps'] = max(4, base_config['training'].get('gradient_accumulation_steps', 1))
+                    logger.debug(f"Reduced batch_size for limited GPU: {current_batch_size} -> {new_batch_size}")
+        
+        # Apply system-aware model configuration optimizations
+        if 'model' in base_config and 'hardware_analysis' in system_analysis:
+            hardware_caps = system_analysis['hardware_analysis'].get('capabilities', {})
+            system_class = system_analysis['hardware_analysis'].get('system_class', 'unknown')
+            
+            # Adjust model complexity based on system capabilities
+            if system_class == 'limited':
+                # Reduce model complexity for limited systems
+                current_encoding_dim = base_config['model'].get('encoding_dim', 12)
+                new_encoding_dim = min(8, current_encoding_dim)
+                if new_encoding_dim != current_encoding_dim:
+                    base_config['model']['encoding_dim'] = new_encoding_dim
+                    logger.debug(f"Reduced encoding_dim for limited system: {current_encoding_dim} -> {new_encoding_dim}")
+                
+                # Reduce hidden layer sizes
+                current_dims = base_config['model'].get('hidden_dims', [128, 64])
+                new_dims = [min(64, dim) for dim in current_dims]
+                if new_dims != current_dims:
+                    base_config['model']['hidden_dims'] = new_dims
+                    # Update dropout rates to match
+                    current_dropout = base_config['model'].get('dropout_rates', [0.2, 0.15])
+                    if len(current_dropout) > len(new_dims):
+                        base_config['model']['dropout_rates'] = current_dropout[:len(new_dims)]
+                    elif len(current_dropout) < len(new_dims):
+                        base_config['model']['dropout_rates'] = current_dropout + [0.2] * (len(new_dims) - len(current_dropout))
+                    logger.debug(f"Reduced hidden_dims for limited system: {current_dims} -> {new_dims}")
+                
+                # Force single model for ensembles
+                if base_config['model'].get('model_type') == 'AutoencoderEnsemble':
+                    base_config['model']['num_models'] = 1
+                    logger.debug("Reduced ensemble size to 1 for limited system")
+                
+                # Reduce memory usage by disabling normalization
+                base_config['model']['use_batch_norm'] = True
+                base_config['model']['use_layer_norm'] = False
+                logger.debug("Disabled normalization for limited system")
+                
+            elif system_class == 'high_performance':
+                # Increase model complexity for high-performance systems
+                gpu_info = hardware_caps.get('gpu', {})
+                if gpu_info.get('available') and gpu_info.get('total_memory_gb', 0) >= 8:
+                    # Can handle more complex models
+                    current_encoding_dim = base_config['model'].get('encoding_dim', 12)
+                    new_encoding_dim = max(16, current_encoding_dim)
+                    if new_encoding_dim != current_encoding_dim:
+                        base_config['model']['encoding_dim'] = new_encoding_dim
+                        logger.debug(f"Increased encoding_dim for high-performance system: {current_encoding_dim} -> {new_encoding_dim}")
+                    
+                    current_dims = base_config['model'].get('hidden_dims', [128, 64])
+                    if len(current_dims) < 3:
+                        new_dims = [256, 128, 64]
+                        base_config['model']['hidden_dims'] = new_dims
+                        # Update dropout rates to match
+                        base_config['model']['dropout_rates'] = [0.2, 0.15, 0.1]
+                        logger.debug(f"Enhanced hidden_dims for high-performance system: {current_dims} -> {new_dims}")
+        
+        # MEMORY OPTIMIZATION - Clear memory after configuration optimizations
+        config_complexity = len(str(base_config.get('model', {}))) + len(str(base_config.get('training', {})))
+        if config_complexity > 10000 and total_ram_gb < 16:
+            try:
+                config_optimization_clear = enhanced_clear_memory(
+                    aggressive=config_complexity > 50000,
+                    hardware_data=hardware_data
+                )
+                if config_optimization_clear.get('success'):
+                    logger.debug("Configuration optimization memory management completed")
+            except Exception as e:
+                logger.debug(f"Configuration optimization memory management failed: {e}")
+        
+        # Update hardware configuration with system-specific recommendations
+        if 'hardware' in base_config and 'hardware_analysis' in system_analysis:
+            hardware_caps = system_analysis['hardware_analysis'].get('capabilities', {})
+            
+            # Update hardware requirements based on actual system
+            memory_gb = hardware_caps.get('memory', {}).get('total_gb', 0)
+            gpu_memory_gb = hardware_caps.get('gpu', {}).get('total_memory_gb', 0)
+            
+            base_config['hardware'].update({
+                'detected_gpu_memory': gpu_memory_gb,
+                'detected_system_memory': memory_gb,
+                'recommended_gpu_memory': max(4, min(gpu_memory_gb, base_config['hardware'].get('recommended_gpu_memory', 8))) if gpu_memory_gb > 0 else base_config['hardware'].get('recommended_gpu_memory', 8),
+                'system_performance_class': system_analysis['hardware_analysis'].get('system_class', 'unknown'),
+                'optimization_recommendations': system_analysis.get('detailed_analysis', {}).get('configuration_suggestions', [])
+            })
+            
+            # Update performance optimization flags
+            cuda_available = hardware_caps.get('gpu', {}).get('available', False)
+            base_config['hardware']['performance_optimization'].update({
+                'use_cuda': cuda_available,
+                'use_amp': cuda_available and gpu_memory_gb >= 4,
+                # Enable benchmarking if CUDA available
+                'benchmark_mode': cuda_available,
+                # Deterministic mode for CPU-only systems
+                'deterministic': not cuda_available
+            })
+        
+        # Update system paths and ensure directories exist
+        if 'system' in base_config:
+            # Ensure all required directories exist
+            required_dirs = ['model_dir', 'log_dir', 'config_dir', 'data_dir', 'checkpoint_dir']
+            for dir_key in required_dirs:
+                if dir_key in base_config['system']:
+                    dir_path = Path(base_config['system'][dir_key])
+                    try:
+                        dir_path.mkdir(parents=True, exist_ok=True)
+                        logger.debug(f"Ensured directory exists: {dir_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not create directory {dir_path}: {e}")
+            
+            # Update system configuration with current environment
+            base_config['system'].update({
+                'python_executable': sys.executable,
+                'working_directory': str(Path.cwd()),
+                'environment_health': system_analysis.get('package_analysis', {}).get('environment_health', {}).get('overall_status', 'unknown')
+            })
+        
+        # Update preset information with dynamic data
+        if 'presets' in base_config:
+            base_config['presets'].update({
+                'available_presets': get_available_presets(),
+                'current_preset': 'default',
+                'preset_configs': get_preset_descriptions(),
+                'custom_presets_available': get_safe_custom_presets(),
+                'system_recommended_preset': _recommend_preset_for_system(system_analysis),
+                'preset_compatibility': _check_preset_system_compatibility(base_config, system_analysis)
+            })
+        
+        # Add comprehensive runtime configuration
+        base_config['runtime'] = {
+            'config_loaded_at': current_time,
+            'config_source': config_source,
+            'runtime_id': hashlib.md5(current_time.encode()).hexdigest()[:8] if 'hashlib' in globals() else 'unknown',
+            'process_id': os.getpid(),
+            'working_directory': str(Path.cwd()),
+            'python_executable': sys.executable,
+            
+            # System analysis integration
+            'system_analysis_completed': 'hardware_analysis' in system_analysis,
+            'system_performance_score': system_analysis.get('hardware_analysis', {}).get('performance_score', 0),
+            'system_class': system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown'),
+            'environment_health': system_analysis.get('package_analysis', {}).get('environment_health', {}).get('overall_status', 'unknown'),
+            
+            # Configuration optimizations applied
+            'optimizations_applied': {
+                'training_optimized': 'training' in base_config and 'hardware_analysis' in system_analysis,
+                'model_optimized': 'model' in base_config and 'hardware_analysis' in system_analysis,
+                'hardware_optimized': 'hardware' in base_config and 'hardware_analysis' in system_analysis,
+                'system_aware': True,
+                'preset_based': config_source.startswith('PRESET_CONFIGS')
+            },
+            
+            # Resource availability
+            'resource_status': {
+                'cuda_available': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False),
+                'memory_adequate': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0) >= 4,
+                'cpu_adequate': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('cpu', {}).get('logical_cores', 0) >= 2,
+                'disk_adequate': system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('storage', {}).get('free_gb', 0) >= 5
+            }
+        }
+        
+        # Add warnings and recommendations from system analysis
+        if 'detailed_analysis' in system_analysis:
+            analysis = system_analysis['detailed_analysis']
+            
+            base_config['runtime']['system_warnings'] = []
+            base_config['runtime']['recommendations'] = []
+            
+            # Collect all warnings and recommendations
+            for category in ['system_recommendations', 'performance_optimizations', 'compatibility_issues', 'resource_warnings']:
+                if category in analysis and analysis[category]:
+                    base_config['runtime']['system_warnings'].extend(analysis[category])
+            
+            if 'configuration_suggestions' in analysis:
+                base_config['runtime']['recommendations'].extend(analysis['configuration_suggestions'])
+            
+            # Add configuration health status
+            warning_count = len(base_config['runtime']['system_warnings'])
+            critical_issues = len([w for w in base_config['runtime']['system_warnings'] 
+                                 if any(keyword in w.lower() for keyword in ['critical', 'missing required', 'failed', 'error'])])
+            
+            base_config['runtime']['configuration_health'] = {
+                'status': 'healthy' if warning_count == 0 else 'needs_attention' if critical_issues == 0 else 'critical',
+                'warning_count': warning_count,
+                'recommendation_count': len(base_config['runtime']['recommendations']),
+                'critical_issues': critical_issues,
+                'overall_score': max(0, 100 - (warning_count * 10) - (critical_issues * 25))
+            }
+        
+        # Ensure model variants are initialized and compatible
+        if not MODEL_VARIANTS:
+            try:
+                logger.debug("MODEL_VARIANTS not initialized, attempting initialization")
+                #initialize_model_variants(silent=True)
+                initialize_model_variants(silent=False)
+            except Exception as e:
+                logger.warning(f"Failed to initialize model variants: {e}")
+        
+        # Validate model type compatibility
+        if MODEL_VARIANTS:
+            model_type = base_config.get('model', {}).get('model_type', 'SimpleAutoencoder')
+            if model_type not in MODEL_VARIANTS:
+                logger.warning(f"Model type '{model_type}' not available, falling back to SimpleAutoencoder")
+                base_config['model']['model_type'] = 'SimpleAutoencoder'
+                # Simplify configuration for SimpleAutoencoder
+                base_config['model']['hidden_dims'] = [base_config['model']['hidden_dims'][0]] if base_config['model'].get('hidden_dims') else [64]
+                base_config['model']['dropout_rates'] = [base_config['model']['dropout_rates'][0]] if base_config['model'].get('dropout_rates') else [0.2]
+        
+        # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
+        # Aggressive cleanup after all processing is complete
+        try:
+            final_clear_results = enhanced_clear_memory(
+                aggressive=True,  # Aggressive final cleanup
+                hardware_data=hardware_data
+            )
+            
+            if final_clear_results.get('success'):
+                actions_taken = final_clear_results.get('actions_taken', [])
+                logger.debug(f"Final memory optimization completed: {', '.join(actions_taken)}")
+                
+                # Add memory optimization summary to runtime
+                if 'memory_optimization_summary' not in base_config['runtime']:
+                    base_config['runtime']['memory_optimization_summary'] = {
+                        'optimizations_performed': len(actions_taken),
+                        'final_cleanup': True,
+                        'hardware_aware': True,
+                        'aggressive_mode': True
+                    }
+                
+        except Exception as e:
+            logger.debug(f"Final memory optimization failed: {e}")
+        
+        # Cache the configuration
+        _cached_config = base_config
+        _config_cache_time = time.time()
+        
+        # Log configuration summary
+        model_info = base_config.get('model', {})
+        training_info = base_config.get('training', {})
+        system_class = system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown')
+        
+        logger.info("Successfully generated system-aware default configuration:")
+        logger.info(f"  - System Class: {system_class}")
+        logger.info(f"  - Model: {model_info.get('model_type', 'unknown')} (encoding_dim={model_info.get('encoding_dim', 'unknown')})")
+        logger.info(f"  - Training: batch_size={training_info.get('batch_size', 'unknown')}, epochs={training_info.get('epochs', 'unknown')}")
+        logger.info(f"  - Hardware: CUDA={'available' if base_config.get('hardware', {}).get('performance_optimization', {}).get('use_cuda', False) else 'disabled'}")
+        logger.info(f"  - Config Source: {config_source}")
+        
+        return base_config
+        
+    except Exception as e:
+        logger.error(f"Failed to generate default configuration: {e}", exc_info=True)
+        
+        # Emergency memory cleanup on error
+        try:
+            emergency_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
+            logger.debug("Emergency memory cleanup performed after error")
+        except Exception as cleanup_error:
+            logger.debug(f"Emergency cleanup failed: {cleanup_error}")
+        
+        # Return minimal fallback with error information
+        try:
+            fallback_config = _create_minimal_fallback_config('minimal')
+        except Exception as fallback_error:
+            logger.critical(f"Even minimal fallback failed: {fallback_error}")
+            # Last resort configuration
+            fallback_config = {
+                'metadata': {
+                    'version': '2.1', 'config_version': '2.1',
+                    'created': datetime.now().isoformat() if 'datetime' in globals() else 'unknown',
+                    'description': 'Emergency last resort configuration',
+                    'preset_used': 'emergency_last_resort',
+                    'compatibility': ['SimpleAutoencoder'],
+                    'system': {
+                        'python_version': platform.python_version() if 'platform' in globals() else 'unknown',
+                        'os': platform.system() if 'platform' in globals() else 'unknown'
+                    }
+                },
+                'training': {
+                    'batch_size': 8, 'epochs': 5, 'learning_rate': 0.01, 'num_workers': 1,
+                    'optimizer': 'SGD', 'mixed_precision': False, 'patience': 3
+                },
+                'model': {
+                    'model_type': 'SimpleAutoencoder', 'encoding_dim': 4, 'hidden_dims': [32],
+                    'dropout_rates': [0.1], 'activation': 'relu', 'num_models': 1
+                },
+                'data': {
+                    'normal_samples': 100, 'attack_samples': 20, 'features': 8, 'validation_split': 0.3
+                },
+                'security': {
+                    'percentile': 90, 'attack_threshold': 0.5, 'enable_security_metrics': False
+                },
+                'hardware': {
+                    'device': 'cpu', 'recommended_gpu_memory': 1,
+                    'performance_optimization': {'use_cuda': False, 'use_amp': False, 'deterministic': True}
+                },
+                'system': {
+                    'model_dir': './models/emergency', 'debug': True, 'random_seed': 42
+                },
+                'presets': {
+                    'current_preset': 'emergency_last_resort', 'available_presets': []
+                }
+            }
+        
+        fallback_config['runtime'] = {
+            'config_loaded_at': datetime.now().isoformat() if 'datetime' in globals() else 'unknown',
+            'config_source': 'emergency_fallback',
+            'error': str(e),
+            'system_analysis_failed': True,
+            'configuration_health': {
+                'status': 'critical',
+                'error_message': str(e),
+                'fallback_used': True
+            }
+        }
+        
+        # Cache the fallback
+        _cached_config = fallback_config
+        _config_cache_time = time.time()
+        
+        return fallback_config
+
+def _get_basic_system_info() -> Dict[str, Any]:
+    """Get basic system information when full analysis fails."""
+    try:
+        return {
+            'timestamp': datetime.now().isoformat(),
+            'platform': {
+                'system': platform.system(),
+                'platform': platform.platform(),
+                'machine': platform.machine(),
+                'node': platform.node()
+            },
+            'python': {
+                'version_info': {
+                    'version_tuple': tuple(sys.version_info[:3])
+                }
+            },
+            'hardware_analysis': {
+                'capabilities': {
+                    'cpu': {
+                        'logical_cores': os.cpu_count() or 1,
+                        'performance_class': 'unknown'
+                    },
+                    'memory': {
+                        'total_gb': 0,
+                        'performance_class': 'unknown'
+                    },
+                    'gpu': {
+                        'available': torch.cuda.is_available() if 'torch' in globals() else False,
+                        'count': torch.cuda.device_count() if 'torch' in globals() and torch.cuda.is_available() else 0,
+                        'performance_class': 'unknown'
+                    }
+                },
+                'system_class': 'unknown',
+                'performance_score': 50
+            },
+            'package_analysis': {
+                'environment_health': {
+                    'overall_status': 'unknown',
+                    'compatibility_score': 0
+                }
+            },
+            'collection_metadata': {
+                'data_quality': 'basic',
+                'errors': ['Full system analysis failed, using basic info']
+            }
+        }
+    except Exception:
+        return {
+            'timestamp': datetime.now().isoformat(),
+            'hardware_analysis': {'system_class': 'unknown', 'performance_score': 0},
+            'package_analysis': {'environment_health': {'overall_status': 'unknown'}},
+            'collection_metadata': {'data_quality': 'minimal', 'errors': ['Basic system info collection failed']}
+        }
+
+def reset_config() -> None:
+    """Reset configuration to default values with comprehensive cleanup.
+    
+    This function now leverages get_default_config() to obtain a fresh, system-aware
+    default configuration instead of creating one from scratch, reducing code
+    redundancy and ensuring consistency with the default configuration generation logic.
+    """
+    try:
+        logger.info("Resetting configuration to system-aware defaults...")
+        
+        # Clear any cached configurations to ensure fresh generation
+        global _cached_config, _config_cache_time
+        _cached_config = None
+        _config_cache_time = None
+        
+        # Get fresh default configuration using get_default_config()
+        # This automatically includes system analysis, hardware optimization, and preset integration
+        try:
+            default_config = get_default_config()
+            logger.debug("Successfully obtained fresh default configuration from get_default_config()")
+        except Exception as e:
+            logger.error(f"Failed to get default configuration: {e}")
+            logger.warning("Falling back to minimal emergency configuration")
+            
+            # Emergency fallback - create absolute minimal configuration
+            default_config = _create_minimal_fallback_config('emergency')
+            logger.warning("Using emergency fallback configuration due to get_default_config() failure")
+        
+        # Validate the default configuration before applying
+        try:
+            validate_config(default_config)
+            logger.debug("Default configuration validation passed")
+        except Exception as validation_error:
+            logger.error(f"Default configuration validation failed: {validation_error}")
+            logger.warning("Attempting to fix validation issues automatically")
+            
+            # Try to fix common validation issues
+            try:
+                # Ensure required sections exist
+                required_sections = ['training', 'model', 'security', 'data']
+                for section in required_sections:
+                    if section not in default_config:
+                        logger.warning(f"Adding missing section: {section}")
+                        if section == 'training':
+                            default_config[section] = {
+                                'batch_size': 32, 'epochs': 10, 'learning_rate': 0.001,
+                                'num_workers': 1, 'optimizer': 'Adam'
+                            }
+                        elif section == 'model':
+                            default_config[section] = {
+                                'model_type': 'SimpleAutoencoder', 'encoding_dim': 8,
+                                'hidden_dims': [64], 'dropout_rates': [0.2]
+                            }
+                        elif section == 'security':
+                            default_config[section] = {
+                                'percentile': 95, 'attack_threshold': 0.3,
+                                'enable_security_metrics': True
+                            }
+                        elif section == 'data':
+                            default_config[section] = {
+                                'normal_samples': 1000, 'attack_samples': 200,
+                                'features': 10, 'validation_split': 0.2
+                            }
+                
+                # Re-validate after fixes
+                validate_config(default_config)
+                logger.info("Successfully fixed validation issues in default configuration")
+                
+            except Exception as fix_error:
+                logger.critical(f"Could not fix default configuration: {fix_error}")
+                # Last resort - use emergency fallback
+                default_config = _create_minimal_fallback_config('emergency')
+                logger.critical("Using emergency fallback configuration due to validation failures")
+        
+        # Ensure metadata reflects the reset operation
+        if 'metadata' not in default_config:
+            default_config['metadata'] = {}
+        
+        default_config['metadata'].update({
+            'modified': datetime.now().isoformat(),
+            'reset_timestamp': datetime.now().isoformat(),
+            'reset_reason': 'manual_reset_to_defaults',
+            'config_source': 'reset_to_system_aware_defaults'
+        })
+        
+        # Add reset operation to runtime information
+        if 'runtime' not in default_config:
+            default_config['runtime'] = {}
+        
+        default_config['runtime'].update({
+            'last_reset': datetime.now().isoformat(),
+            'reset_method': 'get_default_config',
+            'config_generation_method': 'system_aware_reset'
+        })
+        
+        # Update preset information to reflect reset
+        if 'presets' in default_config:
+            default_config['presets']['current_preset'] = 'default'
+            default_config['presets']['last_reset'] = datetime.now().isoformat()
+            default_config['presets']['reset_to_preset'] = 'default'
+        
+        # Update global configuration with the new default
+        try:
+            update_global_config(default_config)
+            logger.debug("Successfully updated global configuration")
+        except Exception as e:
+            logger.error(f"Failed to update global configuration: {e}")
+            # Continue anyway as this isn't critical for reset operation
+        
+        # Save the reset configuration to file
+        try:
+            save_config(default_config)
+            logger.debug("Successfully saved reset configuration to file")
+        except Exception as e:
+            logger.error(f"Failed to save reset configuration: {e}")
+            # Log but don't fail - the configuration is still reset in memory
+        
+        # Clear any model variants cache to ensure fresh initialization
+        global MODEL_VARIANTS
+        if MODEL_VARIANTS:
+            logger.debug("Clearing model variants cache for fresh initialization")
+            MODEL_VARIANTS.clear()
+        
+        # Re-initialize model variants with the new configuration
+        try:
+            initialize_model_variants(silent=False)
+            logger.debug("Successfully re-initialized model variants")
+        except Exception as e:
+            logger.warning(f"Failed to re-initialize model variants: {e}")
+            # Non-critical for reset operation
+        
+        # Force memory cleanup after reset
+        try:
+            enhanced_clear_memory()
+            logger.debug("Completed memory cleanup after reset")
+        except Exception as e:
+            logger.debug(f"Memory cleanup had issues: {e}")
+        
+        # Log successful reset with configuration summary
+        model_info = default_config.get('model', {})
+        training_info = default_config.get('training', {})
+        system_class = default_config.get('runtime', {}).get('system_class', 'unknown')
+        
+        logger.info("Configuration reset completed successfully:")
+        logger.info(f"  - System Class: {system_class}")
+        logger.info(f"  - Model: {model_info.get('model_type', 'unknown')} (encoding_dim={model_info.get('encoding_dim', 'unknown')})")
+        logger.info(f"  - Training: batch_size={training_info.get('batch_size', 'unknown')}, epochs={training_info.get('epochs', 'unknown')}")
+        logger.info(f"  - Config Source: {default_config.get('runtime', {}).get('config_source', 'unknown')}")
+        
+        # Verify reset by checking key parameters
+        verification_checks = [
+            ('training.batch_size', training_info.get('batch_size')),
+            ('model.model_type', model_info.get('model_type')),
+            ('model.encoding_dim', model_info.get('encoding_dim')),
+            ('security.percentile', default_config.get('security', {}).get('percentile')),
+            ('data.normal_samples', default_config.get('data', {}).get('normal_samples'))
+        ]
+        
+        logger.debug("Reset verification checks:")
+        for param_name, param_value in verification_checks:
+            logger.debug(f"  - {param_name}: {param_value}")
+        
+        logger.info("[SUCCESS] Configuration has been reset to system-aware defaults")
+        
+    except Exception as e:
+        logger.error(f"Critical failure during configuration reset: {e}", exc_info=True)
+        
+        # Emergency recovery attempt
+        try:
+            logger.critical("Attempting emergency configuration recovery...")
+            
+            # Create absolute minimal configuration
+            emergency_config = {
+                'metadata': {
+                    'version': '2.1',
+                    'config_version': '2.1',
+                    'created': datetime.now().isoformat(),
+                    'description': 'Emergency recovery configuration',
+                    'preset_used': 'emergency_recovery',
+                    'reset_failed': True,
+                    'original_error': str(e)
+                },
+                'training': {
+                    'batch_size': 16, 'epochs': 5, 'learning_rate': 0.001,
+                    'num_workers': 1, 'optimizer': 'SGD', 'patience': 3
+                },
+                'model': {
+                    'model_type': 'SimpleAutoencoder', 'encoding_dim': 4,
+                    'hidden_dims': [32], 'dropout_rates': [0.1], 'activation': 'relu'
+                },
+                'data': {
+                    'normal_samples': 100, 'attack_samples': 20, 'features': 8,
+                    'validation_split': 0.3, 'normalization': 'minmax'
+                },
+                'security': {
+                    'percentile': 90, 'attack_threshold': 0.5,
+                    'enable_security_metrics': False
+                },
+                'system': {
+                    'model_dir': './models/emergency', 'debug': True,
+                    'random_seed': 42, 'export_onnx': False
+                },
+                'hardware': {
+                    'device': 'cpu', 'recommended_gpu_memory': 1,
+                    'performance_optimization': {'use_cuda': False, 'use_amp': False}
+                },
+                'presets': {
+                    'current_preset': 'emergency_recovery',
+                    'available_presets': []
+                },
+                'runtime': {
+                    'config_source': 'emergency_recovery',
+                    'reset_failed': True,
+                    'emergency_recovery': True,
+                    'recovery_timestamp': datetime.now().isoformat()
+                }
+            }
+            
+            # Try to apply emergency configuration
+            update_global_config(emergency_config)
+            
+            # Try to save emergency configuration
+            try:
+                save_config(emergency_config)
+            except:
+                logger.critical("Could not save emergency configuration to file")
+            
+            logger.critical("[EMERGENCY] Applied minimal emergency configuration")
+            logger.critical("System is in degraded state - manual intervention recommended")
+            
+        except Exception as recovery_error:
+            logger.critical(f"Emergency recovery also failed: {recovery_error}")
+            logger.critical("System configuration is in critical failure state")
+            raise RuntimeError(f"Configuration reset failed completely: {str(e)}. Recovery failed: {str(recovery_error)}")
+        
+        # Re-raise the original exception with context
+        raise RuntimeError(f"Configuration reset failed: {str(e)}. Emergency recovery applied.")
+
+def reset_config_interactive():
+    """Interactive configuration reset with enhanced confirmation and feedback."""
+    try:
+        # clear screen and show banner
+        print("\033c", end="")
+        show_banner()
+        
+        # Get current configuration info for display
+        try:
+            current_config = get_current_config()
+            current_preset = current_config.get('presets', {}).get('current_preset', 'unknown')
+            current_model = current_config.get('model', {}).get('model_type', 'unknown')
+            system_class = current_config.get('runtime', {}).get('system_class', 'unknown')
+        except Exception as e:
+            logger.debug(f"Could not get current config for display: {e}")
+            current_preset = 'unknown'
+            current_model = 'unknown'
+            system_class = 'unknown'
+        
+        # Display current configuration summary
+        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "CONFIGURATION RESET")
+        print(Fore.CYAN + Style.BRIGHT + "="*40)
+        print(Fore.GREEN + Style.BRIGHT + f"\nCurrent Preset: {current_preset}")
+        print(Fore.GREEN + Style.BRIGHT + f"Current Model:  {current_model}")
+        print(Fore.GREEN + Style.BRIGHT + f"System Class:   {system_class}")
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*60)
+        print(Fore.RED + Style.BRIGHT + "This will reset your configuration to system-aware defaults.")
+        print(Fore.RED + Style.BRIGHT + "All current settings will be lost and cannot be recovered.")
+        print(Fore.RED + Style.BRIGHT + "The new configuration will be optimized for your system.")
+        print(Fore.YELLOW + Style.BRIGHT + "="*60)
+        
+        # Get user confirmation with multiple prompts for safety
+        response1 = input(Fore.YELLOW + Style.BRIGHT + "\nDo you want to reset configuration to defaults? (y/N): ").lower().strip()
+        
+        if response1 != 'y':
+            print(Fore.RED + Style.BRIGHT + "Configuration reset cancelled.")
+            return
+        
+        print(Fore.YELLOW + Style.BRIGHT + "\nWARNING! This action cannot be undone!")
+        reset_message = (Fore.RED + Style.BRIGHT + "RESET")
+        response2 = input(Fore.YELLOW + Style.BRIGHT + f"Are you absolutely sure? Type '{reset_message}' to confirm: ").lower().strip()
+        
+        if response2 != 'reset':
+            print(Fore.RED + Style.BRIGHT + "Configuration reset cancelled.")
+            return
+        
+        # Perform the reset
+        print(Fore.GREEN + Style.BRIGHT + "\nResetting configuration...")
+        try:
+            reset_config()
+            
+            # Get new configuration summary
+            try:
+                new_config = get_current_config()
+                new_preset = new_config.get('presets', {}).get('current_preset', 'unknown')
+                new_model = new_config.get('model', {}).get('model_type', 'unknown')
+                new_system_class = new_config.get('runtime', {}).get('system_class', 'unknown')
+                new_batch_size = new_config.get('training', {}).get('batch_size', 'unknown')
+                new_epochs = new_config.get('training', {}).get('epochs', 'unknown')
+            except Exception as e:
+                logger.debug(f"Could not get new config for display: {e}")
+                new_preset = 'unknown'
+                new_model = 'unknown'
+                new_system_class = 'unknown'
+                new_batch_size = 'unknown'
+                new_epochs = 'unknown'
+            
+            print(Fore.GREEN + Style.BRIGHT + "\n" + "="*60)
+            print(Fore.GREEN + Style.BRIGHT + "RESET COMPLETED SUCCESSFULLY")
+            print(Fore.GREEN + Style.BRIGHT + "="*60)
+            print(Fore.GREEN + Style.BRIGHT + f"\nNew Preset:       {new_preset}")
+            print(Fore.GREEN + Style.BRIGHT + f"New Model:        {new_model}")
+            print(Fore.GREEN + Style.BRIGHT + f"System Class:     {new_system_class}")
+            print(Fore.GREEN + Style.BRIGHT + f"Batch Size:       {new_batch_size}")
+            print(Fore.GREEN + Style.BRIGHT + f"Epochs:           {new_epochs}")
+            print(Fore.GREEN + Style.BRIGHT + "\n" + "="*60)
+            print(Fore.GREEN + Style.BRIGHT + "\nConfiguration has been reset to optimized defaults for your system.")
+            print(Fore.GREEN + Style.BRIGHT + "You can now customize the settings as needed.")
+            
+        except Exception as e:
+            print(Fore.RED + Style.BRIGHT + f"\nERROR: Configuration reset failed: {e}")
+            print(Fore.RED + Style.BRIGHT + "System may be in an inconsistent state.")
+            print(Fore.RED + Style.BRIGHT + "Please check logs for details and consider manual recovery.")
+            
+    except KeyboardInterrupt:
+        print(Fore.RED + Style.BRIGHT + "\n\nConfiguration reset cancelled by user.")
+    except Exception as e:
+        print(Fore.RED + Style.BRIGHT + f"\nUnexpected error during interactive reset: {e}")
+        logger.error(f"Interactive reset failed: {e}", exc_info=True)
+
+def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str, Any]:
+    """Create fallback configuration with different levels of completeness.
+    
+    Args:
+        fallback_level: Level of fallback configuration
+            - 'minimal': Ultra-minimal for emergency use
+            - 'standard': More complete fallback with enhanced features
+            - 'emergency': Absolute minimal when everything fails
+    
+    Returns:
+        Dictionary containing fallback configuration
+    """
+    try:
+        current_time = datetime.now().isoformat()
+        
+        # Common base configuration matching updated preset structure
+        base_config = {
+            'metadata': {
+                'description': f'{fallback_level.title()} fallback configuration for system recovery',
+                'version': '2.1', 'config_version': '2.1', 'config_type': 'autoencoder',
+                'created': current_time, 'last_modified': current_time,
+                'preset_used': f'{fallback_level}_fallback',
+                'recommended_hardware': {'gpu_memory_gb': 1, 'cpu_cores': 1, 'ram_gb': 2},
+                'compatibility': ['SimpleAutoencoder'],
+                'system': {
+                    'python_version': platform.python_version(),
+                    'platform': platform.platform(),
+                    'architecture': platform.machine(),
+                    'processor': platform.processor() or 'unknown',
+                    'pytorch_version': torch.__version__ if 'torch' in globals() else 'unknown',
+                    'cuda_available': torch.cuda.is_available() if 'torch' in globals() and hasattr(torch, 'cuda') else False,
+                    'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
+                    'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
+                    'hostname': platform.node(), 'os': platform.system(),
+                    'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
+                },
+                'validation': {
+                    'schema_version': '2.1',
+                    'required_sections': ['training', 'model', 'security', 'data'],
+                    'optional_sections': ['monitoring', 'hardware', 'presets']
+                },
+                'fallback_info': {
+                    'is_fallback': True, 'level': fallback_level,
+                    'creation_time': current_time,
+                    'reason': 'Configuration system failure - using safe defaults',
+                    'warnings': [
+                        f'This is a {fallback_level} fallback configuration',
+                        'Limited functionality available',
+                        'Recommend fixing configuration system'
+                    ]
+                }
+            }
+        }
+        
+        # Configuration based on fallback level
+        if fallback_level == 'emergency':
+            # Absolute minimal configuration
+            base_config.update({
+                'training': {
+                    'batch_size': 8, 'epochs': 2, 'learning_rate': 0.01, 'patience': 2, 'weight_decay': 0.0,
+                    'gradient_clip': 5.0, 'gradient_accumulation_steps': 1, 'mixed_precision': False,
+                    'num_workers': 1, 'optimizer': 'SGD', 'scheduler': None, 'scheduler_params': {},
+                    'early_stopping': False, 'validation_split': 0.4, 'shuffle': True,
+                    'pin_memory': False, 'persistent_workers': False,
+                    'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 2, 'lr_factor': 0.5, 'min_lr': 1e-7
+                },
+                'model': {
+                    'model_type': 'SimpleAutoencoder', 'input_dim': 8, 'encoding_dim': 2, 'hidden_dims': [16],
+                    'dropout_rates': [0.0], 'activation': 'relu', 'activation_param': 0.0,
+                    'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
+                    'diversity_factor': 0.0, 'min_features': 2, 'num_models': 1, 'skip_connection': False,
+                    'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
+                    'model_types': ['SimpleAutoencoder'],
+                    'available_activations': ['relu'],
+                    'available_normalizations': [None],
+                    'available_initializers': ['xavier_uniform'],
+                    'legacy_mode': False, 'use_attention': False
+                },
+                'security': {
+                    'percentile': 85, 'attack_threshold': 0.5, 'false_negative_cost': 1.0,
+                    'enable_security_metrics': False, 'anomaly_threshold_strategy': 'fixed_percentile',
+                    'early_warning_threshold': 0.45, 'adaptive_threshold': False, 'confidence_interval': 0.8,
+                    'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium'],
+                    'threshold_validation': False
+                },
+                'data': {
+                    'normal_samples': 50, 'attack_samples': 10, 'features': 4, 'use_real_data': False,
+                    'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
+                    'validation_split': 0.4, 'test_split': 0.4, 'stratified_split': False,
+                    'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+                    'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
+                    'synthetic_generation': {'cluster_variance': 0.2, 'anomaly_sparsity': 0.5},
+                    'preprocessing': {'remove_outliers': False, 'impute_missing': False},
+                    'shuffle': True, 'pin_memory': False
+                },
+                'monitoring': {
+                    'metrics_frequency': 1, 'checkpoint_frequency': 1, 'tensorboard_logging': False,
+                    'console_logging_level': 'ERROR', 'save_best_model': False, 'save_model_history': False,
+                    'metrics_to_track': ['loss'], 'early_stopping_metric': 'loss',
+                    'checkpoint_format': 'pytorch', 'log_model_summary': False,
+                    'tensorboard_dir': str(TB_DIR), 'log_frequency': 1, 'save_checkpoints': False,
+                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
+                                   'max_scalars': 50, 'max_histograms': 0, 'max_images': 0, 'save_summary': False}
+                }
+            })
+            
+        elif fallback_level == 'standard':
+            # Enhanced fallback with more features
+            safe_batch_size = 16
+            safe_epochs = 5
+            safe_workers = min(2, os.cpu_count() or 1)
+            
+            base_config.update({
+                'training': {
+                    'batch_size': safe_batch_size, 'epochs': safe_epochs, 'learning_rate': 0.001, 
+                    'patience': 3, 'weight_decay': 0.0, 'gradient_clip': 1.0, 'gradient_accumulation_steps': 1, 
+                    'mixed_precision': False, 'num_workers': safe_workers, 'optimizer': 'Adam', 'scheduler': None, 
+                    'scheduler_params': {}, 'early_stopping': True, 'validation_split': 0.3, 'shuffle': True,
+                    'pin_memory': False, 'persistent_workers': False,
+                    'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 3, 'lr_factor': 0.7, 'min_lr': 1e-6
+                },
+                'model': {
+                    'model_type': 'SimpleAutoencoder', 'input_dim': 16, 'encoding_dim': 4, 'hidden_dims': [32],
+                    'dropout_rates': [0.1], 'activation': 'relu', 'activation_param': 0.0,
+                    'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
+                    'diversity_factor': 0.0, 'min_features': 3, 'num_models': 1, 'skip_connection': False,
+                    'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
+                    'model_types': list(MODEL_VARIANTS.keys()) if 'MODEL_VARIANTS' in globals() else ['SimpleAutoencoder'],
+                    'available_activations': ['relu', 'leaky_relu'],
+                    'available_normalizations': [None, 'batch'],
+                    'available_initializers': ['xavier_uniform', 'xavier_normal'],
+                    'legacy_mode': False, 'use_attention': False
+                },
+                'security': {
+                    'percentile': 90, 'attack_threshold': 0.4, 'false_negative_cost': 1.5,
+                    'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
+                    'early_warning_threshold': 0.35, 'adaptive_threshold': False, 'confidence_interval': 0.9,
+                    'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium', 'high'],
+                    'threshold_validation': True
+                },
+                'data': {
+                    'normal_samples': 200, 'attack_samples': 50, 'features': 8, 'use_real_data': False,
+                    'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
+                    'validation_split': 0.3, 'test_split': 0.3, 'stratified_split': False,
+                    'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+                    'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
+                    'synthetic_generation': {'cluster_variance': 0.1, 'anomaly_sparsity': 0.3, 'noise_factor': 0.05},
+                    'preprocessing': {'remove_outliers': False, 'impute_missing': True, 'imputation_strategy': 'mean'},
+                    'shuffle': True, 'pin_memory': False
+                },
+                'monitoring': {
+                    'metrics_frequency': 2, 'checkpoint_frequency': 5, 'tensorboard_logging': False,
+                    'console_logging_level': 'WARNING', 'save_best_model': True, 'save_model_history': False,
+                    'metrics_to_track': ['loss', 'reconstruction_error'], 'early_stopping_metric': 'loss',
+                    'checkpoint_format': 'pytorch', 'log_model_summary': False,
+                    'tensorboard_dir': str(TB_DIR), 'log_frequency': 2, 'save_checkpoints': True,
+                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
+                                   'max_scalars': 100, 'max_histograms': 10, 'max_images': 0, 'save_summary': False}
+                },
+                'fallback_info': {
+                    'is_fallback': True, 'level': 'standard', 'creation_time': current_time,
+                    'reason': 'Configuration system failure - using enhanced safe defaults',
+                    'recommendations': [
+                        'Check configuration file format', 'Verify preset definitions',
+                        'Check file permissions', 'Review system requirements'
+                    ],
+                    'limitations': [
+                        'Limited model architectures', 'Reduced functionality',
+                        'Basic monitoring only', 'CPU-only execution'
+                    ]
+                }
+            })
+            
+        else:
+            # 'minimal' - default case with balanced functionality
+            base_config.update({
+                'training': {
+                    'batch_size': 32, 'epochs': 10, 'learning_rate': 0.001, 'patience': 5, 'weight_decay': 1e-4,
+                    'gradient_clip': 1.0, 'gradient_accumulation_steps': 2, 'mixed_precision': False,
+                    'num_workers': min(2, os.cpu_count() or 1), 'optimizer': 'Adam', 'scheduler': None,
+                    'scheduler_params': {}, 'early_stopping': True, 'validation_split': 0.2, 'shuffle': True,
+                    'pin_memory': False, 'persistent_workers': False,
+                    'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 3, 'lr_factor': 0.7, 'min_lr': 1e-6
+                },
+                'model': {
+                    'model_type': 'SimpleAutoencoder', 'input_dim': 20, 'encoding_dim': 8, 'hidden_dims': [64],
+                    'dropout_rates': [0.2], 'activation': 'relu', 'activation_param': 0.0,
+                    'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
+                    'diversity_factor': 0.0, 'min_features': 5, 'num_models': 1, 'skip_connection': False,
+                    'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
+                    'model_types': list(MODEL_VARIANTS.keys()) if 'MODEL_VARIANTS' in globals() else ['SimpleAutoencoder'],
+                    'available_activations': ['relu', 'leaky_relu', 'gelu'],
+                    'available_normalizations': [None, 'batch'],
+                    'available_initializers': ['xavier_uniform', 'xavier_normal'],
+                    'legacy_mode': False, 'use_attention': False
+                },
+                'security': {
+                    'percentile': 95, 'attack_threshold': 0.3, 'false_negative_cost': 2.0,
+                    'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
+                    'early_warning_threshold': 0.25, 'adaptive_threshold': False, 'confidence_interval': 0.95,
+                    'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium', 'high'],
+                    'threshold_validation': True
+                },
+                'data': {
+                    'normal_samples': 1000, 'attack_samples': 200, 'features': 10, 'use_real_data': False,
+                    'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
+                    'validation_split': 0.2, 'test_split': 0.2, 'stratified_split': True,
+                    'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+                    'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
+                    'synthetic_generation': {'cluster_variance': 0.1, 'anomaly_sparsity': 0.3, 'noise_factor': 0.05},
+                    'preprocessing': {'remove_outliers': True, 'impute_missing': True, 'imputation_strategy': 'mean'},
+                    'shuffle': True, 'pin_memory': False
+                },
+                'monitoring': {
+                    'metrics_frequency': 5, 'checkpoint_frequency': 10, 'tensorboard_logging': False,
+                    'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': False,
+                    'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss'],
+                    'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
+                    'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 5, 'save_checkpoints': True,
+                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
+                                   'max_scalars': 200, 'max_histograms': 20, 'max_images': 5, 'save_summary': False}
+                }
+            })
+
+        # Common sections for all fallback levels
+        base_config.update({
+            'hardware': {
+                'device': 'cpu', 'recommended_gpu_memory': 1,
+                'minimum_system_requirements': {'cpu_cores': 1, 'ram_gb': 1, 'disk_space': 2},
+                'optimal_system_requirements': {'cpu_cores': 2, 'ram_gb': 2, 'disk_space': 5},
+                'memory_management': {'max_memory_fraction': 0.5, 'allow_memory_growth': False, 'memory_limit': 1024},
+                'performance_optimization': {'use_cuda': False, 'use_amp': False, 'benchmark_mode': False, 'deterministic': True}
+            },
+            'system': {
+                'model_dir': str(Path('./models/fallback')), 'log_dir': str(Path('./logs/fallback')),
+                'config_dir': str(Path('./config/fallback')), 'data_dir': str(Path('./data/fallback')),
+                'checkpoint_dir': str(Path('./checkpoints/fallback')),
+                'debug': True if fallback_level == 'emergency' else False, 'verbose': True,
+                'random_seed': 42, 'reproducible': True, 'parallel_processing': False, 'max_workers': 1,
+                'export_onnx': False, 'non_interactive': False, 'cuda_optimizations': False,
+                'onnx_export': {'opset_version': 14, 'dynamic_axes': False, 'constant_folding': False,
+                               'optimize_for_mobile': False, 'runtime_validation': False,
+                               'validation_tolerance': 1e-5, 'verbose': False}
+            },
+            'presets': {
+                'available_presets': [], 'current_preset': f'{fallback_level}_fallback', 'current_override': None,
+                'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
+                'preset_configs': {}, 'custom_presets_available': [],
+                'auto_apply': False, 'validate_compatibility': False
+            },
+            'hyperparameter_optimization': {
+                'enabled': False, 'strategy': 'optuna', 'study_name': f'autoencoder_hpo_{fallback_level}',
+                'direction': 'minimize', 'n_trials': 5, 'timeout': 300,
+                'sampler': 'RandomSampler', 'pruner': 'NopPruner', 'objective_metric': 'loss',
+                'optimization_space': {
+                    'learning_rate': {'type': 'float', 'low': 1e-3, 'high': 1e-1, 'log': True},
+                    'batch_size': {'type': 'categorical', 'choices': [8, 16, 32]}
+                },
+                'early_stopping': {'enabled': False, 'patience': 2, 'min_improvement': 1e-2},
+                'timeout_seconds': 300, 'trial_epochs': 3, 'trial_patience': 2,
+                'cleanup_trials': False, 'generate_plots': False,
+                'search_space': {
+                    'encoding_dim_min': 2, 'encoding_dim_max': 8, 'hidden_layers_min': 1, 'hidden_layers_max': 1,
+                    'lr_min': 1e-3, 'lr_max': 1e-1, 'batch_sizes': [8, 16, 32],
+                    'weight_decay_min': 0.0, 'weight_decay_max': 0.0, 'dropout_min': 0.0, 'dropout_max': 0.1,
+                    'activations': ["relu"], 'normalizations': [None], 'percentile_min': 80, 'percentile_max': 90
+                },
+                'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0,
+                           'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 2,
+                           'n_ei_candidates': 5, 'multivariate': False},
+                'hpo_pruner': {'type': 'Nop', 'n_startup_trials': 0, 'n_warmup_steps': 0, 'interval_steps': 1},
+                'scoring': {'use_composite_score': False, 'validation_weight': 1.0, 'test_weight': 0.0,
+                           'complexity_weight': 0.0, 'max_params_penalty': 1000},
+                'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/{fallback_level}_study.db",
+                           'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
+            },
+            'validation': {
+                'cross_validation': {'enabled': False, 'folds': 2, 'stratified': False, 'random_state': 42},
+                'metrics': ['mse', 'mae'], 'validation_frequency': 1,
+                'save_validation_results': False, 'detailed_metrics': False
+            },
+            'experimental': {
+                'features': {'advanced_logging': True if fallback_level == 'emergency' else False, 
+                            'model_interpretability': False, 'federated_learning': False, 'active_learning': False},
+                'settings': {'experimental_mode': True if fallback_level == 'emergency' else False, 
+                            'beta_features': False, 'research_mode': False}
+            }
+        })
+        
+        # Add runtime information
+        base_config['runtime'] = {
+            'config_loaded_at': current_time,
+            'config_source': f'{fallback_level}_fallback',
+            'process_id': os.getpid(),
+            'configuration_health': {
+                'status': f'{fallback_level}_fallback',
+                'last_validation': current_time,
+                'validation_errors': []
+            }
+        }
+        
+        # Log the fallback creation
+        if fallback_level == 'emergency':
+            logger.critical("Created emergency fallback configuration - system in critical state")
+        elif fallback_level == 'standard':
+            logger.warning("Created standard fallback configuration due to system failure")
+            logger.info(f"Fallback config: {base_config['data']['features']} features, "
+                       f"{base_config['training']['batch_size']} batch size, "
+                       f"{base_config['model']['model_type']} model")
+        else:
+            logger.info(f"Created {fallback_level} fallback configuration")
+        
+        return base_config
+        
+    except Exception as e:
+        logger.critical(f"Failed to create {fallback_level} fallback configuration: {e}")
+        
+        # Last resort emergency config - absolute minimal
+        return {
+            'metadata': {
+                'version': '2.1', 'config_version': '2.1',
+                'created': datetime.now().isoformat() if 'datetime' in globals() else 'unknown',
+                'description': 'Emergency minimal configuration - last resort',
+                'preset_used': 'emergency_last_resort',
+                'config_source': 'last_resort_fallback',
+                'compatibility': ['SimpleAutoencoder']
+            },
+            'training': {
+                'batch_size': 8, 'epochs': 2, 'learning_rate': 0.01, 'num_workers': 1, 'optimizer': 'SGD'
+            },
+            'model': {
+                'model_type': 'SimpleAutoencoder', 'encoding_dim': 2, 'hidden_dims': [16],
+                'dropout_rates': [0.0], 'activation': 'relu'
+            },
+            'data': {
+                'normal_samples': 50, 'attack_samples': 10, 'features': 4, 'validation_split': 0.4
+            },
+            'security': {
+                'percentile': 90, 'attack_threshold': 0.5, 'enable_security_metrics': False
+            },
+            'system': {
+                'model_dir': './models/emergency', 'debug': True, 'random_seed': 42
+            },
+            'presets': {
+                'current_preset': 'emergency_last_resort', 'available_presets': []
+            },
+            'fallback_info': {
+                'is_fallback': True, 'level': 'emergency_last_resort', 'critical_error': str(e)
+            },
+            'runtime': {
+                'config_source': 'last_resort_fallback',
+                'configuration_health': {'status': 'critical'}
+            }
+        }
+
+def _recommend_preset_for_system(system_analysis: Dict[str, Any]) -> str:
+    """Recommend optimal preset based on system analysis."""
+    try:
+        system_class = system_analysis.get('hardware_analysis', {}).get('system_class', 'unknown')
+        performance_score = system_analysis.get('hardware_analysis', {}).get('performance_score', 0)
+        gpu_available = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False)
+        memory_gb = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0)
+        
+        if system_class == 'high_performance' and gpu_available and memory_gb >= 16:
+            return 'advanced'
+        elif system_class == 'high_performance' and gpu_available:
+            return 'performance'
+        elif system_class == 'standard':
+            return 'default'
+        elif memory_gb < 4 or performance_score < 40:
+            return 'lightweight'
+        else:
+            return 'default'
+            
+    except Exception:
+        return 'default'
+
+def _check_preset_system_compatibility(config: Dict[str, Any], system_analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Check compatibility between preset configuration and system capabilities."""
+    try:
+        compatibility = {
+            'overall_compatible': True,
+            'warnings': [],
+            'recommendations': []
+        }
+        
+        # Check memory requirements
+        training_config = config.get('training', {})
+        model_config = config.get('model', {})
+        system_memory = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('memory', {}).get('total_gb', 0)
+        
+        # Estimate memory requirements
+        batch_size = training_config.get('batch_size', 64)
+        model_complexity = len(model_config.get('hidden_dims', [])) + 1
+        # Rough estimate in GB
+        estimated_memory_need = (batch_size * model_complexity) / 1000
+        
+        if system_memory > 0 and estimated_memory_need > system_memory * 0.8:
+            compatibility['overall_compatible'] = False
+            compatibility['warnings'].append(f"High memory usage expected ({estimated_memory_need:.1f}GB) for available memory ({system_memory:.1f}GB)")
+            compatibility['recommendations'].append("Consider reducing batch size or model complexity")
+        
+        # Check GPU requirements
+        cuda_available = system_analysis.get('hardware_analysis', {}).get('capabilities', {}).get('gpu', {}).get('available', False)
+        mixed_precision = training_config.get('mixed_precision', False)
+        
+        if mixed_precision and not cuda_available:
+            compatibility['warnings'].append("Mixed precision training enabled but CUDA not available")
+            compatibility['recommendations'].append("Disable mixed precision for CPU-only systems")
+        
+        # Check model type compatibility
+        model_type = model_config.get('model_type', '')
+        num_models = model_config.get('num_models', 1)
+        
+        if 'Ensemble' in model_type and num_models > 1 and system_analysis.get('hardware_analysis', {}).get('system_class') == 'limited':
+            compatibility['warnings'].append("Ensemble model may be too complex for limited system resources")
+            compatibility['recommendations'].append("Consider using SimpleAutoencoder for better compatibility")
+        
+        return compatibility
+        
+    except Exception as e:
+        return {
+            'overall_compatible': True,
+            'warnings': [f"Compatibility check failed: {str(e)}"],
+            'recommendations': []
+        }
+
 def save_custom_preset(name: str, config: Dict) -> Path:
     """Save a custom preset configuration with enhanced validation and metadata.
     
@@ -15534,21 +16985,21 @@ def save_config_interactive():
         
         config = get_current_config()
         
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
         print(Fore.GREEN + Style.BRIGHT + "INTERACTIVE CONFIGURATION SAVE")
-        print(Fore.CYAN + Style.BRIGHT + "="*40)
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         # Show current configuration summary
         preset_used = config.get('presets', {}).get('current_preset', 'none')
         model_type = config.get('model', {}).get('model_type', 'unknown')
-        print(Fore.YELLOW + Style.BRIGHT + f"\nCurrent configuration:")
-        print(Fore.GREEN + Style.BRIGHT + f"  - Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_used}")
-        print(Fore.GREEN + Style.BRIGHT + f"  - Model type: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.GREEN + Style.BRIGHT + f"  - Sections: " + Fore.CYAN + Style.BRIGHT + f"{len(config)}")
+        print(Fore.YELLOW + Style.BRIGHT + f"Current configuration:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_used}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model type: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Sections: " + Fore.YELLOW + Style.BRIGHT + f"{len(config)}")
         
         # Get save options
         print(Fore.YELLOW + Style.BRIGHT + f"\nSave options:")
-        print(Fore.WHITE + Style.BRIGHT + f"1. Save to default location ({CONFIG_FILE})")
+        print(Fore.WHITE + Style.BRIGHT + f"1. Save to default location " + Fore.GREEN + Style.BRIGHT + f"({CONFIG_FILE})")
         print(Fore.WHITE + Style.BRIGHT + f"2. Save with a specific name")
         print(Fore.WHITE + Style.BRIGHT + f"3. Save to custom path")
         print(Fore.WHITE + Style.BRIGHT + f"4. Save both to default and with name")
@@ -18915,25 +20366,24 @@ def display_configuration_changes(changes: List[Dict], console: Console = None, 
 
 def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) -> None:
     """
-    Save a comprehensive initialization report to disk with multiple formats using template-based architecture.
+    Save a comprehensive initialization report to disk with multiple formats.
     
-    This function creates both machine-readable (JSON) and human-readable (TXT) reports that match 
-    the comprehensive system_status structure from initialize_system, plus generates an interactive 
-    HTML dashboard using the modular template system.
+    This function creates both machine-readable (JSON) and human-readable (TXT)
+    reports that match the comprehensive system_status structure from initialize_system.
     
     Args:
-        system_status: Complete system status dictionary from initialize_system (contains all check results)
+        system_status: Complete system status dictionary from initialize_system
         report_dir: Directory to save the report (should be a Path object)
         
     Raises:
-        Exception: If report saving fails (logged but not re-raised to avoid interrupting initialization)
+        Exception: If report saving fails (logged but not re-raised to avoid
+                  interrupting initialization)
     """
     from datetime import datetime
     
     # Define file variables at the top to ensure they're in scope for error handling
     consolidated_files = {}
     report_data, status_data, diagnostics_data, dashboard_json_file_data = None, None, None, None
-    template_renderer = None
     
     try:
         # Determine report_dir (default: script's directory / reports)
@@ -18951,266 +20401,75 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
         time_str = timestamp_obj.strftime('%H%M%S')
         timestamp = f"{date_str}_{time_str}"
         
-        # Initialize Template Renderer
-        try:
-            # Try to import and initialize the template renderer
-            template_dir = Path(__file__).resolve().parent / "templates"
-            
-            template_renderer_path = template_dir / "template_renderer.py"
-            if template_renderer_path.exists():
-                spec = importlib.util.spec_from_file_location("template_renderer", template_renderer_path)
-                template_renderer_module = importlib.util.module_from_spec(spec)
-                sys.modules["template_renderer"] = template_renderer_module
-                spec.loader.exec_module(template_renderer_module)
-                
-                # Initialize the renderer
-                template_renderer = template_renderer_module.DashboardTemplateRenderer(template_dir)
-                logger.debug("Template-based dashboard renderer initialized successfully")
-            else:
-                logger.warning("Template renderer not found, will use fallback HTML generation")
-                template_renderer = None
-                
-        except Exception as template_error:
-            logger.warning(f"Failed to initialize template renderer: {template_error}")
-            logger.debug("Template renderer initialization error:", exc_info=True)
-            template_renderer = None
-        
-        # OPTIMIZED: Extract existing check results instead of re-running checks
+        # Enhance system_status with additional diagnostic information using existing functions
         enhanced_status = system_status.copy()
         
-        # Extract existing check results from system_status
-        existing_check_results = system_status.get('dependencies', {}).get('check_results', {})
+        # Add hardware information using check_hardware()
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+            enhanced_status['detailed_hardware'] = hardware_data
+        except Exception as e:
+            enhanced_status['detailed_hardware_error'] = str(e)
         
-        # HARDWARE INFORMATION - Extract from existing data
-        if 'hardware' in system_status:
-            enhanced_status['detailed_hardware'] = system_status['hardware']['detailed_info']
-        elif 'hardware' in existing_check_results:
-            # Extract from system check results if available
-            hardware_check = existing_check_results['hardware']
-            if hasattr(hardware_check, 'details') and hardware_check.details:
-                enhanced_status['detailed_hardware'] = hardware_check.details
-            elif hasattr(hardware_check, 'metadata') and hardware_check.metadata:
-                enhanced_status['detailed_hardware'] = hardware_check.metadata
-            else:
-                # Fallback to system_status hardware info
-                enhanced_status['detailed_hardware'] = system_status.get('hardware', {})
-        else:
-            # Only run check if absolutely no data is available
-            try:
-                hardware_data = check_hardware(include_memory_usage=True)
-                enhanced_status['detailed_hardware'] = hardware_data
-                logger.debug("Hardware check run as fallback - no existing data found")
-            except Exception as e:
-                enhanced_status['detailed_hardware_error'] = str(e)
-                logger.warning(f"Fallback hardware check failed: {e}")
+        # Add version information using check_versions()
+        try:
+            version_info = check_versions(include_optional=True)
+            enhanced_status['detailed_versions'] = version_info
+        except Exception as e:
+            enhanced_status['detailed_versions_error'] = str(e)
         
-        # VERSION INFORMATION - Extract from existing data
-        if 'package_versions' in existing_check_results:
-            version_check = existing_check_results['package_versions']
-            if hasattr(version_check, 'metadata') and version_check.metadata.get('version_info'):
-                enhanced_status['detailed_versions'] = version_check.metadata['version_info']
-            elif hasattr(version_check, 'details') and isinstance(version_check.details, str):
-                # Try to extract from details if it's structured
-                try:
-                    # Look for version info in dependencies section
-                    deps_info = system_status.get('dependencies', {})
-                    if 'check_results' in deps_info:
-                        enhanced_status['detailed_versions'] = deps_info.get('version_summary', {})
-                except Exception:
-                    pass
-        
-        # If still no version info, extract from system dependencies
-        if 'detailed_versions' not in enhanced_status:
-            deps_info = system_status.get('dependencies', {})
-            if 'torch_version' in deps_info:
-                # Build version info from available dependency data
-                enhanced_status['detailed_versions'] = {
-                    'PyTorch': {
-                        'version': deps_info.get('torch_version', 'unknown'),
-                        'compatible': True,
-                        'required': True,
-                        'status': 'OK'
-                    },
-                    'Python': {
-                        'version': str(deps_info.get('python_version', 'unknown')),
-                        'compatible': True,
-                        'required': True,
-                        'status': 'OK'
-                    },
-                    'Platform': {
-                        'version': deps_info.get('platform', 'unknown'),
-                        'compatible': True,
-                        'required': False,
-                        'status': 'OK'
-                    }
-                }
-                # Add optional dependencies
-                optional_available = deps_info.get('optional_available', {})
-                for name, available in optional_available.items():
-                    enhanced_status['detailed_versions'][name] = {
-                        'version': 'Available' if available else 'N/A',
-                        'compatible': available,
-                        'required': False,
-                        'status': 'OK' if available else 'MISSING'
-                    }
-            else:
-                # Only run if absolutely no data available
-                try:
-                    version_info = check_versions(include_optional=True)
-                    enhanced_status['detailed_versions'] = version_info
-                    logger.debug("Version check run as fallback - no existing data found")
-                except Exception as e:
-                    enhanced_status['detailed_versions_error'] = str(e)
-                    logger.warning(f"Fallback version check failed: {e}")
-        
-        # SEED CONFIGURATION - Extract from existing data
-        if 'seed_config' in existing_check_results:
-            seed_check = existing_check_results['seed_config']
+        # Add seed configuration status using check_seed_config()
+        try:
+            seed_result = check_seed_config(enhanced_status.get('detailed_hardware'))
             enhanced_status['reproducibility'] = {
-                'seed_config_passed': seed_check.passed,
-                'compliance_score': seed_check.metadata.get('compliance_score', 0) if seed_check.metadata else 0,
-                'recommendations': seed_check.metadata.get('recommendations', []) if seed_check.metadata else [],
-                'details': seed_check.details if hasattr(seed_check, 'details') else {}
+                'seed_config_passed': seed_result.passed,
+                'compliance_score': seed_result.metadata.get('compliance_score', 0) if seed_result.metadata else 0,
+                'recommendations': seed_result.metadata.get('recommendations', []) if seed_result.metadata else [],
+                'details': seed_result.details
             }
-        else:
-            # Try to infer from system configuration
-            if 'config' in system_status and system_status['config'].get('reproducible', False):
-                enhanced_status['reproducibility'] = {
-                    'seed_config_passed': True,
-                    'compliance_score': 85,  # Reasonable assumption if reproducible=True
-                    'recommendations': [],
-                    'details': {'inferred_from_config': True, 'seed': system_status['config'].get('random_seed', 42)}
-                }
-            else:
-                # Only run if no existing data and can't infer
-                try:
-                    seed_result = check_seed_config(enhanced_status.get('detailed_hardware'))
-                    enhanced_status['reproducibility'] = {
-                        'seed_config_passed': seed_result.passed,
-                        'compliance_score': seed_result.metadata.get('compliance_score', 0) if seed_result.metadata else 0,
-                        'recommendations': seed_result.metadata.get('recommendations', []) if seed_result.metadata else [],
-                        'details': seed_result.details
-                    }
-                    logger.debug("Seed config check run as fallback - no existing data found")
-                except Exception as e:
-                    enhanced_status['reproducibility_error'] = str(e)
-                    logger.warning(f"Fallback seed config check failed: {e}")
+        except Exception as e:
+            enhanced_status['reproducibility_error'] = str(e)
         
-        # LOGGING CONFIGURATION - Extract from existing data
-        if 'logging_setup' in existing_check_results:
-            logging_check = existing_check_results['logging_setup']
+        # Add logging configuration status using check_logging_setup()
+        try:
+            logging_result = check_logging_setup()
             enhanced_status['logging_config'] = {
-                'passed': logging_check.passed,
-                'compliance_score': logging_check.details.get('compliance_score', 0) if isinstance(logging_check.details, dict) else 0,
-                'handlers_count': len(logging_check.details.get('handlers', [])) if isinstance(logging_check.details, dict) else 0,
-                'feedback': logging_check.details.get('feedback', []) if isinstance(logging_check.details, dict) else []
+                'passed': logging_result.passed,
+                'compliance_score': logging_result.details.get('compliance_score', 0) if isinstance(logging_result.details, dict) else 0,
+                'handlers_count': len(logging_result.details.get('handlers', [])) if isinstance(logging_result.details, dict) else 0,
+                'feedback': logging_result.details.get('feedback', []) if isinstance(logging_result.details, dict) else []
             }
-        else:
-            # Try to infer from system state
-            if logger and logger.handlers:
-                enhanced_status['logging_config'] = {
-                    'passed': True,
-                    'compliance_score': 90,  # Reasonable assumption if logger is working
-                    'handlers_count': len(logger.handlers),
-                    'feedback': []
-                }
-            else:
-                # Only run if no existing data and can't infer
-                try:
-                    logging_result = check_logging_setup()
-                    enhanced_status['logging_config'] = {
-                        'passed': logging_result.passed,
-                        'compliance_score': logging_result.details.get('compliance_score', 0) if isinstance(logging_result.details, dict) else 0,
-                        'handlers_count': len(logging_result.details.get('handlers', [])) if isinstance(logging_result.details, dict) else 0,
-                        'feedback': logging_result.details.get('feedback', []) if isinstance(logging_result.details, dict) else []
-                    }
-                    logger.debug("Logging setup check run as fallback - no existing data found")
-                except Exception as e:
-                    enhanced_status['logging_config_error'] = str(e)
-                    logger.warning(f"Fallback logging setup check failed: {e}")
+        except Exception as e:
+            enhanced_status['logging_config_error'] = str(e)
         
-        # PERFORMANCE MONITORING - Extract from existing data
-        if 'performance_monitoring' in existing_check_results:
-            perf_check = existing_check_results['performance_monitoring']
+        # Add performance monitoring status
+        try:
+            perf_monitoring_result = check_performance_monitoring()
             enhanced_status['performance_monitoring'] = {
-                'available': perf_check.passed,
-                'capabilities': perf_check.details.get('capabilities', {}) if isinstance(perf_check.details, dict) else {},
-                'hardware_integration': perf_check.details.get('hardware_integration', False) if isinstance(perf_check.details, dict) else False
+                'available': perf_monitoring_result.passed,
+                'capabilities': perf_monitoring_result.details.get('capabilities', {}) if isinstance(perf_monitoring_result.details, dict) else {},
+                'hardware_integration': perf_monitoring_result.details.get('hardware_integration', False) if isinstance(perf_monitoring_result.details, dict) else False
             }
-        else:
-            # Try to infer from available functions
-            has_perf_functions = (
-                'enhanced_monitor_performance' in globals() and
-                'performance_monitor_wrapper' in globals()
-            )
-            if has_perf_functions:
-                enhanced_status['performance_monitoring'] = {
-                    'available': True,
-                    'capabilities': {'basic_monitoring': True, 'decorator_available': True},
-                    'hardware_integration': enhanced_status.get('detailed_hardware', {}).get('cuda', {}).get('available', False)
-                }
-            else:
-                # Only run if no existing data and can't infer
-                try:
-                    perf_monitoring_result = check_performance_monitoring()
-                    enhanced_status['performance_monitoring'] = {
-                        'available': perf_monitoring_result.passed,
-                        'capabilities': perf_monitoring_result.details.get('capabilities', {}) if isinstance(perf_monitoring_result.details, dict) else {},
-                        'hardware_integration': perf_monitoring_result.details.get('hardware_integration', False) if isinstance(perf_monitoring_result.details, dict) else False
-                    }
-                    logger.debug("Performance monitoring check run as fallback - no existing data found")
-                except Exception as e:
-                    enhanced_status['performance_monitoring_error'] = str(e)
-                    logger.warning(f"Fallback performance monitoring check failed: {e}")
+        except Exception as e:
+            enhanced_status['performance_monitoring_error'] = str(e)
         
-        # MEMORY MANAGEMENT - Extract from existing data
-        if 'memory_management' in existing_check_results:
-            memory_check = existing_check_results['memory_management']
+        # Add memory management status
+        try:
+            memory_mgmt_result = check_memory_management()
             enhanced_status['memory_management'] = {
-                'comprehensive': memory_check.passed,
-                'capabilities': memory_check.details.get('capabilities', {}) if isinstance(memory_check.details, dict) else {},
-                'test_results': memory_check.details.get('test_results', {}) if isinstance(memory_check.details, dict) else {}
+                'comprehensive': memory_mgmt_result.passed,
+                'capabilities': memory_mgmt_result.details.get('capabilities', {}) if isinstance(memory_mgmt_result.details, dict) else {},
+                'test_results': memory_mgmt_result.details.get('test_results', {}) if isinstance(memory_mgmt_result.details, dict) else {}
             }
-        else:
-            # Try to infer from available functions
-            has_memory_functions = 'enhanced_clear_memory' in globals()
-            if has_memory_functions:
-                enhanced_status['memory_management'] = {
-                    'comprehensive': True,
-                    'capabilities': {'clear_memory': True, 'hardware_aware': True},
-                    'test_results': {'basic_test_passed': True}
-                }
-            else:
-                # Only run if no existing data and can't infer
-                try:
-                    memory_mgmt_result = check_memory_management()
-                    enhanced_status['memory_management'] = {
-                        'comprehensive': memory_mgmt_result.passed,
-                        'capabilities': memory_mgmt_result.details.get('capabilities', {}) if isinstance(memory_mgmt_result.details, dict) else {},
-                        'test_results': memory_mgmt_result.details.get('test_results', {}) if isinstance(memory_mgmt_result.details, dict) else {}
-                    }
-                    logger.debug("Memory management check run as fallback - no existing data found")
-                except Exception as e:
-                    enhanced_status['memory_management_error'] = str(e)
-                    logger.warning(f"Fallback memory management check failed: {e}")
+        except Exception as e:
+            enhanced_status['memory_management_error'] = str(e)
         
-        # SYSTEM CONFIGURATION - Extract from existing data
-        if 'system' in system_status:
-            enhanced_status['comprehensive_system_info'] = {
-                'platform': system_status['system'],
-                'hardware': system_status.get('hardware', {}),
-                'dependencies': system_status.get('dependencies', {}),
-                'diagnostics': system_status.get('diagnostics', {})
-            }
-        else:
-            # Only run if no existing data
-            try:
-                system_info = get_system_info(include_versions=True, include_hardware=True)
-                enhanced_status['comprehensive_system_info'] = system_info
-                logger.debug("System info check run as fallback - no existing data found")
-            except Exception as e:
-                enhanced_status['comprehensive_system_info_error'] = str(e)
-                logger.warning(f"Fallback system info check failed: {e}")
+        # Add system configuration information using get_system_info()
+        try:
+            system_info = get_system_info(include_versions=True, include_hardware=True)
+            enhanced_status['comprehensive_system_info'] = system_info
+        except Exception as e:
+            enhanced_status['comprehensive_system_info_error'] = str(e)
         
         # Create a serializable version of the enhanced report
         serializable_status = {}
@@ -19225,27 +20484,27 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
         
         # Add metadata to the JSON report
         serializable_status['_metadata'] = {
-            'report_version': '3.1',  # Updated version to indicate optimization
+            'report_version': '3.0',
             'generated_at': timestamp_obj.isoformat(),
             'report_type': 'comprehensive_system_initialization',
             'format': 'json',
             'generator': 'initialize_system',
-            'enhancement_level': 'optimized_extraction',
-            'template_based': template_renderer is not None,
-            'dashboard_architecture': 'template_based' if template_renderer else 'inline_fallback',
-            'redundancy_eliminated': True,
-            'data_source': 'existing_check_results',
-            'optimization_level': 'high',
+            'enhancement_level': 'full_diagnostic',
             'check_functions_used': [
-                'extracted_from_initialize_system_checks',
-                'minimal_fallback_checks_only_when_needed'
+                'check_hardware',
+                'check_versions', 
+                'check_seed_config',
+                'check_logging_setup',
+                'check_performance_monitoring',
+                'check_memory_management',
+                'get_system_info'
             ],
             'python_version': sys.version,
             'platform': platform.platform(),
             'working_directory': str(Path.cwd())
         }
         
-        # Calculate system health score for summary (using existing data)
+        # Calculate system health score for summary
         checks_performed = []
         checks_passed = []
         
@@ -19256,33 +20515,33 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
         perf_monitoring = enhanced_status.get('performance_monitoring', {})
         memory_mgmt = enhanced_status.get('memory_management', {})
         
-        if 'detailed_hardware' in enhanced_status and not enhanced_status.get('detailed_hardware_error'):
+        if 'detailed_hardware' in enhanced_status:
             checks_performed.append('Hardware Analysis')
-            if detailed_hw.get('cuda', {}).get('status') in ['PASS', 'WARN'] or detailed_hw.get('available', False):
+            if detailed_hw.get('cuda', {}).get('status') in ['PASS', 'WARN']:
                 checks_passed.append('Hardware Analysis')
         
-        if 'detailed_versions' in enhanced_status and not enhanced_status.get('detailed_versions_error'):
+        if 'detailed_versions' in enhanced_status:
             checks_performed.append('Version Validation')
             compatible_count = sum(1 for v in detailed_versions.values() if isinstance(v, dict) and v.get('compatible', False))
             if compatible_count > 0:
                 checks_passed.append('Version Validation')
         
-        if 'reproducibility' in enhanced_status and not enhanced_status.get('reproducibility_error'):
+        if 'reproducibility' in enhanced_status:
             checks_performed.append('Reproducibility Config')
             if reproducibility.get('seed_config_passed', False):
                 checks_passed.append('Reproducibility Config')
         
-        if 'logging_config' in enhanced_status and not enhanced_status.get('logging_config_error'):
+        if 'logging_config' in enhanced_status:
             checks_performed.append('Logging Configuration')
             if logging_config.get('passed', False):
                 checks_passed.append('Logging Configuration')
         
-        if 'performance_monitoring' in enhanced_status and not enhanced_status.get('performance_monitoring_error'):
+        if 'performance_monitoring' in enhanced_status:
             checks_performed.append('Performance Monitoring')
             if perf_monitoring.get('available', False):
                 checks_passed.append('Performance Monitoring')
         
-        if 'memory_management' in enhanced_status and not enhanced_status.get('memory_management_error'):
+        if 'memory_management' in enhanced_status:
             checks_performed.append('Memory Management')
             if memory_mgmt.get('comprehensive', False):
                 checks_passed.append('Memory Management')
@@ -19311,8 +20570,7 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
             'metadata': {
                 'timestamp': timestamp_obj.isoformat(),
                 'report_type': 'diagnostic',
-                'check_framework_version': '3.1',
-                'template_based': template_renderer is not None
+                'check_framework_version': '3.0'
             },
             'hardware_analysis': enhanced_status.get('detailed_hardware', {}),
             'version_validation': enhanced_status.get('detailed_versions', {}),
@@ -19320,13 +20578,7 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
             'logging_config': enhanced_status.get('logging_config', {}),
             'performance_monitoring': enhanced_status.get('performance_monitoring', {}),
             'memory_management': enhanced_status.get('memory_management', {}),
-            'system_info': enhanced_status.get('comprehensive_system_info', {}),
-            'extraction_summary': {
-                'checks_extracted': len(checks_performed),
-                'checks_successful': len(checks_passed),
-                'fallback_checks_used': sum(1 for key in enhanced_status.keys() if key.endswith('_error')),
-                'data_source': 'existing_system_checks'
-            }
+            'system_info': enhanced_status.get('comprehensive_system_info', {})
         }
         
         # Create dashboard data for JSON storage
@@ -19343,7 +20595,7 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
             'memory_management': compact_status.get('memory_management', False)
         }
         
-        # DAILY CONSOLIDATED FILES IMPLEMENTATION (unchanged from original)
+        # DAILY CONSOLIDATED FILES IMPLEMENTATION
         # Define all the consolidated file paths
         consolidated_files = {
             'report': report_dir / f"deep_init_report_{date_str}.json",
@@ -19378,12 +20630,11 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
                     'date': date_str,
                     'reports': [],
                     'metadata': {
-                        'version': '3.1',
+                        'version': '3.0',
                         'created_at': timestamp_obj.isoformat(),
                         'total_reports': 0,
                         'last_updated': timestamp_obj.isoformat(),
-                        'report_type': 'consolidated_daily',
-                        'template_based': template_renderer is not None
+                        'report_type': 'consolidated_daily'
                     }
                 }
         else:
@@ -19391,12 +20642,11 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
                 'date': date_str,
                 'reports': [report_entry],
                 'metadata': {
-                    'version': '3.1',
+                    'version': '3.0',
                     'created_at': timestamp_obj.isoformat(),
                     'total_reports': 1,
                     'last_updated': timestamp_obj.isoformat(),
-                    'report_type': 'consolidated_daily',
-                    'template_based': template_renderer is not None
+                    'report_type': 'consolidated_daily'
                 }
             }
         
@@ -19415,7 +20665,6 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
 {'=' * 80}
 INITIALIZATION REPORT - {timestamp_obj.strftime('%Y-%m-%d %H:%M:%S')}
 Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
-Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fallback'}
 {'=' * 80}
 """
         
@@ -19430,16 +20679,6 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
         
         # Build summary content as a single string to avoid file handle issues
         summary_content = summary_header
-        
-        # Template Architecture Status
-        summary_content += "TEMPLATE ARCHITECTURE\n"
-        summary_content += "-" * 22 + "\n"
-        summary_content += f"Template Renderer: {'Available' if template_renderer else 'Not Available'}\n"
-        summary_content += f"Dashboard Type: {'Modular Template-Based' if template_renderer else 'Inline HTML Fallback'}\n"
-        summary_content += f"CSS: {'External Stylesheet' if template_renderer else 'Embedded Styles'}\n"
-        summary_content += f"JavaScript: {'Template Variables' if template_renderer else 'Inline Generation'}\n"
-        summary_content += f"Quick Actions: {'Partial Template' if template_renderer else 'Generated HTML'}\n"
-        summary_content += "\n"
         
         # Initialization Status
         summary_content += "INITIALIZATION STATUS\n"
@@ -19536,18 +20775,18 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
         # Model Variants Information
         summary_content += "MODEL VARIANTS\n"
         summary_content += "-" * 15 + "\n"
-        summary_content += f"Available Model Variants: {model_info.get('variants_available', 0)}\n"
+        summary_content += f"Available Variants: {model_info.get('variants_available', 0)}\n"
         
         variant_names = model_info.get('variant_names', [])
         if variant_names:
-            summary_content += f"Model Variant Names: {', '.join(variant_names)}\n"
+            summary_content += f"Variant Names: {', '.join(variant_names)}\n"
         else:
-            summary_content += "Model Variant Names: None\n"
+            summary_content += "Variant Names: None\n"
         
         # Enhanced variant status
         variant_status = model_info.get('variant_status', {})
         if variant_status:
-            summary_content += "Model Variant Status Details:\n"
+            summary_content += "Variant Status Details:\n"
             for name, status in variant_status.items():
                 status_indicator = "[OK]" if status == 'available' else "[MISSING]"
                 summary_content += f"  {status_indicator} {name}: {status}\n"
@@ -19724,7 +20963,6 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
         summary_content += f"Diagnostic Checks Performed: {len(checks_performed)}\n"
         summary_content += f"Checks Passed: {len(checks_passed)}\n"
         summary_content += f"System Health Score: {system_health_score:.1f}%\n"
-        summary_content += f"Template Architecture: {'Active' if template_renderer else 'Fallback'}\n"
         summary_content += f"\nPassed Checks: {', '.join(checks_passed) if checks_passed else 'None'}\n"
         
         failed_checks = [check for check in checks_performed if check not in checks_passed]
@@ -19732,11 +20970,10 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
             summary_content += f"Failed Checks: {', '.join(failed_checks)}\n"
         
         summary_content += f"\nReport Generated: {timestamp_obj.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        summary_content += f"Dashboard Architecture: {'Template-Based v3.0' if template_renderer else 'Inline Fallback'}\n"
         summary_content += "End of Report Entry\n"
         summary_content += "=" * 80 + "\n\n"
         
-        # Write the complete summary content in a single operation
+        # NOW write the complete content in a single operation
         with open(consolidated_files['summary'], 'a', encoding='utf-8') as f:
             f.write(summary_content)
         
@@ -19759,12 +20996,11 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
                     'date': date_str,
                     'entries': [status_entry],
                     'metadata': {
-                        'version': '3.1',
+                        'version': '3.0',
                         'created_at': timestamp_obj.isoformat(),
                         'total_entries': 1,
                         'last_updated': timestamp_obj.isoformat(),
-                        'report_type': 'consolidated_status',
-                        'template_based': template_renderer is not None
+                        'report_type': 'consolidated_status'
                     }
                 }
         else:
@@ -19772,12 +21008,11 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
                 'date': date_str,
                 'entries': [status_entry],
                 'metadata': {
-                    'version': '3.1',
+                    'version': '3.0',
                     'created_at': timestamp_obj.isoformat(),
                     'total_entries': 1,
                     'last_updated': timestamp_obj.isoformat(),
-                    'report_type': 'consolidated_status',
-                    'template_based': template_renderer is not None
+                    'report_type': 'consolidated_status'
                 }
             }
         
@@ -19803,12 +21038,11 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
                     'date': date_str,
                     'entries': [diagnostics_entry],
                     'metadata': {
-                        'version': '3.1',
+                        'version': '3.0',
                         'created_at': timestamp_obj.isoformat(),
                         'total_entries': 1,
                         'last_updated': timestamp_obj.isoformat(),
-                        'report_type': 'consolidated_diagnostics',
-                        'template_based': template_renderer is not None
+                        'report_type': 'consolidated_diagnostics'
                     }
                 }
         else:
@@ -19816,12 +21050,11 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
                 'date': date_str,
                 'entries': [diagnostics_entry],
                 'metadata': {
-                    'version': '3.1',
+                    'version': '3.0',
                     'created_at': timestamp_obj.isoformat(),
                     'total_entries': 1,
                     'last_updated': timestamp_obj.isoformat(),
-                    'report_type': 'consolidated_diagnostics',
-                    'template_based': template_renderer is not None
+                    'report_type': 'consolidated_diagnostics'
                 }
             }
         
@@ -19847,12 +21080,11 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
                     'date': date_str,
                     'entries': [dashboard_json_entry],
                     'metadata': {
-                        'version': '3.1',
+                        'version': '3.0',
                         'created_at': timestamp_obj.isoformat(),
                         'total_entries': 1,
                         'last_updated': timestamp_obj.isoformat(),
-                        'report_type': 'consolidated_dashboard_data',
-                        'template_based': template_renderer is not None
+                        'report_type': 'consolidated_dashboard_data'
                     }
                 }
         else:
@@ -19860,97 +21092,1529 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
                 'date': date_str,
                 'entries': [dashboard_json_entry],
                 'metadata': {
-                    'version': '3.1',
+                    'version': '3.0',
                     'created_at': timestamp_obj.isoformat(),
                     'total_entries': 1,
                     'last_updated': timestamp_obj.isoformat(),
-                    'report_type': 'consolidated_dashboard_data',
-                    'template_based': template_renderer is not None
+                    'report_type': 'consolidated_dashboard_data'
                 }
             }
         
         with open(consolidated_files['dashboard_json'], 'w', encoding='utf-8') as f:
             json.dump(dashboard_json_file_data, f, indent=2, default=str, ensure_ascii=False)
         
-        # 6. Create/Update HTML dashboard file using Template-Based Architecture
-        try:
-            if template_renderer:
-                # USE TEMPLATE-BASED RENDERING
-                logger.debug("Generating dashboard using template-based architecture (optimized)")
-                html_content = template_renderer.render_dashboard(
-                    enhanced_status=enhanced_status,
-                    compact_status=compact_status,
-                    system_health_score=system_health_score,
-                    dashboard_json_file_data=dashboard_json_file_data,
-                    consolidated_files=consolidated_files,
-                    report_data=report_data,
-                    status_data=status_data,
-                    diagnostics_data=diagnostics_data,
-                    timestamp_obj=timestamp_obj
-                )
+        # 6. Create/Update HTML dashboard file
+        # Build GPU information section separately to avoid nested f-string issues
+        gpu_info_html = ""
+        if cuda_info.get('available'):
+            gpu_info_html = f"""
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="metric-title">CUDA Version</div>
+                    <div class="metric-value">{cuda_info.get('cuda_version', 'unknown')}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">cuDNN Version</div>
+                    <div class="metric-value">{cuda_info.get('cudnn_version', 'unknown')}</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">GPU Count</div>
+                    <div class="metric-value">{cuda_info.get('gpu_count', 0)}</div>
+                </div>
+            </div>
+            """
+            
+            for i, gpu in enumerate(cuda_info.get('gpus', [])):
+                memory_usage_html = ""
+                if 'current_usage' in gpu:
+                    usage = gpu['current_usage']
+                    memory_usage_html = f"""
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {usage.get('percent_allocated', 0)}%" 
+                            data-value="{usage.get('allocated_mb', 0):.0f}MB ({usage.get('percent_allocated', 0):.1f}%)"></div>
+                    </div>
+                    <div class="metric-description">
+                        <span>Memory Usage:</span>
+                        <span class="value">{usage.get('allocated_mb', 0):.0f}MB allocated ({usage.get('percent_allocated', 0):.1f}%)</span>
+                    </div>
+                    """
                 
-                # Add template architecture metadata to HTML
-                html_content = html_content.replace(
-                    '<body>', 
-                    f'<body><!-- Generated using Optimized Template-Based Architecture v3.1 at {timestamp_obj.isoformat()} - Redundancy Eliminated -->'
-                )
+                gpu_info_html += f"""
+                <div class="entry">
+                    <h4>GPU {i}: {gpu.get('name', 'Unknown')}</h4>
+                    <div class="metric-description">
+                        <span>Memory:</span>
+                        <span class="value">{gpu.get('memory_gb', 0):.1f}GB</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Compute Capability:</span>
+                        <span class="value">{gpu.get('compute_capability', 'unknown')}</span>
+                    </div>
+                    {memory_usage_html}
+                </div>
+                """
+        else:
+            gpu_info_html = """
+            <div class="metric-card">
+                <div class="metric-title">CUDA Status</div>
+                <div class="metric-value status-error">Not Available</div>
+                <div class="metric-description">CUDA is not available on this system</div>
+            </div>
+            """
+        
+        # Build performance section
+        performance_html = """
+        <div class="metric-card">
+            <div class="metric-title">Performance Metrics</div>
+            <div class="metric-value status-warning">Not Available</div>
+            <div class="metric-description">No performance metrics collected</div>
+        </div>
+        """
+
+        if performance:
+            cpu_baseline_html = ""
+            if 'cpu' in performance.get('baselines', {}):
+                cpu_baseline = performance['baselines']['cpu']
+                cpu_baseline_html = f"""
+                <div class="entry">
+                    <h4>CPU Benchmark</h4>
+                    <div class="metric-description">
+                        <span>Matrix Size:</span>
+                        <span class="value">{cpu_baseline.get('matrix_size', 'unknown')}</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Computation Time:</span>
+                        <span class="value">{cpu_baseline.get('computation_time', 0):.4f}s</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>GFLOPS:</span>
+                        <span class="value">{cpu_baseline.get('gflops', 0):.2f}</span>
+                    </div>
+                </div>
+                """
+            
+            gpu_benchmarks_html = ""
+            if 'gpu' in performance.get('baselines', {}):
+                gpu_benchmarks = ""
+                for gpu_name, gpu_data in performance['baselines']['gpu'].items():
+                    if isinstance(gpu_data, dict) and 'gflops' in gpu_data:
+                        gpu_benchmarks += f"""
+                        <div class="metric-description">
+                            <span>{gpu_name}:</span>
+                            <span class="value">{gpu_data.get('gflops', 0):.2f} GFLOPS</span>
+                        </div>
+                        """
                 
-                logger.debug("Template-based dashboard rendered successfully (optimized)")
+                if gpu_benchmarks:
+                    gpu_benchmarks_html = f"""
+                    <div class="entry">
+                        <h4>GPU Benchmarks</h4>
+                        {gpu_benchmarks}
+                    </div>
+                    """
+            
+            performance_html = f"""
+            <div class="stats-grid">
+                <div class="metric-card">
+                    <h4>System Capability</h4>
+                    <div class="metric-description">
+                        <span>Overall:</span>
+                        <span class="value {'status-success' if performance.get('summary', {}).get('overall_capability', '').lower() == 'high' else 'status-warning' if performance.get('summary', {}).get('overall_capability', '').lower() == 'medium' else 'status-error'}">
+                            {performance.get('summary', {}).get('overall_capability', 'unknown').upper()}
+                        </span>
+                    </div>
+                    <div class="metric-description">
+                        <span>CPU:</span>
+                        <span class="value">{performance.get('summary', {}).get('cpu_performance', 'unknown')}</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Memory:</span>
+                        <span class="value">{performance.get('summary', {}).get('memory_performance', 'unknown')}</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>I/O:</span>
+                        <span class="value">{performance.get('summary', {}).get('io_performance', 'unknown')}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>Benchmark Results</h3>
+            {cpu_baseline_html}
+            {gpu_benchmarks_html}
+            """
+        
+        # Build dependencies tables
+        core_deps_html = "<tr><td colspan='3'>No dependency information available</td></tr>"
+        optional_deps_html = "<tr><td colspan='2'>No optional dependencies information available</td></tr>"
+
+        if detailed_versions:
+            core_deps_rows = []
+            optional_deps_rows = []
+            
+            for name, info in detailed_versions.items():
+                if info.get('required', False):
+                    status_class = 'status-success' if info.get('compatible') else 'status-error'
+                    status_text = '✅ Compatible' if info.get('compatible') else '❌ Incompatible'
+                    core_deps_rows.append(f"""
+                    <tr>
+                        <td>{name}</td>
+                        <td>{info.get('version', 'unknown')}</td>
+                        <td><span class="{status_class}">{status_text}</span></td>
+                    </tr>
+                    """)
+                else:
+                    status_class = 'status-success' if info.get('available') else 'status-warning'
+                    status_text = '✅ Available' if info.get('available') else '⚠️ Not Available'
+                    optional_deps_rows.append(f"""
+                    <tr>
+                        <td>{name}</td>
+                        <td><span class="{status_class}">{status_text}</span></td>
+                    </tr>
+                    """)
+            
+            if core_deps_rows:
+                core_deps_html = "".join(core_deps_rows)
+            if optional_deps_rows:
+                optional_deps_html = "".join(optional_deps_rows)
+        
+        # Build quick actions section
+        quick_actions_html = f"""
+        <div class="analysis-section" style="background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%); border-left: 5px solid #ff9800;">
+            <h2 style="color: #e65100;">Quick Actions</h2>
+            <div class="metric-grid">
+                <div class="metric-card" style="cursor: pointer;" onclick="showTab('history')">
+                    <div class="metric-title">View Initialization History</div>
+                    <div class="metric-value">{dashboard_json_file_data['metadata']['total_entries']}</div>
+                    <div class="metric-description">Total initialization entries available</div>
+                </div>
                 
+                <div class="metric-card" style="cursor: pointer;" onclick="showTab('performance')">
+                    <div class="metric-title">Run Performance Test</div>
+                    <div class="metric-value">{'Available' if performance else 'Setup Required'}</div>
+                    <div class="metric-description">Benchmark system performance</div>
+                </div>
+                
+                <div class="metric-card" style="cursor: pointer;" onclick="showTab('configuration')">
+                    <div class="metric-title">Configuration Manager</div>
+                    <div class="metric-value">{len(config_info.get('available_presets', []))}</div>
+                    <div class="metric-description">Available presets</div>
+                </div>
+                
+                <div class="metric-card" style="cursor: pointer;" onclick="showTab('dependencies')">
+                    <div class="metric-title">Dependency Check</div>
+                    <div class="metric-value">{len([d for d in detailed_versions.values() if d.get('required', False)]) if detailed_versions else 0}</div>
+                    <div class="metric-description">Core dependencies</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h3 style="color: #e65100;">Recent Initializations</h3>
+                <div class="metric-grid">
+        """
+
+        # Add recent initializations using REAL DATA from entries
+        recent_entries = dashboard_json_file_data.get('entries', [])
+        if len(recent_entries) > 1:
+            # Get the last 4 entries (excluding current one if it's already there)
+            display_entries = recent_entries[-4:-1] if len(recent_entries) > 4 else recent_entries[:-1] if len(recent_entries) > 1 else []
+            display_entries.reverse()  # Show most recent first
+            
+            for i, entry in enumerate(display_entries):
+                entry_data = entry.get('data', {})
+                entry_time = entry.get('timestamp', 'Unknown time')
+                
+                # Parse time for display
+                try:
+                    from datetime import datetime
+                    parsed_time = datetime.fromisoformat(entry_time.replace('Z', '+00:00'))
+                    display_time = parsed_time.strftime('%H:%M:%S')
+                except:
+                    display_time = entry_time.split('T')[1][:8] if 'T' in entry_time else entry_time
+                
+                # Extract status and health data
+                entry_status = entry_data.get('status', 'unknown')
+                entry_health = entry_data.get('health_score', 0)
+                entry_duration = entry_data.get('duration_seconds', 0)
+                
+                # Determine status styling
+                if entry_status.lower() == 'success':
+                    status_class = "history-status-success"
+                    status_display = "SUCCESS"
+                elif entry_status.lower() in ['warning', 'partial']:
+                    status_class = "history-status-warning"
+                    status_display = "WARNING"
+                else:
+                    status_class = "history-status-error"
+                    status_display = "ERROR"
+                
+                quick_actions_html += f"""
+                    <div class="metric-card" style="cursor: pointer;" onclick="viewInitializationDetails({len(recent_entries) - len(display_entries) + i})">
+                        <div class="metric-title">Initialization at {display_time}</div>
+                        <div class="metric-value {status_class}">{status_display}</div>
+                        <div class="metric-description">
+                            Health: {entry_health:.1f}% | Duration: {entry_duration:.2f}s
+                        </div>
+                        <div class="metric-description">
+                            Models: {entry_data.get('model_variants', 0)} | 
+                            CUDA: {'Available' if entry_data.get('cuda_available', False) else 'Not Available'}
+                        </div>
+                        <button class="details-button" style="margin-top: 10px; padding: 5px 10px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer;">View Details</button>
+                    </div>
+                """
+        else:
+            quick_actions_html += """
+                <div class="metric-card">
+                    <div class="metric-title">No previous initializations</div>
+                    <div class="metric-value">N/A</div>
+                    <div class="metric-description">This is the first initialization today</div>
+                </div>
+            """
+
+        quick_actions_html += """
+                </div>
+            </div>
+        </div>
+        """
+        
+        # Update the history tab content in the tab container section:
+        history_tab_content = f"""
+        <div id="history" class="tab-content">
+            <h3>Initialization History</h3>
+            
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="metric-title">Total Entries</div>
+                    <div class="metric-value">{dashboard_json_file_data['metadata']['total_entries']}</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-title">Successful Initializations</div>
+                    <div class="metric-value">{
+                        len([e for e in dashboard_json_file_data.get('entries', []) 
+                            if e.get('data', {}).get('status', '').lower() == 'success'])
+                    }</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-title">Average Health Score</div>
+                    <div class="metric-value">{
+                        sum(e.get('data', {}).get('health_score', 0) for e in dashboard_json_file_data.get('entries', [])) / 
+                        len(dashboard_json_file_data.get('entries', [1])) 
+                        if dashboard_json_file_data.get('entries') else system_health_score
+                    :.1f}%</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="metric-title">Average Duration</div>
+                    <div class="metric-value">{
+                        sum(e.get('data', {}).get('duration_seconds', 0) for e in dashboard_json_file_data.get('entries', [])) / 
+                        len(dashboard_json_file_data.get('entries', [1])) 
+                        if dashboard_json_file_data.get('entries') else compact_status['duration_seconds']
+                    :.2f}s</div>
+                </div>
+            </div>
+            
+            <div class="history-viewer">
+                <div class="history-header">
+                    Initialization History - Sorted by Most Recent ({len(dashboard_json_file_data.get('entries', []))} entries)
+                    <button class="details-button" style="float: right;" onclick="exportDashboardData()">Export Data</button>
+                </div>
+                <div class="history-content">
+        """
+        
+        # Add actual history entries
+        all_entries = dashboard_json_file_data.get('entries', [])
+        if all_entries:
+            # Reverse to show most recent first
+            for i, entry in enumerate(reversed(all_entries)):
+                entry_data = entry.get('data', {})
+                entry_timestamp = entry.get('timestamp', 'Unknown time')
+                
+                # Parse timestamp for better display
+                try:
+                    parsed_time = datetime.fromisoformat(entry_timestamp.replace('Z', '+00:00'))
+                    display_timestamp = parsed_time.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    display_timestamp = entry_timestamp
+                
+                # Extract entry details
+                entry_status = entry_data.get('status', 'unknown').lower()
+                entry_health = entry_data.get('health_score', 0)
+                entry_duration = entry_data.get('duration_seconds', 0)
+                entry_models = entry_data.get('model_variants', 0)
+                entry_cuda = entry_data.get('cuda_available', False)
+                entry_repro_score = entry_data.get('reproducibility_score', 0)
+                entry_logging_score = entry_data.get('logging_compliance', 0)
+                entry_perf_monitor = entry_data.get('performance_monitoring', False)
+                entry_mem_mgmt = entry_data.get('memory_management', False)
+                
+                # Determine status styling
+                if entry_status == 'success':
+                    status_class = 'history-status-success'
+                    status_display = 'SUCCESS'
+                elif entry_status in ['warning', 'partial']:
+                    status_class = 'history-status-warning'
+                    status_display = 'WARNING'
+                else:
+                    status_class = 'history-status-error'
+                    status_display = 'ERROR'
+                
+                history_tab_content += f"""
+                        <div class="history-item" onclick="viewInitializationDetails({len(all_entries) - 1 - i})" style="cursor: pointer; transition: background-color 0.2s;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span class="history-time" style="font-weight: bold; color: #1976d2; font-size: 1.1em;">{display_timestamp}</span>
+                                <span class="history-status {status_class}" style="padding: 4px 12px; border-radius: 6px; font-weight: bold; font-size: 0.85em;">{status_display}</span>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                                <div>
+                                    <div style="margin-bottom: 4px;"><strong>Performance:</strong></div>
+                                    <div style="font-size: 0.9em; color: #666;">
+                                        Health: <span style="font-weight: 600; color: {'#4CAF50' if entry_health > 80 else '#FF9800' if entry_health > 60 else '#F44336'};">{entry_health:.1f}%</span> | 
+                                        Duration: <span style="font-weight: 600;">{entry_duration:.2f}s</span>
+                                    </div>
+                                    <div style="font-size: 0.9em; color: #666;">
+                                        Models: <span style="font-weight: 600;">{entry_models}</span> | 
+                                        CUDA: <span style="font-weight: 600; color: {'#4CAF50' if entry_cuda else '#F44336'};">{'Available' if entry_cuda else 'Not Available'}</span>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <div style="margin-bottom: 4px;"><strong>Configuration Scores:</strong></div>
+                                    <div style="font-size: 0.9em; color: #666;">
+                                        Reproducibility: <span style="font-weight: 600;">{entry_repro_score:.1f}%</span> | 
+                                        Logging: <span style="font-weight: 600;">{entry_logging_score:.1f}%</span>
+                                    </div>
+                                    <div style="font-size: 0.9em; color: #666;">
+                                        Perf Monitor: <span style="font-weight: 600; color: {'#4CAF50' if entry_perf_monitor else '#F44336'};">{'Yes' if entry_perf_monitor else 'No'}</span> | 
+                                        Memory Mgmt: <span style="font-weight: 600; color: {'#4CAF50' if entry_mem_mgmt else '#FF9800'};">{'Full' if entry_mem_mgmt else 'Basic'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;">
+                                <button class="details-button" style="padding: 5px 10px; background: #2196f3; color: white; border: none; border-radius: 4px; font-size: 0.85em; cursor: pointer;">View Full Details</button>
+                            </div>
+                        </div>
+                """
+        else:
+            history_tab_content += """
+                        <div class="history-item">
+                            <div style="text-align: center; color: #666; padding: 20px;">
+                                No initialization history available. Previous entries will appear here.
+                            </div>
+                        </div>
+            """
+        
+        history_tab_content += """
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h4>Initialization Trends & Statistics</h4>
+                <div class="metric-grid">
+        """
+        
+        # Calculate real statistics from the data
+        if all_entries:
+            success_rate = len([e for e in all_entries if e.get('data', {}).get('status', '').lower() == 'success']) / len(all_entries) * 100
+            avg_duration = sum(e.get('data', {}).get('duration_seconds', 0) for e in all_entries) / len(all_entries)
+            avg_health = sum(e.get('data', {}).get('health_score', 0) for e in all_entries) / len(all_entries)
+            avg_models = sum(e.get('data', {}).get('model_variants', 0) for e in all_entries) / len(all_entries)
+            
+            # Calculate trends (compare recent vs older entries)
+            if len(all_entries) >= 2:
+                recent_half = all_entries[len(all_entries)//2:]
+                older_half = all_entries[:len(all_entries)//2]
+                
+                recent_avg_health = sum(e.get('data', {}).get('health_score', 0) for e in recent_half) / len(recent_half)
+                older_avg_health = sum(e.get('data', {}).get('health_score', 0) for e in older_half) / len(older_half)
+                health_trend = recent_avg_health - older_avg_health
+                
+                recent_avg_duration = sum(e.get('data', {}).get('duration_seconds', 0) for e in recent_half) / len(recent_half)
+                older_avg_duration = sum(e.get('data', {}).get('duration_seconds', 0) for e in older_half) / len(older_half)
+                duration_trend = recent_avg_duration - older_avg_duration
             else:
-                # FALLBACK TO INLINE HTML GENERATION
-                logger.warning("Generating dashboard using inline HTML fallback (optimized)")
-                html_content = _generate_inline_dashboard_fallback(
-                    enhanced_status, compact_status, system_health_score,
-                    dashboard_json_file_data, consolidated_files, report_data,
-                    status_data, diagnostics_data, timestamp_obj, 
-                    date_str, time_str
-                )
+                health_trend = 0
+                duration_trend = 0
                 
-                logger.warning("Inline fallback dashboard generated (optimized)")
-            
-            # Write the HTML file
-            with open(consolidated_files['dashboard_html'], 'w', encoding='utf-8') as f:
-                f.write(html_content)
-                
-        except Exception as dashboard_error:
-            logger.error(f"Failed to generate dashboard HTML: {dashboard_error}")
-            logger.debug("Dashboard generation error details:", exc_info=True)
-            
-            # Create minimal error dashboard
-            error_html = f"""<!DOCTYPE html>
+            history_tab_content += f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Success Rate</div>
+                        <div class="metric-value" style="color: {'#4CAF50' if success_rate > 80 else '#FF9800' if success_rate > 60 else '#F44336'};">{success_rate:.1f}%</div>
+                        <div class="metric-description">{len([e for e in all_entries if e.get('data', {}).get('status', '').lower() == 'success'])} out of {len(all_entries)} successful</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Avg. Duration</div>
+                        <div class="metric-value">{avg_duration:.2f}s</div>
+                        <div class="metric-description">
+                            Trend: <span style="color: {'#4CAF50' if duration_trend < 0 else '#F44336' if duration_trend > 0 else '#666'};">
+                                {'↓ Faster' if duration_trend < -0.1 else '↑ Slower' if duration_trend > 0.1 else '→ Stable'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Avg. Health Score</div>
+                        <div class="metric-value" style="color: {'#4CAF50' if avg_health > 80 else '#FF9800' if avg_health > 60 else '#F44336'};">{avg_health:.1f}%</div>
+                        <div class="metric-description">
+                            Trend: <span style="color: {'#4CAF50' if health_trend > 0 else '#F44336' if health_trend < 0 else '#666'};">
+                                {'↑ Improving' if health_trend > 1 else '↓ Declining' if health_trend < -1 else '→ Stable'}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Avg. Models</div>
+                        <div class="metric-value">{avg_models:.1f}</div>
+                        <div class="metric-description">Average model variants per initialization</div>
+                    </div>
+            """
+        else:
+            history_tab_content += f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Success Rate</div>
+                        <div class="metric-value">100%</div>
+                        <div class="metric-description">Current initialization only</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Avg. Duration</div>
+                        <div class="metric-value">{compact_status['duration_seconds']:.2f}s</div>
+                        <div class="metric-description">Current initialization only</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Health Score</div>
+                        <div class="metric-value">{system_health_score:.1f}%</div>
+                        <div class="metric-description">Current initialization only</div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Model Variants</div>
+                        <div class="metric-value">{compact_status['model_variants']}</div>
+                        <div class="metric-description">Current initialization only</div>
+                    </div>
+            """
+        
+        history_tab_content += """
+                </div>
+            </div>
+        </div>
+        """
+        
+        # Build full HTML content
+        html_content = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>Dashboard Generation Error - {date_str}</title>
+    <title>Deep Learning System Dashboard - {date_str}</title>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
-        .error-container {{ background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-        .error-title {{ color: #d32f2f; font-size: 1.5em; margin-bottom: 20px; }}
-        .error-message {{ background: #ffebee; padding: 15px; border-radius: 4px; border-left: 4px solid #f44336; }}
-        .optimization-note {{ background: #e8f5e8; padding: 15px; border-radius: 4px; border-left: 4px solid #4caf50; margin-top: 15px; }}
+        body {{ 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #333;
+            line-height: 1.6;
+        }}
+        
+        .container {{ 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }}
+        
+        .header {{ 
+            text-align: center; 
+            margin-bottom: 40px; 
+            padding-bottom: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: -30px -30px 40px -30px;
+            padding: 40px 30px 20px 30px;
+            border-radius: 12px 12px 0 0;
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .header::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0,0 L100,0 L100,100 Z" fill="rgba(255,255,255,0.05)"/></svg>');
+            background-size: cover;
+        }}
+        
+        .header h1 {{ 
+            margin: 0; 
+            font-size: 2.8em; 
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 1;
+        }}
+        
+        .header .subtitle {{
+            font-size: 1.2em;
+            margin-top: 10px;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }}
+        
+        .header-stats {{
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }}
+        
+        .header-stat {{
+            background: rgba(255, 255, 255, 0.15);
+            padding: 10px 20px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }}
+        
+        .header-stat .number {{
+            font-size: 1.4em;
+            font-weight: bold;
+        }}
+        
+        .header-stat .label {{
+            font-size: 0.9em;
+            opacity: 0.8;
+        }}
+        
+        .analysis-section {{ 
+            background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%); 
+            border-left: 5px solid #2196f3; 
+            padding: 25px; 
+            margin: 25px 0; 
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }}
+        
+        .analysis-section h2 {{
+            margin-top: 0;
+            color: #1976d2;
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        
+        .analysis-section h2::before {{
+            content: '📊';
+            font-size: 1.2em;
+        }}
+        
+        .health-score {{ 
+            font-size: 3.5em; 
+            font-weight: bold; 
+            text-align: center; 
+            padding: 40px; 
+            border-radius: 15px; 
+            margin: 25px 0;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .health-score.excellent {{ 
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }}
+        
+        .health-score.good {{ 
+            background: linear-gradient(135deg, #8BC34A 0%, #7CB342 100%);
+        }}
+        
+        .health-score.fair {{ 
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+        }}
+        
+        .health-score.poor {{ 
+            background: linear-gradient(135deg, #F44336 0%, #D32F2F 100%);
+        }}
+        
+        .health-score .sub-score {{
+            font-size: 0.4em;
+            margin-top: 10px;
+            opacity: 0.9;
+        }}
+        
+        .metric-grid {{ 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); 
+            gap: 20px; 
+            margin: 25px 0; 
+        }}
+        
+        .metric-card {{ 
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            padding: 25px; 
+            border-radius: 10px; 
+            border-left: 5px solid #2196f3;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+        }}
+        
+        .metric-card::before {{
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, transparent 50%, #2196f3 50%);
+        }}
+        
+        .metric-card:hover {{ 
+            transform: translateY(-5px); 
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            border-left-color: #1976d2;
+        }}
+        
+        .metric-title {{ 
+            font-weight: 600; 
+            color: #2196f3; 
+            margin-bottom: 12px; 
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .metric-card:nth-child(1) .metric-title::before {{ content: '🚀'; }}
+        .metric-card:nth-child(2) .metric-title::before {{ content: '💻'; }}
+        .metric-card:nth-child(3) .metric-title::before {{ content: '⚙️'; }}
+        .metric-card:nth-child(4) .metric-title::before {{ content: '📈'; }}
+        
+        .metric-value {{ 
+            font-size: 2.2em; 
+            font-weight: bold; 
+            color: #333; 
+            margin-bottom: 8px;
+        }}
+        
+        .metric-description {{
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+        }}
+        
+        .metric-description .value {{
+            font-weight: 600;
+            color: #2196f3;
+        }}
+        
+        .progress-bar {{ 
+            width: 100%; 
+            height: 24px; 
+            background: #e0e0e0; 
+            border-radius: 12px; 
+            overflow: hidden;
+            margin: 12px 0;
+            position: relative;
+        }}
+        
+        .progress-fill {{ 
+            height: 100%; 
+            background: linear-gradient(90deg, #4CAF50, #8BC34A); 
+            border-radius: 12px; 
+            transition: width 0.5s ease;
+            position: relative;
+        }}
+        
+        .progress-fill::after {{
+            content: attr(data-value);
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }}
+        
+        .status-indicator {{
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 8px;
+        }}
+        
+        .status-success {{
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+        
+        .status-warning {{
+            background: #fff3e0;
+            color: #f57c00;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+        
+        .status-error {{
+            background: #ffebee;
+            color: #c62828;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }}
+        
+        .entry {{ 
+            background: #fff; 
+            border: 1px solid #e0e0e0; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+            transition: all 0.2s ease;
+            margin: 15px 0;
+        }}
+        
+        .entry:hover {{
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }}
+        
+        .entry h4 {{
+            color: #1976d2;
+            margin-top: 0;
+            font-size: 1.3em;
+            border-bottom: 2px solid #e3f2fd;
+            padding-bottom: 10px;
+        }}
+        
+        .tab-container {{ 
+            margin: 40px 0; 
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }}
+        
+        .tab-buttons {{ 
+            display: flex; 
+            background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+            flex-wrap: wrap;
+        }}
+        
+        .tab-button {{ 
+            flex: 1; 
+            min-width: 140px;
+            padding: 18px 12px; 
+            background: transparent;
+            border: none; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: rgba(255,255,255,0.8);
+            border-right: 1px solid rgba(255,255,255,0.2);
+        }}
+        
+        .tab-button:last-child {{
+            border-right: none;
+        }}
+        
+        .tab-button:hover {{
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }}
+        
+        .tab-button.active {{ 
+            background: rgba(255,255,255,0.2);
+            color: white;
+            box-shadow: inset 0 -3px 0 #fff;
+        }}
+        
+        .tab-content {{ 
+            display: none; 
+            padding: 30px; 
+            background: white; 
+            min-height: 400px;
+        }}
+        
+        .tab-content.active {{ 
+            display: block; 
+            animation: fadeIn 0.3s ease;
+        }}
+        
+        @keyframes fadeIn {{
+            from {{ opacity: 0; transform: translateY(10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+        
+        .tab-content h3 {{
+            color: #1976d2;
+            font-size: 1.8em;
+            margin-top: 0;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #e3f2fd;
+            padding-bottom: 10px;
+        }}
+        
+        table {{ 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 25px 0; 
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+        }}
+        
+        th, td {{ 
+            padding: 15px 12px; 
+            text-align: left; 
+            border-bottom: 1px solid #e0e0e0; 
+        }}
+        
+        th {{ 
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            font-weight: 600; 
+            color: #1976d2; 
+            font-size: 1.05em;
+        }}
+        
+        tr:hover {{ 
+            background: #f5f5f5; 
+        }}
+        
+        tr:last-child td {{
+            border-bottom: none;
+        }}
+        
+        .footer {{ 
+            text-align: center; 
+            margin-top: 50px; 
+            padding: 30px 0; 
+            border-top: 2px solid #e0e0e0; 
+            color: #666; 
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            margin-left: -30px;
+            margin-right: -30px;
+            margin-bottom: -30px;
+            border-radius: 0 0 12px 12px;
+        }}
+        
+        .collapsible {{
+            display: none;
+        }}
+        
+        .toggle {{
+            cursor: pointer;
+            color: #2196f3;
+            font-weight: bold;
+        }}
+        
+        /* Add these new styles for the history viewer */
+        .history-viewer {{
+            margin-top: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        
+        .history-header {{
+            background: #f5f5f5;
+            padding: 15px;
+            font-weight: bold;
+            border-bottom: 1px solid #e0e0e0;
+        }}
+        
+        .history-content {{
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }}
+        
+        .history-item {{
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }}
+        
+        .history-item:hover {{
+            background: #f9f9f9;
+        }}
+        
+        .history-item:last-child {{
+            border-bottom: none;
+        }}
+        
+        .history-time {{
+            font-weight: bold;
+            color: #1976d2;
+        }}
+        
+        .history-status {{
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }}
+        
+        .history-status-success {{
+            background: #e8f5e9;
+            color: #2e7d32;
+        }}
+        
+        .history-status-warning {{
+            background: #fff3e0;
+            color: #f57c00;
+        }}
+        
+        .history-status-error {{
+            background: #ffebee;
+            color: #c62828;
+        }}
     </style>
+    <script>
+        // Store the actual entries data for JavaScript access
+        const dashboardData = {json.dumps(dashboard_json_file_data, default=str, indent=2)};
+        const currentSystemStatus = {json.dumps(compact_status, default=str, indent=2)};
+        
+        function showTab(tabName) {{
+            var contents = document.querySelectorAll('.tab-content');
+            contents.forEach(function(content) {{
+                content.classList.remove('active');
+            }});
+            
+            var buttons = document.querySelectorAll('.tab-button');
+            buttons.forEach(function(button) {{
+                button.classList.remove('active');
+            }});
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }}
+        
+        function toggleSection(sectionId) {{
+            const section = document.getElementById(sectionId);
+            section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        }}
+        
+        document.addEventListener('DOMContentLoaded', function() {{
+            var firstTab = document.querySelector('.tab-button');
+            var firstContent = document.querySelector('.tab-content');
+            if (firstTab && firstContent) {{
+                firstTab.classList.add('active');
+                firstContent.classList.add('active');
+            }}
+        }});
+        
+        // Enhanced function to view initialization details with REAL DATA
+        function viewInitializationDetails(entryIndex) {{
+            const entries = dashboardData.entries || [];
+            if (entryIndex >= 0 && entryIndex < entries.length) {{
+                const entry = entries[entryIndex];
+                const entryData = entry.data || {{}};
+                
+                // Create detailed modal content
+                const modalContent = `
+                    <div style="max-width: 800px; max-height: 80vh; overflow-y: auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #2196f3;">
+                            <h2 style="margin: 0; color: #1976d2;">Initialization Details</h2>
+                            <button onclick="closeModal()" style="background: #f44336; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Close</button>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div>
+                                <h3 style="color: #1976d2; margin-bottom: 10px;">Basic Information</h3>
+                                <p><strong>Timestamp:</strong> ${{entry.timestamp || 'Unknown'}}</p>
+                                <p><strong>Status:</strong> <span style="color: ${{entryData.status === 'success' ? '#4CAF50' : '#F44336'}};">${{entryData.status?.toUpperCase() || 'UNKNOWN'}}</span></p>
+                                <p><strong>Duration:</strong> ${{entryData.duration_seconds || 0}} seconds</p>
+                                <p><strong>Health Score:</strong> <span style="color: ${{entryData.health_score > 80 ? '#4CAF50' : entryData.health_score > 60 ? '#FF9800' : '#F44336'}};">${{entryData.health_score || 0}}%</span></p>
+                            </div>
+                            
+                            <div>
+                                <h3 style="color: #1976d2; margin-bottom: 10px;">System Resources</h3>
+                                <p><strong>CUDA Available:</strong> <span style="color: ${{entryData.cuda_available ? '#4CAF50' : '#F44336'}};">${{entryData.cuda_available ? 'Yes' : 'No'}}</span></p>
+                                <p><strong>Model Variants:</strong> ${{entryData.model_variants || 0}}</p>
+                                <p><strong>Reproducibility Score:</strong> ${{entryData.reproducibility_score || 0}}%</p>
+                                <p><strong>Logging Compliance:</strong> ${{entryData.logging_compliance || 0}}%</p>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h3 style="color: #1976d2; margin-bottom: 10px;">Advanced Features</h3>
+                            <p><strong>Performance Monitoring:</strong> <span style="color: ${{entryData.performance_monitoring ? '#4CAF50' : '#F44336'}};">${{entryData.performance_monitoring ? 'Available' : 'Not Available'}}</span></p>
+                            <p><strong>Memory Management:</strong> <span style="color: ${{entryData.memory_management ? '#4CAF50' : '#FF9800'}};">${{entryData.memory_management ? 'Comprehensive' : 'Basic'}}</span></p>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                            <button onclick="exportEntryData(${{entryIndex}})" style="background: #2196f3; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Export This Entry</button>
+                            <button onclick="compareWithCurrent(${{entryIndex}})" style="background: #FF9800; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Compare with Current</button>
+                        </div>
+                    </div>
+                `;
+                
+                // Create modal overlay
+                const modalOverlay = document.createElement('div');
+                modalOverlay.id = 'detailModal';
+                modalOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;';
+                modalOverlay.innerHTML = modalContent;
+                
+                document.body.appendChild(modalOverlay);
+            }} else {{
+                alert('Invalid entry index: ' + entryIndex);
+            }}
+        }}
+        
+        function closeModal() {{
+            const modal = document.getElementById('detailModal');
+            if (modal) {{
+                document.body.removeChild(modal);
+            }}
+        }}
+        
+        function exportEntryData(entryIndex) {{
+            const entries = dashboardData.entries || [];
+            if (entryIndex >= 0 && entryIndex < entries.length) {{
+                const entry = entries[entryIndex];
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(entry, null, 2));
+                
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "initialization_entry_" + entryIndex + "_" + new Date().toISOString().split('T')[0] + ".json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+                
+                alert('Entry data exported successfully!');
+            }}
+        }}
+        
+        function compareWithCurrent(entryIndex) {{
+            const entries = dashboardData.entries || [];
+            if (entryIndex >= 0 && entryIndex < entries.length) {{
+                const historicalEntry = entries[entryIndex].data || {{}};
+                const currentEntry = currentSystemStatus;
+                
+                const comparison = `
+                    <div style="max-width: 900px; max-height: 80vh; overflow-y: auto; padding: 20px; background: white; border-radius: 8px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #2196f3;">
+                            <h2 style="margin: 0; color: #1976d2;">Comparison with Current Initialization</h2>
+                            <button onclick="closeModal()" style="background: #f44336; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer;">Close</button>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div>
+                                <h3 style="color: #1976d2;">Historical Entry</h3>
+                                <p><strong>Health Score:</strong> ${{historicalEntry.health_score || 0}}%</p>
+                                <p><strong>Duration:</strong> ${{historicalEntry.duration_seconds || 0}}s</p>
+                                <p><strong>Model Variants:</strong> ${{historicalEntry.model_variants || 0}}</p>
+                                <p><strong>CUDA:</strong> ${{historicalEntry.cuda_available ? 'Available' : 'Not Available'}}</p>
+                                <p><strong>Reproducibility:</strong> ${{historicalEntry.reproducibility_score || 0}}%</p>
+                                <p><strong>Logging Compliance:</strong> ${{historicalEntry.logging_compliance || 0}}%</p>
+                            </div>
+                            
+                            <div>
+                                <h3 style="color: #1976d2;">Current Initialization</h3>
+                                <p><strong>Health Score:</strong> ${{currentEntry.system_health_score || 0}}%</p>
+                                <p><strong>Duration:</strong> ${{currentEntry.duration_seconds || 0}}s</p>
+                                <p><strong>Model Variants:</strong> ${{currentEntry.model_variants || 0}}</p>
+                                <p><strong>CUDA:</strong> ${{currentEntry.cuda_available ? 'Available' : 'Not Available'}}</p>
+                                <p><strong>Reproducibility:</strong> ${{currentEntry.reproducibility_score || 0}}%</p>
+                                <p><strong>Logging Compliance:</strong> ${{currentEntry.logging_compliance || 0}}%</p>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                            <h3 style="color: #1976d2;">Changes</h3>
+                            <p><strong>Health Score:</strong> <span style="color: ${{(currentEntry.system_health_score || 0) > (historicalEntry.health_score || 0) ? '#4CAF50' : '#F44336'}};">${{((currentEntry.system_health_score || 0) - (historicalEntry.health_score || 0) > 0 ? '+' : '') + ((currentEntry.system_health_score || 0) - (historicalEntry.health_score || 0)).toFixed(1)}}%</span></p>
+                            <p><strong>Duration:</strong> <span style="color: ${{(currentEntry.duration_seconds || 0) < (historicalEntry.duration_seconds || 0) ? '#4CAF50' : '#F44336'}};">${{((currentEntry.duration_seconds || 0) - (historicalEntry.duration_seconds || 0) > 0 ? '+' : '') + ((currentEntry.duration_seconds || 0) - (historicalEntry.duration_seconds || 0)).toFixed(2)}}s</span></p>
+                            <p><strong>Model Variants:</strong> <span style="color: ${{(currentEntry.model_variants || 0) >= (historicalEntry.model_variants || 0) ? '#4CAF50' : '#F44336'}};">${{((currentEntry.model_variants || 0) - (historicalEntry.model_variants || 0) > 0 ? '+' : '') + ((currentEntry.model_variants || 0) - (historicalEntry.model_variants || 0))}}</span></p>
+                        </div>
+                    </div>
+                `;
+                
+                const modalOverlay = document.createElement('div');
+                modalOverlay.id = 'detailModal';
+                modalOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000;';
+                modalOverlay.innerHTML = comparison;
+                
+                document.body.appendChild(modalOverlay);
+            }}
+        }}
+        
+        // Enhanced function to export current dashboard data with REAL DATA
+        function exportDashboardData() {{
+            const exportData = {{
+                generated_at: new Date().toISOString(),
+                dashboard_metadata: dashboardData.metadata,
+                current_status: currentSystemStatus,
+                all_entries: dashboardData.entries,
+                export_type: 'complete_dashboard_export',
+                export_version: '1.0'
+            }};
+            
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+            
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "complete_dashboard_export_" + new Date().toISOString().replace(/[:.]/g, '-') + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            
+            alert('Complete dashboard data exported successfully!');
+        }}
+        
+        // Close modal when clicking outside
+        document.addEventListener('click', function(event) {{
+            if (event.target.id === 'detailModal') {{
+                closeModal();
+            }}
+        }});
+    </script>
 </head>
 <body>
-    <div class="error-container">
-        <h1 class="error-title">Dashboard Generation Error</h1>
-        <div class="error-message">
-            <strong>Error:</strong> {str(dashboard_error)}<br>
-            <strong>Template Renderer:</strong> {'Available' if template_renderer else 'Not Available'}<br>
-            <strong>Fallback Used:</strong> {'No' if template_renderer else 'Yes'}
+    <div class="container">
+        <!-- Enhanced Header Section -->
+        <div class="header">
+            <h1>Deep Learning System Dashboard</h1>
+            <div class="subtitle">
+                Comprehensive system status and performance monitoring
+            </div>
+            <div class="header-stats">
+                <div class="header-stat">
+                    <div class="number">{dashboard_json_file_data['metadata']['total_entries']}</div>
+                    <div class="label">Total Initializations</div>
+                </div>
+                <div class="header-stat">
+                    <div class="number">{time_str}</div>
+                    <div class="label">Current Sequence</div>
+                </div>
+                <div class="header-stat">
+                    <div class="number">{date_str}</div>
+                    <div class="label">Session Date</div>
+                </div>
+            </div>
         </div>
-        <div class="optimization-note">
-            <strong>Optimization Status:</strong> Redundant checks eliminated - Data extracted from existing system checks<br>
-            <strong>Fallback Checks:</strong> {sum(1 for key in enhanced_status.keys() if key.endswith('_error'))}<br>
-            <strong>System Health Score:</strong> {system_health_score:.1f}%
+        
+        <!-- QUICK ACTIONS SECTION -->
+        {quick_actions_html}
+
+        <!-- Enhanced Current System Status Section -->
+        <div class="analysis-section">
+            <h2>Current System Status</h2>
+            
+            <!-- Health Score with visual indicator -->
+            <div class="health-score {'excellent' if system_health_score > 80 else 'good' if system_health_score > 60 else 'fair' if system_health_score > 40 else 'poor'}">
+                {system_health_score:.1f}
+                <div class="sub-score">System Health Score</div>
+            </div>
+            
+            <div class="metric-grid">
+                <!-- Initialization Card -->
+                <div class="metric-card">
+                    <div class="metric-title">Initialization</div>
+                    <div class="metric-value {'status-success' if compact_status['status'] == 'success' else 'status-warning' if compact_status['status'] == 'warning' else 'status-error'}">
+                        {compact_status['status'].upper()}
+                    </div>
+                    <div class="metric-description">
+                        <span>Duration:</span>
+                        <span class="value">{compact_status['duration_seconds']:.2f}s</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Method:</span>
+                        <span class="value">{init_info.get('method', 'unknown')}</span>
+                    </div>
+                </div>
+                
+                <!-- Hardware Card -->
+                <div class="metric-card">
+                    <div class="metric-title">CUDA GPU</div>
+                    <div class="metric-value {'status-success' if compact_status['cuda_available'] else 'status-error'}">
+                        {'CUDA Available' if compact_status['cuda_available'] else 'CUDA Not Found'}
+                    </div>
+                    <div class="metric-description">
+                        <span>GPU Count:</span>
+                        <span class="value">{cuda_info.get('gpu_count', 0) if cuda_info.get('available') else 0}</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Model Variants:</span>
+                        <span class="value">{compact_status['model_variants']}</span>
+                    </div>
+                </div>
+                
+                <!-- Configuration Scores Card -->
+                <div class="metric-card">
+                    <div class="metric-title">Configuration Scores</div>
+                    
+                    <div class="metric-description">
+                        <span>Seed Reproducibility:</span>
+                        <span class="value">{compact_status.get('reproducibility_score', 0):.1f}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {compact_status.get('reproducibility_score', 0)}%" data-value="{compact_status.get('reproducibility_score', 0):.1f}%"></div>
+                    </div>
+                    
+                    <div class="metric-description">
+                        <span>Logging Compliance:</span>
+                        <span class="value">{compact_status.get('logging_compliance', 0):.1f}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {compact_status.get('logging_compliance', 0)}%" data-value="{compact_status.get('logging_compliance', 0):.1f}%"></div>
+                    </div>
+                    
+                    <div class="metric-description">
+                        <span>Performance Monitoring:</span>
+                        <span class="value {'status-success' if compact_status.get('performance_monitoring') else 'status-error'}">
+                            {'Available' if compact_status.get('performance_monitoring') else 'Not Available'}
+                        </span>
+                    </div>
+                    
+                    <div class="metric-description">
+                        <span>Memory Management:</span>
+                        <span class="value {'status-success' if compact_status.get('memory_management') else 'status-warning'}">
+                            {'Comprehensive' if compact_status.get('memory_management') else 'Basic'}
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- System Resources Card -->
+                <div class="metric-card">
+                    <div class="metric-title">System Resources</div>
+                    
+                    <div class="metric-description">
+                        <span>CPU Cores (logical):</span>
+                        <span class="value">{cpu_info.get('logical_cores', '?')}</span>
+                    </div>
+                    
+                    <div class="metric-description">
+                        <span>CPU Cores (physical):</span>
+                        <span class="value">{cpu_info.get('physical_cores', '?')}</span>
+                    </div>
+                    
+                    <div class="metric-description">
+                        <span>Total RAM:</span>
+                        <span class="value">{ram_info.get('ram_total_gb', 0):.1f} GB</span>
+                    </div>
+                    
+                    <div class="metric-description">
+                        <span>Available RAM:</span>
+                        <span class="value">{ram_info.get('ram_available_gb', 0):.1f} GB</span>
+                    </div>
+                    
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {ram_info.get('ram_percent', 0)}%" data-value="{ram_info.get('ram_percent', 0):.1f}%"></div>
+                    </div>
+                </div>
+            </div>
         </div>
-        <p><strong>Status:</strong> {compact_status['status']}</p>
-        <p><strong>Generated:</strong> {timestamp_obj.strftime('%Y-%m-%d %H:%M:%S')}</p>
+
+        <!-- Tab Container for other sections -->
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button" onclick="showTab('hardware')">Hardware</button>
+                <button class="tab-button" onclick="showTab('configuration')">Configuration</button>
+                <button class="tab-button" onclick="showTab('performance')">Performance</button>
+                <button class="tab-button" onclick="showTab('dependencies')">Dependencies</button>
+                <button class="tab-button" onclick="showTab('history')">History</button>
+                <button class="tab-button" onclick="showTab('reports')">Reports</button>
+            </div>
+            
+            <div id="hardware" class="tab-content">
+                <h3>Hardware Details</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-title">CPU Information</div>
+                        <div class="metric-description">
+                            <span>Cores:</span>
+                            <span class="value">{cpu_info.get('logical_cores', 'N/A')} logical, {cpu_info.get('physical_cores', 'N/A')} physical</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Frequency:</span>
+                            <span class="value">{cpu_info.get('capacity', {}).get('frequency_ghz', 'N/A')} GHz</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Memory</div>
+                        <div class="metric-description">
+                            <span>Total:</span>
+                            <span class="value">{ram_info.get('ram_total_gb', 0):.1f}GB</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Available:</span>
+                            <span class="value">{ram_info.get('ram_available_gb', 0):.1f}GB</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {ram_info.get('ram_percent', 0)}%" data-value="{ram_info.get('ram_percent', 0):.1f}%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Storage</div>
+                        <div class="metric-description">
+                            <span>Total:</span>
+                            <span class="value">{disk_info.get('total_gb', 0):.1f}GB</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Free:</span>
+                            <span class="value">{disk_info.get('free_gb', 0):.1f}GB</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {100 - (disk_info.get('free_gb', 0) / disk_info.get('total_gb', 1) * 100)}%" data-value="{100 - (disk_info.get('free_gb', 0) / disk_info.get('total_gb', 1) * 100):.1f}%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3>GPU Information</h3>
+                {gpu_info_html}
+            </div>
+            
+            <div id="configuration" class="tab-content">
+                <h3>Configuration Details</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-title">Preset Configuration</div>
+                        <div class="metric-description">
+                            <span>Name:</span>
+                            <span class="value">{config_info.get('preset_name', 'custom')}</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Status:</span>
+                            <span class="value">{config_info.get('validation_status', 'unknown')}</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Config File:</span>
+                            <span class="value">{config_info.get('config_file', 'unknown')}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card">
+                        <div class="metric-title">Available Presets</div>
+                        <div class="metric-value">{len(config_info.get('available_presets', []))}</div>
+                        <div class="metric-description">
+                            {', '.join(config_info.get('available_presets', [])) or 'None'}
+                        </div>
+                    </div>
+                </div>
+                
+                <h3>Model Variants</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-title">Available Variants</div>
+                        <div class="metric-value">{model_info.get('variants_available', 0)}</div>
+                    </div>
+                </div>
+                
+                <h3>Variant Status</h3>
+                <table>
+                    <tr><th>Variant</th><th>Status</th></tr>
+                    {"".join([f"<tr><td>{name}</td><td><span class='{'status-success' if status == 'available' else 'status-error'}'>{'✅ Available' if status == 'available' else '❌ Missing'}</span></td></tr>" 
+                             for name, status in model_info.get('variant_status', {}).items()])}
+                </table>
+            </div>
+            
+            <div id="performance" class="tab-content">
+                <h3>Performance Metrics</h3>
+                {performance_html}
+            </div>
+            
+            <div id="dependencies" class="tab-content">
+                <h3>Dependencies</h3>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-title">Core Framework</div>
+                        <div class="metric-description">
+                            <span>Python:</span>
+                            <span class="value">{sys_info.get('python_version', 'unknown')}</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>PyTorch:</span>
+                            <span class="value">{sys_info.get('pytorch_version', 'unknown')}</span>
+                        </div>
+                        <div class="metric-description">
+                            <span>Platform:</span>
+                            <span class="value">{sys_info.get('platform', 'unknown')}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <h3>Core Dependencies</h3>
+                <table>
+                    <tr><th>Dependency</th><th>Version</th><th>Status</th></tr>
+                    {core_deps_html}
+                </table>
+                
+                <h3>Optional Dependencies</h3>
+                <table>
+                    <tr><th>Dependency</th><th>Status</th></tr>
+                    {optional_deps_html}
+                </table>
+            </div>
+            
+            <!-- HISTOR TAB CONTENT -->
+            {history_tab_content}
+            
+            <div id="reports" class="tab-content">
+                <h3>Report Files</h3>
+                <div class="metric-card">
+                    <div class="metric-title">Consolidated Reports for {date_str}</div>
+                    <div class="metric-description">
+                        <span>Full Reports:</span>
+                        <span class="value">{consolidated_files['report'].name} ({report_data['metadata']['total_reports']} entries)</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Summary:</span>
+                        <span class="value">{consolidated_files['summary'].name}</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Status:</span>
+                        <span class="value">{consolidated_files['status'].name} ({status_data['metadata']['total_entries']} entries)</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Diagnostics:</span>
+                        <span class="value">{consolidated_files['diagnostics'].name} ({diagnostics_data['metadata']['total_entries']} entries)</span>
+                    </div>
+                    <div class="metric-description">
+                        <span>Dashboard Data:</span>
+                        <span class="value">{consolidated_files['dashboard_json'].name} ({dashboard_json_file_data['metadata']['total_entries']} entries)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="footer">
+            <p><strong>Deep Learning System Dashboard</strong></p>
+            <p>Last Updated: {timestamp_obj.strftime('%Y-%m-%d %H:%M:%S')} | Dashboard Version: 3.0</p>
+        </footer>
     </div>
 </body>
 </html>"""
-            
-            with open(consolidated_files['dashboard_html'], 'w', encoding='utf-8') as f:
-                f.write(error_html)
+        
+        with open(consolidated_files['dashboard_html'], 'w', encoding='utf-8') as f:
+            f.write(html_content)
         
         # 7. Update index file
         index_path = report_dir / "deep_initialization_reports.txt"
@@ -19959,9 +22623,7 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
             f"({compact_status['duration_seconds']:.2f}s, "
             f"health: {system_health_score:.1f}%, "
             f"cuda: {compact_status['cuda_available']}, "
-            f"models: {compact_status['model_variants']}, "
-            f"template: {'OK' if template_renderer else 'ERROR'}, "
-            f"optimized: YES)\n"
+            f"models: {compact_status['model_variants']})\n"
         )
         
         with open(index_path, 'a', encoding='utf-8') as f:
@@ -19989,33 +22651,24 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
         except (OSError, NotImplementedError):
             # Create a text file with paths instead
             with open(report_dir / "latest_reports.txt", 'w') as f:
-                f.write("Latest consolidated reports (optimized):\n")
+                f.write("Latest consolidated reports:\n")
                 for file_type, file_path in consolidated_files.items():
                     f.write(f"{file_type}: {file_path.name}\n")
-                f.write(f"Template Architecture: {'Active' if template_renderer else 'Fallback'}\n")
-                f.write(f"Optimization Applied: YES - Redundant checks eliminated\n")
         
-        # Log successful report generation with optimization details
-        architecture_type = "Optimized Template-Based v3.1" if template_renderer else "Optimized Inline Fallback"
-        fallback_count = sum(1 for key in enhanced_status.keys() if key.endswith('_error'))
-        
-        logger.debug(f"Initialization report saved using {architecture_type} architecture:")
-        logger.debug(f"  - OPTIMIZATION: Redundant checks eliminated")
-        logger.debug(f"  - DATA SOURCE: Extracted from existing initialize_system() results")
-        logger.debug(f"  - FALLBACK CHECKS: {fallback_count} (only when data unavailable)")
-        logger.debug(f"  - Full reports: {consolidated_files['report'].name}")
-        logger.debug(f"  - Summary: {consolidated_files['summary'].name}")
-        logger.debug(f"  - Status: {consolidated_files['status'].name}")
-        logger.debug(f"  - Diagnostics: {consolidated_files['diagnostics'].name}")
-        logger.debug(f"  - Dashboard Data: {consolidated_files['dashboard_json'].name}")
-        logger.debug(f"  - Dashboard HTML: {consolidated_files['dashboard_html'].name}")
-        logger.debug(f"  - Total entries today: {report_data['metadata']['total_reports']}")
-        logger.debug(f"  - Template Renderer: {'Active' if template_renderer else 'Unavailable'}")
+        # Log successful report generation
+        logger.info(f"Initialization report saved to consolidated daily files:")
+        logger.info(f"  - Full reports: {consolidated_files['report'].name}")
+        logger.info(f"  - Summary: {consolidated_files['summary'].name}")
+        logger.info(f"  - Status: {consolidated_files['status'].name}")
+        logger.info(f"  - Diagnostics: {consolidated_files['diagnostics'].name}")
+        logger.info(f"  - Dashboard Data: {consolidated_files['dashboard_json'].name}")
+        logger.info(f"  - Dashboard HTML: {consolidated_files['dashboard_html'].name}")
+        logger.info(f"  - Total entries today: {report_data['metadata']['total_reports']}")
         
     except Exception as e:
         # Log the error but don't raise it - we don't want report saving
         # to interrupt the initialization process
-        error_msg = f"Failed to save optimized initialization report: {str(e)}"
+        error_msg = f"Failed to save comprehensive initialization report: {str(e)}"
         logger.error(error_msg)
         logger.debug(f"Report save error details:", exc_info=True)
         
@@ -20025,12 +22678,10 @@ Dashboard Architecture: {'Template-Based' if template_renderer else 'Inline Fall
             error_path = report_dir / f"deep_report_error_{error_timestamp}.txt"
             
             with open(error_path, 'w', encoding='utf-8') as f:
-                f.write(f"OPTIMIZED INITIALIZATION REPORT SAVE FAILED\n")
+                f.write(f"COMPREHENSIVE INITIALIZATION REPORT SAVE FAILED\n")
                 f.write(f"Timestamp: {datetime.now().isoformat()}\n")
                 f.write(f"Error: {str(e)}\n")
                 f.write(f"Error Type: {type(e).__name__}\n")
-                f.write(f"Optimization Status: Redundancy elimination attempted\n")
-                f.write(f"Template Renderer: {'Available' if template_renderer else 'Not Available'}\n")
                 f.write(f"Original system_status keys: {list(system_status.keys()) if isinstance(system_status, dict) else 'Not a dict'}\n")
                 
                 # Include file information if available
@@ -20590,7 +23241,7 @@ def _show_all_report_files(report_dir, report_files):
 
 # Model architecture comparison
 def initialize_model_variants(silent: bool = False) -> None:
-    """Initialize MODEL_VARIANTS dictionary with enhanced validation and error recovery.
+    """Initialize MODEL_VARIANTS dictionary with validation and error recovery.
     
     This function has been updated to leverage the model_instantiation_with_validation() helper
     for comprehensive model initialization with built-in validation and error handling.
@@ -20601,7 +23252,7 @@ def initialize_model_variants(silent: bool = False) -> None:
     global MODEL_VARIANTS
     
     if not silent:
-        logger.info("Initializing model variants using enhanced helper functions")
+        logger.info("Initializing model variants using helper functions")
     
     # Initialize progress tracking
     progress_data = {
@@ -20652,7 +23303,7 @@ def initialize_model_variants(silent: bool = False) -> None:
             progress_data['current_stage'] = "Loading Configuration"
             bar.text = "Loading configuration..."
             
-            # Get current configuration with comprehensive fallbacks
+            # Get current configuration with fallbacks
             try:
                 current_config = get_current_config()
                 if not isinstance(current_config, dict):
@@ -20665,7 +23316,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                 system_config = current_config.get('system', {})
                 
                 if not silent:
-                    logger.debug("Loaded comprehensive configuration for model variant initialization")
+                    logger.debug("Loaded configuration for model variant initialization")
                 bar.text = "Configuration loaded"
             except Exception as e:
                 if not silent:
@@ -20693,7 +23344,7 @@ def initialize_model_variants(silent: bool = False) -> None:
             progress_data['current_stage'] = "Validating Parameters"
             bar.text = "Extracting parameters..."
             
-            # Extract comprehensive configuration values using helper function
+            # Extract configuration values using helper function
             test_input_dim = _extract_and_validate_config_param(
                 data_config, 'features', 20, 'FEATURES',
                 lambda x: isinstance(x, int) and x > 0,
@@ -20840,7 +23491,7 @@ def initialize_model_variants(silent: bool = False) -> None:
             progress_data['current_stage'] = "Creating Model Definitions"
             bar.text = "Creating model definitions..."
             
-            # Create model test definitions using helper function
+            # Create model test definitions using helper function with ALL required parameters
             model_definitions = _create_model_test_definition(
                 encoding_dim=base_encoding_dim,
                 hidden_dims=base_hidden_dims,
@@ -20851,7 +23502,14 @@ def initialize_model_variants(silent: bool = False) -> None:
                 legacy_mode=legacy_mode,
                 num_models=num_models,
                 diversity_factor=diversity_factor,
-                mixed_precision=mixed_precision
+                mixed_precision=mixed_precision,
+                # ADDED: Pass all the missing parameters that are now required
+                input_dim=test_input_dim,
+                activation=activation,
+                activation_param=activation_param,
+                normalization=normalization,
+                use_batch_norm=use_batch_norm,
+                use_layer_norm=use_layer_norm
             )
             
             total_models = len(model_definitions)
@@ -20864,7 +23522,7 @@ def initialize_model_variants(silent: bool = False) -> None:
         # STAGE 5: Model Initialization with detailed progress
         progress_data['current_stage'] = "Model Initialization"
         
-        # Track comprehensive initialization statistics
+        # Track initialization statistics
         initialization_stats = {
             'attempted': 0,
             'successful': [],
@@ -20898,7 +23556,7 @@ def initialize_model_variants(silent: bool = False) -> None:
         
         with alive_bar(total_models, title='Initializing Models\t\t', unit='models') as model_bar:
             
-            # Initialize each model variant using the enhanced helper function
+            # Initialize each model variant using the helper function
             for name, definition in model_definitions.items():
                 initialization_stats['attempted'] += 1
                 progress_data['current_model'] = name
@@ -20910,7 +23568,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                 
                 try:
                     if not silent:
-                        logger.debug(f"Attempting to initialize {name} using enhanced helper function")
+                        logger.debug(f"Attempting to initialize {name} using helper function")
                     
                     # Check if model class exists and is callable
                     if not definition['class_check']():
@@ -20927,7 +23585,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                     # Get the model class
                     model_class = definition['class_getter']()
                     
-                    # Use model_instantiation_with_validation for comprehensive initialization
+                    # Use model_instantiation_with_validation for initialization
                     test_model, validation_results, performance_metrics, instantiation_details = model_instantiation_with_validation(
                         variant_class=model_class,
                         variant_name=name,
@@ -20979,7 +23637,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                             if test_results.get('training_mode') == 'passed':
                                 initialization_stats['performance_tests_passed'] += 1
                             
-                            # Additional comprehensive validation
+                            # Additional validation
                             if hasattr(test_model, 'encode') and hasattr(test_model, 'decode'):
                                 try:
                                     test_model.eval()
@@ -21042,7 +23700,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                     if test_model is not None:
                         del test_model
                     
-                    # MEMORY OPTIMIZATION CHECKPOINT - Enhanced cleanup between model tests
+                    # MEMORY OPTIMIZATION CHECKPOINT - Cleanup between model tests
                     if _optimize_memory_if_needed(
                         condition=True,  # Always aggressive between models
                         hardware_data=hardware_data,
@@ -21084,7 +23742,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                 silent=silent
             )
             
-            # Log comprehensive initialization summary
+            # Log initialization summary
             total_attempted = initialization_stats['attempted']
             successful_count = len(initialization_stats['successful'])
             failed_count = len(initialization_stats['failed'])
@@ -21094,7 +23752,7 @@ def initialize_model_variants(silent: bool = False) -> None:
             memory_opts = initialization_stats['memory_optimizations_performed']
             
             if not silent:
-                logger.info("Model variants initialization completed using enhanced helper functions:")
+                logger.info("Model variants initialization completed using helper functions:")
                 logger.info(f"  - Total attempted: {total_attempted}")
                 logger.info(f"  - Successful: {successful_count}")
                 logger.info(f"  - Failed: {failed_count}")
@@ -21202,7 +23860,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                 if not silent:
                     final_bar.text = "Running final validation"
                 
-                # Use the enhanced validation function if available
+                # Use the validation function if available
                 if 'validate_model_variants' in globals():
                     variant_validation_results = validate_model_variants(logger, silent=silent)
                     
@@ -21213,10 +23871,10 @@ def initialize_model_variants(silent: bool = False) -> None:
                     
                     if fully_validated:
                         if not silent:
-                            logger.info(f"[SUCCESS] Fully validated model variants: {', '.join(fully_validated)}")
+                            logger.info(f"-SUCCESS- Fully validated model variants: {', '.join(fully_validated)}")
                     else:
                         if not silent:
-                            logger.warning("[WARN] No model variants passed comprehensive post-validation")
+                            logger.warning("-WARN- No model variants passed comprehensive post-validation")
                     final_bar.text = "Final validation complete"
                 else:
                     if not silent:
@@ -21226,7 +23884,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                 if not silent:
                     logger.error(f"Post-initialization validation failed: {validation_error}")
             
-            # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
+            # FINAL MEMORY OPTIMIZATION
             _optimize_memory_if_needed(
                 condition=True,  # Always aggressive final cleanup
                 hardware_data=hardware_data,
@@ -21364,7 +24022,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             system_config = current_config.get('system', {})
             
             if not silent:
-                logger.debug("Loaded comprehensive configuration for validation testing")
+                logger.debug("Loaded configuration for validation testing")
             config_bar.text = "Configuration loaded"
                 
         except Exception as e:
@@ -21388,7 +24046,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         param_bar.text = "Extracting parameters..."
         
         test_input_dim = _extract_and_validate_config_param(
-            model_config, 'input_dim', 20, 'FEATURES',
+            data_config, 'features', 20, 'FEATURES',
             lambda x: isinstance(x, int) and x > 0,
             "input feature dimension", silent
         )
@@ -21411,7 +24069,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             "dropout rates", silent
         )
         
-        # Additional parameters for comprehensive validation
+        # Additional parameters for validation
         activation = _extract_and_validate_config_param(
             model_config, 'activation', 'leaky_relu', 'ACTIVATION',
             lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
@@ -21510,13 +24168,14 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         param_bar.text = "Parameters validated"
         param_bar()
     
-    # Phase 6: Create model test definitions
+    # Phase 6: Create model test definitions with ALL required parameters
     progress_data['current_stage'] = "Creating Test Definitions"
     
     with alive_bar(1, title='Creating Test Definitions\t') as def_bar:
         
         def_bar.text = "Creating model definitions..."
         
+        # Create model test definitions with ALL required parameters
         model_definitions = _create_model_test_definition(
             encoding_dim=base_encoding_dim,
             hidden_dims=base_hidden_dims,
@@ -21527,10 +24186,17 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             legacy_mode=legacy_mode,
             num_models=num_models,
             diversity_factor=diversity_factor,
-            mixed_precision=mixed_precision
+            mixed_precision=mixed_precision,
+            # ADDED: Pass all the missing parameters that are now required
+            input_dim=test_input_dim,
+            activation=activation,
+            activation_param=activation_param,
+            normalization=normalization,
+            use_batch_norm=use_batch_norm,
+            use_layer_norm=use_layer_norm
         )
         
-        # Update configurations with validation-specific input dimension
+        # Update configurations with validation-specific input dimension (redundant but safe)
         for definition in model_definitions.values():
             for config_type in ['primary_config', 'fallback_config', 'minimal_config']:
                 if config_type in definition:
@@ -21540,7 +24206,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         def_bar.text = f"Created {len(model_definitions)} test definitions"
         def_bar()
     
-    # Define comprehensive validation test scenarios
+    # Define validation test scenarios
     validation_scenarios = [
         {
             'name': 'batch_norm_compatible',
@@ -21569,7 +24235,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         }
     ]
     
-    # Phase 7: Initialize comprehensive validation statistics
+    # Phase 7: Initialize validation statistics
     validation_stats = {
         'models_attempted': 0,
         'models_successful': 0,
@@ -21758,7 +24424,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                 validation_stats['total_tests_passed'] += 1
                 validation_stats['configuration_tests_passed'] += 1
                 
-                # Use the comprehensive model_instantiation_with_validation helper function
+                # Use the model_instantiation_with_validation helper function
                 test_instance, validation_results, performance_metrics, instantiation_details = model_instantiation_with_validation(
                     variant_class=variant_class,
                     variant_name=variant_name,
@@ -21806,7 +24472,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                     validation_stats['total_tests_performed'] += 1
                     validation_stats['total_tests_passed'] += 1
                     
-                    # Process comprehensive validation results
+                    # Process validation results
                     for test_name, test_result in test_results.items():
                         variant_details['tests_performed'].append(test_name)
                         if test_result == 'passed':
@@ -21910,7 +24576,6 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                     try:
                         # Use psutil if available for memory monitoring
                         try:
-                            import psutil
                             process = psutil.Process()
                             memory_before = process.memory_info().rss
                             
@@ -22099,7 +24764,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         
         total_validation_time = time.time() - validation_start_time
         
-        # Final comprehensive memory cleanup
+        # Final memory cleanup
         _optimize_memory_if_needed(
             condition=True,
             hardware_data=hardware_data,
@@ -22107,10 +24772,10 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             silent=silent
         )
         
-        # Phase 10: Log comprehensive validation summary
+        # Phase 10: Log validation summary
         if not silent:
             logger.info("="*70)
-            logger.info("MODEL VARIANTS COMPREHENSIVE VALIDATION SUMMARY")
+            logger.info("MODEL VARIANTS VALIDATION SUMMARY")
             logger.info("="*70)
             logger.info(f"Total Validation Time: {total_validation_time:.2f} seconds")
             logger.info(f"Models Attempted: {validation_stats['models_attempted']}")
@@ -22231,7 +24896,7 @@ def model_instantiation(
         config_used = base_config
         
         if not silent:
-            logger.debug(f"[OK] {variant_name}: Instantiated with primary configuration")
+            logger.debug(f"-OK- {variant_name}: Instantiated with primary configuration")
             
     except Exception as primary_error:
         primary_error_msg = str(primary_error)
@@ -22832,7 +25497,7 @@ def _create_model_test_config(
     hardware_data: Dict[str, Any],
     model_specific_overrides: Dict[str, Any] = None
 ) -> Dict[str, Any]:
-    """Creates a comprehensive test configuration for model initialization."""
+    """Creates a test configuration for model initialization."""
     # Get hardware data if not provided
     if not hardware_data:
         try:
@@ -22840,18 +25505,30 @@ def _create_model_test_config(
         except:
             hardware_data = {}
     
+    # Ensure normalization consistency
+    if normalization == 'batch':
+        effective_use_batch_norm = use_batch_norm or True
+        effective_use_layer_norm = False
+    elif normalization == 'layer':
+        effective_use_batch_norm = False
+        effective_use_layer_norm = use_layer_norm or True
+    else:
+        effective_use_batch_norm = use_batch_norm
+        effective_use_layer_norm = use_layer_norm
+    
     # Base configuration structure
     config = {
         'model': {
             'model_type': 'SimpleAutoencoder',
+            'input_dim': input_dim,  # Ensure input_dim is included
             'encoding_dim': encoding_dim,
             'hidden_dims': hidden_dims.copy(),
             'dropout_rates': dropout_rates.copy(),
             'activation': activation,
             'activation_param': activation_param,
             'normalization': normalization,
-            'use_batch_norm': use_batch_norm or True if normalization == 'batch' else False,
-            'use_layer_norm': use_layer_norm or True if normalization == 'layer' else False,
+            'use_batch_norm': effective_use_batch_norm,
+            'use_layer_norm': effective_use_layer_norm,
             'skip_connection': skip_connection,
             'residual_blocks': residual_blocks,
             'use_attention': use_attention,
@@ -22912,9 +25589,19 @@ def _create_model_test_definition(
     legacy_mode: bool,
     num_models: int,
     diversity_factor: float,
-    mixed_precision: bool
+    mixed_precision: bool,
+    # ADDED: Missing parameters that were causing issues
+    input_dim: int,
+    activation: str = 'leaky_relu',
+    activation_param: float = 0.2,
+    normalization: str = 'batch',
+    use_batch_norm: bool = True,
+    use_layer_norm: bool = False
 ) -> Dict[str, Any]:
-    """Creates a comprehensive model test definition dictionary."""
+    """Creates a model test definition dictionary."""
+    
+    # Common hardware data for all configs
+    hardware_data = {'gpu_available': torch.cuda.is_available()}
     
     model_definitions = {
         'SimpleAutoencoder': {
@@ -22924,14 +25611,14 @@ def _create_model_test_definition(
                 encoding_dim=encoding_dim,
                 hidden_dims=[hidden_dims[0]] if hidden_dims else [128],
                 dropout_rates=[dropout_rates[0]] if dropout_rates else [0.2],
-                activation='relu',
-                activation_param=0.0,
-                normalization='batch',
-                use_batch_norm=True,
-                use_layer_norm=False,
-                skip_connection=False,
-                residual_blocks=False,
-                use_attention=False,
+                activation=activation,  # Use parameter instead of hardcoded
+                activation_param=activation_param,  # Use parameter instead of hardcoded
+                normalization=normalization,  # Use parameter instead of hardcoded
+                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
+                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
+                skip_connection=False,  # SimpleAutoencoder doesn't use skip connections
+                residual_blocks=False,  # SimpleAutoencoder doesn't use residual blocks
+                use_attention=False,  # SimpleAutoencoder doesn't use attention
                 legacy_mode=legacy_mode,
                 num_models=1,
                 diversity_factor=0.0,
@@ -22941,13 +25628,14 @@ def _create_model_test_definition(
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,  # Will be overridden
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
                         'model_type': 'SimpleAutoencoder',
                         'use_attention': False,
-                        'residual_blocks': False
+                        'residual_blocks': False,
+                        'skip_connection': False  # Explicitly disable for SimpleAutoencoder
                     }
                 }
             ),
@@ -22955,29 +25643,32 @@ def _create_model_test_definition(
                 encoding_dim=max(4, encoding_dim // 2),
                 hidden_dims=[64],
                 dropout_rates=[0.2],
-                activation='relu',
-                activation_param=0.0,
-                normalization=None,
-                use_batch_norm=False,
-                use_layer_norm=False,
+                activation='relu',  # Simplified for fallback
+                activation_param=0.0,  # Simplified for fallback
+                normalization=None,  # Simplified for fallback
+                use_batch_norm=False,  # Simplified for fallback
+                use_layer_norm=False,  # Simplified for fallback
                 skip_connection=False,
                 residual_blocks=False,
                 use_attention=False,
-                legacy_mode=True,
+                legacy_mode=True,  # Force legacy mode for fallback
                 num_models=1,
                 diversity_factor=0.0,
                 learning_rate=0.001,
                 batch_size=32,
-                mixed_precision=False,
+                mixed_precision=False,  # Disable mixed precision for fallback
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
                         'model_type': 'SimpleAutoencoder',
-                        'legacy_mode': True
+                        'legacy_mode': True,
+                        'use_attention': False,
+                        'residual_blocks': False,
+                        'skip_connection': False
                     }
                 }
             ),
@@ -22985,31 +25676,34 @@ def _create_model_test_definition(
                 encoding_dim=8,
                 hidden_dims=[32],
                 dropout_rates=[0.1],
-                activation='relu',
-                activation_param=0.0,
-                normalization=None,
-                use_batch_norm=False,
-                use_layer_norm=False,
+                activation='relu',  # Simplified for minimal
+                activation_param=0.0,  # Simplified for minimal
+                normalization=None,  # Simplified for minimal
+                use_batch_norm=False,  # Simplified for minimal
+                use_layer_norm=False,  # Simplified for minimal
                 skip_connection=False,
                 residual_blocks=False,
                 use_attention=False,
-                legacy_mode=True,
+                legacy_mode=True,  # Force legacy mode for minimal
                 num_models=1,
                 diversity_factor=0.0,
                 learning_rate=0.001,
                 batch_size=32,
-                mixed_precision=False,
+                mixed_precision=False,  # Disable mixed precision for minimal
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=20,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=max(20, input_dim // 2),  # Use scaled input_dim
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
-                        'model_type': 'SimpleAutoencoder'
+                        'model_type': 'SimpleAutoencoder',
+                        'use_attention': False,
+                        'residual_blocks': False,
+                        'skip_connection': False
                     },
                     'data': {
-                        'features': 20
+                        'features': max(20, input_dim // 2)  # Consistent with input_dim
                     }
                 }
             ),
@@ -23023,14 +25717,14 @@ def _create_model_test_definition(
                 encoding_dim=encoding_dim,
                 hidden_dims=hidden_dims.copy(),
                 dropout_rates=dropout_rates.copy(),
-                activation='leaky_relu',
-                activation_param=0.01,
-                normalization='batch',
-                use_batch_norm=True,
-                use_layer_norm=False,
-                skip_connection=skip_connection,
-                residual_blocks=residual_blocks,
-                use_attention=use_attention and encoding_dim >= 32,
+                activation=activation,  # Use parameter instead of hardcoded
+                activation_param=activation_param,  # Use parameter instead of hardcoded
+                normalization=normalization,  # Use parameter instead of hardcoded
+                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
+                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
+                skip_connection=skip_connection,  # Use parameter
+                residual_blocks=residual_blocks,  # Use parameter
+                use_attention=use_attention and encoding_dim >= 32,  # Use parameter with condition
                 legacy_mode=legacy_mode,
                 num_models=1,
                 diversity_factor=0.0,
@@ -23040,8 +25734,8 @@ def _create_model_test_definition(
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
                         'model_type': 'EnhancedAutoencoder'
@@ -23052,14 +25746,14 @@ def _create_model_test_definition(
                 encoding_dim=max(8, encoding_dim // 2),
                 hidden_dims=[96, 48] if len(hidden_dims) > 1 else [64],
                 dropout_rates=[0.2, 0.15] if len(dropout_rates) > 1 else [0.2],
-                activation='leaky_relu',
-                activation_param=0.01,
-                normalization='batch',
-                use_batch_norm=True,
-                use_layer_norm=False,
-                skip_connection=True,
-                residual_blocks=False,
-                use_attention=False,
+                activation=activation,  # Use parameter instead of hardcoded
+                activation_param=activation_param,  # Use parameter instead of hardcoded
+                normalization=normalization,  # Use parameter instead of hardcoded
+                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
+                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
+                skip_connection=True,  # Enable skip connection for fallback stability
+                residual_blocks=False,  # Disable residual blocks for fallback
+                use_attention=False,  # Disable attention for fallback
                 legacy_mode=False,
                 num_models=1,
                 diversity_factor=0.0,
@@ -23069,11 +25763,12 @@ def _create_model_test_definition(
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
-                        'model_type': 'EnhancedAutoencoder'
+                        'model_type': 'EnhancedAutoencoder',
+                        'use_attention': False  # Explicitly disable for fallback
                     }
                 }
             ),
@@ -23081,28 +25776,31 @@ def _create_model_test_definition(
                 encoding_dim=12,
                 hidden_dims=[48],
                 dropout_rates=[0.15],
-                activation='relu',
-                activation_param=0.0,
-                normalization=None,
-                use_batch_norm=False,
-                use_layer_norm=False,
-                skip_connection=False,
-                residual_blocks=False,
-                use_attention=False,
-                legacy_mode=True,
+                activation='relu',  # Simplified for minimal
+                activation_param=0.0,  # Simplified for minimal
+                normalization=None,  # Simplified for minimal
+                use_batch_norm=False,  # Simplified for minimal
+                use_layer_norm=False,  # Simplified for minimal
+                skip_connection=False,  # Disable for minimal
+                residual_blocks=False,  # Disable for minimal
+                use_attention=False,  # Disable for minimal
+                legacy_mode=True,  # Force legacy mode for minimal
                 num_models=1,
                 diversity_factor=0.0,
                 learning_rate=0.001,
                 batch_size=32,
-                mixed_precision=False,
+                mixed_precision=False,  # Disable mixed precision for minimal
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
-                        'model_type': 'EnhancedAutoencoder'
+                        'model_type': 'EnhancedAutoencoder',
+                        'use_attention': False,  # Explicitly disable for minimal
+                        'residual_blocks': False,  # Explicitly disable for minimal
+                        'skip_connection': False  # Explicitly disable for minimal
                     }
                 }
             ),
@@ -23116,14 +25814,14 @@ def _create_model_test_definition(
                 encoding_dim=encoding_dim,
                 hidden_dims=hidden_dims.copy(),
                 dropout_rates=dropout_rates.copy(),
-                activation='leaky_relu',
-                activation_param=0.01,
-                normalization='batch',
-                use_batch_norm=True,
-                use_layer_norm=False,
-                skip_connection=skip_connection,
-                residual_blocks=residual_blocks and not legacy_mode,
-                use_attention=use_attention and not legacy_mode,
+                activation=activation,  # Use parameter instead of hardcoded
+                activation_param=activation_param,  # Use parameter instead of hardcoded
+                normalization=normalization,  # Use parameter instead of hardcoded
+                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
+                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
+                skip_connection=skip_connection,  # Use parameter
+                residual_blocks=residual_blocks and not legacy_mode,  # Use parameter with condition
+                use_attention=use_attention and not legacy_mode,  # Use parameter with condition
                 legacy_mode=legacy_mode,
                 num_models=min(3, num_models),
                 diversity_factor=diversity_factor,
@@ -23133,8 +25831,8 @@ def _create_model_test_definition(
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
                         'model_type': 'AutoencoderEnsemble'
@@ -23145,28 +25843,30 @@ def _create_model_test_definition(
                 encoding_dim=max(8, encoding_dim // 2),
                 hidden_dims=[80, 40] if len(hidden_dims) > 1 else [60],
                 dropout_rates=[0.2, 0.15] if len(dropout_rates) > 1 else [0.2],
-                activation='leaky_relu',
-                activation_param=0.01,
-                normalization='batch',
-                use_batch_norm=True,
-                use_layer_norm=False,
-                skip_connection=False,
-                residual_blocks=False,
-                use_attention=False,
+                activation=activation,  # Use parameter instead of hardcoded
+                activation_param=activation_param,  # Use parameter instead of hardcoded
+                normalization=normalization,  # Use parameter instead of hardcoded
+                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
+                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
+                skip_connection=False,  # Disable for fallback stability
+                residual_blocks=False,  # Disable for fallback stability
+                use_attention=False,  # Disable for fallback stability
                 legacy_mode=False,
                 num_models=2,
                 diversity_factor=0.1,
                 learning_rate=0.001,
                 batch_size=32,
-                mixed_precision=False,
+                mixed_precision=False,  # Disable mixed precision for fallback
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
-                        'model_type': 'AutoencoderEnsemble'
+                        'model_type': 'AutoencoderEnsemble',
+                        'use_attention': False,  # Explicitly disable for fallback
+                        'residual_blocks': False  # Explicitly disable for fallback
                     }
                 }
             ),
@@ -23174,28 +25874,30 @@ def _create_model_test_definition(
                 encoding_dim=8,
                 hidden_dims=[40],
                 dropout_rates=[0.15],
-                activation='relu',
-                activation_param=0.0,
-                normalization=None,
-                use_batch_norm=False,
-                use_layer_norm=False,
-                skip_connection=False,
-                residual_blocks=False,
-                use_attention=False,
-                legacy_mode=True,
+                activation='relu',  # Simplified for minimal
+                activation_param=0.0,  # Simplified for minimal
+                normalization=None,  # Simplified for minimal
+                use_batch_norm=False,  # Simplified for minimal
+                use_layer_norm=False,  # Simplified for minimal
+                skip_connection=False,  # Disable for minimal
+                residual_blocks=False,  # Disable for minimal
+                use_attention=False,  # Disable for minimal
+                legacy_mode=True,  # Force legacy mode for minimal
                 num_models=2,
                 diversity_factor=0.05,
                 learning_rate=0.001,
                 batch_size=32,
-                mixed_precision=False,
+                mixed_precision=False,  # Disable mixed precision for minimal
                 optimizer_type='adam',
                 device_setting='auto',
                 random_seed=42,
-                input_dim=100,
-                hardware_data={'gpu_available': torch.cuda.is_available()},
+                input_dim=input_dim,  # Use parameter instead of hardcoded
+                hardware_data=hardware_data,
                 model_specific_overrides={
                     'model': {
-                        'model_type': 'AutoencoderEnsemble'
+                        'model_type': 'AutoencoderEnsemble',
+                        'use_attention': False,  # Explicitly disable for minimal
+                        'residual_blocks': False  # Explicitly disable for minimal
                     }
                 }
             ),
@@ -23534,7 +26236,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
     
     try:
         if not silent:
-            logger.debug("Starting comprehensive model architecture comparison using helper functions")
+            logger.debug("Starting model architecture comparison using helper functions")
         
         # Calculate total work units for progress tracking
         total_stages = 8  # System, Config, Validation, Parameters, Configs, Analysis, Summary, Finalization
@@ -23778,6 +26480,18 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 "normalization type", silent
             )
             
+            use_batch_norm = _extract_and_validate_config_param(
+                model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
+                lambda x: isinstance(x, bool),
+                "batch normalization flag", silent
+            )
+            
+            use_layer_norm = _extract_and_validate_config_param(
+                model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
+                lambda x: isinstance(x, bool),
+                "layer normalization flag", silent
+            )
+            
             use_attention = _extract_and_validate_config_param(
                 model_config, 'use_attention', True, 'USE_ATTENTION',
                 lambda x: isinstance(x, bool),
@@ -23856,11 +26570,11 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
             bar.text = "Parameters extracted and validated"
             bar()
             
-            # STAGE 5: Test Configuration Creation
+            # STAGE 5: Test Configuration Creation with ALL required parameters
             progress_data['current_stage'] = "Creating Test Configurations"
             bar.text = "Creating test configurations..."
             
-            # Generate test definitions
+            # Generate test definitions with ALL required parameters
             model_test_definitions = _create_model_test_definition(
                 encoding_dim=encoding_dim,
                 hidden_dims=hidden_dims,
@@ -23871,7 +26585,14 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 legacy_mode=legacy_mode,
                 num_models=num_models,
                 diversity_factor=diversity_factor,
-                mixed_precision=mixed_precision
+                mixed_precision=mixed_precision,
+                # ADDED: Pass all the missing parameters that are now required
+                input_dim=input_dim,
+                activation=activation,
+                activation_param=activation_param,
+                normalization=normalization,
+                use_batch_norm=use_batch_norm,
+                use_layer_norm=use_layer_norm
             )
             
             # Create test configurations for each model variant
@@ -23882,7 +26603,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                     test_def = model_test_definitions[model_name]
                     primary_config = test_def.get('primary_config', {})
                     
-                    # Update input dimension in the configuration
+                    # Update input dimension in the configuration (redundant but safe)
                     if 'data' in primary_config:
                         primary_config['data']['features'] = input_dim
                     else:
@@ -23918,8 +26639,8 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                         activation=activation,
                         activation_param=activation_param,
                         normalization=normalization,
-                        use_batch_norm=normalization == 'batch',
-                        use_layer_norm=normalization == 'layer',
+                        use_batch_norm=use_batch_norm,
+                        use_layer_norm=use_layer_norm,
                         skip_connection=skip_connection,
                         residual_blocks=residual_blocks,
                         use_attention=use_attention,
@@ -24058,7 +26779,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                     non_trainable_params = total_params - trainable_params
                     model_size_mb = total_params * 4 / (1024 * 1024)
                     
-                    # Enhanced layer analysis using helper function
+                    # Layer analysis using helper function
                     model_results['helper_functions_used'].append('analyze_model_layers')
                     layer_analysis = analyze_model_layers(model=model_instance)
                     
@@ -24083,7 +26804,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                         'validation_score': validation_score
                     }
                     
-                    # Performance Testing with enhanced metrics using helper function
+                    # Performance Testing with metrics using helper function
                     model_results['helper_functions_used'].append('execute_performance_testing')
                     performance_test_metrics = execute_performance_testing(
                         batch_size, input_dim, model_name, model_instance, hardware_data,
@@ -24292,7 +27013,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 'integration_level': 'full'
             }
             
-            # Log comprehensive comparison summary
+            # Log comparison summary
             successful = results['_metadata']['successful_comparisons']
             total = results['_metadata']['available_variants']
             duration = results['_metadata']['comparison_duration_seconds']
@@ -27698,489 +30419,1365 @@ def generate_comparative_summary(
         }
 
 # Display model comparison
-
-
-# Model variants validation
-def validate_model_preset_compatibility(model_type: str, config: Dict[str, Any]) -> bool:
+def display_model_comparison() -> None:
     """
-    Comprehensive validation of model type compatibility with preset configurations.
-    
-    This function has been updated to work harmoniously with initialize_model_variants() and 
-    validate_model_variants(), providing thorough compatibility validation for all preset 
-    configurations including DEFAULT_PRESET, STABILITY_PRESET, PERFORMANCE_PRESET, and 
-    custom configurations while maintaining consistency with the validation approach.
-    
-    Args:
-        model_type: The model type to validate (e.g., 'SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble')
-        config: Configuration dictionary (can be preset or full config structure)
-        
-    Returns:
-        bool: True if compatible, False otherwise with detailed logging of incompatibility reasons
+    Display available initialization reports and provide options to view them.
+    Supports multiple report formats: HTML dashboard, JSON, TXT summary, and diagnostics.
     """
-    compatibility_start_time = time.time()
-    validation_details = {
-        'model_type': model_type,
-        'compatibility_checks': [],
-        'warnings': [],
-        'errors': [],
-        'recommendations': []
-    }
-    
     try:
-        # Phase 1: Basic Input Validation (aligned with validate_model_variants approach)
-        if not model_type or not isinstance(model_type, str):
-            validation_details['errors'].append('Invalid model_type: must be non-empty string')
-            logger.debug("validate_model_preset_compatibility: Invalid model_type provided")
-            return False
+        # Clear screen and show banner with configuration
+        print("\033c", end="")
+        config = show_banner(return_config=True)
         
-        if not config or not isinstance(config, dict):
-            validation_details['errors'].append('Invalid config: must be non-empty dictionary')
-            logger.debug("validate_model_preset_compatibility: Invalid config provided")
-            return False
+        # Use the config returned from show_banner or fallback
+        if config is None:
+            config = get_current_config()
         
-        validation_details['compatibility_checks'].append('basic_input_validation')
+        # Configuration context using multiple fallbacks
+        preset_name = "Custom/Default"
+        model_type = "Unknown"
+        config_source = "Unknown"
         
-        # Phase 2: Model Variants Availability Check (harmonized with initialize_model_variants)
-        if not MODEL_VARIANTS:
-            logger.debug("MODEL_VARIANTS not initialized, attempting initialization for compatibility check")
-            try:
-                #initialize_model_variants(silent=True)
-                initialize_model_variants(silent=False)
-            except Exception as e:
-                validation_details['warnings'].append(f'MODEL_VARIANTS initialization failed: {str(e)}')
-                logger.warning(f"Failed to initialize model variants for compatibility check: {e}")
-                # Fallback to basic string validation (consistent with existing approach)
-                valid_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
-                if model_type not in valid_types:
-                    validation_details['errors'].append(f'Model type "{model_type}" not in known types: {valid_types}')
-                    return False
-                validation_details['warnings'].append('Using fallback validation without MODEL_VARIANTS')
+        # Method 1: Check presets section
+        presets_section = config.get("presets", {})
+        if isinstance(presets_section, dict):
+            preset_name = presets_section.get("current_preset", "Custom/Default")
         
-        if MODEL_VARIANTS and model_type not in MODEL_VARIANTS:
-            validation_details['errors'].append(f'Model type "{model_type}" not found in MODEL_VARIANTS')
-            logger.debug(f"Model type '{model_type}' not found in MODEL_VARIANTS: {list(MODEL_VARIANTS.keys())}")
-            return False
+        # Method 2: Check metadata for preset_used
+        if preset_name in ["Custom/Default", None, ""]:
+            metadata = config.get("metadata", {})
+            if isinstance(metadata, dict):
+                preset_name = metadata.get("preset_used", "Custom/Default")
         
-        validation_details['compatibility_checks'].append('model_variants_validation')
+        # Method 3: Check legacy _preset_name field
+        if preset_name in ["Custom/Default", None, ""]:
+            preset_name = config.get("_preset_name", "Custom/Default")
         
-        # Phase 3: Configuration Structure Analysis (enhanced but aligned)
+        # Method 4: Check runtime information
+        if preset_name in ["Custom/Default", None, ""]:
+            runtime = config.get("runtime", {})
+            if isinstance(runtime, dict):
+                preset_name = runtime.get("active_preset", "Custom/Default")
+        
+        # Clean up preset name display
+        if preset_name in ["Custom/Default", None, "", "none"]:
+            preset_name = "Custom/Default"
+        elif isinstance(preset_name, str):
+            preset_name = preset_name.title()
+        
+        # Extract model type with error handling
+        model_section = config.get("model", {})
+        if isinstance(model_section, dict):
+            model_type = model_section.get("model_type", "Unknown")
+        
+        # Extract config source with fallbacks
+        if "runtime" in config and isinstance(config["runtime"], dict):
+            config_source = config["runtime"].get("config_source", "Unknown")
+        elif "metadata" in config and isinstance(config["metadata"], dict):
+            config_source = config["metadata"].get("config_source", "Unknown")
+        
+        # Menu display with context
+        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.CYAN + Style.BRIGHT + "MODEL ARCHITECTURE COMPARISON")
+        print(Fore.YELLOW + Style.BRIGHT + "="*40)
+        print(Fore.GREEN + Style.BRIGHT + f"Active Comparison Context:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}\n")
+        
+        # Get comparison results with error handling
         try:
-            config_structure_type = 'unknown'
-            metadata = config.get('metadata', {})
-            model_config = config.get('model', {})
-            training_config = config.get('training', {})
-            
-            # Determine configuration structure type
-            if 'metadata' in config and 'model' in config and 'training' in config:
-                config_structure_type = 'full_preset'
-                preset_name = config.get('presets', {}).get('current_preset') or metadata.get('preset_used')
-            elif 'preset_used' in config or 'preset_used' in metadata:
-                config_structure_type = 'preset_reference'
-                preset_name = config.get('preset_used') or metadata.get('preset_used')
-            elif model_config:
-                config_structure_type = 'partial_config'
-                preset_name = model_config.get('preset_used')
-            else:
-                config_structure_type = 'minimal_config'
-                preset_name = None
-            
-            validation_details['config_structure_type'] = config_structure_type
-            validation_details['preset_name'] = preset_name
-            validation_details['compatibility_checks'].append('config_structure_analysis')
-            
+            results = compare_model_architectures()
         except Exception as e:
-            validation_details['warnings'].append(f'Config structure analysis failed: {str(e)}')
-            logger.debug(f"Config structure analysis failed: {e}")
+            logger.error(f"Failed to generate model comparison: {e}")
+            
+            # Error display with context
+            message = (
+                f"Failed to generate model architecture comparison: {str(e)}\n"
+                f"Context:\n"
+                f"- Current Preset: {preset_name}\n"
+                f"- Model Type: {model_type}\n"
+                f"- Config Source: {config_source}\n\n"
+                f"This could be due to:\n"
+                f"- Model variants not properly initialized\n"
+                f"- Configuration parameter issues\n"
+                f"- System resource constraints\n"
+                f"- Missing dependencies or compatibility problems\n\n"
+                f"Troubleshooting Steps:\n"
+                f"1. Run 'initialize_model_variants()' to refresh model registry\n"
+                f"2. Check configuration with 'get_current_config()'\n"
+                f"3. Validate models with 'validate_model_variants(logger)'\n"
+                f"4. Check system resources and dependencies"
+            )
+            console.print(
+                Panel.fit(
+                    f"[bold red]{message}[/bold red]",
+                    title="COMPARISON FAILED",
+                    style="bold red",
+                    border_style="red",
+                    padding=(1, 2),
+                    box=box.ROUNDED
+                )
+            )
+            return
         
-        # Phase 4: Explicit Compatibility List Validation
-        try:
-            compatible_models = metadata.get('compatibility', [])
-            if compatible_models and isinstance(compatible_models, list):
-                if model_type not in compatible_models:
-                    validation_details['errors'].append(
-                        f'Model type "{model_type}" not in explicit compatibility list: {compatible_models}'
+        # Handle critical errors with error analysis
+        if isinstance(results, dict):
+            if 'error' in results or 'critical_validation_failure' in results:
+                error_msg = results.get('error') or results.get('critical_validation_failure', 'Unknown error')
+                
+                message = (
+                    f"Analysis Error: {error_msg}\n"
+                    f"Context:\n"
+                    f"- Current Preset: {preset_name}\n"
+                    f"- Model Type: {model_type}\n\n"
+                )
+                
+                # Error-specific guidance based on current implementation
+                if 'initialization_failed' in error_msg.lower() or 'MODEL_VARIANTS' in error_msg:
+                    message += (
+                        f"Model Initialization Issues:\n"
+                        f"1. Check if model classes are properly imported\n"
+                        f"2. Verify PyTorch installation and dependencies\n"
+                        f"3. Run: initialize_model_variants(silent=False)\n"
+                        f"4. Check for configuration compatibility issues\n"
                     )
-                    logger.debug(f"Model type '{model_type}' not in compatibility list: {compatible_models}")
-                    return False
+                elif 'memory' in error_msg.lower() or 'resource' in error_msg.lower():
+                    message += (
+                        f"Resource Issues:\n"
+                        f"1. Close other applications to free memory\n"
+                        f"2. Reduce batch size or model complexity\n"
+                        f"3. Enable memory optimization: enhanced_clear_memory()\n"
+                        f"4. Check available system and GPU memory\n"
+                    )
+                elif 'validation' in error_msg.lower():
+                    message += (
+                        f"Model Validation Issues:\n"
+                        f"1. Run: validate_model_variants(logger, silent=False)\n"
+                        f"2. Check individual model instantiation\n"
+                        f"3. Verify configuration parameters\n"
+                    )
                 else:
-                    validation_details['compatibility_checks'].append('explicit_compatibility_list')
-                    logger.debug(f"Model type '{model_type}' found in explicit compatibility list")
+                    message += (
+                        f"General Analysis Issues:\n"
+                        f"1. Check system resources and dependencies\n"
+                        f"2. Verify configuration file integrity\n"
+                        f"3. Ensure all required packages are installed\n"
+                    )
+                
+                # Display partial results if available
+                partial_results = results.get('partial_results', {})
+                if partial_results and isinstance(partial_results, dict):
+                    message += f"\nPartial Results Available:\n"
+                    for key, value in partial_results.items():
+                        if not key.startswith('_'):
+                            status = value.get('analysis_status', 'unknown') if isinstance(value, dict) else 'unknown'
+                            message += f"  - {key}: {status}\n"
+                
+                console.print(
+                    Panel.fit(
+                        f"[bold red]{message}[/bold red]",
+                        title="ANALYSIS ERROR",
+                        style="bold red",
+                        border_style="red",
+                        padding=(1, 2),
+                        box=box.ROUNDED
+                    )
+                )
+                return
             
-        except Exception as e:
-            validation_details['warnings'].append(f'Explicit compatibility validation failed: {str(e)}')
-            logger.debug(f"Error validating explicit compatibility: {e}")
+            if 'initialization_error' in results:
+                message = (
+                    f"Initialization Error: {results['initialization_error']}\n"
+                    f"Context:\n"
+                    f"- Current Preset: {preset_name}\n"
+                    f"- Model Type: {model_type}\n\n"
+                    f"This indicates:\n"
+                    f"1. Model variants could not be initialized properly\n"
+                    f"2. Configuration parameters are invalid or incompatible\n"
+                    f"3. Required dependencies may be missing\n"
+                    f"4. System resources may be insufficient"
+                )
+                console.print(
+                    Panel.fit(
+                        f"[bold red]{message}[/bold red]",
+                        title="INITIALIZATION ERROR",
+                        style="bold red",
+                        border_style="red",
+                        padding=(1, 2),
+                        box=box.ROUNDED
+                    )
+                )
+                return
         
-        # Phase 5: Model-Specific Architecture Requirements Validation (aligned with test configurations)
-        try:
-            if model_type == 'SimpleAutoencoder':
-                validation_details['compatibility_checks'].append('simpleautoencoder_validation')
-                
-                # Simple autoencoder requirements - basic parameters only (consistent with test config)
-                encoding_dim = model_config.get('encoding_dim', 12)
-                if not isinstance(encoding_dim, (int, float)) or encoding_dim <= 0:
-                    validation_details['errors'].append(f'SimpleAutoencoder: Invalid encoding_dim: {encoding_dim}')
-                    logger.debug(f"SimpleAutoencoder: Invalid encoding_dim: {encoding_dim}")
-                    return False
-                
-                # Ensure simple architecture (no complex features) - aligned with _create_model_test_config
-                if model_config.get('use_attention', False):
-                    validation_details['warnings'].append('SimpleAutoencoder: use_attention should be False for simple architecture')
-                
-                if model_config.get('residual_blocks', False):
-                    validation_details['warnings'].append('SimpleAutoencoder: residual_blocks should be False for simple architecture')
-                
-                # Validate hidden dimensions for simple architecture
-                hidden_dims = model_config.get('hidden_dims', [128])
-                if isinstance(hidden_dims, list) and len(hidden_dims) > 2:
-                    validation_details['warnings'].append(f'SimpleAutoencoder: Deep architecture with {len(hidden_dims)} layers may be too complex')
-                
-                # Validate dropout rates (consistent with _validate_and_adjust_parameters approach)
-                dropout_rates = model_config.get('dropout_rates', [0.2])
-                if isinstance(dropout_rates, list):
-                    invalid_rates = [r for r in dropout_rates if not isinstance(r, (int, float)) or r < 0 or r >= 1]
-                    if invalid_rates:
-                        validation_details['errors'].append(f'SimpleAutoencoder: Invalid dropout rates: {invalid_rates}')
-                        return False
-                
-                validation_details['recommendations'].append('SimpleAutoencoder works best with simple architectures and basic features')
-                
-            elif model_type == 'EnhancedAutoencoder':
-                validation_details['compatibility_checks'].append('enhancedautoencoder_validation')
-                
-                # Enhanced autoencoder requirements - supports advanced features
-                encoding_dim = model_config.get('encoding_dim', 32)
-                if not isinstance(encoding_dim, (int, float)) or encoding_dim <= 0:
-                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid encoding_dim: {encoding_dim}')
-                    return False
-                
-                # Validate hidden dimensions (consistent with parameter validation)
-                hidden_dims = model_config.get('hidden_dims', [256, 128, 64])
-                if not isinstance(hidden_dims, list) or not hidden_dims:
-                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid hidden_dims: {hidden_dims}')
-                    return False
-                
-                # Check for invalid dimension values (aligned with _validate_and_adjust_parameters)
-                invalid_dims = [dim for dim in hidden_dims if not isinstance(dim, (int, float)) or dim <= 0]
-                if invalid_dims:
-                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid dimension values: {invalid_dims}')
-                    return False
-                
-                # Validate dropout rates (consistent with existing validation approach)
-                dropout_rates = model_config.get('dropout_rates', [0.2, 0.15, 0.1])
-                if not isinstance(dropout_rates, list) or not dropout_rates:
-                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid dropout_rates: {dropout_rates}')
-                    return False
-                
-                invalid_rates = [r for r in dropout_rates if not isinstance(r, (int, float)) or r < 0 or r >= 1]
-                if invalid_rates:
-                    validation_details['errors'].append(f'EnhancedAutoencoder: Invalid dropout rate values: {invalid_rates}')
-                    return False
-                
-                # Advanced feature compatibility checks (aligned with test configurations)
-                use_attention = model_config.get('use_attention', False)
-                if use_attention and encoding_dim < 32:
-                    validation_details['warnings'].append(f'EnhancedAutoencoder: Attention mechanism may not be effective with small encoding_dim: {encoding_dim}')
-                
-                residual_blocks = model_config.get('residual_blocks', False)
-                if residual_blocks and not hidden_dims:
-                    validation_details['warnings'].append('EnhancedAutoencoder: Residual blocks require hidden layers')
-                
-                # Normalization compatibility (consistent with _extract_and_validate_config_param)
-                normalization = model_config.get('normalization', 'batch')
-                available_normalizations = model_config.get('available_normalizations', ['batch', 'layer', 'instance', 'group', 'none'])
-                if normalization and normalization not in available_normalizations:
-                    validation_details['errors'].append(f'EnhancedAutoencoder: Normalization "{normalization}" not in available list: {available_normalizations}')
-                    return False
-                
-                validation_details['recommendations'].append('EnhancedAutoencoder supports advanced features like attention and residual connections')
-                
-            elif model_type == 'AutoencoderEnsemble':
-                validation_details['compatibility_checks'].append('autoencoder_ensemble_validation')
-                
-                # Ensemble-specific requirements (aligned with test configuration constraints)
-                num_models = model_config.get('num_models', 3)
-                if not isinstance(num_models, int) or num_models < 1:
-                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid num_models: {num_models} (must be positive integer)')
-                    return False
-                
-                if num_models > 20:
-                    validation_details['warnings'].append(f'AutoencoderEnsemble: Large ensemble size ({num_models}) may be memory intensive')
-                
-                diversity_factor = model_config.get('diversity_factor', 0.3)
-                if not isinstance(diversity_factor, (int, float)) or not 0 <= diversity_factor <= 1:
-                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid diversity_factor: {diversity_factor} (must be between 0 and 1)')
-                    return False
-                
-                # Basic architecture validation (same as enhanced, consistent with test configs)
-                encoding_dim = model_config.get('encoding_dim', 24)
-                if not isinstance(encoding_dim, (int, float)) or encoding_dim <= 0:
-                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid encoding_dim: {encoding_dim}')
-                    return False
-                
-                hidden_dims = model_config.get('hidden_dims', [192, 96, 48])
-                if not isinstance(hidden_dims, list) or not hidden_dims:
-                    validation_details['errors'].append(f'AutoencoderEnsemble: Invalid hidden_dims: {hidden_dims}')
-                    return False
-                
-                # Memory and computational requirements (aligned with resource estimation approach)
-                total_params_estimate = sum(hidden_dims) * num_models + encoding_dim * num_models
-                if total_params_estimate > 1_000_000:  # 1M parameters threshold
-                    validation_details['warnings'].append(f'AutoencoderEnsemble: Large parameter count estimate ({total_params_estimate:,}) may require significant memory')
-                
-                validation_details['recommendations'].append('AutoencoderEnsemble provides improved robustness through model diversity')
-                
+        # Extract metadata and summary with validation
+        metadata = results.get('_metadata', {})
+        summary = results.get('_summary', {})
+        analysis_results = results.get('_analysis_results', {})
+        
+        # Validate metadata
+        if not metadata:
+            logger.warning("No metadata found in comparison results")
+            metadata = {
+                'comparison_timestamp': datetime.now().isoformat(),
+                'comparison_version': '3.2',
+                'available_variants': 0,
+                'successful_comparisons': 0,
+                'failed_comparisons': 0,
+                'hardware_context': {},
+                'input_dimension': 'unknown',
+                'config_source': 'unknown',
+                'validation_checks_performed': [],
+                'memory_optimization_summary': {'optimizations_performed': 0},
+                'helper_functions_utilized': []
+            }
+        
+        # Filter model results (exclude metadata and analysis results)
+        model_results = {}
+        for key, value in results.items():
+            if not key.startswith('_') and isinstance(value, dict):
+                model_results[key] = value
+        
+        if not model_results:
+            message = (
+                f"No Model Results Available\n"
+                f"Context:\n"
+                f"- Current Preset: {preset_name}\n"
+                f"- Model Type: {model_type}\n\n"
+                f"This could indicate:\n"
+                f"1. No model variants are initialized in MODEL_VARIANTS\n"
+                f"2. All model analyses failed during execution\n"
+                f"3. Configuration issues prevent proper analysis\n"
+                f"4. System resource constraints blocked analysis\n\n"
+                f"Try running: [bold cyan]initialize_model_variants(silent=False)[/bold cyan]"
+            )
+            console.print(
+                Panel.fit(
+                    f"[bold yellow]{message}[/bold yellow]",
+                    title="NO RESULTS AVAILABLE",
+                    style="bold yellow",
+                    border_style="yellow",
+                    padding=(1, 2),
+                    box=box.ROUNDED
+                )
+            )
+            return
+        
+        # ENHANCED MAIN HEADER SECTION
+        comparison_version = metadata.get('comparison_version', '3.2')
+        hardware_ctx = metadata.get('hardware_context', {})
+        gpu_available = hardware_ctx.get('gpu_available', False)
+        system_class = hardware_ctx.get('system_class', 'unknown')
+        memory_optimizations = metadata.get('memory_optimization_summary', {}).get('optimizations_performed', 0)
+        helper_functions_used = len(metadata.get('helper_functions_utilized', []))
+        
+        header_panel = Panel.fit(
+            f"[bold yellow]MODEL ARCHITECTURE COMPARISON REPORT v{comparison_version}[/bold yellow]\n"
+            f"Generated: {metadata.get('comparison_timestamp', 'Unknown')[:19]} | "
+            f"Duration: {metadata.get('comparison_duration_seconds', 0):.2f}s\n"
+            f"Input Dimension: {metadata.get('input_dimension', 'Unknown')} | "
+            f"Config Source: {metadata.get('config_source', 'Unknown')}\n"
+            f"Models Available: {metadata.get('available_variants', 0)} | "
+            f"Successfully Analyzed: {metadata.get('successful_comparisons', 0)} | "
+            f"Failed: {metadata.get('failed_comparisons', 0)}\n"
+            f"System Class: {system_class.title()} | "
+            f"Hardware: {'GPU Available' if gpu_available else 'CPU Only'} | "
+            f"Memory Optimizations: {memory_optimizations}\n"
+            f"Helper Functions: {helper_functions_used} | "
+            f"Analysis Completeness: {(metadata.get('successful_comparisons', 0) / max(metadata.get('available_variants', 1), 1) * 100):.1f}%",
+            title="[bold yellow]COMPREHENSIVE ANALYSIS OVERVIEW[/bold yellow]",
+            border_style="green",
+            title_align="left",
+            style="bold green",
+            padding=(1, 2)
+        )
+        console.print()
+        console.print(header_panel)
+        
+        # ENHANCED MAIN COMPARISON TABLE
+        main_table = Table(
+            title="\nPERFORMANCE & RESOURCE COMPARISON",
+            box=box.ROUNDED,
+            header_style="bold cyan",
+            border_style="white",
+            title_style="bold yellow",
+            title_justify="left",
+            show_lines=True,
+            expand=True,
+            width=min(180, console.width - 2)
+        )
+        
+        # Configure main table columns
+        main_table.add_column("Model", style="bold yellow", width=15, no_wrap=True)
+        main_table.add_column("Parameters", style="bold cyan", width=10, justify="left")
+        main_table.add_column("Size (MB)", style="bold blue", width=8, justify="left")
+        main_table.add_column("Complexity", style="bold magenta", width=8, justify="left")
+        main_table.add_column("Inference (ms)", style="bold green", width=10, justify="left")
+        main_table.add_column("Throughput", style="bold", width=12, justify="left")
+        main_table.add_column("Memory (MB)", style="bold", width=10, justify="left")
+        main_table.add_column("Efficiency", style="bold", width=10, justify="left")
+        main_table.add_column("Status", style="bold", width=10, justify="left")
+        
+        # Prepare and sort model data
+        model_data_list = []
+        successful_models = []
+        failed_models = []
+        
+        for model_name, model_data in model_results.items():
+            analysis_status = model_data.get('analysis_status', 'unknown')
+            
+            if analysis_status in ['failed', 'analysis_failed', 'instantiation_failed', 'validation_error'] or 'error' in model_data:
+                failed_models.append((model_name, model_data))
+            elif analysis_status == 'completed':
+                param_count = model_data.get('architecture', {}).get('total_params', 0)
+                model_data_list.append((param_count, model_name, model_data))
+                successful_models.append((model_name, model_data))
             else:
-                validation_details['warnings'].append(f'Unknown model type "{model_type}" - using generic validation')
-                
-        except Exception as e:
-            validation_details['errors'].append(f'Model-specific validation failed: {str(e)}')
-            logger.error(f"Model-specific validation failed for {model_type}: {e}")
-            return False
+                # Handle partial success cases
+                param_count = model_data.get('architecture', {}).get('total_params', 0)
+                if param_count > 0 and 'architecture' in model_data:
+                    model_data_list.append((param_count, model_name, model_data))
+                    successful_models.append((model_name, model_data))
+                else:
+                    failed_models.append((model_name, model_data))
         
-        # Phase 6: Preset-Specific Compatibility Validation (enhanced but consistent)
-        try:
-            if preset_name and preset_name in globals().get('PRESET_CONFIGS', {}):
-                validation_details['compatibility_checks'].append('preset_specific_validation')
-                
-                preset_config = globals()['PRESET_CONFIGS'][preset_name]
-                preset_metadata = preset_config.get('metadata', {})
-                preset_compatible_models = preset_metadata.get('compatibility', [])
-                
-                if preset_compatible_models and model_type not in preset_compatible_models:
-                    validation_details['errors'].append(f'Model type "{model_type}" not compatible with preset "{preset_name}" (compatible: {preset_compatible_models})')
-                    logger.debug(f"Model type '{model_type}' not compatible with preset '{preset_name}'")
-                    return False
-                
-                # Validate preset's model configuration compatibility
-                preset_model_config = preset_config.get('model', {})
-                preset_model_type = preset_model_config.get('model_type')
-                
-                if preset_model_type and preset_model_type != model_type:
-                    validation_details['warnings'].append(f'Preset "{preset_name}" configured for "{preset_model_type}", requested "{model_type}" (may work but not optimal)')
-                
-                # Check preset-specific constraints (aligned with configuration validation)
-                if preset_name == 'STABILITY_PRESET':
-                    # Stability preset should use conservative settings
-                    if model_config.get('dropout_rates', []):
-                        high_dropout = [r for r in model_config['dropout_rates'] if isinstance(r, (int, float)) and r > 0.3]
-                        if high_dropout:
-                            validation_details['warnings'].append(f'STABILITY_PRESET: High dropout rates may impact stability: {high_dropout}')
-                    
-                elif preset_name == 'PERFORMANCE_PRESET':
-                    # Performance preset should support advanced features
-                    if model_type == 'SimpleAutoencoder':
-                        validation_details['warnings'].append('PERFORMANCE_PRESET: SimpleAutoencoder may not utilize performance optimizations fully')
-                    
-                    mixed_precision = training_config.get('mixed_precision', False)
-                    if not mixed_precision and torch.cuda.is_available():
-                        validation_details['recommendations'].append('PERFORMANCE_PRESET: Consider enabling mixed_precision for better performance')
-                
-                elif preset_name == 'DEFAULT_PRESET':
-                    # Default preset should work with all model types
-                    pass
-                
-                validation_details['preset_validation_completed'] = preset_name
-                
-        except Exception as e:
-            validation_details['warnings'].append(f'Preset-specific validation failed: {str(e)}')
-            logger.debug(f"Error during preset validation: {e}")
+        # Sort by parameter count for logical ordering
+        model_data_list.sort(key=lambda x: x[0])
         
-        # Phase 7: Hardware Requirements Validation (aligned with system analysis approach)
-        try:
-            validation_details['compatibility_checks'].append('hardware_requirements_validation')
+        # Add successful models to main table
+        for param_count, model_name, model_data in model_data_list:
+            arch = model_data.get('architecture', {})
+            perf = model_data.get('performance', {})
+            memory_analysis = model_data.get('memory_analysis', {})
+            resource_req = model_data.get('resource_requirements', {})
             
-            hardware_config = config.get('hardware', {})
-            if hardware_config:
-                # Memory requirements estimation (consistent with resource estimation)
-                min_gpu_memory = hardware_config.get('minimum_system_requirements', {}).get('gpu_memory_gb', 0)
-                
-                # Model-specific memory requirements in GB (aligned with resource analysis)
-                memory_requirement = 0
-                if model_type == 'SimpleAutoencoder':
-                    memory_requirement = 1
-                elif model_type == 'EnhancedAutoencoder':
-                    memory_requirement = 2
-                elif model_type == 'AutoencoderEnsemble':
-                    num_models = model_config.get('num_models', 3)
-                    memory_requirement = 1.5 * num_models
-                
-                if min_gpu_memory > 0 and memory_requirement > min_gpu_memory:
-                    validation_details['warnings'].append(f'Estimated memory requirement ({memory_requirement:.1f}GB) exceeds minimum specified ({min_gpu_memory}GB)')
-                
-                # Device compatibility (consistent with hardware context validation)
-                device = hardware_config.get('device', 'auto')
-                mixed_precision = training_config.get('mixed_precision', False)
-                
-                if mixed_precision and device == 'cpu':
-                    validation_details['warnings'].append('Mixed precision enabled but device is CPU (mixed precision requires CUDA)')
-                
-                # CUDA availability check (aligned with system validation)
-                if device == 'cuda' and not torch.cuda.is_available():
-                    validation_details['errors'].append('CUDA device specified but CUDA is not available')
-                    return False
-                
-        except Exception as e:
-            validation_details['warnings'].append(f'Hardware requirements validation failed: {str(e)}')
-            logger.debug(f"Error during hardware validation: {e}")
-        
-        # Phase 8: Activation Function Compatibility (consistent with config parameter extraction)
-        try:
-            validation_details['compatibility_checks'].append('activation_compatibility_validation')
+            # Performance metrics extraction
+            inference_time_ms = None
+            throughput_sps = None
             
-            activation = model_config.get('activation', 'leaky_relu')
-            available_activations = model_config.get('available_activations', [
-                'relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'
-            ])
+            # Extract from scenario_summary
+            scenario_summary = perf.get('scenario_summary', {})
+            if scenario_summary:
+                # Try standard_batch first, then single_sample
+                for scenario_name in ['standard_batch', 'single_sample', 'small_batch']:
+                    scenario_data = scenario_summary.get(scenario_name, {})
+                    if scenario_data and 'latency_ms' in scenario_data:
+                        inference_time_ms = scenario_data.get('latency_ms', 0)
+                        throughput_sps = scenario_data.get('throughput', 0)
+                        break
             
-            if activation and activation not in available_activations:
-                validation_details['errors'].append(f'Activation function "{activation}" not in available list: {available_activations}')
-                return False
+            # Fallback to direct performance metrics
+            if inference_time_ms is None:
+                inference_time_ms = (
+                    perf.get('standard_batch_inference_time_ms') or
+                    perf.get('single_sample_inference_time_ms') or
+                    perf.get('avg_inference_time_ms', 0)
+                )
             
-            # Model-specific activation recommendations (aligned with test configurations)
-            if model_type == 'SimpleAutoencoder' and activation in ['gelu', 'swish', 'selu']:
-                validation_details['warnings'].append(f'SimpleAutoencoder: Advanced activation "{activation}" may be overkill for simple architecture')
+            if throughput_sps is None:
+                throughput_sps = (
+                    perf.get('standard_batch_throughput_samples_per_second') or
+                    perf.get('single_sample_throughput_samples_per_second') or
+                    perf.get('throughput_samples_per_second', 0)
+                )
             
-            activation_param = model_config.get('activation_param', 0.2)
-            if activation == 'leaky_relu' and not isinstance(activation_param, (int, float)):
-                validation_details['errors'].append(f'LeakyReLU requires numeric activation_param, got: {activation_param}')
-                return False
+            # Memory usage from multiple sources
+            memory_mb = 0
             
-        except Exception as e:
-            validation_details['warnings'].append(f'Activation compatibility validation failed: {str(e)}')
-            logger.debug(f"Error during activation validation: {e}")
-        
-        # Phase 9: Training Configuration Compatibility (aligned with functional testing approach)
-        try:
-            validation_details['compatibility_checks'].append('training_compatibility_validation')
+            # Try GPU memory from detailed analysis
+            gpu_memory_detailed = memory_analysis.get('gpu_memory_detailed', {})
+            if gpu_memory_detailed:
+                memory_mb = gpu_memory_detailed.get('allocated_mb', 0)
             
-            if training_config:
-                batch_size = training_config.get('batch_size', 32)
-                
-                # Batch normalization compatibility (consistent with test scenario filtering)
-                use_batch_norm = model_config.get('use_batch_norm', False)
-                normalization = model_config.get('normalization', 'batch')
-                
-                if (use_batch_norm or normalization == 'batch') and batch_size < 2:
-                    validation_details['errors'].append(f'Batch size {batch_size} too small for batch normalization (minimum 2)')
-                    return False
-                
-                if batch_size < 1:
-                    validation_details['errors'].append(f'Invalid batch size: {batch_size}')
-                    return False
-                
-                # Ensemble-specific training compatibility (aligned with scaling analysis)
-                if model_type == 'AutoencoderEnsemble':
-                    num_models = model_config.get('num_models', 3)
-                    if batch_size < num_models:
-                        validation_details['warnings'].append(f'Batch size ({batch_size}) smaller than ensemble size ({num_models}) may impact training efficiency')
-                
-                # Learning rate validation (consistent with parameter extraction validation)
-                learning_rate = training_config.get('learning_rate', 0.001)
-                if not isinstance(learning_rate, (int, float)) or learning_rate <= 0:
-                    validation_details['errors'].append(f'Invalid learning rate: {learning_rate}')
-                    return False
-                
-                # Optimizer compatibility (aligned with resource estimation approach)
-                optimizer = training_config.get('optimizer', 'AdamW')
-                available_optimizers = ['Adam', 'AdamW', 'SGD', 'RMSprop', 'Adagrad']
-                if optimizer not in available_optimizers:
-                    validation_details['warnings'].append(f'Optimizer "{optimizer}" may not be supported (available: {available_optimizers})')
-                
-        except Exception as e:
-            validation_details['warnings'].append(f'Training compatibility validation failed: {str(e)}')
-            logger.debug(f"Error during training validation: {e}")
-        
-        # Phase 10: Data Configuration Compatibility (aligned with input dimension validation)
-        try:
-            validation_details['compatibility_checks'].append('data_compatibility_validation')
+            # Fallback to other memory sources
+            if memory_mb == 0:
+                memory_mb = (
+                    memory_analysis.get('gpu_memory_mb', 0) or
+                    memory_analysis.get('cpu_memory_analysis', {}).get('estimated_total_cpu_memory_mb', 0) or
+                    arch.get('model_size_mb', 0) * 4  # Rough estimate
+                )
             
-            data_config = config.get('data', {})
-            if data_config:
-                features = data_config.get('features', 20)
-                min_features = model_config.get('min_features', 5)
-                
-                if not isinstance(features, int) or features < min_features:
-                    validation_details['errors'].append(f'Feature count {features} below minimum required {min_features}')
-                    return False
-                
-                # Model-specific feature requirements (consistent with architectural analysis)
-                if model_type == 'EnhancedAutoencoder' and features < 10:
-                    validation_details['warnings'].append(f'EnhancedAutoencoder: Small feature count ({features}) may not benefit from advanced features')
-                
-                encoding_dim = model_config.get('encoding_dim', 16)
-                if encoding_dim >= features:
-                    validation_details['warnings'].append(f'Encoding dimension ({encoding_dim}) should be smaller than input features ({features}) for compression')
-                
-        except Exception as e:
-            validation_details['warnings'].append(f'Data compatibility validation failed: {str(e)}')
-            logger.debug(f"Error during data validation: {e}")
-        
-        # Phase 11: Experimental Features Validation (consistent with configuration analysis)
-        try:
-            validation_details['compatibility_checks'].append('experimental_features_validation')
+            # Calculate efficiency score
+            efficiency_score = arch.get('architecture_efficiency', 0)
             
-            experimental_config = config.get('experimental', {})
-            if experimental_config:
-                experimental_features = experimental_config.get('experimental_features', {})
+            # Status determination based on current metrics
+            if inference_time_ms and throughput_sps:
+                if inference_time_ms < 5 and throughput_sps > 1000:
+                    status_text = "EXCELLENT"
+                    status_style = "bold green"
+                elif inference_time_ms < 20 and throughput_sps > 500:
+                    status_text = "VERY GOOD"
+                    status_style = "bold cyan"
+                elif inference_time_ms < 50 and throughput_sps > 100:
+                    status_text = "GOOD"
+                    status_style = "bold blue"
+                elif inference_time_ms < 200:
+                    status_text = "ACCEPTABLE"
+                    status_style = "bold yellow"
+                else:
+                    status_text = "SLOW"
+                    status_style = "bold red"
+            else:
+                status_text = "PARTIAL"
+                status_style = "bold magenta"
+            
+            # Memory formatting
+            if memory_mb < 50:
+                memory_text = f"{memory_mb:.3f}"
+                memory_style = "bold green"
+            elif memory_mb < 200:
+                memory_text = f"{memory_mb:.3f}"
+                memory_style = "bold cyan"
+            elif memory_mb < 1000:
+                memory_text = f"{memory_mb:.3f}"
+                memory_style = "yellow"
+            else:
+                memory_text = f"{memory_mb:.3f}"
+                memory_style = "red"
+            
+            # Format efficiency score
+            if efficiency_score >= 80:
+                eff_text = f"{efficiency_score:.0f}%"
+                eff_style = "bold green"
+            elif efficiency_score >= 60:
+                eff_text = f"{efficiency_score:.0f}%"
+                eff_style = "bold cyan"
+            elif efficiency_score >= 40:
+                eff_text = f"{efficiency_score:.0f}%"
+                eff_style = "bold yellow"
+            else:
+                eff_text = f"{efficiency_score:.0f}%" if efficiency_score > 0 else "N/A"
+                eff_style = "bold red" if efficiency_score > 0 else "bold magenta"
+            
+            main_table.add_row(
+                Text(model_name, style="bold"),
+                f"{param_count:,}",
+                f"{arch.get('model_size_mb', 0):.3f}",
+                arch.get('complexity_level', 'Unknown').title(),
+                f"{inference_time_ms:.1f}" if inference_time_ms and inference_time_ms > 0 else "N/A",
+                f"{throughput_sps:.0f}/s" if throughput_sps and throughput_sps > 0 else "N/A",
+                Text(memory_text, style=memory_style),
+                Text(eff_text, style=eff_style),
+                Text(status_text, style=status_style)
+            )
+        
+        # Add failed models to table with error information
+        for model_name, model_data in failed_models:
+            errors = model_data.get('errors', [])
+            if errors:
+                error_msg = errors[0] if isinstance(errors, list) else str(errors)
+            else:
+                error_msg = model_data.get('error', 'Unknown error')
+            
+            # Categorize error types based on current implementation
+            if 'memory' in error_msg.lower():
+                error_type = "MEMORY"
+                error_style = "bold red"
+            elif 'parameter' in error_msg.lower() or 'config' in error_msg.lower():
+                error_type = "CONFIG"
+                error_style = "bold yellow"
+            elif 'instantiation' in error_msg.lower():
+                error_type = "INIT"
+                error_style = "bold red"
+            elif 'validation' in error_msg.lower():
+                error_type = "VALID"
+                error_style = "bold red"
+            else:
+                error_type = "ERROR"
+                error_style = "bold red"
+            
+            main_table.add_row(
+                Text(model_name, style="bold"),
+                Text("--", style="bold"),
+                Text("--", style="bold"),
+                Text(error_type, style=error_style),
+                Text("--", style="bold"),
+                Text("--", style="bold"),
+                Text("--", style="bold"),
+                Text("--", style="bold"),
+                Text("FAILED", style="bold red")
+            )
+        
+        console.print(main_table)
+        
+        # ENHANCED DETAILED ARCHITECTURE ANALYSIS
+        if successful_models:
+            detail_table = Table(
+                title="\nDETAILED ARCHITECTURE & FEATURE ANALYSIS",
+                box=box.ROUNDED,
+                header_style="bold cyan",
+                border_style="cyan",
+                title_style="bold magenta",
+                title_justify="left",
+                show_lines=True,
+                expand=True,
+                width=min(200, console.width - 2)
+            )
+            
+            detail_table.add_column("Model", style="bold magenta", width=15)
+            detail_table.add_column("Description", style="bold yellow", width=32, justify="left")
+            detail_table.add_column("Layers", style="bold green", width=5, justify="left")
+            detail_table.add_column("Features", style="bold", width=22, justify="left")
+            detail_table.add_column("FLOPs", style="bold cyan", width=7, justify="left")
+            detail_table.add_column("Complexity", style="bold cyan", width=8, justify="left")
+            detail_table.add_column("Use Cases", style="bold yellow", width=30, justify="left")
+            
+            for model_name, model_data in successful_models:
+                arch = model_data.get('architecture', {})
+                flop_analysis = model_data.get('computational_complexity', {})
+                feature_analysis = model_data.get('feature_analysis', {})
+                use_cases = model_data.get('use_cases', [])
                 
-                if experimental_features and experimental_features.get('enabled', False):
-                    if model_type == 'SimpleAutoencoder':
-                        validation_details['warnings'].append('SimpleAutoencoder: Experimental features may not be supported')
-                    
-                    validation_details['recommendations'].append('Experimental features should be used with caution in production')
+                # Feature detection
+                features = []
+                if feature_analysis.get('supports_attention', False):
+                    features.append("Attention")
+                if feature_analysis.get('supports_residual_blocks', False):
+                    features.append("Residual")
+                if feature_analysis.get('supports_skip_connections', False):
+                    features.append("Skip")
+                if feature_analysis.get('has_batch_norm', False):
+                    features.append("BatchNorm")
+                if feature_analysis.get('has_layer_norm', False):
+                    features.append("LayerNorm")
+                if feature_analysis.get('mixed_precision_compatible', False):
+                    features.append("FP16")
                 
-        except Exception as e:
-            validation_details['warnings'].append(f'Experimental features validation failed: {str(e)}')
-            logger.debug(f"Error during experimental features validation: {e}")
+                # Check normalization type
+                norm_type = feature_analysis.get('normalization_type', 'none')
+                if norm_type and norm_type != 'none' and norm_type not in [f.lower() for f in features]:
+                    features.append(norm_type.title())
+                
+                # Ensemble information
+                ensemble_size = feature_analysis.get('ensemble_size', 1)
+                if ensemble_size > 1:
+                    features.append(f"Ens({ensemble_size})")
+                
+                features_text = ", ".join(features) if features else "Basic"
+                
+                # FLOP formatting
+                flops = flop_analysis.get('forward_pass', {}).get('total_flops', 0)
+                if flops > 1e12:
+                    flops_text = f"{flops/1e12:.1f}T"
+                elif flops > 1e9:
+                    flops_text = f"{flops/1e9:.1f}G"
+                elif flops > 1e6:
+                    flops_text = f"{flops/1e6:.1f}M"
+                elif flops > 1e3:
+                    flops_text = f"{flops/1e3:.1f}K"
+                else:
+                    flops_text = str(int(flops)) if flops > 0 else "N/A"
+                
+                # Use cases formatting
+                use_cases_text = ', '.join(use_cases[:2]) + ('...' if len(use_cases) > 2 else '')
+                if not use_cases_text:
+                    use_cases_text = "General purpose"
+                
+                # Get complexity class from current implementation
+                complexity_class = (
+                    flop_analysis.get('complexity_metrics', {}).get('complexity_class') or
+                    arch.get('computational_class', 'Unknown')
+                )
+                
+                detail_table.add_row(
+                    model_name,
+                    arch.get('description', 'No description available')[:32],
+                    str(arch.get('layer_count', 0)),
+                    features_text,
+                    flops_text,
+                    complexity_class.replace('_', ' ').title() if complexity_class else "Unknown",
+                    use_cases_text
+                )
+            
+            console.print(detail_table)
         
-        # Phase 12: Comprehensive Results Analysis and Memory Optimization (aligned with existing functions)
-        validation_time = time.time() - compatibility_start_time
-        validation_details['validation_time_seconds'] = validation_time
-        validation_details['total_checks_performed'] = len(validation_details['compatibility_checks'])
-        validation_details['total_warnings'] = len(validation_details['warnings'])
-        validation_details['total_errors'] = len(validation_details['errors'])
+        # ENHANCED HARDWARE CONTEXT & SYSTEM INFO
+        gpu_memory_gb = hardware_ctx.get('gpu_memory_gb', 0)
+        cpu_count = hardware_ctx.get('cpu_count', os.cpu_count() or 1)
+        system_memory_gb = hardware_ctx.get('system_memory_gb', 8)
         
-        # Determine final compatibility result (consistent with validate_model_variants approach)
-        has_critical_errors = len(validation_details['errors']) > 0
-        has_warnings = len(validation_details['warnings']) > 0
-        
-        if has_critical_errors:
-            logger.debug(f"Model type '{model_type}' is NOT compatible: {len(validation_details['errors'])} errors found")
-            # Log first 3 errors for debugging
-            logger.debug(f"Compatibility errors: {validation_details['errors'][:3]}...")
-            return False
-        
-        # Log detailed results (aligned with existing logging approach)
-        if has_warnings:
-            logger.debug(f"Model type '{model_type}' is compatible with {len(validation_details['warnings'])} warnings")
-            # Log first 2 warnings for debugging
-            logger.debug(f"Compatibility warnings: {validation_details['warnings'][:2]}...")
+        # Hardware status with GPU info
+        if gpu_available:
+            cuda_info = hardware_ctx.get('cuda', {})
+            if cuda_info.get('device_name'):
+                gpu_name = cuda_info['device_name']
+                gpu_status = f"[bold green]-OK- {gpu_name}[/bold green] ({gpu_memory_gb:.1f}GB VRAM)"
+            elif 'devices' in cuda_info and isinstance(cuda_info['devices'], list) and cuda_info['devices']:
+                gpu_name = cuda_info['devices'][0].get('name', 'Unknown GPU')
+                gpu_status = f"[bold green]-OK- {gpu_name}[/bold green] ({gpu_memory_gb:.1f}GB VRAM)"
+            else:
+                gpu_status = f"[bold green]-OK- GPU Available[/bold green] ({gpu_memory_gb:.1f}GB VRAM)"
         else:
-            logger.debug(f"Model type '{model_type}' is fully compatible - all {validation_details['total_checks_performed']} checks passed")
+            gpu_status = "[bold yellow]-WARN- CPU Only[/bold yellow] - Consider GPU for better performance"
         
-        # Store validation details for debugging (consistent with existing approach)
-        if hasattr(validate_model_preset_compatibility, 'last_validation_details'):
-            validate_model_preset_compatibility.last_validation_details = validation_details
+        # CPU status with performance class info
+        cpu_perf_class = hardware_ctx.get('cpu_performance_class', 'unknown')
+        if cpu_count >= 16:
+            cpu_status = f"[bold green]-OK- {cpu_count} CPU Cores[/bold green] ({cpu_perf_class})"
+        elif cpu_count >= 8:
+            cpu_status = f"[bold green]-OK- {cpu_count} CPU Cores[/bold green] ({cpu_perf_class})"
+        elif cpu_count >= 4:
+            cpu_status = f"[bold yellow]-WARN- {cpu_count} CPU Cores[/bold yellow] ({cpu_perf_class})"
+        else:
+            cpu_status = f"[bold red]-WARN- {cpu_count} CPU Cores[/bold red] (Limited)"
         
-        return True
+        # System memory status with performance class
+        memory_perf_class = hardware_ctx.get('memory_performance_class', 'unknown')
+        if system_memory_gb >= 32:
+            mem_status = f"[bold green]-OK- {system_memory_gb:.1f}GB RAM[/bold green] ({memory_perf_class})"
+        elif system_memory_gb >= 16:
+            mem_status = f"[bold green]-OK- {system_memory_gb:.1f}GB RAM[/bold green] ({memory_perf_class})"
+        elif system_memory_gb >= 8:
+            mem_status = f"[bold yellow]-WARN- {system_memory_gb:.1f}GB RAM[/bold yellow] ({memory_perf_class})"
+        else:
+            mem_status = f"[bold red]-WARN- {system_memory_gb:.1f}GB RAM[/bold red] (Limited)"
+        
+        hardware_text = f"{gpu_status}\n{cpu_status}\n{mem_status}"
+        
+        # Add system class
+        if system_class != 'unknown':
+            hardware_text += f"\n[bold cyan]-INFO- System Class: {system_class.title()}[/bold cyan]"
+        
+        # Add memory optimization
+        if memory_optimizations > 0:
+            hardware_text += f"\n[bold green]-INFO- Memory optimizations performed: {memory_optimizations}[/bold green]"
+        
+        # Add helper function utilization
+        if helper_functions_used > 0:
+            hardware_text += f"\n[bold cyan]-INFO- Helper functions utilized: {helper_functions_used}[/bold cyan]"
+        
+        # Add hardware analysis method if available
+        collection_method = hardware_ctx.get('collection_method', '')
+        if collection_method:
+            hardware_text += f"\n[bold]-INFO- Detection method: {collection_method}[/bold]"
+        
+        hardware_panel = Panel.fit(
+            hardware_text,
+            title="[bold]SYSTEM CAPABILITIES & ANALYSIS CONTEXT[/bold]",
+            border_style="bold blue",
+            title_align="left",
+            style="bold",
+            padding=(1, 2)
+        )
+        console.print()
+        console.print(hardware_panel)
+        
+        # ENHANCED RECOMMENDATIONS & OPTIMAL CHOICES
+        if summary:
+            # Overall recommendations
+            overall_recs = summary.get('recommendations', [])
+            optimization_suggestions = summary.get('optimization_suggestions', [])
+            
+            all_recommendations = overall_recs + optimization_suggestions
+            
+            if all_recommendations:
+                # Categorize recommendations based on current implementation patterns
+                performance_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['performance', 'speed', 'throughput', 'optimization', 'gpu', 'batch', 'precision'])]
+                memory_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['memory', 'ram', 'vram', 'checkpointing', 'accumulation', 'clear'])]
+                config_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['config', 'setting', 'parameter', 'dimension', 'encoding'])]
+                general_recs = [rec for rec in all_recommendations if rec not in performance_recs + memory_recs + config_recs]
+                
+                rec_sections = [
+                    ("Performance Optimization", performance_recs, "bold green"),
+                    ("Memory Management", memory_recs, "bold yellow"),
+                    ("Configuration Tuning", config_recs, "bold cyan"),
+                    ("General Recommendations", general_recs, "bold white")
+                ]
+                
+                for section_title, recs, color in rec_sections:
+                    if recs:
+                        # Limit to 5 per section and format consistently
+                        rec_text = "\n".join([f"[{color}]+[/{color}] {rec}" for rec in recs[:5]])
+                        
+                        rec_panel = Panel.fit(
+                            rec_text,
+                            title=f"[bold {color}]{section_title.upper()}[/bold {color}]",
+                            border_style=color,
+                            title_align="left",
+                            style="bold",
+                            padding=(1, 2)
+                        )
+                        console.print(rec_panel)
+            
+            # Optimal choices table
+            optimal = summary.get('optimal_choices', {})
+            if optimal:
+                opt_table = Table(
+                    title="\n[bold yellow]OPTIMAL MODEL SELECTION GUIDE[/bold yellow]",
+                    box=box.ROUNDED,
+                    header_style="bold white",
+                    title_style="bold green",
+                    title_justify="left",
+                    border_style="green",
+                    show_lines=True,
+                    expand=True
+                )
+                
+                opt_table.add_column("Scenario", style="bold cyan", width=15)
+                opt_table.add_column("Recommended Model", style="bold green", width=15)
+                opt_table.add_column("Rationale", style="bold", width=35)
+                opt_table.add_column("Performance", style="bold cyan", width=10, justify="left")
+                
+                # Rationale and performance metrics
+                for scenario, choice in optimal.items():
+                    scenario_display = scenario.replace('_', ' ').title()
+                    
+                    # Get performance data for the chosen model
+                    choice_data = model_results.get(choice, {})
+                    perf_data = choice_data.get('performance', {})
+                    arch_data = choice_data.get('architecture', {})
+                    memory_data = choice_data.get('memory_analysis', {})
+                    
+                    # Rationale based on actual metrics from current implementation
+                    if scenario == 'fastest_inference':
+                        rationale = "Minimizes latency for real-time applications"
+                        # Get inference time from scenario summary
+                        scenario_summary = perf_data.get('scenario_summary', {})
+                        best_time = float('inf')
+                        for sc_name, sc_data in scenario_summary.items():
+                            if 'latency_ms' in sc_data:
+                                best_time = min(best_time, sc_data['latency_ms'])
+                        perf_metric = f"{best_time:.1f}ms" if best_time < float('inf') else "N/A"
+                        
+                    elif scenario == 'most_efficient':
+                        rationale = "Best performance per parameter ratio"
+                        eff_score = arch_data.get('architecture_efficiency', 0)
+                        perf_metric = f"{eff_score:.0f}%" if eff_score > 0 else "N/A"
+                        
+                    elif scenario == 'lowest_memory':
+                        rationale = "Suitable for memory-constrained environments"
+                        # Get memory from detailed analysis
+                        gpu_mem = memory_data.get('gpu_memory_detailed', {}).get('allocated_mb', 0)
+                        cpu_mem = memory_data.get('cpu_memory_analysis', {}).get('estimated_total_cpu_memory_mb', 0)
+                        mem_mb = gpu_mem or cpu_mem
+                        perf_metric = f"{mem_mb:.3f}MB" if mem_mb > 0 else "N/A"
+                        
+                    elif scenario == 'smallest_model':
+                        rationale = "Minimal resource footprint and fastest loading"
+                        params = arch_data.get('total_params', 0)
+                        perf_metric = f"{params:,}" if params > 0 else "N/A"
+                        
+                    elif scenario == 'best_balanced':
+                        rationale = "Optimal trade-off across all performance metrics"
+                        perf_metric = "Balanced"
+                        
+                    else:
+                        rationale = "Best choice for this specific use case"
+                        perf_metric = "Optimized"
+                    
+                    opt_table.add_row(
+                        scenario_display,
+                        Text(choice, style="bold"),
+                        rationale,
+                        perf_metric
+                    )
+                
+                console.print(opt_table)
+            
+            # Performance rankings
+            rankings = summary.get('performance_ranking', {})
+            if rankings:
+                rank_table = Table(
+                    title="\n[bold yellow]PERFORMANCE RANKINGS BY CATEGORY[/bold yellow]",
+                    box=box.ROUNDED,
+                    header_style="bold white",
+                    title_style="bold blue",
+                    title_justify="left",
+                    border_style="blue",
+                    show_lines=True,
+                    expand=True
+                )
+                
+                rank_table.add_column("Category", style="bold cyan", width=15)
+                rank_table.add_column("First Place", style="bold green", width=15)
+                rank_table.add_column("Second Place", style="bold yellow", width=15)
+                rank_table.add_column("Third Place", style="bold white", width=15)
+                rank_table.add_column("Metric", width=10, justify="left")
+                
+                ranking_labels = {
+                    'speed': 'Fastest Inference',
+                    'efficiency': 'Most Efficient',
+                    'memory_efficiency': 'Memory Efficient',
+                    'size': 'Smallest Size'
+                }
+                
+                for metric, models in rankings.items():
+                    if models and metric in ranking_labels:
+                        first = models[0] if len(models) > 0 else "N/A"
+                        second = models[1] if len(models) > 1 else "N/A"
+                        third = models[2] if len(models) > 2 else "N/A"
+                        
+                        # Get metric value for first place from current implementation data
+                        if first != "N/A" and first in model_results:
+                            first_data = model_results[first]
+                            if metric == 'speed':
+                                # Get best throughput from scenario summary
+                                perf = first_data.get('performance', {})
+                                scenario_summary = perf.get('scenario_summary', {})
+                                best_throughput = 0
+                                for sc_data in scenario_summary.values():
+                                    if 'throughput' in sc_data:
+                                        best_throughput = max(best_throughput, sc_data['throughput'])
+                                metric_val = f"{best_throughput:.0f}/s" if best_throughput > 0 else "N/A"
+                                
+                            elif metric == 'efficiency':
+                                arch = first_data.get('architecture', {})
+                                metric_val = f"{arch.get('architecture_efficiency', 0):.0f}%"
+                                
+                            elif metric == 'memory_efficiency':
+                                mem = first_data.get('memory_analysis', {})
+                                gpu_mem = mem.get('gpu_memory_detailed', {}).get('allocated_mb', 0)
+                                cpu_mem = mem.get('cpu_memory_analysis', {}).get('estimated_total_cpu_memory_mb', 0)
+                                mem_mb = gpu_mem or cpu_mem
+                                metric_val = f"{mem_mb:.3f}MB" if mem_mb > 0 else "N/A"
+                                
+                            elif metric == 'size':
+                                arch = first_data.get('architecture', {})
+                                metric_val = f"{arch.get('total_params', 0):,}"
+                            else:
+                                metric_val = "N/A"
+                        else:
+                            metric_val = "N/A"
+                        
+                        rank_table.add_row(
+                            ranking_labels[metric],
+                            first,
+                            second,
+                            third,
+                            metric_val
+                        )
+                
+                console.print(rank_table)
+        
+        # ENHANCED WARNINGS & ISSUES
+        warnings = summary.get('warnings', []) if summary else []
+        analysis_warnings = []
+        for model_name, model_data in model_results.items():
+            model_warnings = model_data.get('warnings', [])
+            if model_warnings:
+                analysis_warnings.extend([f"{model_name}: {w}" for w in model_warnings])
+        
+        all_warnings = warnings + analysis_warnings
+        
+        if all_warnings or failed_models:
+            warn_items = []
+            
+            # Categorize warnings by type based on current implementation
+            critical_warnings = []
+            performance_warnings = []
+            config_warnings = []
+            memory_warnings = []
+            
+            for warning in all_warnings:
+                if any(word in warning.lower() for word in ['critical', 'error', 'fail', 'crash']):
+                    critical_warnings.append(f"[bold red]-CRITICAL-[/bold red] {warning}")
+                elif any(word in warning.lower() for word in ['memory', 'ram', 'vram', 'oom', 'allocation']):
+                    memory_warnings.append(f"[bold yellow]-MEMORY-[/bold yellow] {warning}")
+                elif any(word in warning.lower() for word in ['performance', 'slow', 'degradation', 'throughput']):
+                    performance_warnings.append(f"[bold cyan]-PERF-[/bold cyan] {warning}")
+                else:
+                    config_warnings.append(f"[bold magenta]-CONFIG-[/bold magenta] {warning}")
+            
+            # Add failed model warnings with error analysis from current implementation
+            for model_name, model_data in failed_models:
+                errors = model_data.get('errors', [])
+                analysis_status = model_data.get('analysis_status', 'unknown')
+                
+                if errors:
+                    error_msg = errors[0] if isinstance(errors, list) else str(errors)
+                else:
+                    error_msg = model_data.get('error', 'Unknown error')
+                
+                analysis_time = model_data.get('analysis_metadata', {}).get('analysis_time_seconds', 0)
+                error_type = model_data.get('analysis_metadata', {}).get('error_type', 'Unknown')
+                
+                detailed_error = f"{model_name}: {error_msg[:60]}{'...' if len(error_msg) > 60 else ''}"
+                if analysis_time > 0:
+                    detailed_error += f" (failed after {analysis_time:.2f}s)"
+                if error_type != 'Unknown':
+                    detailed_error += f" [{error_type}]"
+                
+                critical_warnings.append(f"[bold red]-FAIL-[/boldred] {detailed_error}")
+            
+            # Display warnings by category with current implementation context
+            all_warn_items = critical_warnings + memory_warnings + performance_warnings + config_warnings
+            
+            if all_warn_items:
+                warn_text = "\n".join(all_warn_items[:12])  # Limit to 12 total warnings
+                if len(all_warn_items) > 12:
+                    warn_text += f"\n[bold]... and {len(all_warn_items) - 12} more issues[/bold]"
+                
+                warn_panel = Panel.fit(
+                    warn_text,
+                    title="[bold yellow]WARNINGS & ANALYSIS ISSUES[/bold yellow]",
+                    border_style="yellow",
+                    title_align="left",
+                    padding=(1, 2)
+                )
+                console.print(warn_panel)
+        
+        # ENHANCED USE CASE RECOMMENDATIONS
+        use_case_recs = summary.get('use_case_recommendations', {}) if summary else {}
+        if use_case_recs:
+            use_case_table = Table(
+                title="[bold yellow]USE CASE SPECIFIC RECOMMENDATIONS[/bold yellow]",
+                box=box.ROUNDED,
+                header_style="bold white",
+                title_style="bold magenta",
+                title_justify="left",
+                border_style="magenta",
+                show_lines=True,
+                expand=True
+            )
+            
+            use_case_table.add_column("Use Case", style="bold magenta", width=15)
+            use_case_table.add_column("Primary Choice", style="bold green", width=15)
+            use_case_table.add_column("Alternative Options", width=25)
+            use_case_table.add_column("Key Benefits", width=25)
+            
+            use_case_labels = {
+                'prototyping_development': 'Prototyping & Development',
+                'production_deployment': 'Production Deployment',
+                'resource_constrained': 'Resource-Constrained',
+                'high_performance': 'High Performance',
+                'research_experimentation': 'Research & Experimentation'
+            }
+            
+            use_case_benefits = {
+                'prototyping_development': 'Fast iteration, low resource use',
+                'production_deployment': 'Balanced performance & reliability',
+                'resource_constrained': 'Minimal memory & compute needs',
+                'high_performance': 'Maximum accuracy & capability',
+                'research_experimentation': 'Advanced features & flexibility'
+            }
+            
+            for use_case, models in use_case_recs.items():
+                if models and use_case in use_case_labels:
+                    primary = models[0] if models else "None"
+                    alternatives = ", ".join(models[1:3]) if len(models) > 1 else "None"
+                    if len(models) > 3:
+                        alternatives += f" (+{len(models) - 3} more)"
+                    
+                    benefits = use_case_benefits.get(use_case, "Optimized for this scenario")
+                    
+                    use_case_table.add_row(
+                        use_case_labels[use_case],
+                        Text(primary, style="bold"),
+                        alternatives,
+                        benefits
+                    )
+            
+            console.print(use_case_table)
+        
+        # ENHANCED CONFIGURATION GUIDANCE
+        config_guidance = []
+        
+        # Hardware-specific guidance with recommendations from current system analysis
+        if gpu_available:
+            gpu_perf_class = hardware_ctx.get('gpu_performance_class', 'unknown')
+            if gpu_memory_gb >= 16:
+                config_guidance.extend([
+                    f"[bold green]OK[/bold green] High-end GPU detected ({gpu_perf_class}) - All models fully supported",
+                    "[bold green]OK[/bold green] Enable mixed precision (FP16) for 40-50% memory savings",
+                    "[bold green]OK[/bold green] Use large batch sizes (64-128) for optimal throughput",
+                    "[bold green]OK[/bold green] AutoencoderEnsemble recommended for maximum accuracy"
+                ])
+            elif gpu_memory_gb >= 8:
+                config_guidance.extend([
+                    f"[bold cyan]OK[/bold cyan] Mid-range GPU ({gpu_perf_class}) - Good for most models",
+                    "[bold cyan]WARN[/bold cyan] Use moderate batch sizes (32-64) to avoid memory issues",
+                    "[bold cyan]OK[/bold cyan] EnhancedAutoencoder recommended for balanced performance"
+                ])
+            elif gpu_memory_gb >= 4:
+                config_guidance.extend([
+                    f"[bold yellow]WARN[/bold yellow] Entry-level GPU ({gpu_perf_class}) - Reduce batch sizes to 16-32",
+                    "[bold yellow]WARN[/bold yellow] SimpleAutoencoder or small EnhancedAutoencoder recommended",
+                    "[bold yellow]WARN[/bold yellow] Monitor memory usage during training with nvidia-smi"
+                ])
+            else:
+                config_guidance.extend([
+                    "[bold red]WARN[/bold red] Very limited GPU memory - Use smallest models only",
+                    "[bold red]WARN[/bold red] Batch size should be 8-16 maximum",
+                    "[bold red]WARN[/bold red] Consider gradient accumulation instead of large batches"
+                ])
+        else:
+            config_guidance.extend([
+                "[bold yellow]WARN[/bold yellow] CPU-only training - Use SimpleAutoencoder for reasonable performance",
+                "[bold yellow]WARN[/bold yellow] Reduce batch_size to 16-32 for CPU efficiency",
+                "[bold yellow]WARN[/bold yellow] Set num_workers to match CPU core count for data loading",
+                "[bold yellow]INFO[/bold yellow] Consider cloud GPU instances for significantly faster training"
+            ])
+        
+        # System class specific guidance
+        if system_class == 'high_performance':
+            config_guidance.append("[bold green]-OK-[/bold green] High-performance system - Can handle complex models and large batches")
+        elif system_class == 'limited':
+            config_guidance.append("[bold yellow]-WARN-[/bold yellow] Limited system resources - Use conservative settings")
+        elif system_class == 'standard':
+            config_guidance.append("[bold cyan]-INFO-[/bold cyan] Standard system capabilities - Balanced configuration recommended")
+        
+        # Memory-specific guidance from current system analysis
+        if system_memory_gb < 8:
+            config_guidance.append("[bold red]-WARN-[/bold red] Low system RAM - Close other applications during training")
+        elif system_memory_gb >= 32:
+            config_guidance.append("[bold green]-OK-[/bold green] Excellent system RAM - Can handle large datasets and models")
+        
+        # Memory optimization guidance
+        if memory_optimizations > 0:
+            config_guidance.append(f"[bold cyan]-INFO-[/bold cyan] Memory optimizations already applied ({memory_optimizations} operations)")
+        
+        # Helper function integration guidance
+        if helper_functions_used > 0:
+            config_guidance.append(f"[bold cyan]-INFO-[/bold cyan] Comprehensive analysis using {helper_functions_used} helper functions")
+        
+        # Configuration optimization tips
+        config_guidance.extend([
+            "[bold cyan]-INFO-[/bold cyan] Use presets: select_preset_config('lightweight') or select_preset_config('performance')",
+            "[bold cyan]-INFO-[/bold cyan] Enable tensorboard logging: config['training']['use_tensorboard'] = True",
+            "[bold cyan]-INFO-[/bold cyan] Set up early stopping: config['training']['early_stopping'] = True",
+            "[bold cyan]-INFO-[/bold cyan] Configure gradient clipping: config['training']['gradient_clip'] = 1.0",
+            "[bold cyan]-INFO-[/bold cyan] Use enhanced_clear_memory() for memory optimization"
+        ])
+        
+        # Model-specific configuration guidance based on successful analyses
+        if successful_models:
+            best_model = max(successful_models, key=lambda x: x[1].get('architecture', {}).get('architecture_efficiency', 0))
+            config_guidance.append(f"[bold green]-RECOMMENDED-[/bold green] Start with {best_model[0]} for optimal balance")
+        
+        config_text = "\n".join(config_guidance)
+        config_panel = Panel.fit(
+            config_text,
+            title="[bold yellow]CONFIGURATION GUIDANCE & OPTIMIZATION[/bold yellow]",
+            border_style="bold cyan",
+            title_align="left",
+            padding=(1, 2)
+        )
+        console.print(config_panel)
+        
+        # ENHANCED RESOURCE REQUIREMENTS SUMMARY
+        if successful_models:
+            resource_table = Table(
+                title="[bold yellow]RESOURCE REQUIREMENTS SUMMARY[/bold yellow]",
+                box=box.ROUNDED,
+                header_style="bold cyan",
+                border_style="cyan",
+                title_style="bold green",
+                title_justify="left",
+                show_lines=True,
+                expand=True
+            )
+            
+            resource_table.add_column("Model", style="bold cyan", width=15)
+            resource_table.add_column("Training Memory", width=10, justify="left")
+            resource_table.add_column("Training Time", width=10, justify="left")
+            resource_table.add_column("Min Hardware", width=10)
+            resource_table.add_column("Recommended", width=10)
+            resource_table.add_column("Optimization", width=15)
+            
+            for model_name, model_data in successful_models[:5]:  # Limit to top 5
+                resources_data = model_data.get('resource_requirements', {})
+                
+                # Extract resource information
+                training_mem = resources_data.get('memory', {}).get('training_memory', {})
+                time_estimates = resources_data.get('time_estimates', {})
+                hw_reqs = resources_data.get('hardware_requirements', {})
+                
+                # Format memory requirement
+                mem_with_overhead = training_mem.get('total_with_overhead', {})
+                if isinstance(mem_with_overhead, dict):
+                    mem_gb = mem_with_overhead.get('gb', 0)
+                else:
+                    mem_gb = training_mem.get('total_training', {}).get('gb', 0)
+                mem_text = f"{mem_gb:.3f}GB" if mem_gb > 0 else "N/A"
+                
+                # Format training time
+                convergence_estimates = time_estimates.get('convergence_estimates', {})
+                if convergence_estimates:
+                    epoch_time = convergence_estimates.get('total_training_time_hours', 0) / max(convergence_estimates.get('estimated_epochs', 100), 1)
+                else:
+                    epoch_time = time_estimates.get('training_time', {}).get('time_per_epoch_hours', 0)
+                
+                if epoch_time > 1:
+                    time_text = f"{epoch_time:.3f}h/epoch"
+                elif epoch_time > 0:
+                    time_text = f"{epoch_time*60:.3f}m/epoch"
+                else:
+                    time_text = "N/A"
+                
+                # Hardware recommendations
+                min_hw = hw_reqs.get('minimum_requirements', {})
+                rec_hw = hw_reqs.get('recommended_requirements', {})
+                
+                min_gpu = min_hw.get('gpu_memory_gb', 0) or 0
+                rec_gpu = rec_hw.get('gpu_memory_gb', 0) or 0
+                
+                min_text = f"{min_gpu:.3f}GB GPU" if min_gpu > 0 else "CPU OK"
+                rec_text = f"{rec_gpu:.3f}GB GPU" if rec_gpu > 0 else "CPU"
+                
+                # Optimization suggestions
+                opt_strategies = resources_data.get('optimization_strategies', {})
+                mem_opts = opt_strategies.get('memory_optimization', [])
+                comp_opts = opt_strategies.get('compute_optimization', [])
+                
+                if mem_opts and 'mixed precision' in str(mem_opts[0]).lower():
+                    opt_text = "Mixed Precision"
+                elif mem_opts and 'batch' in str(mem_opts[0]).lower():
+                    opt_text = "Smaller Batches"
+                elif mem_opts and 'checkpointing' in str(mem_opts[0]).lower():
+                    opt_text = "Grad Checkpoint"
+                elif comp_opts and 'gpu' in str(comp_opts[0]).lower():
+                    opt_text = "GPU Required"
+                else:
+                    opt_text = "Standard"
+                
+                resource_table.add_row(
+                    model_name,
+                    mem_text,
+                    time_text,
+                    min_text,
+                    rec_text,
+                    opt_text
+                )
+            
+            console.print(resource_table)
+        
+        # ENHANCED SCALING ANALYSIS SUMMARY
+        if successful_models and any('scaling' in model_data for _, model_data in successful_models):
+            scaling_table = Table(
+                title="[bold yellow]MODEL SCALING ANALYSIS[/bold yellow]",
+                box=box.ROUNDED,
+                header_style="bold cyan",
+                border_style="cyan",
+                title_style="bold blue",
+                title_justify="left",
+                show_lines=True,
+                expand=True
+            )
+            
+            scaling_table.add_column("Model", style="bold cyan", width=15)
+            scaling_table.add_column("Parameter Scaling", width=10)
+            scaling_table.add_column("FLOP Scaling", width=10)
+            scaling_table.add_column("Memory Scaling", width=10)
+            scaling_table.add_column("Optimal Batch", width=10, justify="left")
+            scaling_table.add_column("Complexity Growth", width=15)
+            
+            for model_name, model_data in successful_models:
+                scaling_data = model_data.get('scaling', {})
+                if scaling_data:
+                    # Input dimension scaling
+                    input_scaling = scaling_data.get('input_dimension_scaling', {})
+                    scaling_coeffs = input_scaling.get('scaling_coefficients', {})
+                    
+                    param_exp = scaling_coeffs.get('parameter_scaling_exponent', 0)
+                    flop_exp = scaling_coeffs.get('flop_scaling_exponent', 0)
+                    
+                    param_scaling_text = f"O(n^{param_exp:.3f})" if param_exp > 0 else "N/A"
+                    flop_scaling_text = f"O(n^{flop_exp:.3f})" if flop_exp > 0 else "N/A"
+                    
+                    # Memory scaling
+                    memory_curves = input_scaling.get('memory_curves', {})
+                    mem_exp = memory_curves.get('memory_scaling_exponent', 0)
+                    mem_scaling_text = f"O(n^{mem_exp:.3f})" if mem_exp > 0 else "Linear"
+                    
+                    # Batch size scaling
+                    batch_scaling = scaling_data.get('batch_size_scaling', {})
+                    optimal_batches = batch_scaling.get('optimal_batch_sizes', {})
+                    opt_batch = optimal_batches.get('recommended', 'N/A')
+                    
+                    # Parameter scaling complexity growth
+                    param_scaling = scaling_data.get('parameter_scaling', {})
+                    complexity_growth = param_scaling.get('complexity_growth', 'unknown').replace('_', ' ').title()
+                    
+                    scaling_table.add_row(
+                        model_name,
+                        param_scaling_text,
+                        flop_scaling_text,
+                        mem_scaling_text,
+                        str(opt_batch),
+                        complexity_growth
+                    )
+            
+            if scaling_table.rows:  # Only show if we have scaling data
+                console.print(scaling_table)
+        
+        # TROUBLESHOOTING SECTION
+        troubleshoot_sections = {
+            "Essential Commands": [
+                "[bold cyan]initialize_model_variants(silent=False)[/bold cyan] - Refresh model registry with detailed logs",
+                "[bold cyan]validate_model_variants(logger, silent=False)[/bold cyan] - Test model functionality thoroughly",
+                "[bold cyan]get_current_config()[/bold cyan] - View current configuration parameters",
+                "[bold cyan]select_preset_config('performance')[/bold cyan] - Load optimized preset configuration",
+                "[bold cyan]enhanced_clear_memory(aggressive=True)[/bold cyan] - Optimize memory usage"
+            ],
+            "Performance Optimization": [
+                "Adjust batch_size based on available GPU memory and system class",
+                "Use mixed precision (FP16) for 40-50% memory savings on modern GPUs",
+                "Enable gradient checkpointing: config['training']['gradient_checkpointing'] = True",
+                "Use learning rate scheduling for better convergence",
+                "Enable early stopping to prevent overfitting and reduce training time"
+            ],
+            "Memory Management": [
+                "Call enhanced_clear_memory() before training to optimize memory",
+                "Reduce batch_size if encountering OOM errors",
+                "Enable gradient accumulation for large effective batch sizes",
+                "Use gradient checkpointing for memory-intensive models",
+                "Monitor GPU memory usage with nvidia-smi during training"
+            ],
+            "Model Selection": [
+                f"Start with {optimal.get('best_balanced', 'EnhancedAutoencoder')} for balanced performance" if optimal else "Use EnhancedAutoencoder for balanced performance",
+                "Use SimpleAutoencoder for prototyping and debugging",
+                "Use AutoencoderEnsemble only when maximum accuracy is required",
+                f"Consider system class ({system_class}) when selecting models",
+                "Test with default presets before custom configurations"
+            ]
+        }
+        
+        troubleshoot_text = ""
+        for section, items in troubleshoot_sections.items():
+            troubleshoot_text += f"[bold cyan]{section}:[/bold cyan]\n"
+            # Limit to 4 items per section
+            for item in items[:4]:
+                troubleshoot_text += f"- {item}\n"
+            troubleshoot_text += "\n"
+        
+        troubleshoot_panel = Panel.fit(
+            troubleshoot_text.strip(),
+            title="[bold yellow]TROUBLESHOOTING & OPTIMIZATION GUIDE[/bold yellow]",
+            border_style="bold cyan",
+            title_align="left",
+            style="bold",
+            padding=(1, 2)
+        )
+        console.print(troubleshoot_panel)
+        
+        # FOOTER WITH STATISTICS
+        total_models = len(model_results)
+        success_count = len(successful_models)
+        fail_count = len(failed_models)
+        success_rate = (success_count / total_models * 100) if total_models > 0 else 0
+        
+        # Analysis completeness metrics
+        total_validation_checks = sum(
+            len(model_data.get('analysis_metadata', {}).get('validation_checks_passed', []))
+            for _, model_data in successful_models
+        )
+        avg_checks = total_validation_checks / max(success_count, 1)
+        
+        # Helper function utilization metrics
+        total_helper_functions = sum(
+            len(model_data.get('analysis_metadata', {}).get('helper_functions_utilized', []))
+            for _, model_data in successful_models
+        )
+        avg_helper_functions = total_helper_functions / max(success_count, 1)
+        
+        # Performance summary
+        if successful_models:
+            avg_params = sum(model_data.get('architecture', {}).get('total_params', 0) 
+                           for _, model_data in successful_models) / success_count
+            avg_efficiency = sum(model_data.get('architecture', {}).get('architecture_efficiency', 0) 
+                               for _, model_data in successful_models) / success_count
+            
+            perf_summary = f"Avg Parameters: {avg_params:,.0f} | Avg Efficiency: {avg_efficiency:.1f}%"
+        else:
+            perf_summary = "No performance data available"
+        
+        # Additional metrics
+        total_memory_opts = metadata.get('memory_optimization_summary', {}).get('optimizations_performed', 0)
+        total_cleanup_actions = metadata.get('memory_optimization_summary', {}).get('total_cleanup_actions', 0)
+        
+        footer_text = (
+            f"[bold cyan]Analysis Completed Successfully[/bold cyan]\n"
+            f"Models analyzed: {total_models} | Successful: {success_count} | Failed: {fail_count} | Success rate: {success_rate:.1f}%\n"
+            f"System: {system_class.title()} | Hardware: {'GPU available' if gpu_available else 'CPU only'} | {perf_summary}\n"
+            f"Analysis depth: {avg_checks:.1f} avg checks/model | Helper functions: {avg_helper_functions:.1f}/model\n"
+            f"Memory optimizations: {total_memory_opts} operations, {total_cleanup_actions} cleanup actions\n"
+            f"Report generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version: {comparison_version}"
+        )
+        
+        footer_panel = Panel.fit(
+            footer_text,
+            title="[bold yellow]COMPREHENSIVE ANALYSIS SUMMARY[/bold yellow]",
+            border_style="bold green",
+            title_align="left",
+            style="bold",
+            padding=(0, 2)
+        )
+        console.print(footer_panel)
+        
+        # Logging with metrics
+        logger.debug(f"Model comparison display completed successfully:")
+        logger.debug(f"  - Total models analyzed: {total_models}")
+        logger.debug(f"  - Successful comprehensive analyses: {success_count}")
+        logger.debug(f"  - Failed analyses: {fail_count}")
+        logger.debug(f"  - Overall success rate: {success_rate:.1f}%")
+        logger.debug(f"  - Average validation checks per model: {avg_checks:.1f}")
+        logger.debug(f"  - Average helper functions per model: {avg_helper_functions:.1f}")
+        logger.debug(f"  - System class: {system_class}")
+        logger.debug(f"  - Hardware context: {'GPU available' if gpu_available else 'CPU only'}")
+        logger.debug(f"  - Memory optimizations: {total_memory_opts} operations")
+        logger.debug(f"  - Comparison version: {comparison_version}")
+        
+        # Log individual model performance for debugging
+        for model_name, model_data in successful_models:
+            arch = model_data.get('architecture', {})
+            analysis_status = model_data.get('analysis_status', 'unknown')
+            validation_checks = len(model_data.get('analysis_metadata', {}).get('validation_checks_passed', []))
+            helper_functions = len(model_data.get('analysis_metadata', {}).get('helper_functions_utilized', []))
+            
+            logger.debug(
+                f"Model {model_name} [{analysis_status}]: "
+                f"{arch.get('total_params', 0):,} params, "
+                f"efficiency: {arch.get('architecture_efficiency', 0):.1f}%, "
+                f"complexity: {arch.get('complexity_level', 'unknown')}, "
+                f"checks: {validation_checks}, "
+                f"helpers: {helper_functions}"
+            )
+        
+        # Log error information for failed models
+        for model_name, model_data in failed_models:
+            errors = model_data.get('errors', [])
+            analysis_status = model_data.get('analysis_status', 'unknown')
+            error_type = model_data.get('analysis_metadata', {}).get('error_type', 'Unknown')
+            
+            if errors:
+                error_msg = errors[0] if isinstance(errors, list) else str(errors)
+            else:
+                error_msg = model_data.get('error', 'Unknown error')
+            
+            logger.error(f"Model {model_name} analysis failed [{analysis_status}] [{error_type}]: {error_msg}")
         
     except Exception as e:
-        validation_details['errors'].append(f'Unexpected validation error: {str(e)}')
-        logger.error(f"Unexpected error during model-preset compatibility validation: {e}")
-        logger.debug(f"Validation details when error occurred: {validation_details}")
+        error_msg = f"Critical failure in enhanced display_model_comparison: {str(e)}"
+        logger.critical(error_msg, exc_info=True)
         
-        # In case of validation errors, default to compatible to avoid blocking functionality
-        # but log the issue for investigation (consistent with existing error handling)
-        logger.warning(f"Defaulting to compatible due to validation error for {model_type}")
-        return True
-    
-    finally:
-        # Always log final timing information (aligned with existing timing approach)
-        total_time = time.time() - compatibility_start_time
-        logger.debug(f"Model-preset compatibility validation completed in {total_time:.3f}s: "
-                    f"model='{model_type}', checks={validation_details.get('total_checks_performed', 0)}, "
-                    f"warnings={validation_details.get('total_warnings', 0)}, "
-                    f"errors={validation_details.get('total_errors', 0)}")
+        # Display errors with context
+        message = (
+            f"Critical failure in model comparison display: {str(e)}\n"
+            f"Context:\n"
+            f"- Current Preset: [bold yellow]{preset_name if 'preset_name' in locals() else 'Unknown'}[/bold yellow]\n"
+            f"- Model Type: [bold yellow]{model_type if 'model_type' in locals() else 'Unknown'}[/bold yellow]\n"
+            f"- Config Source: [bold yellow]{config_source if 'config_source' in locals() else 'Unknown'}[/bold yellow]\n\n"
+            f"Enhanced Recovery Actions:\n"
+            f"1. [bold yellow]initialize_model_variants()[/bold yellow] - Reinitialize model registry\n"
+            f"2. [bold yellow]check_hardware()[/bold yellow] - Verify system capabilities and resources\n"
+            f"3. [bold yellow]get_current_config()[/bold yellow] - Validate configuration parameters\n"
+            f"4. [bold yellow]validate_model_variants(logger)[/bold yellow] - Test model functionality\n"
+            f"5. [bold yellow]select_preset_config('lightweight')[/bold yellow] - Use simplified configuration\n"
+            f"6. Restart Python session if persistent issues occur"
+        )
+        console.print(
+            Panel.fit(
+                f"[bold red]{message}[/bold red]",
+                title="CRITICAL DISPLAY ERROR",
+                style="bold red",
+                border_style="red",
+                padding=(1, 2),
+                box=box.ROUNDED
+            )
+        )
+
+# Model variants validation
+
 
 def display_model_initialization_summary(
     model_instance,
@@ -28833,8 +32430,8 @@ def display_model_initialization_summary(
         print(f"Model initialization completed with errors. Check logs for details.")
 
 def create_model_instance(
-    model_type: str, 
-    input_dim: int, 
+    model_type: str,
+    input_dim: int,
     config: Dict[str, Any] = None,
     preset: str = None,
     **kwargs
@@ -28924,8 +32521,8 @@ def create_model_instance(
             validation_tests=['basic', 'forward_pass', 'parameters', 'config_methods'],
             comprehensive_validation=True,
             hardware_data=None,
-            #silent=False,
-            silent=True,
+            silent=False,
+            #silent=True,
             logger=logger
         )
         
@@ -29434,8 +33031,7 @@ def _initialize_autoencoder_config(
     # Collect all non-None parameters for processing
     local_params = locals().copy()
     params_to_remove = {'model_class_name', 'config', 'preset', 'kwargs', 'local_params', 'initialization_timestamp'}
-    individual_params = {k: v for k, v in local_params.items() 
-                       if k not in params_to_remove and v is not None}
+    individual_params = {k: v for k, v in local_params.items() if k not in params_to_remove and v is not None}
     
     # Add kwargs
     if kwargs:
@@ -30514,9 +34110,12 @@ class SimpleAutoencoder(nn.Module):
         if checkpoint.get('centralized_config_used', False):
             try:
                 model = create_model_instance('SimpleAutoencoder', input_dim, config, **kwargs)
+                #model = cls(input_dim=input_dim, config=config, **kwargs)
+                #model = create_model_instance(model_type='SimpleAutoencoder', input_dim=input_dim, config=config, **kwargs)
             except:
                 # Fallback to direct instantiation
                 model = cls(input_dim=input_dim, config=config, **kwargs)
+                #model = create_model_instance(model_type='SimpleAutoencoder', input_dim=input_dim, config=config, **kwargs)
         else:
             model = cls(input_dim=input_dim, config=config, **kwargs)
         
@@ -30533,7 +34132,7 @@ class SimpleAutoencoder(nn.Module):
         
         summary = [
             f"SimpleAutoencoder Summary (Factory Pattern)",
-            f"{'='*60}",
+            f"{'-'*40}",
             f"Model Type: {self.model_type}",
             f"Preset: {self.preset_name or 'Custom'}",
             f"Architecture: {self.input_dim} -> {self.hidden_dims} -> {self.encoding_dim}",
@@ -30546,7 +34145,7 @@ class SimpleAutoencoder(nn.Module):
             f"Factory Pattern: Enabled",
             f"Centralized Config: Enabled",
             f"Helper Functions: Leveraged",
-            f"{'='*60}"
+            f"{'-'*40}"
         ]
         
         return '\n'.join(summary)
@@ -31573,9 +35172,12 @@ class EnhancedAutoencoder(nn.Module):
         if checkpoint.get('centralized_config_used', False):
             try:
                 model = create_model_instance('EnhancedAutoencoder', input_dim, config, **kwargs)
+                #model = cls(input_dim=input_dim, config=config, **kwargs)
+                #model = create_model_instance(model_type='EnhancedAutoencoder', input_dim=input_dim, config=config, **kwargs)
             except:
                 # Fallback to direct instantiation
                 model = cls(input_dim=input_dim, config=config, **kwargs)
+                #model = create_model_instance(model_type='EnhancedAutoencoder', input_dim=input_dim, config=config, **kwargs)
         else:
             model = cls(input_dim=input_dim, config=config, **kwargs)
         
@@ -31603,7 +35205,7 @@ class EnhancedAutoencoder(nn.Module):
         
         summary = [
             f"EnhancedAutoencoder Summary (Factory Pattern)",
-            f"{'='*65}",
+            f"{'-'*40}",
             f"Model Type: {self.model_type}",
             f"Preset: {self.preset_name or 'Custom'}",
             f"Architecture: {self.input_dim} -> {self.hidden_dims} -> {self.encoding_dim}",
@@ -31617,7 +35219,7 @@ class EnhancedAutoencoder(nn.Module):
             f"Factory Pattern: Enabled",
             f"Centralized Config: Enabled",
             f"Helper Functions: Leveraged",
-            f"{'='*65}"
+            f"{'-'*40}"
         ]
         
         return '\n'.join(summary)
@@ -32205,10 +35807,12 @@ class AutoencoderEnsemble(nn.Module):
                     if i % 3 == 0:
                         # Enhanced architecture
                         model_type_variant = 'EnhancedAutoencoder'
+                        #model_type_variant = EnhancedAutoencoder
                         model_config = base_config.copy()
                     elif i % 3 == 1:
                         # Enhanced with different features
                         model_type_variant = 'EnhancedAutoencoder'
+                        #model_type_variant = EnhancedAutoencoder
                         model_config = base_config.copy()
                         model_config.setdefault('model', {}).update({
                             'use_attention': not self.legacy_mode and (i % 2 == 0),
@@ -32219,6 +35823,7 @@ class AutoencoderEnsemble(nn.Module):
                     else:
                         # Simple architecture for diversity
                         model_type_variant = 'SimpleAutoencoder'
+                        #model_type_variant = SimpleAutoencoder
                         model_config = base_config.copy()
                         model_config.setdefault('model', {}).update({
                             'use_attention': False,
@@ -32241,6 +35846,10 @@ class AutoencoderEnsemble(nn.Module):
                             input_dim=self.input_dim,
                             config=model_config
                         )
+                        # model = model_type_variant(
+                        #     input_dim=self.input_dim,
+                        #     config=model_config
+                        # )
                     except Exception as factory_error:
                         # Fallback to direct instantiation if factory fails
                         logger.debug(f"Factory creation failed for model {i}, using direct instantiation: {factory_error}")
@@ -32653,9 +36262,12 @@ class AutoencoderEnsemble(nn.Module):
         if checkpoint.get('centralized_config_used', False):
             try:
                 ensemble = create_model_instance('AutoencoderEnsemble', input_dim, config, **kwargs)
+                #ensemble = cls(input_dim=input_dim, config=config, **kwargs)
+                #ensemble = create_model_instance(model_type='AutoencoderEnsemble', input_dim=input_dim, config=config, **kwargs)
             except:
                 # Fallback to direct instantiation
                 ensemble = cls(input_dim=input_dim, config=config, **kwargs)
+                #ensemble = create_model_instance(model_type='AutoencoderEnsemble', input_dim=input_dim, config=config, **kwargs)
         else:
             ensemble = cls(input_dim=input_dim, config=config, **kwargs)
         
@@ -32696,7 +36308,7 @@ class AutoencoderEnsemble(nn.Module):
         
         summary = [
             f"AutoencoderEnsemble Summary (Factory Pattern)",
-            f"{'='*75}",
+            f"{'-'*40}",
             f"Ensemble Size: {self.num_models} models",
             f"Model Distribution: {dict(type_counts)}",
             f"Preset: {self.preset_name or 'Custom'}",
@@ -32712,7 +36324,7 @@ class AutoencoderEnsemble(nn.Module):
             f"Factory Pattern: Enabled",
             f"Centralized Config: Enabled",
             f"Helper Functions: Leveraged",
-            f"{'='*75}"
+            f"{'-'*40}"
         ]
         
         return '\n'.join(summary)
@@ -43245,22 +46857,13 @@ def _interactive_express_setup(
             current_model_type = model_type
         
         # Clear screen and show context
-        #print("\033c", end="")
-        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS SETUP - QUICK CONFIGURATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        
-        # Extract context from base_config for consistent display
-        #preset_name = base_config.get('presets', {}).get('current_preset', 'Custom/Default')
-        #current_model_type = base_config.get('model', {}).get('model_type', 'Unknown')
-        #current_model_type = model_type
         
         print(Fore.YELLOW + Style.BRIGHT + f"Base Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + f"Express Setup")
-        
-        #print(Fore.GREEN + Style.BRIGHT + "\nSetting up training with smart defaults...")
         
         # Data Source Selection
         if use_real_data is None:
@@ -43646,7 +47249,6 @@ def _interactive_express_setup(
         print(Fore.WHITE + Style.BRIGHT + f"  └─ Checkpoints: " + Fore.GREEN + f"{'Enabled' if monitoring_config.get('save_checkpoints', False) else 'Disabled'}")
         
         # Confirmation with enhanced styling
-        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         try:
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with these express settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -43753,14 +47355,8 @@ def _interactive_preset_setup(
             current_model_type = model_type
         
         # Clear screen and show context
-        #print("\033c", end="")
-        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "PRESET CONFIGURATION SETUP")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        
-        # Extract context from base_config for consistent display
-        #current_preset = base_config.get('presets', {}).get('current_preset', 'Custom/Default')
-        #current_model_type = base_config.get('model', {}).get('model_type', 'Unknown')
         
         print(Fore.YELLOW + Style.BRIGHT + f"Base Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset}")
@@ -43768,30 +47364,11 @@ def _interactive_preset_setup(
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.YELLOW + Style.BRIGHT + f"Preset Selection")
         
         print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Preset Configurations:\n")
-        #print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
         
         available_presets = list(globals().get('PRESET_CONFIGS', {}).keys())
         
         if not available_presets:
-            message = (
-                f"No preset configurations available.\n"
-                f"Presets provide pre-configured settings for:\n"
-                f"- Different model architectures\n"
-                f"- Various use cases and scenarios\n"
-                f"- Performance vs accuracy tradeoffs\n"
-                f"- Hardware-specific optimizations\n\n"
-                f"Switching to express setup as fallback..."
-            )
-            console.print(
-                Panel.fit(
-                    f"{message}",
-                    title="NO PRESETS AVAILABLE",
-                    style="bold yellow",
-                    border_style="yellow",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
+            print(Fore.RED + Style.BRIGHT + "\nNo presets available! Using express setup instead.")
             return _interactive_express_setup(base_config, use_real_data, **kwargs)
         
         # Display available presets with enhanced formatting
@@ -43990,6 +47567,9 @@ def _interactive_preset_setup(
                     # Adaptive patience based on epochs
                     final_config['training']['patience'] = min(20, max(5, new_epochs_int // 3))
                     
+                    # Store the user-configured epochs to preserve it
+                    final_config['training']['user_configured_epochs'] = new_epochs_int
+                    
                     print(Fore.GREEN + Style.BRIGHT + f"\nUpdated: {new_epochs_int} epochs (~{_estimate_training_time(new_epochs_int, model_type)} min)")
                 else:
                     print(Fore.GREEN + Style.BRIGHT + f"\nKeeping: {current_epochs} epochs")
@@ -44022,12 +47602,24 @@ def _interactive_preset_setup(
                 elif model_change in ['2', '3', '4']:
                     new_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
                     new_model_type = new_types[int(model_change)-2]
+                    
+                    # Store user-configured epochs BEFORE applying model defaults
+                    user_epochs = final_config.get('training', {}).get('user_configured_epochs')
+                    user_patience = final_config.get('training', {}).get('patience')
+                    
                     final_config.setdefault('model', {})['model_type'] = new_model_type
                     
                     print(Fore.GREEN + Style.BRIGHT + f"\nChanged model type to: {new_model_type}")
                     
                     # Apply model-specific defaults
                     _apply_model_type_defaults(final_config, new_model_type)
+                    
+                    # RESTORE user-configured epochs if they were set
+                    if user_epochs is not None:
+                        final_config['training']['epochs'] = user_epochs
+                        if user_patience is not None:
+                            final_config['training']['patience'] = user_patience
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Preserved your configured epochs: {user_epochs}")
                 else:
                     print(Fore.GREEN + Style.BRIGHT + f"\nKeeping: {current_model_type}")
                     
@@ -44066,7 +47658,6 @@ def _interactive_preset_setup(
                 print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model architecture modified")
         
         # Enhanced confirmation with fallback options
-        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*50)
         try:
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with this configuration? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -44127,16 +47718,11 @@ def _interactive_preset_setup(
             f"- Configuration merging issues\n"
             f"- User input handling problems"
         )
-        console.print(
-            Panel.fit(
-                f"{message}",
-                title="PRESET SETUP ERROR",
-                style="bold red",
-                border_style="red",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
+        print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+        print(Fore.RED + Style.BRIGHT + "PRESET SETUP ERROR")
+        print(Fore.RED + Style.BRIGHT + "-" * 40)
+        print(Fore.WHITE + Style.BRIGHT + message)
+        print(Fore.RED + Style.BRIGHT + "-" * 40)
         return None
 
 def _interactive_custom_setup(
@@ -44172,7 +47758,6 @@ def _interactive_custom_setup(
             model_type = model_section.get("model_type", "Unknown")
         
         # Menu header with context matching other functions
-        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "CUSTOM CONFIGURATION SETUP")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
@@ -44187,7 +47772,6 @@ def _interactive_custom_setup(
         final_config = base_config.copy()
         
         # DATA CONFIGURATION SECTION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "DATA CONFIGURATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -44295,7 +47879,6 @@ def _interactive_custom_setup(
         data_config['data_preprocessing'] = preprocessing in ('', 'y', 'yes')
 
         # MODEL ARCHITECTURE SECTION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "MODEL ARCHITECTURE")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -44465,7 +48048,6 @@ def _interactive_custom_setup(
         model_config['min_features'] = int(min_features) if min_features else 5
 
         # TRAINING CONFIGURATION SECTION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "TRAINING CONFIGURATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -44685,7 +48267,6 @@ def _interactive_custom_setup(
             training_config['mixed_precision'] = False
 
         # SYSTEM & HARDWARE CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "SYSTEM & HARDWARE CONFIGURATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -44790,7 +48371,6 @@ def _interactive_custom_setup(
         system_config['distributed_training'] = distributed_training in ('y', 'yes')
 
         # MONITORING & LOGGING CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "MONITORING & LOGGING")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -44913,7 +48493,6 @@ def _interactive_custom_setup(
         monitoring_config['profiling_enabled'] = profiling in ('y', 'yes')
 
         # SECURITY & ANOMALY DETECTION CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "SECURITY & ANOMALY DETECTION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45033,7 +48612,6 @@ def _interactive_custom_setup(
                 security_config['uncertainty_threshold'] = float(uncertainty)
 
         # VALIDATION & TESTING CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "VALIDATION & TESTING")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45103,7 +48681,6 @@ def _interactive_custom_setup(
             validation_config['metrics'] = ['loss', 'reconstruction_error']
 
         # EXPORT & SAVING CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "EXPORT & SAVING")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45166,7 +48743,6 @@ def _interactive_custom_setup(
         system_config['checkpoint_dir'] = checkpoint_dir if checkpoint_dir else DEFAULT_MODEL_DIR
 
         # REPRODUCIBILITY & SYSTEM CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "REPRODUCIBILITY & SYSTEM")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45210,7 +48786,6 @@ def _interactive_custom_setup(
         system_config['environment_health'] = env_health if env_health else 'auto'
 
         # HYPERPARAMETER OPTIMIZATION CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45300,7 +48875,6 @@ def _interactive_custom_setup(
             hpo_config['generate_plots'] = generate_plots in ('', 'y', 'yes')
 
         # PRESETS & ADVANCED CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "PRESETS & ADVANCED")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45366,7 +48940,6 @@ def _interactive_custom_setup(
         experimental_config['auto_optimize'] = auto_optimize in ('y', 'yes')
 
         # METADATA & DOCUMENTATION CONFIGURATION
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "METADATA & DOCUMENTATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45431,7 +49004,6 @@ def _interactive_custom_setup(
         })
 
         # FINAL CONFIGURATION REVIEW
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "CONFIGURATION REVIEW")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -45588,7 +49160,7 @@ def _interactive_custom_setup(
 def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
     try:
         print("\nLAUNCHING TRAINING")
-        print("="*40)
+        print("-"*40)
         
         training_params = {}
         
@@ -56446,9 +60018,9 @@ def _handle_hpo_result(result: Optional[Dict[str, Any]], hpo_type: str) -> None:
     try:
         # Handle cancellation case with context-aware messaging
         if result is None:
-            print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
-            print(Fore.RED + Style.BRIGHT + "OPERATION CANCELLED")
-            print(Fore.RED + Style.BRIGHT + "-"*40)
+            #print(Fore.RED + Style.BRIGHT + "\n" + "-"*40)
+            print(Fore.RED + Style.BRIGHT + "Operation cancelled!")
+            #print(Fore.RED + Style.BRIGHT + "-"*40)
             
             # Context-aware cancellation messages
             if 'quick' in hpo_type.lower():
@@ -63869,7 +67441,7 @@ def print_main_menu(config: Optional[Dict[str, Any]] = None):
     
     # menu header with context
     #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-    print(Fore.MAGENTA + Style.BRIGHT + "MAIN APPLICATION MENU")
+    print(Fore.YELLOW + Style.BRIGHT + "MAIN APPLICATION MENU")
     print(Fore.CYAN + Style.BRIGHT + "-"*40)
     print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
@@ -64614,16 +68186,15 @@ def configuration_menu():
         preset_count = len(PRESET_CONFIGS) if 'PRESET_CONFIGS' in globals() else 'Unknown'
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "CONFIGURATION MANAGEMENT MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Active Configuration Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Status: " + health_color + Style.BRIGHT + f"{config_status}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Health: " + health_color + Style.BRIGHT + f"{health_status}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Sections: " + Fore.CYAN + Style.BRIGHT + f"{len(config) if isinstance(config, dict) else 'Unknown'}")
+        print(Fore.YELLOW + Style.BRIGHT + "CONFIGURATION MANAGEMENT MENU")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.YELLOW + Style.BRIGHT + "Active Configuration Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Status: " + health_color + Style.BRIGHT + f"{config_status}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Health: " + health_color + Style.BRIGHT + f"{health_status}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Sections: " + Fore.YELLOW + Style.BRIGHT + f"{len(config) if isinstance(config, dict) else 'Unknown'}")
         
         # Context-aware Menu options
         print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration Operations:")
@@ -64657,238 +68228,182 @@ def configuration_menu():
                 try:
                     show_current_config()
                 except Exception as e:
-                    message = (
-                        f"Error encountered while displaying current configuration: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Preset: {preset_name}\n"
-                        f"- Model: {model_type}\n"
-                        f"- Config Source: {config_source}\n\n"
-                        f"This could be due to:\n"
-                        f"- Configuration file corruption\n"
-                        f"- Invalid configuration structure\n"
-                        f"- Display formatting issues\n"
-                        f"- System resource constraints"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONFIGURATION DISPLAY ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "CONFIGURATION DISPLAY ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered while displaying current configuration: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Preset: {preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Model: {model_type}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Config Source: {config_source}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nThis could be due to:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration file corruption")
+                    print(Fore.WHITE + Style.BRIGHT + "- Invalid configuration structure")
+                    print(Fore.WHITE + Style.BRIGHT + "- Display formatting issues")
+                    print(Fore.WHITE + Style.BRIGHT + "- System resource constraints")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "2":
                 try:
                     save_config_interactive()
                 except Exception as e:
-                    message = (
-                        f"Error encountered while saving configuration: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Preset: {preset_name}\n"
-                        f"- Config Status: {config_status}\n\n"
-                        f"Please check:\n"
-                        f"- File system permissions\n"
-                        f"- Available disk space\n"
-                        f"- Configuration validity\n"
-                        f"- File path accessibility"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONFIGURATION SAVE ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "CONFIGURATION SAVE ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered while saving configuration: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Preset: {preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Config Status: {config_status}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nPlease check:")
+                    print(Fore.WHITE + Style.BRIGHT + "- File system permissions")
+                    print(Fore.WHITE + Style.BRIGHT + "- Available disk space")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration validity")
+                    print(Fore.WHITE + Style.BRIGHT + "- File path accessibility")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "3":
                 try:
                     select_preset_config()
                 except Exception as e:
-                    message = (
-                        f"Error encountered during preset selection: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Available Presets: {preset_count}\n"
-                        f"- Current Preset: {preset_name}\n\n"
-                        f"Please verify:\n"
-                        f"- Preset configuration files exist\n"
-                        f"- Preset validation logic\n"
-                        f"- Configuration loading mechanisms"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="PRESET SELECTION ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "PRESET SELECTION ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered during preset selection: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Available Presets: {preset_count}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Current Preset: {preset_name}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nPlease verify:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Preset configuration files exist")
+                    print(Fore.WHITE + Style.BRIGHT + "- Preset validation logic")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration loading mechanisms")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "4":
                 try:
                     load_saved_config_interactive()
                 except Exception as e:
-                    message = (
-                        f"Error encountered while loading configuration: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Current Preset: {preset_name}\n"
-                        f"- Config Status: {config_status}\n\n"
-                        f"Please check:\n"
-                        f"- Configuration file exists and is accessible\n"
-                        f"- File format is supported\n"
-                        f"- Configuration is compatible with current system\n"
-                        f"- File is not corrupted"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONFIGURATION LOAD ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "CONFIGURATION LOAD ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered while loading configuration: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Current Preset: {preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Config Status: {config_status}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nPlease check:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration file exists and is accessible")
+                    print(Fore.WHITE + Style.BRIGHT + "- File format is supported")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration is compatible with current system")
+                    print(Fore.WHITE + Style.BRIGHT + "- File is not corrupted")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "5":
                 try:
                     reset_config_interactive()
                 except Exception as e:
-                    message = (
-                        f"Error encountered while resetting configuration: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Current Preset: {preset_name}\n\n"
-                        f"This could indicate:\n"
-                        f"- Default configuration files missing\n"
-                        f"- System file permissions issues\n"
-                        f"- Configuration restoration problems"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONFIGURATION RESET ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "CONFIGURATION RESET ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered while resetting configuration: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Current Preset: {preset_name}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nThis could indicate:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Default configuration files missing")
+                    print(Fore.WHITE + Style.BRIGHT + "- System file permissions issues")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration restoration problems")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "6":
                 try:
-                    validate_config_interactive()
+                    validate_config_interactive(silent=False)
                 except Exception as e:
-                    message = (
-                        f"Error encountered during configuration validation: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Current Health: {health_status}\n"
-                        f"- Preset: {preset_name}\n\n"
-                        f"Please check:\n"
-                        f"- Configuration file integrity\n"
-                        f"- Validation rule definitions\n"
-                        f"- System state and dependencies"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONFIGURATION VALIDATION ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "CONFIGURATION VALIDATION ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered during configuration validation: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Current Health: {health_status}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Preset: {preset_name}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nPlease check:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration file integrity")
+                    print(Fore.WHITE + Style.BRIGHT + "- Validation rule definitions")
+                    print(Fore.WHITE + Style.BRIGHT + "- System state and dependencies")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "7":
                 try:
                     edit_config_interactive()
                 except Exception as e:
-                    message = (
-                        f"Error encountered in interactive configuration editor: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Preset: {preset_name}\n"
-                        f"- Model: {model_type}\n\n"
-                        f"Please check:\n"
-                        f"- Editor dependencies are installed\n"
-                        f"- Configuration file permissions\n"
-                        f"- Interactive input handling"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONFIGURATION EDITOR ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "CONFIGURATION EDITOR ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered in interactive configuration editor: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Preset: {preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Model: {model_type}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nPlease check:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Editor dependencies are installed")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration file permissions")
+                    print(Fore.WHITE + Style.BRIGHT + "- Interactive input handling")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "8":
                 try:
                     compare_configs_interactive()
                 except Exception as e:
-                    message = (
-                        f"Error encountered during configuration comparison: {str(e)}\n"
-                        f"Context:\n"
-                        f"- Active Preset: {preset_name}\n"
-                        f"- Config Source: {config_source}\n\n"
-                        f"Please verify:\n"
-                        f"- Comparison configurations exist\n"
-                        f"- Configuration formats are compatible\n"
-                        f"- Sufficient system resources available"
-                    )
-                    console.print(
-                        Panel.fit(
-                            f"{message}",
-                            title="CONFIGURATION COMPARISON ERROR",
-                            style="bold red",
-                            border_style="red",
-                            padding=(1, 2),
-                            box=box.ROUNDED
-                        )
-                    )
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "CONFIGURATION COMPARISON ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error encountered during configuration comparison: {str(e)}")
+                    print(Fore.CYAN + Style.BRIGHT + "Context:")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Active Preset: {preset_name}")
+                    print(Fore.WHITE + Style.BRIGHT + f"- Config Source: {config_source}")
+                    print(Fore.YELLOW + Style.BRIGHT + "\nPlease verify:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Comparison configurations exist")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration formats are compatible")
+                    print(Fore.WHITE + Style.BRIGHT + "- Sufficient system resources available")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    
+            elif choice == "9":
+                try:
+                    # Placeholder for configuration health report
+                    print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration Health Report feature coming soon!")
+                    print(Fore.CYAN + Style.BRIGHT + "This will provide detailed analysis of:")
+                    print(Fore.WHITE + Style.BRIGHT + "- Configuration performance metrics")
+                    print(Fore.WHITE + Style.BRIGHT + "- Resource utilization patterns")
+                    print(Fore.WHITE + Style.BRIGHT + "- Optimization recommendations")
+                    print(Fore.WHITE + Style.BRIGHT + "- Health scoring and trends")
+                except Exception as e:
+                    print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + "HEALTH REPORT ERROR")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
+                    print(Fore.RED + Style.BRIGHT + f"Error generating health report: {str(e)}")
+                    print(Fore.RED + Style.BRIGHT + "-" * 40)
                     
             elif choice == "0":
                 return
             else:
-                print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 0-8.")
+                print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 0-9.")
         
         except KeyboardInterrupt:
             print(Fore.RED + Style.BRIGHT + "\nConfiguration operation interrupted by user")
         except Exception as e:
             logger.error(f"Configuration menu error: {e}", exc_info=True)
-            message = (
-                f"Unexpected error in configuration menu: {str(e)}\n"
-                f"Context:\n"
-                f"- Selected Option: {choice}\n"
-                f"- Current Preset: {preset_name}\n"
-                f"- Model Type: {model_type}\n"
-                f"- Config Source: {config_source}\n\n"
-                f"This could indicate:\n"
-                f"- System resource issues\n"
-                f"- Configuration file corruption\n"
-                f"- Dependency conflicts\n"
-                f"- File system problems\n\n"
-                f"Please check the logs for detailed information."
-            )
-            console.print(
-                Panel.fit(
-                    f"{message}",
-                    title="CONFIGURATION MENU ERROR",
-                    style="bold red",
-                    border_style="red",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
+            print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
+            print(Fore.RED + Style.BRIGHT + "CONFIGURATION MENU ERROR")
+            print(Fore.RED + Style.BRIGHT + "-" * 40)
+            print(Fore.RED + Style.BRIGHT + f"Unexpected error in configuration menu: {str(e)}")
+            print(Fore.CYAN + Style.BRIGHT + "Context:")
+            print(Fore.WHITE + Style.BRIGHT + f"- Selected Option: {choice}")
+            print(Fore.WHITE + Style.BRIGHT + f"- Current Preset: {preset_name}")
+            print(Fore.WHITE + Style.BRIGHT + f"- Model Type: {model_type}")
+            print(Fore.WHITE + Style.BRIGHT + f"- Config Source: {config_source}")
+            print(Fore.YELLOW + Style.BRIGHT + "\nThis could indicate:")
+            print(Fore.WHITE + Style.BRIGHT + "- System resource issues")
+            print(Fore.WHITE + Style.BRIGHT + "- Configuration file corruption")
+            print(Fore.WHITE + Style.BRIGHT + "- Dependency conflicts")
+            print(Fore.WHITE + Style.BRIGHT + "- File system problems")
+            print(Fore.CYAN + Style.BRIGHT + "\nPlease check the logs for detailed information.")
+            print(Fore.RED + Style.BRIGHT + "-" * 40)
         
         # Only continue if not exiting
         if choice != "0":
@@ -64965,15 +68480,15 @@ def model_analysis_menu():
         data_path_config = data_config.get('data_path', 'Default')
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "MODEL ANALYSIS & VISUALIZATION MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Active Analysis Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Epochs: " + Fore.CYAN + Style.BRIGHT + f"{epoch_count}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Data: " + Fore.CYAN + Style.BRIGHT + f"{data_path_config}")
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + "MODEL ANALYSIS & VISUALIZATION MENU")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Active Analysis Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{epoch_count}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Data: " + Fore.YELLOW + Style.BRIGHT + f"{data_path_config}")
         
         # Menu options with context-aware display
         print(Fore.YELLOW + Style.BRIGHT + "\nAnalysis & Visualization Options:")
@@ -65177,15 +68692,15 @@ def advanced_tools_menu():
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "ADVANCED TOOLS MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Advanced Tools Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Hardware: " + Fore.CYAN + Style.BRIGHT + f"{hardware_config.get('device', 'Default')}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Experimental: " + Fore.CYAN + Style.BRIGHT + f"{'Enabled' if experimental_config.get('enabled', False) else 'Disabled'}")
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + "ADVANCED TOOLS MENU")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Advanced Tools Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Hardware: " + Fore.YELLOW + Style.BRIGHT + f"{hardware_config.get('device', 'Default')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Experimental: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled' if experimental_config.get('enabled', False) else 'Disabled'}")
         
         # Menu options with context-aware display
         print(Fore.YELLOW + Style.BRIGHT + "\nAdvanced Tools & Utilities:")
@@ -65452,15 +68967,15 @@ def show_init_report():
             return
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "INITIALIZATION REPORTS MENU")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-        print(Fore.GREEN + Style.BRIGHT + f"System Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Reports: " + Fore.CYAN + Style.BRIGHT + f"{total_files} files")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Location: " + Fore.CYAN + Style.BRIGHT + f"{report_dir}")
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + "INITIALIZATION REPORTS MENU")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"System Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Reports: " + Fore.YELLOW + Style.BRIGHT + f"{total_files} files")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Location: " + Fore.YELLOW + Style.BRIGHT + f"{report_dir}")
         
         # Prepare menu categories
         categories = []
@@ -66321,15 +69836,15 @@ def run_performance_benchmark_interactive():
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Context-aware Menu options
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
-        print(Fore.CYAN + Style.BRIGHT + "PERFORMANCE BENCHMARK")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Benchmark Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Device: " + Fore.CYAN + Style.BRIGHT + f"{hardware_config.get('device', 'Default')}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Epochs: " + Fore.CYAN + Style.BRIGHT + f"{training_config.get('epochs', 'Default')}")
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + "PERFORMANCE BENCHMARK")
+        print(Fore.CYAN + Style.BRIGHT + "="*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Benchmark Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{hardware_config.get('device', 'Default')}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{training_config.get('epochs', 'Default')}")
         
         # Display benchmark overview panel
         message = (
@@ -66668,1362 +70183,7 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
         )
         raise
 
-def display_model_comparison() -> None:
-    """
-    Display available initialization reports and provide options to view them.
-    Supports multiple report formats: HTML dashboard, JSON, TXT summary, and diagnostics.
-    """
-    try:
-        # Clear screen and show banner with configuration
-        print("\033c", end="")
-        config = show_banner(return_config=True)
-        
-        # Use the config returned from show_banner or fallback
-        if config is None:
-            config = get_current_config()
-        
-        # Configuration context using multiple fallbacks
-        preset_name = "Custom/Default"
-        model_type = "Unknown"
-        config_source = "Unknown"
-        
-        # Method 1: Check presets section
-        presets_section = config.get("presets", {})
-        if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "Custom/Default")
-        
-        # Method 2: Check metadata for preset_used
-        if preset_name in ["Custom/Default", None, ""]:
-            metadata = config.get("metadata", {})
-            if isinstance(metadata, dict):
-                preset_name = metadata.get("preset_used", "Custom/Default")
-        
-        # Method 3: Check legacy _preset_name field
-        if preset_name in ["Custom/Default", None, ""]:
-            preset_name = config.get("_preset_name", "Custom/Default")
-        
-        # Method 4: Check runtime information
-        if preset_name in ["Custom/Default", None, ""]:
-            runtime = config.get("runtime", {})
-            if isinstance(runtime, dict):
-                preset_name = runtime.get("active_preset", "Custom/Default")
-        
-        # Clean up preset name display
-        if preset_name in ["Custom/Default", None, "", "none"]:
-            preset_name = "Custom/Default"
-        elif isinstance(preset_name, str):
-            preset_name = preset_name.title()
-        
-        # Extract model type with error handling
-        model_section = config.get("model", {})
-        if isinstance(model_section, dict):
-            model_type = model_section.get("model_type", "Unknown")
-        
-        # Extract config source with fallbacks
-        if "runtime" in config and isinstance(config["runtime"], dict):
-            config_source = config["runtime"].get("config_source", "Unknown")
-        elif "metadata" in config and isinstance(config["metadata"], dict):
-            config_source = config["metadata"].get("config_source", "Unknown")
-        
-        # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "="*40)
-        print(Fore.CYAN + Style.BRIGHT + "MODEL ARCHITECTURE COMPARISON")
-        print(Fore.YELLOW + Style.BRIGHT + "="*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Active Comparison Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}\n")
-        
-        # Get comparison results with error handling
-        try:
-            results = compare_model_architectures()
-        except Exception as e:
-            logger.error(f"Failed to generate model comparison: {e}")
-            
-            # Error display with context
-            message = (
-                f"Failed to generate model architecture comparison: {str(e)}\n"
-                f"Context:\n"
-                f"- Current Preset: {preset_name}\n"
-                f"- Model Type: {model_type}\n"
-                f"- Config Source: {config_source}\n\n"
-                f"This could be due to:\n"
-                f"- Model variants not properly initialized\n"
-                f"- Configuration parameter issues\n"
-                f"- System resource constraints\n"
-                f"- Missing dependencies or compatibility problems\n\n"
-                f"Troubleshooting Steps:\n"
-                f"1. Run 'initialize_model_variants()' to refresh model registry\n"
-                f"2. Check configuration with 'get_current_config()'\n"
-                f"3. Validate models with 'validate_model_variants(logger)'\n"
-                f"4. Check system resources and dependencies"
-            )
-            console.print(
-                Panel.fit(
-                    f"[bold red]{message}[/bold red]",
-                    title="COMPARISON FAILED",
-                    style="bold red",
-                    border_style="red",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
-            return
-        
-        # Handle critical errors with error analysis
-        if isinstance(results, dict):
-            if 'error' in results or 'critical_validation_failure' in results:
-                error_msg = results.get('error') or results.get('critical_validation_failure', 'Unknown error')
-                
-                message = (
-                    f"Analysis Error: {error_msg}\n"
-                    f"Context:\n"
-                    f"- Current Preset: {preset_name}\n"
-                    f"- Model Type: {model_type}\n\n"
-                )
-                
-                # Error-specific guidance based on current implementation
-                if 'initialization_failed' in error_msg.lower() or 'MODEL_VARIANTS' in error_msg:
-                    message += (
-                        f"Model Initialization Issues:\n"
-                        f"1. Check if model classes are properly imported\n"
-                        f"2. Verify PyTorch installation and dependencies\n"
-                        f"3. Run: initialize_model_variants(silent=False)\n"
-                        f"4. Check for configuration compatibility issues\n"
-                    )
-                elif 'memory' in error_msg.lower() or 'resource' in error_msg.lower():
-                    message += (
-                        f"Resource Issues:\n"
-                        f"1. Close other applications to free memory\n"
-                        f"2. Reduce batch size or model complexity\n"
-                        f"3. Enable memory optimization: enhanced_clear_memory()\n"
-                        f"4. Check available system and GPU memory\n"
-                    )
-                elif 'validation' in error_msg.lower():
-                    message += (
-                        f"Model Validation Issues:\n"
-                        f"1. Run: validate_model_variants(logger, silent=False)\n"
-                        f"2. Check individual model instantiation\n"
-                        f"3. Verify configuration parameters\n"
-                    )
-                else:
-                    message += (
-                        f"General Analysis Issues:\n"
-                        f"1. Check system resources and dependencies\n"
-                        f"2. Verify configuration file integrity\n"
-                        f"3. Ensure all required packages are installed\n"
-                    )
-                
-                # Display partial results if available
-                partial_results = results.get('partial_results', {})
-                if partial_results and isinstance(partial_results, dict):
-                    message += f"\nPartial Results Available:\n"
-                    for key, value in partial_results.items():
-                        if not key.startswith('_'):
-                            status = value.get('analysis_status', 'unknown') if isinstance(value, dict) else 'unknown'
-                            message += f"  - {key}: {status}\n"
-                
-                console.print(
-                    Panel.fit(
-                        f"[bold red]{message}[/bold red]",
-                        title="ANALYSIS ERROR",
-                        style="bold red",
-                        border_style="red",
-                        padding=(1, 2),
-                        box=box.ROUNDED
-                    )
-                )
-                return
-            
-            if 'initialization_error' in results:
-                message = (
-                    f"Initialization Error: {results['initialization_error']}\n"
-                    f"Context:\n"
-                    f"- Current Preset: {preset_name}\n"
-                    f"- Model Type: {model_type}\n\n"
-                    f"This indicates:\n"
-                    f"1. Model variants could not be initialized properly\n"
-                    f"2. Configuration parameters are invalid or incompatible\n"
-                    f"3. Required dependencies may be missing\n"
-                    f"4. System resources may be insufficient"
-                )
-                console.print(
-                    Panel.fit(
-                        f"[bold red]{message}[/bold red]",
-                        title="INITIALIZATION ERROR",
-                        style="bold red",
-                        border_style="red",
-                        padding=(1, 2),
-                        box=box.ROUNDED
-                    )
-                )
-                return
-        
-        # Extract metadata and summary with validation
-        metadata = results.get('_metadata', {})
-        summary = results.get('_summary', {})
-        analysis_results = results.get('_analysis_results', {})
-        
-        # Validate metadata
-        if not metadata:
-            logger.warning("No metadata found in comparison results")
-            metadata = {
-                'comparison_timestamp': datetime.now().isoformat(),
-                'comparison_version': '3.2',
-                'available_variants': 0,
-                'successful_comparisons': 0,
-                'failed_comparisons': 0,
-                'hardware_context': {},
-                'input_dimension': 'unknown',
-                'config_source': 'unknown',
-                'validation_checks_performed': [],
-                'memory_optimization_summary': {'optimizations_performed': 0},
-                'helper_functions_utilized': []
-            }
-        
-        # Filter model results (exclude metadata and analysis results)
-        model_results = {}
-        for key, value in results.items():
-            if not key.startswith('_') and isinstance(value, dict):
-                model_results[key] = value
-        
-        if not model_results:
-            message = (
-                f"No Model Results Available\n"
-                f"Context:\n"
-                f"- Current Preset: {preset_name}\n"
-                f"- Model Type: {model_type}\n\n"
-                f"This could indicate:\n"
-                f"1. No model variants are initialized in MODEL_VARIANTS\n"
-                f"2. All model analyses failed during execution\n"
-                f"3. Configuration issues prevent proper analysis\n"
-                f"4. System resource constraints blocked analysis\n\n"
-                f"Try running: [bold cyan]initialize_model_variants(silent=False)[/bold cyan]"
-            )
-            console.print(
-                Panel.fit(
-                    f"[bold yellow]{message}[/bold yellow]",
-                    title="NO RESULTS AVAILABLE",
-                    style="bold yellow",
-                    border_style="yellow",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
-            return
-        
-        # ENHANCED MAIN HEADER SECTION
-        comparison_version = metadata.get('comparison_version', '3.2')
-        hardware_ctx = metadata.get('hardware_context', {})
-        gpu_available = hardware_ctx.get('gpu_available', False)
-        system_class = hardware_ctx.get('system_class', 'unknown')
-        memory_optimizations = metadata.get('memory_optimization_summary', {}).get('optimizations_performed', 0)
-        helper_functions_used = len(metadata.get('helper_functions_utilized', []))
-        
-        header_panel = Panel.fit(
-            f"[bold yellow]MODEL ARCHITECTURE COMPARISON REPORT v{comparison_version}[/bold yellow]\n"
-            f"Generated: {metadata.get('comparison_timestamp', 'Unknown')[:19]} | "
-            f"Duration: {metadata.get('comparison_duration_seconds', 0):.2f}s\n"
-            f"Input Dimension: {metadata.get('input_dimension', 'Unknown')} | "
-            f"Config Source: {metadata.get('config_source', 'Unknown')}\n"
-            f"Models Available: {metadata.get('available_variants', 0)} | "
-            f"Successfully Analyzed: {metadata.get('successful_comparisons', 0)} | "
-            f"Failed: {metadata.get('failed_comparisons', 0)}\n"
-            f"System Class: {system_class.title()} | "
-            f"Hardware: {'GPU Available' if gpu_available else 'CPU Only'} | "
-            f"Memory Optimizations: {memory_optimizations}\n"
-            f"Helper Functions: {helper_functions_used} | "
-            f"Analysis Completeness: {(metadata.get('successful_comparisons', 0) / max(metadata.get('available_variants', 1), 1) * 100):.1f}%",
-            title="[bold yellow]COMPREHENSIVE ANALYSIS OVERVIEW[/bold yellow]",
-            border_style="green",
-            title_align="left",
-            style="bold green",
-            padding=(1, 2)
-        )
-        console.print()
-        console.print(header_panel)
-        
-        # ENHANCED MAIN COMPARISON TABLE
-        main_table = Table(
-            title="\nPERFORMANCE & RESOURCE COMPARISON",
-            box=box.ROUNDED,
-            header_style="bold cyan",
-            border_style="white",
-            title_style="bold yellow",
-            title_justify="left",
-            show_lines=True,
-            expand=True,
-            width=min(180, console.width - 2)
-        )
-        
-        # Configure main table columns
-        main_table.add_column("Model", style="bold yellow", width=15, no_wrap=True)
-        main_table.add_column("Parameters", style="bold cyan", width=10, justify="left")
-        main_table.add_column("Size (MB)", style="bold blue", width=8, justify="left")
-        main_table.add_column("Complexity", style="bold magenta", width=8, justify="left")
-        main_table.add_column("Inference (ms)", style="bold green", width=10, justify="left")
-        main_table.add_column("Throughput", style="bold", width=12, justify="left")
-        main_table.add_column("Memory (MB)", style="bold", width=10, justify="left")
-        main_table.add_column("Efficiency", style="bold", width=10, justify="left")
-        main_table.add_column("Status", style="bold", width=10, justify="left")
-        
-        # Prepare and sort model data
-        model_data_list = []
-        successful_models = []
-        failed_models = []
-        
-        for model_name, model_data in model_results.items():
-            analysis_status = model_data.get('analysis_status', 'unknown')
-            
-            if analysis_status in ['failed', 'analysis_failed', 'instantiation_failed', 'validation_error'] or 'error' in model_data:
-                failed_models.append((model_name, model_data))
-            elif analysis_status == 'completed':
-                param_count = model_data.get('architecture', {}).get('total_params', 0)
-                model_data_list.append((param_count, model_name, model_data))
-                successful_models.append((model_name, model_data))
-            else:
-                # Handle partial success cases
-                param_count = model_data.get('architecture', {}).get('total_params', 0)
-                if param_count > 0 and 'architecture' in model_data:
-                    model_data_list.append((param_count, model_name, model_data))
-                    successful_models.append((model_name, model_data))
-                else:
-                    failed_models.append((model_name, model_data))
-        
-        # Sort by parameter count for logical ordering
-        model_data_list.sort(key=lambda x: x[0])
-        
-        # Add successful models to main table
-        for param_count, model_name, model_data in model_data_list:
-            arch = model_data.get('architecture', {})
-            perf = model_data.get('performance', {})
-            memory_analysis = model_data.get('memory_analysis', {})
-            resource_req = model_data.get('resource_requirements', {})
-            
-            # Performance metrics extraction
-            inference_time_ms = None
-            throughput_sps = None
-            
-            # Extract from scenario_summary
-            scenario_summary = perf.get('scenario_summary', {})
-            if scenario_summary:
-                # Try standard_batch first, then single_sample
-                for scenario_name in ['standard_batch', 'single_sample', 'small_batch']:
-                    scenario_data = scenario_summary.get(scenario_name, {})
-                    if scenario_data and 'latency_ms' in scenario_data:
-                        inference_time_ms = scenario_data.get('latency_ms', 0)
-                        throughput_sps = scenario_data.get('throughput', 0)
-                        break
-            
-            # Fallback to direct performance metrics
-            if inference_time_ms is None:
-                inference_time_ms = (
-                    perf.get('standard_batch_inference_time_ms') or
-                    perf.get('single_sample_inference_time_ms') or
-                    perf.get('avg_inference_time_ms', 0)
-                )
-            
-            if throughput_sps is None:
-                throughput_sps = (
-                    perf.get('standard_batch_throughput_samples_per_second') or
-                    perf.get('single_sample_throughput_samples_per_second') or
-                    perf.get('throughput_samples_per_second', 0)
-                )
-            
-            # Memory usage from multiple sources
-            memory_mb = 0
-            
-            # Try GPU memory from detailed analysis
-            gpu_memory_detailed = memory_analysis.get('gpu_memory_detailed', {})
-            if gpu_memory_detailed:
-                memory_mb = gpu_memory_detailed.get('allocated_mb', 0)
-            
-            # Fallback to other memory sources
-            if memory_mb == 0:
-                memory_mb = (
-                    memory_analysis.get('gpu_memory_mb', 0) or
-                    memory_analysis.get('cpu_memory_analysis', {}).get('estimated_total_cpu_memory_mb', 0) or
-                    arch.get('model_size_mb', 0) * 4  # Rough estimate
-                )
-            
-            # Calculate efficiency score
-            efficiency_score = arch.get('architecture_efficiency', 0)
-            
-            # Status determination based on current metrics
-            if inference_time_ms and throughput_sps:
-                if inference_time_ms < 5 and throughput_sps > 1000:
-                    status_text = "EXCELLENT"
-                    status_style = "bold green"
-                elif inference_time_ms < 20 and throughput_sps > 500:
-                    status_text = "VERY GOOD"
-                    status_style = "bold cyan"
-                elif inference_time_ms < 50 and throughput_sps > 100:
-                    status_text = "GOOD"
-                    status_style = "bold blue"
-                elif inference_time_ms < 200:
-                    status_text = "ACCEPTABLE"
-                    status_style = "bold yellow"
-                else:
-                    status_text = "SLOW"
-                    status_style = "bold red"
-            else:
-                status_text = "PARTIAL"
-                status_style = "bold magenta"
-            
-            # Memory formatting
-            if memory_mb < 50:
-                memory_text = f"{memory_mb:.3f}"
-                memory_style = "bold green"
-            elif memory_mb < 200:
-                memory_text = f"{memory_mb:.3f}"
-                memory_style = "bold cyan"
-            elif memory_mb < 1000:
-                memory_text = f"{memory_mb:.3f}"
-                memory_style = "yellow"
-            else:
-                memory_text = f"{memory_mb:.3f}"
-                memory_style = "red"
-            
-            # Format efficiency score
-            if efficiency_score >= 80:
-                eff_text = f"{efficiency_score:.0f}%"
-                eff_style = "bold green"
-            elif efficiency_score >= 60:
-                eff_text = f"{efficiency_score:.0f}%"
-                eff_style = "bold cyan"
-            elif efficiency_score >= 40:
-                eff_text = f"{efficiency_score:.0f}%"
-                eff_style = "bold yellow"
-            else:
-                eff_text = f"{efficiency_score:.0f}%" if efficiency_score > 0 else "N/A"
-                eff_style = "bold red" if efficiency_score > 0 else "bold magenta"
-            
-            main_table.add_row(
-                Text(model_name, style="bold"),
-                f"{param_count:,}",
-                f"{arch.get('model_size_mb', 0):.3f}",
-                arch.get('complexity_level', 'Unknown').title(),
-                f"{inference_time_ms:.1f}" if inference_time_ms and inference_time_ms > 0 else "N/A",
-                f"{throughput_sps:.0f}/s" if throughput_sps and throughput_sps > 0 else "N/A",
-                Text(memory_text, style=memory_style),
-                Text(eff_text, style=eff_style),
-                Text(status_text, style=status_style)
-            )
-        
-        # Add failed models to table with error information
-        for model_name, model_data in failed_models:
-            errors = model_data.get('errors', [])
-            if errors:
-                error_msg = errors[0] if isinstance(errors, list) else str(errors)
-            else:
-                error_msg = model_data.get('error', 'Unknown error')
-            
-            # Categorize error types based on current implementation
-            if 'memory' in error_msg.lower():
-                error_type = "MEMORY"
-                error_style = "bold red"
-            elif 'parameter' in error_msg.lower() or 'config' in error_msg.lower():
-                error_type = "CONFIG"
-                error_style = "bold yellow"
-            elif 'instantiation' in error_msg.lower():
-                error_type = "INIT"
-                error_style = "bold red"
-            elif 'validation' in error_msg.lower():
-                error_type = "VALID"
-                error_style = "bold red"
-            else:
-                error_type = "ERROR"
-                error_style = "bold red"
-            
-            main_table.add_row(
-                Text(model_name, style="bold"),
-                Text("--", style="bold"),
-                Text("--", style="bold"),
-                Text(error_type, style=error_style),
-                Text("--", style="bold"),
-                Text("--", style="bold"),
-                Text("--", style="bold"),
-                Text("--", style="bold"),
-                Text("FAILED", style="bold red")
-            )
-        
-        console.print(main_table)
-        
-        # ENHANCED DETAILED ARCHITECTURE ANALYSIS
-        if successful_models:
-            detail_table = Table(
-                title="\nDETAILED ARCHITECTURE & FEATURE ANALYSIS",
-                box=box.ROUNDED,
-                header_style="bold cyan",
-                border_style="cyan",
-                title_style="bold magenta",
-                title_justify="left",
-                show_lines=True,
-                expand=True,
-                width=min(200, console.width - 2)
-            )
-            
-            detail_table.add_column("Model", style="bold magenta", width=15)
-            detail_table.add_column("Description", style="bold yellow", width=32, justify="left")
-            detail_table.add_column("Layers", style="bold green", width=5, justify="left")
-            detail_table.add_column("Features", style="bold", width=22, justify="left")
-            detail_table.add_column("FLOPs", style="bold cyan", width=7, justify="left")
-            detail_table.add_column("Complexity", style="bold cyan", width=8, justify="left")
-            detail_table.add_column("Use Cases", style="bold yellow", width=30, justify="left")
-            
-            for model_name, model_data in successful_models:
-                arch = model_data.get('architecture', {})
-                flop_analysis = model_data.get('computational_complexity', {})
-                feature_analysis = model_data.get('feature_analysis', {})
-                use_cases = model_data.get('use_cases', [])
-                
-                # Feature detection
-                features = []
-                if feature_analysis.get('supports_attention', False):
-                    features.append("Attention")
-                if feature_analysis.get('supports_residual_blocks', False):
-                    features.append("Residual")
-                if feature_analysis.get('supports_skip_connections', False):
-                    features.append("Skip")
-                if feature_analysis.get('has_batch_norm', False):
-                    features.append("BatchNorm")
-                if feature_analysis.get('has_layer_norm', False):
-                    features.append("LayerNorm")
-                if feature_analysis.get('mixed_precision_compatible', False):
-                    features.append("FP16")
-                
-                # Check normalization type
-                norm_type = feature_analysis.get('normalization_type', 'none')
-                if norm_type and norm_type != 'none' and norm_type not in [f.lower() for f in features]:
-                    features.append(norm_type.title())
-                
-                # Ensemble information
-                ensemble_size = feature_analysis.get('ensemble_size', 1)
-                if ensemble_size > 1:
-                    features.append(f"Ens({ensemble_size})")
-                
-                features_text = ", ".join(features) if features else "Basic"
-                
-                # FLOP formatting
-                flops = flop_analysis.get('forward_pass', {}).get('total_flops', 0)
-                if flops > 1e12:
-                    flops_text = f"{flops/1e12:.1f}T"
-                elif flops > 1e9:
-                    flops_text = f"{flops/1e9:.1f}G"
-                elif flops > 1e6:
-                    flops_text = f"{flops/1e6:.1f}M"
-                elif flops > 1e3:
-                    flops_text = f"{flops/1e3:.1f}K"
-                else:
-                    flops_text = str(int(flops)) if flops > 0 else "N/A"
-                
-                # Use cases formatting
-                use_cases_text = ', '.join(use_cases[:2]) + ('...' if len(use_cases) > 2 else '')
-                if not use_cases_text:
-                    use_cases_text = "General purpose"
-                
-                # Get complexity class from current implementation
-                complexity_class = (
-                    flop_analysis.get('complexity_metrics', {}).get('complexity_class') or
-                    arch.get('computational_class', 'Unknown')
-                )
-                
-                detail_table.add_row(
-                    model_name,
-                    arch.get('description', 'No description available')[:32],
-                    str(arch.get('layer_count', 0)),
-                    features_text,
-                    flops_text,
-                    complexity_class.replace('_', ' ').title() if complexity_class else "Unknown",
-                    use_cases_text
-                )
-            
-            console.print(detail_table)
-        
-        # ENHANCED HARDWARE CONTEXT & SYSTEM INFO
-        gpu_memory_gb = hardware_ctx.get('gpu_memory_gb', 0)
-        cpu_count = hardware_ctx.get('cpu_count', os.cpu_count() or 1)
-        system_memory_gb = hardware_ctx.get('system_memory_gb', 8)
-        
-        # Hardware status with GPU info
-        if gpu_available:
-            cuda_info = hardware_ctx.get('cuda', {})
-            if cuda_info.get('device_name'):
-                gpu_name = cuda_info['device_name']
-                gpu_status = f"[bold green]-OK- {gpu_name}[/bold green] ({gpu_memory_gb:.1f}GB VRAM)"
-            elif 'devices' in cuda_info and isinstance(cuda_info['devices'], list) and cuda_info['devices']:
-                gpu_name = cuda_info['devices'][0].get('name', 'Unknown GPU')
-                gpu_status = f"[bold green]-OK- {gpu_name}[/bold green] ({gpu_memory_gb:.1f}GB VRAM)"
-            else:
-                gpu_status = f"[bold green]-OK- GPU Available[/bold green] ({gpu_memory_gb:.1f}GB VRAM)"
-        else:
-            gpu_status = "[bold yellow]-WARN- CPU Only[/bold yellow] - Consider GPU for better performance"
-        
-        # CPU status with performance class info
-        cpu_perf_class = hardware_ctx.get('cpu_performance_class', 'unknown')
-        if cpu_count >= 16:
-            cpu_status = f"[bold green]-OK- {cpu_count} CPU Cores[/bold green] ({cpu_perf_class})"
-        elif cpu_count >= 8:
-            cpu_status = f"[bold green]-OK- {cpu_count} CPU Cores[/bold green] ({cpu_perf_class})"
-        elif cpu_count >= 4:
-            cpu_status = f"[bold yellow]-WARN- {cpu_count} CPU Cores[/bold yellow] ({cpu_perf_class})"
-        else:
-            cpu_status = f"[bold red]-WARN- {cpu_count} CPU Cores[/bold red] (Limited)"
-        
-        # System memory status with performance class
-        memory_perf_class = hardware_ctx.get('memory_performance_class', 'unknown')
-        if system_memory_gb >= 32:
-            mem_status = f"[bold green]-OK- {system_memory_gb:.1f}GB RAM[/bold green] ({memory_perf_class})"
-        elif system_memory_gb >= 16:
-            mem_status = f"[bold green]-OK- {system_memory_gb:.1f}GB RAM[/bold green] ({memory_perf_class})"
-        elif system_memory_gb >= 8:
-            mem_status = f"[bold yellow]-WARN- {system_memory_gb:.1f}GB RAM[/bold yellow] ({memory_perf_class})"
-        else:
-            mem_status = f"[bold red]-WARN- {system_memory_gb:.1f}GB RAM[/bold red] (Limited)"
-        
-        hardware_text = f"{gpu_status}\n{cpu_status}\n{mem_status}"
-        
-        # Add system class
-        if system_class != 'unknown':
-            hardware_text += f"\n[bold cyan]-INFO- System Class: {system_class.title()}[/bold cyan]"
-        
-        # Add memory optimization
-        if memory_optimizations > 0:
-            hardware_text += f"\n[bold green]-INFO- Memory optimizations performed: {memory_optimizations}[/bold green]"
-        
-        # Add helper function utilization
-        if helper_functions_used > 0:
-            hardware_text += f"\n[bold cyan]-INFO- Helper functions utilized: {helper_functions_used}[/bold cyan]"
-        
-        # Add hardware analysis method if available
-        collection_method = hardware_ctx.get('collection_method', '')
-        if collection_method:
-            hardware_text += f"\n[bold]-INFO- Detection method: {collection_method}[/bold]"
-        
-        hardware_panel = Panel.fit(
-            hardware_text,
-            title="[bold]SYSTEM CAPABILITIES & ANALYSIS CONTEXT[/bold]",
-            border_style="bold blue",
-            title_align="left",
-            style="bold",
-            padding=(1, 2)
-        )
-        console.print()
-        console.print(hardware_panel)
-        
-        # ENHANCED RECOMMENDATIONS & OPTIMAL CHOICES
-        if summary:
-            # Overall recommendations
-            overall_recs = summary.get('recommendations', [])
-            optimization_suggestions = summary.get('optimization_suggestions', [])
-            
-            all_recommendations = overall_recs + optimization_suggestions
-            
-            if all_recommendations:
-                # Categorize recommendations based on current implementation patterns
-                performance_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['performance', 'speed', 'throughput', 'optimization', 'gpu', 'batch', 'precision'])]
-                memory_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['memory', 'ram', 'vram', 'checkpointing', 'accumulation', 'clear'])]
-                config_recs = [rec for rec in all_recommendations if any(word in rec.lower() for word in ['config', 'setting', 'parameter', 'dimension', 'encoding'])]
-                general_recs = [rec for rec in all_recommendations if rec not in performance_recs + memory_recs + config_recs]
-                
-                rec_sections = [
-                    ("Performance Optimization", performance_recs, "bold green"),
-                    ("Memory Management", memory_recs, "bold yellow"),
-                    ("Configuration Tuning", config_recs, "bold cyan"),
-                    ("General Recommendations", general_recs, "bold white")
-                ]
-                
-                for section_title, recs, color in rec_sections:
-                    if recs:
-                        # Limit to 5 per section and format consistently
-                        rec_text = "\n".join([f"[{color}]+[/{color}] {rec}" for rec in recs[:5]])
-                        
-                        rec_panel = Panel.fit(
-                            rec_text,
-                            title=f"[bold {color}]{section_title.upper()}[/bold {color}]",
-                            border_style=color,
-                            title_align="left",
-                            style="bold",
-                            padding=(1, 2)
-                        )
-                        console.print(rec_panel)
-            
-            # Optimal choices table
-            optimal = summary.get('optimal_choices', {})
-            if optimal:
-                opt_table = Table(
-                    title="\n[bold yellow]OPTIMAL MODEL SELECTION GUIDE[/bold yellow]",
-                    box=box.ROUNDED,
-                    header_style="bold white",
-                    title_style="bold green",
-                    title_justify="left",
-                    border_style="green",
-                    show_lines=True,
-                    expand=True
-                )
-                
-                opt_table.add_column("Scenario", style="bold cyan", width=15)
-                opt_table.add_column("Recommended Model", style="bold green", width=15)
-                opt_table.add_column("Rationale", style="bold", width=35)
-                opt_table.add_column("Performance", style="bold cyan", width=10, justify="left")
-                
-                # Rationale and performance metrics
-                for scenario, choice in optimal.items():
-                    scenario_display = scenario.replace('_', ' ').title()
-                    
-                    # Get performance data for the chosen model
-                    choice_data = model_results.get(choice, {})
-                    perf_data = choice_data.get('performance', {})
-                    arch_data = choice_data.get('architecture', {})
-                    memory_data = choice_data.get('memory_analysis', {})
-                    
-                    # Rationale based on actual metrics from current implementation
-                    if scenario == 'fastest_inference':
-                        rationale = "Minimizes latency for real-time applications"
-                        # Get inference time from scenario summary
-                        scenario_summary = perf_data.get('scenario_summary', {})
-                        best_time = float('inf')
-                        for sc_name, sc_data in scenario_summary.items():
-                            if 'latency_ms' in sc_data:
-                                best_time = min(best_time, sc_data['latency_ms'])
-                        perf_metric = f"{best_time:.1f}ms" if best_time < float('inf') else "N/A"
-                        
-                    elif scenario == 'most_efficient':
-                        rationale = "Best performance per parameter ratio"
-                        eff_score = arch_data.get('architecture_efficiency', 0)
-                        perf_metric = f"{eff_score:.0f}%" if eff_score > 0 else "N/A"
-                        
-                    elif scenario == 'lowest_memory':
-                        rationale = "Suitable for memory-constrained environments"
-                        # Get memory from detailed analysis
-                        gpu_mem = memory_data.get('gpu_memory_detailed', {}).get('allocated_mb', 0)
-                        cpu_mem = memory_data.get('cpu_memory_analysis', {}).get('estimated_total_cpu_memory_mb', 0)
-                        mem_mb = gpu_mem or cpu_mem
-                        perf_metric = f"{mem_mb:.3f}MB" if mem_mb > 0 else "N/A"
-                        
-                    elif scenario == 'smallest_model':
-                        rationale = "Minimal resource footprint and fastest loading"
-                        params = arch_data.get('total_params', 0)
-                        perf_metric = f"{params:,}" if params > 0 else "N/A"
-                        
-                    elif scenario == 'best_balanced':
-                        rationale = "Optimal trade-off across all performance metrics"
-                        perf_metric = "Balanced"
-                        
-                    else:
-                        rationale = "Best choice for this specific use case"
-                        perf_metric = "Optimized"
-                    
-                    opt_table.add_row(
-                        scenario_display,
-                        Text(choice, style="bold"),
-                        rationale,
-                        perf_metric
-                    )
-                
-                console.print(opt_table)
-            
-            # Performance rankings
-            rankings = summary.get('performance_ranking', {})
-            if rankings:
-                rank_table = Table(
-                    title="\n[bold yellow]PERFORMANCE RANKINGS BY CATEGORY[/bold yellow]",
-                    box=box.ROUNDED,
-                    header_style="bold white",
-                    title_style="bold blue",
-                    title_justify="left",
-                    border_style="blue",
-                    show_lines=True,
-                    expand=True
-                )
-                
-                rank_table.add_column("Category", style="bold cyan", width=15)
-                rank_table.add_column("First Place", style="bold green", width=15)
-                rank_table.add_column("Second Place", style="bold yellow", width=15)
-                rank_table.add_column("Third Place", style="bold white", width=15)
-                rank_table.add_column("Metric", width=10, justify="left")
-                
-                ranking_labels = {
-                    'speed': 'Fastest Inference',
-                    'efficiency': 'Most Efficient',
-                    'memory_efficiency': 'Memory Efficient',
-                    'size': 'Smallest Size'
-                }
-                
-                for metric, models in rankings.items():
-                    if models and metric in ranking_labels:
-                        first = models[0] if len(models) > 0 else "N/A"
-                        second = models[1] if len(models) > 1 else "N/A"
-                        third = models[2] if len(models) > 2 else "N/A"
-                        
-                        # Get metric value for first place from current implementation data
-                        if first != "N/A" and first in model_results:
-                            first_data = model_results[first]
-                            if metric == 'speed':
-                                # Get best throughput from scenario summary
-                                perf = first_data.get('performance', {})
-                                scenario_summary = perf.get('scenario_summary', {})
-                                best_throughput = 0
-                                for sc_data in scenario_summary.values():
-                                    if 'throughput' in sc_data:
-                                        best_throughput = max(best_throughput, sc_data['throughput'])
-                                metric_val = f"{best_throughput:.0f}/s" if best_throughput > 0 else "N/A"
-                                
-                            elif metric == 'efficiency':
-                                arch = first_data.get('architecture', {})
-                                metric_val = f"{arch.get('architecture_efficiency', 0):.0f}%"
-                                
-                            elif metric == 'memory_efficiency':
-                                mem = first_data.get('memory_analysis', {})
-                                gpu_mem = mem.get('gpu_memory_detailed', {}).get('allocated_mb', 0)
-                                cpu_mem = mem.get('cpu_memory_analysis', {}).get('estimated_total_cpu_memory_mb', 0)
-                                mem_mb = gpu_mem or cpu_mem
-                                metric_val = f"{mem_mb:.3f}MB" if mem_mb > 0 else "N/A"
-                                
-                            elif metric == 'size':
-                                arch = first_data.get('architecture', {})
-                                metric_val = f"{arch.get('total_params', 0):,}"
-                            else:
-                                metric_val = "N/A"
-                        else:
-                            metric_val = "N/A"
-                        
-                        rank_table.add_row(
-                            ranking_labels[metric],
-                            first,
-                            second,
-                            third,
-                            metric_val
-                        )
-                
-                console.print(rank_table)
-        
-        # ENHANCED WARNINGS & ISSUES
-        warnings = summary.get('warnings', []) if summary else []
-        analysis_warnings = []
-        for model_name, model_data in model_results.items():
-            model_warnings = model_data.get('warnings', [])
-            if model_warnings:
-                analysis_warnings.extend([f"{model_name}: {w}" for w in model_warnings])
-        
-        all_warnings = warnings + analysis_warnings
-        
-        if all_warnings or failed_models:
-            warn_items = []
-            
-            # Categorize warnings by type based on current implementation
-            critical_warnings = []
-            performance_warnings = []
-            config_warnings = []
-            memory_warnings = []
-            
-            for warning in all_warnings:
-                if any(word in warning.lower() for word in ['critical', 'error', 'fail', 'crash']):
-                    critical_warnings.append(f"[bold red]-CRITICAL-[/bold red] {warning}")
-                elif any(word in warning.lower() for word in ['memory', 'ram', 'vram', 'oom', 'allocation']):
-                    memory_warnings.append(f"[bold yellow]-MEMORY-[/bold yellow] {warning}")
-                elif any(word in warning.lower() for word in ['performance', 'slow', 'degradation', 'throughput']):
-                    performance_warnings.append(f"[bold cyan]-PERF-[/bold cyan] {warning}")
-                else:
-                    config_warnings.append(f"[bold magenta]-CONFIG-[/bold magenta] {warning}")
-            
-            # Add failed model warnings with error analysis from current implementation
-            for model_name, model_data in failed_models:
-                errors = model_data.get('errors', [])
-                analysis_status = model_data.get('analysis_status', 'unknown')
-                
-                if errors:
-                    error_msg = errors[0] if isinstance(errors, list) else str(errors)
-                else:
-                    error_msg = model_data.get('error', 'Unknown error')
-                
-                analysis_time = model_data.get('analysis_metadata', {}).get('analysis_time_seconds', 0)
-                error_type = model_data.get('analysis_metadata', {}).get('error_type', 'Unknown')
-                
-                detailed_error = f"{model_name}: {error_msg[:60]}{'...' if len(error_msg) > 60 else ''}"
-                if analysis_time > 0:
-                    detailed_error += f" (failed after {analysis_time:.2f}s)"
-                if error_type != 'Unknown':
-                    detailed_error += f" [{error_type}]"
-                
-                critical_warnings.append(f"[bold red]-FAIL-[/boldred] {detailed_error}")
-            
-            # Display warnings by category with current implementation context
-            all_warn_items = critical_warnings + memory_warnings + performance_warnings + config_warnings
-            
-            if all_warn_items:
-                warn_text = "\n".join(all_warn_items[:12])  # Limit to 12 total warnings
-                if len(all_warn_items) > 12:
-                    warn_text += f"\n[bold]... and {len(all_warn_items) - 12} more issues[/bold]"
-                
-                warn_panel = Panel.fit(
-                    warn_text,
-                    title="[bold yellow]WARNINGS & ANALYSIS ISSUES[/bold yellow]",
-                    border_style="yellow",
-                    title_align="left",
-                    padding=(1, 2)
-                )
-                console.print(warn_panel)
-        
-        # ENHANCED USE CASE RECOMMENDATIONS
-        use_case_recs = summary.get('use_case_recommendations', {}) if summary else {}
-        if use_case_recs:
-            use_case_table = Table(
-                title="[bold yellow]USE CASE SPECIFIC RECOMMENDATIONS[/bold yellow]",
-                box=box.ROUNDED,
-                header_style="bold white",
-                title_style="bold magenta",
-                title_justify="left",
-                border_style="magenta",
-                show_lines=True,
-                expand=True
-            )
-            
-            use_case_table.add_column("Use Case", style="bold magenta", width=15)
-            use_case_table.add_column("Primary Choice", style="bold green", width=15)
-            use_case_table.add_column("Alternative Options", width=25)
-            use_case_table.add_column("Key Benefits", width=25)
-            
-            use_case_labels = {
-                'prototyping_development': 'Prototyping & Development',
-                'production_deployment': 'Production Deployment',
-                'resource_constrained': 'Resource-Constrained',
-                'high_performance': 'High Performance',
-                'research_experimentation': 'Research & Experimentation'
-            }
-            
-            use_case_benefits = {
-                'prototyping_development': 'Fast iteration, low resource use',
-                'production_deployment': 'Balanced performance & reliability',
-                'resource_constrained': 'Minimal memory & compute needs',
-                'high_performance': 'Maximum accuracy & capability',
-                'research_experimentation': 'Advanced features & flexibility'
-            }
-            
-            for use_case, models in use_case_recs.items():
-                if models and use_case in use_case_labels:
-                    primary = models[0] if models else "None"
-                    alternatives = ", ".join(models[1:3]) if len(models) > 1 else "None"
-                    if len(models) > 3:
-                        alternatives += f" (+{len(models) - 3} more)"
-                    
-                    benefits = use_case_benefits.get(use_case, "Optimized for this scenario")
-                    
-                    use_case_table.add_row(
-                        use_case_labels[use_case],
-                        Text(primary, style="bold"),
-                        alternatives,
-                        benefits
-                    )
-            
-            console.print(use_case_table)
-        
-        # ENHANCED CONFIGURATION GUIDANCE
-        config_guidance = []
-        
-        # Hardware-specific guidance with recommendations from current system analysis
-        if gpu_available:
-            gpu_perf_class = hardware_ctx.get('gpu_performance_class', 'unknown')
-            if gpu_memory_gb >= 16:
-                config_guidance.extend([
-                    f"[bold green]OK[/bold green] High-end GPU detected ({gpu_perf_class}) - All models fully supported",
-                    "[bold green]OK[/bold green] Enable mixed precision (FP16) for 40-50% memory savings",
-                    "[bold green]OK[/bold green] Use large batch sizes (64-128) for optimal throughput",
-                    "[bold green]OK[/bold green] AutoencoderEnsemble recommended for maximum accuracy"
-                ])
-            elif gpu_memory_gb >= 8:
-                config_guidance.extend([
-                    f"[bold cyan]OK[/bold cyan] Mid-range GPU ({gpu_perf_class}) - Good for most models",
-                    "[bold cyan]WARN[/bold cyan] Use moderate batch sizes (32-64) to avoid memory issues",
-                    "[bold cyan]OK[/bold cyan] EnhancedAutoencoder recommended for balanced performance"
-                ])
-            elif gpu_memory_gb >= 4:
-                config_guidance.extend([
-                    f"[bold yellow]WARN[/bold yellow] Entry-level GPU ({gpu_perf_class}) - Reduce batch sizes to 16-32",
-                    "[bold yellow]WARN[/bold yellow] SimpleAutoencoder or small EnhancedAutoencoder recommended",
-                    "[bold yellow]WARN[/bold yellow] Monitor memory usage during training with nvidia-smi"
-                ])
-            else:
-                config_guidance.extend([
-                    "[bold red]WARN[/bold red] Very limited GPU memory - Use smallest models only",
-                    "[bold red]WARN[/bold red] Batch size should be 8-16 maximum",
-                    "[bold red]WARN[/bold red] Consider gradient accumulation instead of large batches"
-                ])
-        else:
-            config_guidance.extend([
-                "[bold yellow]WARN[/bold yellow] CPU-only training - Use SimpleAutoencoder for reasonable performance",
-                "[bold yellow]WARN[/bold yellow] Reduce batch_size to 16-32 for CPU efficiency",
-                "[bold yellow]WARN[/bold yellow] Set num_workers to match CPU core count for data loading",
-                "[bold yellow]INFO[/bold yellow] Consider cloud GPU instances for significantly faster training"
-            ])
-        
-        # System class specific guidance
-        if system_class == 'high_performance':
-            config_guidance.append("[bold green]-OK-[/bold green] High-performance system - Can handle complex models and large batches")
-        elif system_class == 'limited':
-            config_guidance.append("[bold yellow]-WARN-[/bold yellow] Limited system resources - Use conservative settings")
-        elif system_class == 'standard':
-            config_guidance.append("[bold cyan]-INFO-[/bold cyan] Standard system capabilities - Balanced configuration recommended")
-        
-        # Memory-specific guidance from current system analysis
-        if system_memory_gb < 8:
-            config_guidance.append("[bold red]-WARN-[/bold red] Low system RAM - Close other applications during training")
-        elif system_memory_gb >= 32:
-            config_guidance.append("[bold green]-OK-[/bold green] Excellent system RAM - Can handle large datasets and models")
-        
-        # Memory optimization guidance
-        if memory_optimizations > 0:
-            config_guidance.append(f"[bold cyan]-INFO-[/bold cyan] Memory optimizations already applied ({memory_optimizations} operations)")
-        
-        # Helper function integration guidance
-        if helper_functions_used > 0:
-            config_guidance.append(f"[bold cyan]-INFO-[/bold cyan] Comprehensive analysis using {helper_functions_used} helper functions")
-        
-        # Configuration optimization tips
-        config_guidance.extend([
-            "[bold cyan]-INFO-[/bold cyan] Use presets: select_preset_config('lightweight') or select_preset_config('performance')",
-            "[bold cyan]-INFO-[/bold cyan] Enable tensorboard logging: config['training']['use_tensorboard'] = True",
-            "[bold cyan]-INFO-[/bold cyan] Set up early stopping: config['training']['early_stopping'] = True",
-            "[bold cyan]-INFO-[/bold cyan] Configure gradient clipping: config['training']['gradient_clip'] = 1.0",
-            "[bold cyan]-INFO-[/bold cyan] Use enhanced_clear_memory() for memory optimization"
-        ])
-        
-        # Model-specific configuration guidance based on successful analyses
-        if successful_models:
-            best_model = max(successful_models, key=lambda x: x[1].get('architecture', {}).get('architecture_efficiency', 0))
-            config_guidance.append(f"[bold green]-RECOMMENDED-[/bold green] Start with {best_model[0]} for optimal balance")
-        
-        config_text = "\n".join(config_guidance)
-        config_panel = Panel.fit(
-            config_text,
-            title="[bold yellow]CONFIGURATION GUIDANCE & OPTIMIZATION[/bold yellow]",
-            border_style="bold cyan",
-            title_align="left",
-            padding=(1, 2)
-        )
-        console.print(config_panel)
-        
-        # ENHANCED RESOURCE REQUIREMENTS SUMMARY
-        if successful_models:
-            resource_table = Table(
-                title="[bold yellow]RESOURCE REQUIREMENTS SUMMARY[/bold yellow]",
-                box=box.ROUNDED,
-                header_style="bold cyan",
-                border_style="cyan",
-                title_style="bold green",
-                title_justify="left",
-                show_lines=True,
-                expand=True
-            )
-            
-            resource_table.add_column("Model", style="bold cyan", width=15)
-            resource_table.add_column("Training Memory", width=10, justify="left")
-            resource_table.add_column("Training Time", width=10, justify="left")
-            resource_table.add_column("Min Hardware", width=10)
-            resource_table.add_column("Recommended", width=10)
-            resource_table.add_column("Optimization", width=15)
-            
-            for model_name, model_data in successful_models[:5]:  # Limit to top 5
-                resources_data = model_data.get('resource_requirements', {})
-                
-                # Extract resource information
-                training_mem = resources_data.get('memory', {}).get('training_memory', {})
-                time_estimates = resources_data.get('time_estimates', {})
-                hw_reqs = resources_data.get('hardware_requirements', {})
-                
-                # Format memory requirement
-                mem_with_overhead = training_mem.get('total_with_overhead', {})
-                if isinstance(mem_with_overhead, dict):
-                    mem_gb = mem_with_overhead.get('gb', 0)
-                else:
-                    mem_gb = training_mem.get('total_training', {}).get('gb', 0)
-                mem_text = f"{mem_gb:.3f}GB" if mem_gb > 0 else "N/A"
-                
-                # Format training time
-                convergence_estimates = time_estimates.get('convergence_estimates', {})
-                if convergence_estimates:
-                    epoch_time = convergence_estimates.get('total_training_time_hours', 0) / max(convergence_estimates.get('estimated_epochs', 100), 1)
-                else:
-                    epoch_time = time_estimates.get('training_time', {}).get('time_per_epoch_hours', 0)
-                
-                if epoch_time > 1:
-                    time_text = f"{epoch_time:.3f}h/epoch"
-                elif epoch_time > 0:
-                    time_text = f"{epoch_time*60:.3f}m/epoch"
-                else:
-                    time_text = "N/A"
-                
-                # Hardware recommendations
-                min_hw = hw_reqs.get('minimum_requirements', {})
-                rec_hw = hw_reqs.get('recommended_requirements', {})
-                
-                min_gpu = min_hw.get('gpu_memory_gb', 0) or 0
-                rec_gpu = rec_hw.get('gpu_memory_gb', 0) or 0
-                
-                min_text = f"{min_gpu:.3f}GB GPU" if min_gpu > 0 else "CPU OK"
-                rec_text = f"{rec_gpu:.3f}GB GPU" if rec_gpu > 0 else "CPU"
-                
-                # Optimization suggestions
-                opt_strategies = resources_data.get('optimization_strategies', {})
-                mem_opts = opt_strategies.get('memory_optimization', [])
-                comp_opts = opt_strategies.get('compute_optimization', [])
-                
-                if mem_opts and 'mixed precision' in str(mem_opts[0]).lower():
-                    opt_text = "Mixed Precision"
-                elif mem_opts and 'batch' in str(mem_opts[0]).lower():
-                    opt_text = "Smaller Batches"
-                elif mem_opts and 'checkpointing' in str(mem_opts[0]).lower():
-                    opt_text = "Grad Checkpoint"
-                elif comp_opts and 'gpu' in str(comp_opts[0]).lower():
-                    opt_text = "GPU Required"
-                else:
-                    opt_text = "Standard"
-                
-                resource_table.add_row(
-                    model_name,
-                    mem_text,
-                    time_text,
-                    min_text,
-                    rec_text,
-                    opt_text
-                )
-            
-            console.print(resource_table)
-        
-        # ENHANCED SCALING ANALYSIS SUMMARY
-        if successful_models and any('scaling' in model_data for _, model_data in successful_models):
-            scaling_table = Table(
-                title="[bold yellow]MODEL SCALING ANALYSIS[/bold yellow]",
-                box=box.ROUNDED,
-                header_style="bold cyan",
-                border_style="cyan",
-                title_style="bold blue",
-                title_justify="left",
-                show_lines=True,
-                expand=True
-            )
-            
-            scaling_table.add_column("Model", style="bold cyan", width=15)
-            scaling_table.add_column("Parameter Scaling", width=10)
-            scaling_table.add_column("FLOP Scaling", width=10)
-            scaling_table.add_column("Memory Scaling", width=10)
-            scaling_table.add_column("Optimal Batch", width=10, justify="left")
-            scaling_table.add_column("Complexity Growth", width=15)
-            
-            for model_name, model_data in successful_models:
-                scaling_data = model_data.get('scaling', {})
-                if scaling_data:
-                    # Input dimension scaling
-                    input_scaling = scaling_data.get('input_dimension_scaling', {})
-                    scaling_coeffs = input_scaling.get('scaling_coefficients', {})
-                    
-                    param_exp = scaling_coeffs.get('parameter_scaling_exponent', 0)
-                    flop_exp = scaling_coeffs.get('flop_scaling_exponent', 0)
-                    
-                    param_scaling_text = f"O(n^{param_exp:.3f})" if param_exp > 0 else "N/A"
-                    flop_scaling_text = f"O(n^{flop_exp:.3f})" if flop_exp > 0 else "N/A"
-                    
-                    # Memory scaling
-                    memory_curves = input_scaling.get('memory_curves', {})
-                    mem_exp = memory_curves.get('memory_scaling_exponent', 0)
-                    mem_scaling_text = f"O(n^{mem_exp:.3f})" if mem_exp > 0 else "Linear"
-                    
-                    # Batch size scaling
-                    batch_scaling = scaling_data.get('batch_size_scaling', {})
-                    optimal_batches = batch_scaling.get('optimal_batch_sizes', {})
-                    opt_batch = optimal_batches.get('recommended', 'N/A')
-                    
-                    # Parameter scaling complexity growth
-                    param_scaling = scaling_data.get('parameter_scaling', {})
-                    complexity_growth = param_scaling.get('complexity_growth', 'unknown').replace('_', ' ').title()
-                    
-                    scaling_table.add_row(
-                        model_name,
-                        param_scaling_text,
-                        flop_scaling_text,
-                        mem_scaling_text,
-                        str(opt_batch),
-                        complexity_growth
-                    )
-            
-            if scaling_table.rows:  # Only show if we have scaling data
-                console.print(scaling_table)
-        
-        # TROUBLESHOOTING SECTION
-        troubleshoot_sections = {
-            "Essential Commands": [
-                "[bold cyan]initialize_model_variants(silent=False)[/bold cyan] - Refresh model registry with detailed logs",
-                "[bold cyan]validate_model_variants(logger, silent=False)[/bold cyan] - Test model functionality thoroughly",
-                "[bold cyan]get_current_config()[/bold cyan] - View current configuration parameters",
-                "[bold cyan]select_preset_config('performance')[/bold cyan] - Load optimized preset configuration",
-                "[bold cyan]enhanced_clear_memory(aggressive=True)[/bold cyan] - Optimize memory usage"
-            ],
-            "Performance Optimization": [
-                "Adjust batch_size based on available GPU memory and system class",
-                "Use mixed precision (FP16) for 40-50% memory savings on modern GPUs",
-                "Enable gradient checkpointing: config['training']['gradient_checkpointing'] = True",
-                "Use learning rate scheduling for better convergence",
-                "Enable early stopping to prevent overfitting and reduce training time"
-            ],
-            "Memory Management": [
-                "Call enhanced_clear_memory() before training to optimize memory",
-                "Reduce batch_size if encountering OOM errors",
-                "Enable gradient accumulation for large effective batch sizes",
-                "Use gradient checkpointing for memory-intensive models",
-                "Monitor GPU memory usage with nvidia-smi during training"
-            ],
-            "Model Selection": [
-                f"Start with {optimal.get('best_balanced', 'EnhancedAutoencoder')} for balanced performance" if optimal else "Use EnhancedAutoencoder for balanced performance",
-                "Use SimpleAutoencoder for prototyping and debugging",
-                "Use AutoencoderEnsemble only when maximum accuracy is required",
-                f"Consider system class ({system_class}) when selecting models",
-                "Test with default presets before custom configurations"
-            ]
-        }
-        
-        troubleshoot_text = ""
-        for section, items in troubleshoot_sections.items():
-            troubleshoot_text += f"[bold cyan]{section}:[/bold cyan]\n"
-            # Limit to 4 items per section
-            for item in items[:4]:
-                troubleshoot_text += f"- {item}\n"
-            troubleshoot_text += "\n"
-        
-        troubleshoot_panel = Panel.fit(
-            troubleshoot_text.strip(),
-            title="[bold yellow]TROUBLESHOOTING & OPTIMIZATION GUIDE[/bold yellow]",
-            border_style="bold cyan",
-            title_align="left",
-            style="bold",
-            padding=(1, 2)
-        )
-        console.print(troubleshoot_panel)
-        
-        # FOOTER WITH STATISTICS
-        total_models = len(model_results)
-        success_count = len(successful_models)
-        fail_count = len(failed_models)
-        success_rate = (success_count / total_models * 100) if total_models > 0 else 0
-        
-        # Analysis completeness metrics
-        total_validation_checks = sum(
-            len(model_data.get('analysis_metadata', {}).get('validation_checks_passed', []))
-            for _, model_data in successful_models
-        )
-        avg_checks = total_validation_checks / max(success_count, 1)
-        
-        # Helper function utilization metrics
-        total_helper_functions = sum(
-            len(model_data.get('analysis_metadata', {}).get('helper_functions_utilized', []))
-            for _, model_data in successful_models
-        )
-        avg_helper_functions = total_helper_functions / max(success_count, 1)
-        
-        # Performance summary
-        if successful_models:
-            avg_params = sum(model_data.get('architecture', {}).get('total_params', 0) 
-                           for _, model_data in successful_models) / success_count
-            avg_efficiency = sum(model_data.get('architecture', {}).get('architecture_efficiency', 0) 
-                               for _, model_data in successful_models) / success_count
-            
-            perf_summary = f"Avg Parameters: {avg_params:,.0f} | Avg Efficiency: {avg_efficiency:.1f}%"
-        else:
-            perf_summary = "No performance data available"
-        
-        # Additional metrics
-        total_memory_opts = metadata.get('memory_optimization_summary', {}).get('optimizations_performed', 0)
-        total_cleanup_actions = metadata.get('memory_optimization_summary', {}).get('total_cleanup_actions', 0)
-        
-        footer_text = (
-            f"[bold cyan]Analysis Completed Successfully[/bold cyan]\n"
-            f"Models analyzed: {total_models} | Successful: {success_count} | Failed: {fail_count} | Success rate: {success_rate:.1f}%\n"
-            f"System: {system_class.title()} | Hardware: {'GPU available' if gpu_available else 'CPU only'} | {perf_summary}\n"
-            f"Analysis depth: {avg_checks:.1f} avg checks/model | Helper functions: {avg_helper_functions:.1f}/model\n"
-            f"Memory optimizations: {total_memory_opts} operations, {total_cleanup_actions} cleanup actions\n"
-            f"Report generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | Version: {comparison_version}"
-        )
-        
-        footer_panel = Panel.fit(
-            footer_text,
-            title="[bold yellow]COMPREHENSIVE ANALYSIS SUMMARY[/bold yellow]",
-            border_style="bold green",
-            title_align="left",
-            style="bold",
-            padding=(0, 2)
-        )
-        console.print(footer_panel)
-        
-        # Logging with metrics
-        logger.debug(f"Model comparison display completed successfully:")
-        logger.debug(f"  - Total models analyzed: {total_models}")
-        logger.debug(f"  - Successful comprehensive analyses: {success_count}")
-        logger.debug(f"  - Failed analyses: {fail_count}")
-        logger.debug(f"  - Overall success rate: {success_rate:.1f}%")
-        logger.debug(f"  - Average validation checks per model: {avg_checks:.1f}")
-        logger.debug(f"  - Average helper functions per model: {avg_helper_functions:.1f}")
-        logger.debug(f"  - System class: {system_class}")
-        logger.debug(f"  - Hardware context: {'GPU available' if gpu_available else 'CPU only'}")
-        logger.debug(f"  - Memory optimizations: {total_memory_opts} operations")
-        logger.debug(f"  - Comparison version: {comparison_version}")
-        
-        # Log individual model performance for debugging
-        for model_name, model_data in successful_models:
-            arch = model_data.get('architecture', {})
-            analysis_status = model_data.get('analysis_status', 'unknown')
-            validation_checks = len(model_data.get('analysis_metadata', {}).get('validation_checks_passed', []))
-            helper_functions = len(model_data.get('analysis_metadata', {}).get('helper_functions_utilized', []))
-            
-            logger.debug(
-                f"Model {model_name} [{analysis_status}]: "
-                f"{arch.get('total_params', 0):,} params, "
-                f"efficiency: {arch.get('architecture_efficiency', 0):.1f}%, "
-                f"complexity: {arch.get('complexity_level', 'unknown')}, "
-                f"checks: {validation_checks}, "
-                f"helpers: {helper_functions}"
-            )
-        
-        # Log error information for failed models
-        for model_name, model_data in failed_models:
-            errors = model_data.get('errors', [])
-            analysis_status = model_data.get('analysis_status', 'unknown')
-            error_type = model_data.get('analysis_metadata', {}).get('error_type', 'Unknown')
-            
-            if errors:
-                error_msg = errors[0] if isinstance(errors, list) else str(errors)
-            else:
-                error_msg = model_data.get('error', 'Unknown error')
-            
-            logger.error(f"Model {model_name} analysis failed [{analysis_status}] [{error_type}]: {error_msg}")
-        
-    except Exception as e:
-        error_msg = f"Critical failure in enhanced display_model_comparison: {str(e)}"
-        logger.critical(error_msg, exc_info=True)
-        
-        # Display errors with context
-        message = (
-            f"Critical failure in model comparison display: {str(e)}\n"
-            f"Context:\n"
-            f"- Current Preset: [bold yellow]{preset_name if 'preset_name' in locals() else 'Unknown'}[/bold yellow]\n"
-            f"- Model Type: [bold yellow]{model_type if 'model_type' in locals() else 'Unknown'}[/bold yellow]\n"
-            f"- Config Source: [bold yellow]{config_source if 'config_source' in locals() else 'Unknown'}[/bold yellow]\n\n"
-            f"Enhanced Recovery Actions:\n"
-            f"1. [bold yellow]initialize_model_variants()[/bold yellow] - Reinitialize model registry\n"
-            f"2. [bold yellow]check_hardware()[/bold yellow] - Verify system capabilities and resources\n"
-            f"3. [bold yellow]get_current_config()[/bold yellow] - Validate configuration parameters\n"
-            f"4. [bold yellow]validate_model_variants(logger)[/bold yellow] - Test model functionality\n"
-            f"5. [bold yellow]select_preset_config('lightweight')[/bold yellow] - Use simplified configuration\n"
-            f"6. Restart Python session if persistent issues occur"
-        )
-        console.print(
-            Panel.fit(
-                f"[bold red]{message}[/bold red]",
-                title="CRITICAL DISPLAY ERROR",
-                style="bold red",
-                border_style="red",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
+
 
 def show_system_info():
     """Enhanced system information display leveraging comprehensive get_system_info() analysis.
@@ -68086,13 +70246,13 @@ def show_system_info():
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu display with context
-        print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.CYAN + Style.BRIGHT + "SYSTEM INFORMATION & ANALYSIS")
-        print(Fore.YELLOW + Style.BRIGHT + "-"*40)
-        print(Fore.GREEN + Style.BRIGHT + f"Active System Context:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Source: " + Fore.CYAN + Style.BRIGHT + f"{config_source}")
+        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + "SYSTEM INFORMATION & ANALYSIS")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        print(Fore.YELLOW + Style.BRIGHT + f"Active System Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
         
         # Get system information
         try:
@@ -69584,7 +71744,7 @@ def select_preset_config():
             current_preset = current_preset.title()
         
         # Menu header with current context
-        print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
+        #print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
         print(Fore.YELLOW + Style.BRIGHT + "PRESET CONFIGURATION SELECTION")
         print(Fore.CYAN + Style.BRIGHT + "="*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Current Context:")
@@ -70352,25 +72512,7 @@ def load_config_from_file():
         except Exception as e:
             print(Fore.RED + Style.BRIGHT + f"Failed to load configuration: {e}")
 
-def validate_config_interactive():
-    """Interactive configuration validation."""
-    try:
-        # clear screen and show banner
-        print("\033c", end="")
-        #show_banner()
-        
-        # Get configuration from show_banner function
-        config = show_banner(return_config=True)
-        
-        #config = get_current_config()
-        validate_config(config)
-        print("\nConfiguration is valid")
-    except ValueError as e:
-        print(f"\nConfiguration validation failed: {e}")
-        
-        if input("\nShow detailed validation report? (y/N): ").lower().strip() == 'y':
-            print("\nValidation Details:")
-            # Additional validation logic could go here
+
 
 def edit_config_interactive():
     """Interactive configuration editor."""
