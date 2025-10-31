@@ -7464,7 +7464,7 @@ DEFAULT_PRESET = {
         'early_warning_threshold': 0.25, 'adaptive_threshold': True, 'confidence_interval': 0.95,
         'detection_methods': ['reconstruction_error', 'statistical_analysis'],
         'alert_levels': ['low', 'medium', 'high', 'critical'], 'threshold_validation': True
-    },
+    },#noise
     'data': {
         'normal_samples': 8000, 'attack_samples': 2000, 'features': 20, 'use_real_data': False,
         'data_normalization': 'standard', 'anomaly_factor': 1.5, 'random_state': 42,
@@ -60935,9 +60935,16 @@ def _interactive_hpo_express_setup(
         current_epochs = training_config.get('epochs', 100)
         current_batch_size = training_config.get('batch_size', 64)
         current_use_real_data = data_config.get('use_real_data', False)
+        current_noise_factor = data_config.get('synthetic_generation', {}).get('noise_factor', 0.05)
+
+        if timeout_seconds is None:
+            timeout_seconds = current_timeout
+        
+        if trial_count is None:
+            trial_count = current_trials
         
         # Clear screen and show context
-        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS HPO SETUP - QUICK HYPERPARAMETER OPTIMIZATION")
+        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS HPO SETUP")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         print(Fore.YELLOW + Style.BRIGHT + "Base Context:")
@@ -61077,8 +61084,7 @@ def _interactive_hpo_express_setup(
                 print(Fore.CYAN + Style.BRIGHT + "-"*40)
 
         # Data Source Selection
-        #if data_mode is None and not (non_interactive or skip_prompt):
-        if data_mode and not (non_interactive or skip_prompt):
+        if data_mode is not None and not (non_interactive or skip_prompt):
             print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SOURCE SELECTION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(recommended for production HPO)")
@@ -61101,6 +61107,215 @@ def _interactive_hpo_express_setup(
                 
             data_mode = 'real' if data_choice == '1' else 'synthetic'
             print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if data_mode == 'real' else 'Synthetic Data'}")
+            
+            # Enhanced data configuration based on selection
+            if data_mode == 'real':
+                use_real_data = True
+                print(Fore.MAGENTA + Style.BRIGHT + "\nREAL DATA CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                # Data file path configuration
+                default_data_path = data_config.get('data_path', 'data/network_data.csv')
+                print(Fore.GREEN + Style.BRIGHT + f"Selected: Real Network Data")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Using actual network traffic data for realistic optimization")
+                print(Fore.YELLOW + Style.BRIGHT + f"\nData file path (default: " + Fore.GREEN + Style.BRIGHT + f"{default_data_path}):")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Path to your network traffic data file")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default or provide custom path")
+                
+                user_data_path = input(Fore.YELLOW + Style.BRIGHT + "\nEnter data file path: " + Style.RESET_ALL).strip()
+                if user_data_path:
+                    data_path = user_data_path
+                    # Validate path exists
+                    if not Path(data_path).exists():
+                        print(Fore.YELLOW + Style.BRIGHT + f"\nWarning: Path '{data_path}' does not exist.")
+                        # Create directory if it doesn't exist
+                        create_confirm = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N): " + Style.RESET_ALL).strip().lower()
+                        if create_confirm not in ('y', 'yes'):
+                            data_path = default_data_path
+                            Path(data_path).mkdir(parents=True, exist_ok=True)
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUsing default data path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
+                else:
+                    data_path = default_data_path
+                    Path(data_path).mkdir(parents=True, exist_ok=True)
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing default data path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
+                
+                # Data format selection
+                print(Fore.YELLOW + Style.BRIGHT + f"\nData format:")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Format of your data file")
+                print(Fore.WHITE + Style.BRIGHT + "1. CSV " + Fore.GREEN + Style.BRIGHT + "(Comma-separated values)")
+                print(Fore.WHITE + Style.BRIGHT + "2. Parquet " + Fore.GREEN + Style.BRIGHT + "(Columnar storage)")
+                print(Fore.WHITE + Style.BRIGHT + "3. JSON " + Fore.GREEN + Style.BRIGHT + "(JavaScript Object Notation)")
+                print(Fore.WHITE + Style.BRIGHT + "4. Auto-detect " + Fore.GREEN + Style.BRIGHT + "(Detect from file extension)")
+                
+                format_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data format (1-4): " + Style.RESET_ALL).strip()
+                format_map = {'1': 'csv', '2': 'parquet', '3': 'json', '4': 'auto'}
+                data_format = format_map.get(format_choice, 'auto')
+                
+                # Feature configuration
+                default_features = data_config.get('features', 'auto')
+                print(Fore.YELLOW + Style.BRIGHT + f"\nNumber of features (default: " + Fore.GREEN + Style.BRIGHT + f"{default_features}):")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Number of input features or 'auto' to detect")
+                
+                user_features = input(Fore.YELLOW + Style.BRIGHT + "\nEnter number of features: " + Style.RESET_ALL).strip()
+                if user_features and user_features.lower() != 'auto':
+                    try:
+                        features = int(user_features)
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing {features} features")
+                    except ValueError:
+                        features = 'auto'
+                        print(Fore.YELLOW + Style.BRIGHT + "\nInvalid input, using auto-detection")
+                else:
+                    features = 'auto'
+                    print(Fore.GREEN + Style.BRIGHT + "\nUsing auto feature detection")
+                
+                # Artifacts path configuration
+                default_artifacts_path = data_config.get('artifacts_path', 'artifacts/')
+                print(Fore.YELLOW + Style.BRIGHT + f"\nArtifacts path (default: " + Fore.GREEN + Style.BRIGHT + f"{default_artifacts_path}):")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Path to your preprocessing artifacts data file")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Directory for storing preprocessing artifacts")
+                
+                user_artifacts_path = input(Fore.YELLOW + Style.BRIGHT + "\nEnter artifacts path: " + Style.RESET_ALL).strip()
+                if user_artifacts_path:
+                    artifacts_path = user_artifacts_path
+                    # Validate path exists
+                    if not Path(artifacts_path).exists():
+                        print(Fore.YELLOW + Style.BRIGHT + f"\nWarning: Path '{artifacts_path}' does not exist.")
+                        # Create directory if it doesn't exist
+                        create_confirm = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N): " + Style.RESET_ALL).strip().lower()
+                        if create_confirm not in ('y', 'yes'):
+                            artifacts_path = default_artifacts_path
+                            Path(artifacts_path).mkdir(parents=True, exist_ok=True)
+                            print(Fore.GREEN + Style.BRIGHT + f"\nArtifacts directory created/verified: " + Fore.YELLOW + Style.BRIGHT + f"{artifacts_path}")
+                else:
+                    artifacts_path = default_artifacts_path
+                    Path(artifacts_path).mkdir(parents=True, exist_ok=True)
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing default artifacts path: " + Fore.YELLOW + Style.BRIGHT + f"{artifacts_path}")
+                
+            else:  # Synthetic data
+                data_mode = 'synthetic'
+                use_real_data = False
+                print(Fore.MAGENTA + Style.BRIGHT + "\nSYNTHETIC DATA CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                # Data complexity level
+                print(Fore.GREEN + Style.BRIGHT + f"Selected: Synthetic Data")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Using generated data for faster iteration cycles")
+                print(Fore.YELLOW + Style.BRIGHT + "\nData complexity level:")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Controls the realism and complexity of generated data")
+                print(Fore.WHITE + Style.BRIGHT + "1. Simple " + Fore.GREEN + Style.BRIGHT + "(Basic patterns, fast generation)")
+                print(Fore.WHITE + Style.BRIGHT + "2. Moderate " + Fore.GREEN + Style.BRIGHT + "(Balanced complexity)")
+                print(Fore.WHITE + Style.BRIGHT + "3. Complex " + Fore.GREEN + Style.BRIGHT + "(Realistic patterns, slower generation)")
+                print(Fore.WHITE + Style.BRIGHT + "4. Custom " + Fore.GREEN + Style.BRIGHT + "(Configure all parameters manually)")
+                
+                complexity_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect complexity level (1-4): " + Style.RESET_ALL).strip()
+                
+                if complexity_choice == '4':
+                    # Custom synthetic data configuration
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM SYNTHETIC DATA CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                    
+                    # Normal samples configuration
+                    default_normal_samples = data_config.get('normal_samples', 10000)
+                    print(Fore.YELLOW + Style.BRIGHT + f"Normal samples (default: " + Fore.GREEN + Style.BRIGHT + f"{default_normal_samples}):")
+                    print(Fore.CYAN + Style.BRIGHT + "  └─ Number of normal/benign samples to generate")
+                    
+                    while True:
+                        try:
+                            user_normal = input(Fore.YELLOW + Style.BRIGHT + "\nEnter number of normal samples: " + Style.RESET_ALL).strip()
+                            if not user_normal:
+                                normal_samples = default_normal_samples
+                                break
+                            normal_samples = int(user_normal)
+                            if normal_samples < 1000:
+                                print(Fore.RED + Style.BRIGHT + "\nWarning: Low sample count may affect model quality")
+                            break
+                        except ValueError:
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter a valid number.")
+                    
+                    # Attack samples configuration
+                    default_attack_samples = data_config.get('attack_samples', 2000)
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nAttack samples (default: " + Fore.GREEN + Style.BRIGHT + f"{default_attack_samples}):")
+                    print(Fore.CYAN + Style.BRIGHT + "  └─ Number of attack/anomaly samples to generate")
+                    
+                    while True:
+                        try:
+                            user_attack = input(Fore.YELLOW + Style.BRIGHT + "\nEnter number of attack samples: " + Style.RESET_ALL).strip()
+                            if not user_attack:
+                                attack_samples = default_attack_samples
+                                break
+                            attack_samples = int(user_attack)
+                            if attack_samples < 100:
+                                print(Fore.RED + Style.BRIGHT + "\nWarning: Very low attack samples may affect anomaly detection")
+                            break
+                        except ValueError:
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter a valid number.")
+                    
+                    # Features configuration
+                    default_features = data_config.get('features', 78)
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nNumber of features (default: " + Fore.GREEN + Style.BRIGHT + f"{default_features}):")
+                    print(Fore.CYAN + Style.BRIGHT + "  └─ Dimensionality of the synthetic data")
+                    
+                    while True:
+                        try:
+                            user_features = input(Fore.YELLOW + Style.BRIGHT + "\nEnter number of features: " + Style.RESET_ALL).strip()
+                            if not user_features:
+                                features = default_features
+                                break
+                            features = int(user_features)
+                            if features < 10:
+                                print(Fore.RED + Style.BRIGHT + "\nWarning: Very low feature count may limit model capacity")
+                            elif features > 500:
+                                print(Fore.YELLOW + Style.BRIGHT + "\nWarning: High feature count may increase training time")
+                            break
+                        except ValueError:
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter a valid number.")
+                    
+                    # Noise level configuration
+                    default_noise_factor = current_noise_factor if current_noise_factor is not None else 0.05
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nNoise level (default: " + Fore.GREEN + Style.BRIGHT + f"{default_noise_factor}):")
+                    print(Fore.CYAN + Style.BRIGHT + "  └─ Amount of noise to add to synthetic data (0.0-1.0)")
+                    
+                    while True:
+                        try:
+                            user_noise = input(Fore.YELLOW + Style.BRIGHT + "\nEnter noise level: " + Style.RESET_ALL).strip()
+                            if not user_noise:
+                                noise_level = 0.05
+                                noise_factor = noise_level
+                                break
+                            noise_level = float(user_noise)
+                            noise_factor = noise_level
+                            if noise_level < 0 or noise_level > 1:
+                                print(Fore.RED + Style.BRIGHT + "\nNoise level must be between 0.0 and 1.0")
+                                continue
+                            break
+                        except ValueError:
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter a valid number.")
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nCustom synthetic data configured:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Noise Factor: " + Fore.YELLOW + Style.BRIGHT + f"{noise_level}")
+                    
+                else:
+                    # Predefined complexity levels
+                    complexity_configs = {
+                        '1': {'normal_samples': 5000, 'attack_samples': 1000, 'features': 50, 'noise_factor': 0.05, 'name': 'Simple'},
+                        '2': {'normal_samples': 10000, 'attack_samples': 2000, 'features': 78, 'noise_factor': 0.1, 'name': 'Moderate'},
+                        '3': {'normal_samples': 20000, 'attack_samples': 4000, 'features': 100, 'noise_factor': 0.15, 'name': 'Complex'}
+                    }
+                    
+                    config = complexity_configs.get(complexity_choice, complexity_configs['1'])
+                    normal_samples = config['normal_samples']
+                    attack_samples = config['attack_samples']
+                    features = config['features']
+                    noise_level = config['noise_factor']
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\n{config['name']} synthetic data configured:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Noise level: " + Fore.YELLOW + Style.BRIGHT + f"{noise_level}")
         
         # Resolve data mode with preset compatibility
         use_real_data_config = data_config.get('use_real_data', False)
@@ -61119,21 +61334,49 @@ def _interactive_hpo_express_setup(
         # Skip interactive optimization goal if in non-interactive mode
         if non_interactive or skip_prompt:
             # Use provided trial_count or default express settings
-            n_trials = trial_count if trial_count is not None else 100
-            trial_epochs = 20
-            timeout_minutes = (timeout_seconds // 60) if timeout_seconds else 60
+            n_trials = trial_count if trial_count is not None else current_trials
+            trial_epochs = current_trial_epochs if current_trial_epochs is not None else 15
+            timeout_minutes = (timeout_seconds // 60) if timeout_seconds else 30
             goal_name = "Express Optimization"
             print(Fore.GREEN + Style.BRIGHT + f"\nNon-interactive mode - using {n_trials} trials, {timeout_minutes} minutes timeout")
         else:
-            # HPO Intensity Selection with trial_epochs
+            # HPO Intensity Selection with system-aware recommendations
             print(Fore.MAGENTA + Style.BRIGHT + "\nHPO INTENSITY SELECTION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             
-            # Calculate estimated times for each intensity level
+            # System-aware intensity recommendations
+            recommended_intensity = '2'  # Default to standard
+            if system_class == "limited":
+                recommended_intensity = '1'
+                print(Fore.YELLOW + Style.BRIGHT + "System recommendation: Quick Scan (limited resources)")
+            elif system_class == "enterprise":
+                recommended_intensity = '3'
+                print(Fore.YELLOW + Style.BRIGHT + "System recommendation: Thorough Search (high-performance system)")
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "System recommendation: Standard Optimization (balanced approach)")
+            
+            # Intensity configurations with descriptions
             intensity_configs = {
-                '1': {'n_trials': 20, 'trial_epochs': 15, 'timeout_minutes': 30, 'name': 'Quick Scan'},
-                '2': {'n_trials': 50, 'trial_epochs': 20, 'timeout_minutes': 120, 'name': 'Standard Optimization'},
-                '3': {'n_trials': 100, 'trial_epochs': 25, 'timeout_minutes': 240, 'name': 'Thorough Search'}
+                '1': {
+                    'n_trials': 20, 'trial_epochs': 15, 'timeout_minutes': 30, 'name': 'Quick Scan',
+                    'description': 'Fast exploration for initial parameter ranges',
+                    'best_for': 'Limited resources, quick experiments, parameter sensitivity analysis'
+                },
+                '2': {
+                    'n_trials': 50, 'trial_epochs': 20, 'timeout_minutes': 120, 'name': 'Standard Optimization',
+                    'description': 'Balanced approach for most use cases',
+                    'best_for': 'General optimization, production model tuning, balanced performance'
+                },
+                '3': {
+                    'n_trials': 100, 'trial_epochs': 25, 'timeout_minutes': 240, 'name': 'Thorough Search',
+                    'description': 'Comprehensive search for optimal performance',
+                    'best_for': 'High-performance systems, final model tuning, research experiments'
+                },
+                '4': {
+                    'n_trials': 200, 'trial_epochs': 30, 'timeout_minutes': 480, 'name': 'Exhaustive Search',
+                    'description': 'Maximum coverage of parameter space',
+                    'best_for': 'Enterprise systems, research papers, critical deployments'
+                }
             }
             
             # Display options with estimated times
@@ -61146,17 +61389,21 @@ def _interactive_hpo_express_setup(
                     hardware_info=hardware_data,
                     system_class=system_class
                 )
-                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']} " + 
-                      Fore.GREEN + Style.BRIGHT + f"({config['n_trials']} trials, {config['trial_epochs']} epochs - {estimated_time})")
+                recommendation_indicator = " " + Fore.GREEN + Style.BRIGHT + "*" + Style.RESET_ALL if key == recommended_intensity else ""
+                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']}{recommendation_indicator} " + Fore.GREEN + Style.BRIGHT + f"({config['description']})")
+                print(Fore.CYAN + Style.BRIGHT + f"   ├─ Best for: {config['best_for']}")
+                print(Fore.CYAN + Style.BRIGHT + f"   ├─ Estimated Time: {estimated_time}")
+                print(Fore.CYAN + Style.BRIGHT + f"   └─ Trials: {config['n_trials']}, Trial Epochs: {config['trial_epochs']}, Timeout: {config['timeout_minutes']} minutes\n")
             
+            print(Fore.WHITE + Style.BRIGHT + "\n5. Custom Configuration " + Fore.GREEN + Style.BRIGHT + "(Configure all parameters individually)")
             print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
             while True:
                 try:
-                    intensity_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect HPO intensity (0-3): " + Style.RESET_ALL).strip()
-                    if intensity_choice in ['1', '2', '3', '0']:
+                    intensity_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect HPO intensity (0-5): " + Style.RESET_ALL).strip()
+                    if intensity_choice in ['1', '2', '3', '4', '5', '0']:
                         break
-                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
                 except (EOFError, KeyboardInterrupt):
                     print(Fore.RED + Style.BRIGHT + "\nIntensity selection cancelled")
                     return None
@@ -61165,11 +61412,99 @@ def _interactive_hpo_express_setup(
                 print(Fore.RED + Style.BRIGHT + "\nIntensity selection cancelled")
                 return None
             
-            # Set parameters based on goal (use overrides if provided)
+            if intensity_choice == '5':
+                # Custom HPO configuration
+                print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM HPO CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                # Number of trials
+                default_trials = trial_count if trial_count is not None else current_trials
+                print(Fore.YELLOW + Style.BRIGHT + f"Number of trials (default: " + Fore.GREEN + Style.BRIGHT + f"{default_trials}):")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ More trials = better optimization but longer runtime")
+                
+                while True:
+                    try:
+                        user_trials = input(Fore.YELLOW + Style.BRIGHT + "\nEnter number of trials: " + Style.RESET_ALL).strip()
+                        if not user_trials:
+                            n_trials = default_trials
+                            trial_count = n_trials
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUsing default: {n_trials} trials")
+                            break
+                        n_trials = int(user_trials)
+                        trial_count = n_trials
+                        if n_trials < 10:
+                            print(Fore.RED + Style.BRIGHT + "\nWarning: Very few trials may not find optimal parameters")
+                        elif n_trials > 500:
+                            print(Fore.YELLOW + Style.BRIGHT + "\nWarning: High trial count will take very long")
+                        break
+                    except ValueError:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter a valid number.")
+                
+                # Trial epochs
+                default_trial_epochs = current_trial_epochs if current_trial_epochs is not None else 15
+                print(Fore.YELLOW + Style.BRIGHT + f"\nTrial epochs (default: " + Fore.GREEN + Style.BRIGHT + f"{default_trial_epochs}):")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Epochs per trial (more = better convergence but slower)")
+                
+                while True:
+                    try:
+                        user_epochs = input(Fore.YELLOW + Style.BRIGHT + "\nEnter trial epochs: " + Style.RESET_ALL).strip()
+                        if not user_epochs:
+                            trial_epochs = default_trial_epochs
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUsing default: {trial_epochs} epochs")
+                            break
+                        trial_epochs = int(user_epochs)
+                        if trial_epochs < 5:
+                            print(Fore.RED + Style.BRIGHT + "\nWarning: Very few epochs may not converge properly")
+                        elif trial_epochs > 100:
+                            print(Fore.YELLOW + Style.BRIGHT + "\nWarning: High epoch count will significantly increase runtime")
+                        break
+                    except ValueError:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter a valid number.")
+                
+                # Timeout configuration
+                default_timeout_seconds = timeout_seconds if timeout_seconds else 900
+                default_timeout_minutes = default_timeout_seconds // 60
+                print(Fore.YELLOW + Style.BRIGHT + f"\nTimeout in minutes (default: " + Fore.GREEN + Style.BRIGHT + f"{default_timeout_minutes}, 0 = no timeout):")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Maximum time for HPO process")
+                
+                while True:
+                    try:
+                        user_timeout = input(Fore.YELLOW + Style.BRIGHT + "\nEnter timeout in minutes: " + Style.RESET_ALL).strip()
+                        if not user_timeout:
+                            timeout_minutes = default_timeout_minutes
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUsing default: {timeout_minutes} minutes")
+                            break
+                        timeout_minutes = float(user_timeout)
+                        if timeout_minutes < 0:
+                            print(Fore.RED + Style.BRIGHT + "\nInvalid timeout. Please enter a positive number or 0 for no timeout.")
+                            continue
+                        if timeout_minutes == 0:
+                            print(Fore.YELLOW + Style.BRIGHT + "\nNo timeout set - HPO will run until all trials complete")
+                        break
+                    except ValueError:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid input. Please enter a valid number.")
+                
+                timeout_seconds = timeout_minutes * 60
+                custom_goal_name = "Custom"
+                # update intensity_configs for custom config
+                intensity_configs['5'] = {
+                    'n_trials': n_trials,
+                    'trial_epochs': trial_epochs,
+                    'timeout_minutes': timeout_minutes,
+                    'name': custom_goal_name,
+                    'description': 'User-defined HPO settings',
+                    'best_for': 'Users needing specific control over HPO parameters'
+                }
+                #print(Fore.GREEN + Style.BRIGHT + f"\nCustom configuration set: {n_trials} trials, {trial_epochs} epochs, {timeout_minutes} minutes timeout")
+                
             goal_config = intensity_configs[intensity_choice]
-            n_trials = trial_count if trial_count is not None else goal_config['n_trials']
+            #n_trials = trial_count if trial_count is not None else goal_config['n_trials']
+            #timeout_minutes = (timeout_seconds // 60) if timeout_seconds else goal_config['timeout_minutes']
+            #goal_config = intensity_configs.get(intensity_choice, intensity_configs['1'])
+            n_trials = goal_config['n_trials']
+            trial_count = n_trials
             trial_epochs = goal_config['trial_epochs']
-            timeout_minutes = (timeout_seconds // 60) if timeout_seconds else goal_config['timeout_minutes']
+            timeout_minutes = goal_config['timeout_minutes']
             timeout_seconds = timeout_minutes * 60
             goal_name = goal_config['name']
             
@@ -61182,24 +61517,71 @@ def _interactive_hpo_express_setup(
                 hardware_info=hardware_data,
                 system_class=system_class
             )
-            
-            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {n_trials} trials, {trial_epochs} epochs - Estimated: {final_estimated_time}")
+            #print(Fore.GREEN + Style.BRIGHT + f"\nSelected {goal_name}: {n_trials} trials, {trial_epochs} epochs, {timeout_minutes} timeout(mins) - Estimated: {final_estimated_time}")
+            print(Fore.GREEN + Style.BRIGHT + f"\nSelected {goal_name} configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trial epochs: " + Fore.YELLOW + Style.BRIGHT + f"{trial_epochs}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{timeout_minutes}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Estimated duration: " + Fore.YELLOW + Style.BRIGHT + f"{final_estimated_time}")
         
         # Optimization Focus Selection
         if optimization_focus is None and not (non_interactive or skip_prompt):
             print(Fore.MAGENTA + Style.BRIGHT + "\nOPTIMIZATION FOCUS SELECTION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-            print(Fore.WHITE + Style.BRIGHT + "1. Balanced " + Fore.GREEN + Style.BRIGHT + "(recommended - balances accuracy and speed)")
-            print(Fore.WHITE + Style.BRIGHT + "2. Accuracy " + Fore.GREEN + Style.BRIGHT + "(prioritizes model performance)")
-            print(Fore.WHITE + Style.BRIGHT + "3. Speed " + Fore.GREEN + Style.BRIGHT + "(prioritizes training efficiency)")
-            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+            
+            # System-aware focus recommendation
+            focus_recommendation = '1'  # Balanced by default
+            if system_class in ["limited", "standard"]:
+                focus_recommendation = '3'  # Speed for limited systems
+            elif goal_name in ["Thorough Search", "Exhaustive Search"]:
+                focus_recommendation = '2'  # Accuracy for thorough searches
+            
+            focus_configs = {
+                '1': {
+                    'name': 'Balanced',
+                    'description': 'Optimizes for both accuracy and training efficiency',
+                    'priorities': ['Model performance', 'Training speed', 'Resource usage'],
+                    'best_for': 'Most use cases, general optimization, production systems'
+                },
+                '2': {
+                    'name': 'Accuracy',
+                    'description': 'Prioritizes model performance over training speed',
+                    'priorities': ['Model performance', 'Generalization', 'Robustness'],
+                    'best_for': 'Critical applications, final model tuning, accuracy-sensitive tasks'
+                },
+                '3': {
+                    'name': 'Speed',
+                    'description': 'Prioritizes training efficiency and resource usage',
+                    'priorities': ['Training speed', 'Resource efficiency', 'Quick iterations'],
+                    'best_for': 'Limited resources, development phase, rapid prototyping'
+                },
+                '4': {
+                    'name': 'Efficiency',
+                    'description': 'Focuses on resource efficiency and model size',
+                    'priorities': ['Memory usage', 'Inference speed', 'Model size'],
+                    'best_for': 'Edge deployment, resource-constrained environments, mobile applications'
+                }
+            }
+            
+            # Display focus options
+            for key, config in focus_configs.items():
+                recommendation_indicator = " " + Fore.GREEN + "*" + Style.RESET_ALL if key == focus_recommendation else ""
+                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']}{recommendation_indicator}")
+                print(Fore.CYAN + Style.BRIGHT + f"   ├─ {config['description']}")
+                print(Fore.GREEN + Style.BRIGHT + f"   ├─ Priorities: {', '.join(config['priorities'])}")
+                print(Fore.YELLOW + Style.BRIGHT + f"   └─ Best for: {config['best_for']}")
+            
+            print(Fore.RED + Style.BRIGHT + "\n0. Cancel and return to previous menu")
             
             while True:
                 try:
-                    focus_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect optimization focus (0-3): " + Style.RESET_ALL).strip()
-                    if focus_choice in ['1', '2', '3', '0']:
+                    focus_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect optimization focus (0-4) [Recommended: {focus_recommendation}]: " + Style.RESET_ALL).strip()
+                    if not focus_choice and focus_recommendation:
+                        focus_choice = focus_recommendation
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing recommended focus: {focus_choice}")
+                    if focus_choice in ['1', '2', '3', '4', '0']:
                         break
-                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-4.")
                 except (EOFError, KeyboardInterrupt):
                     print(Fore.RED + Style.BRIGHT + "\nFocus selection cancelled")
                     return None
@@ -61208,25 +61590,77 @@ def _interactive_hpo_express_setup(
                 print(Fore.RED + Style.BRIGHT + "\nFocus selection cancelled")
                 return None
                 
-            focus_map = {'1': 'balanced', '2': 'accuracy', '3': 'speed'}
+            focus_map = {'1': 'balanced', '2': 'accuracy', '3': 'speed', '4': 'efficiency'}
             optimization_focus = focus_map.get(focus_choice, 'balanced')
-            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {optimization_focus.title()} Focus")
+            focus_config = focus_configs[focus_choice]
+            
+            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{focus_config['name']} Focus")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{focus_config['description']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Priorities: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(focus_config['priorities'])}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Best for: " + Fore.YELLOW + Style.BRIGHT + f"{focus_config['best_for']}")
         
         # Algorithm Selection
         if (sampler_type is None or pruner_type is None) and not (non_interactive or skip_prompt):
             print(Fore.MAGENTA + Style.BRIGHT + "\nOPTIMIZATION ALGORITHM SELECTION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-            print(Fore.WHITE + Style.BRIGHT + "1. TPESampler + MedianPruner " + Fore.GREEN + Style.BRIGHT + "(recommended - efficient and robust)")
-            print(Fore.WHITE + Style.BRIGHT + "2. RandomSampler + HyperbandPruner " + Fore.GREEN + Style.BRIGHT + "(fast exploration)")
-            print(Fore.WHITE + Style.BRIGHT + "3. CmaEsSampler + MedianPruner " + Fore.GREEN + Style.BRIGHT + "(advanced, good for complex spaces)")
+            
+            # Algorithm recommendations based on system and goal
+            algo_recommendation = '1'  # TPESampler + MedianPruner by default
+            
+            if n_trials > 100:
+                algo_recommendation = '3'  # CmaEs for large search spaces
+            elif system_class in ["limited", "standard"]:
+                algo_recommendation = '2'  # Random + Hyperband for faster exploration
+            
+            algo_configs = {
+                '1': {
+                    'sampler': 'TPESampler', 'pruner': 'MedianPruner', 'name': 'TPE + Median Pruner',
+                    'description': 'Tree-structured Parzen Estimator with median-based pruning',
+                    'strengths': ['Efficient for medium-sized spaces', 'Good convergence', 'Robust performance'],
+                    'weaknesses': ['Slower for very large spaces', 'More memory usage'],
+                    'best_for': 'Most use cases, balanced optimization, general hyperparameter tuning'
+                },
+                '2': {
+                    'sampler': 'RandomSampler', 'pruner': 'HyperbandPruner', 'name': 'Random + Hyperband',
+                    'description': 'Random sampling with aggressive early stopping',
+                    'strengths': ['Very fast exploration', 'Good for large spaces', 'Memory efficient'],
+                    'weaknesses': ['May miss optimal regions', 'Less thorough'],
+                    'best_for': 'Large search spaces, limited resources, quick exploration'
+                },
+                '3': {
+                    'sampler': 'CmaEsSampler', 'pruner': 'MedianPruner', 'name': 'CMA-ES + Median Pruner',
+                    'description': 'Covariance Matrix Adaptation Evolution Strategy',
+                    'strengths': ['Excellent for complex spaces', 'Good convergence properties', 'Handles dependencies well'],
+                    'weaknesses': ['Slower initial progress', 'More computational overhead'],
+                    'best_for': 'Complex optimization landscapes, research, thorough searches'
+                },
+                '4': {
+                    'sampler': 'NSGAIISampler', 'pruner': 'HyperbandPruner', 'name': 'NSGA-II + Hyperband',
+                    'description': 'Multi-objective optimization with fast pruning',
+                    'strengths': ['Multi-objective optimization', 'Pareto front discovery', 'Good for trade-off analysis'],
+                    'weaknesses': ['More complex configuration', 'Higher computational cost'],
+                    'best_for': 'Multi-objective optimization, trade-off analysis, advanced users'
+                }
+            }
+            
+            # Display algorithm options
+            for key, config in algo_configs.items():
+                recommendation_indicator = " " + Fore.GREEN + "*" + Style.RESET_ALL if key == algo_recommendation else ""
+                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']}{recommendation_indicator}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ " + Fore.CYAN + Style.BRIGHT + f"{config['description']}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ Strengths: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(config['strengths'])}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ Weaknesses: " + Fore.MAGENTA + Style.BRIGHT + f"{', '.join(config['weaknesses'])}")
+                print(Fore.WHITE + Style.BRIGHT + f"   └─ Best for: " + Fore.GREEN + Style.BRIGHT + f"{config['best_for']}")
+
+            print(Fore.WHITE + Style.BRIGHT + "\n5. Custom Algorithm " + Fore.GREEN + Style.BRIGHT + "(configure sampler and pruner individually)")
             print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
             while True:
                 try:
-                    algo_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect algorithm (0-3): " + Style.RESET_ALL).strip()
-                    if algo_choice in ['1', '2', '3', '0']:
+                    algo_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect algorithm (0-5): " + Style.RESET_ALL).strip()
+                    if algo_choice in ['1', '2', '3', '4', '5', '0']:
                         break
-                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
                 except (EOFError, KeyboardInterrupt):
                     print(Fore.RED + Style.BRIGHT + "\nAlgorithm selection cancelled")
                     return None
@@ -61234,25 +61668,133 @@ def _interactive_hpo_express_setup(
             if algo_choice == '0':
                 print(Fore.RED + Style.BRIGHT + "\nAlgorithm selection cancelled")
                 return None
+            
+            if algo_choice == '5':
+                # Custom algorithm configuration
+                print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM ALGORITHM CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
                 
-            algo_map = {
-                '1': ('TPESampler', 'MedianPruner'),
-                '2': ('RandomSampler', 'HyperbandPruner'),
-                '3': ('CmaEsSampler', 'MedianPruner')
-            }
-            sampler_type, pruner_type = algo_map.get(algo_choice, ('TPESampler', 'MedianPruner'))
-            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {sampler_type} + {pruner_type}")
+                # Sampler selection
+                available_samplers = ['TPESampler', 'RandomSampler', 'CmaEsSampler', 'GridSampler', 'NSGAIISampler']
+                print(Fore.YELLOW + Style.BRIGHT + "\nAvailable samplers:")
+                for i, sampler in enumerate(available_samplers, 1):
+                    print(Fore.WHITE + Style.BRIGHT + f"  {i}. {sampler}")
+                
+                while True:
+                    try:
+                        sampler_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect sampler (1-5): " + Style.RESET_ALL).strip()
+                        if not sampler_choice:
+                            sampler_type = 'TPESampler'
+                            sampler = sampler_type
+                            print(Fore.GREEN + Style.BRIGHT + "\nUsing default: TPESampler")
+                            break
+                        if sampler_choice.isdigit() and 1 <= int(sampler_choice) <= len(available_samplers):
+                            sampler_type = available_samplers[int(sampler_choice) - 1]
+                            sampler = sampler_type
+                            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {sampler_type}")
+                            break
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 1-5.")
+                    except (EOFError, KeyboardInterrupt):
+                        print(Fore.RED + Style.BRIGHT + "\nSampler selection cancelled")
+                        return None
+                
+                # Pruner selection
+                available_pruners = ['MedianPruner', 'HyperbandPruner', 'NopPruner', 'PercentilePruner', 'SuccessiveHalvingPruner']
+                print(Fore.YELLOW + Style.BRIGHT + "\nAvailable pruners:")
+                for i, pruner in enumerate(available_pruners, 1):
+                    print(Fore.WHITE + Style.BRIGHT + f"  {i}. {pruner}")
+                
+                while True:
+                    try:
+                        pruner_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect pruner (1-5): " + Style.RESET_ALL).strip()
+                        if not pruner_choice:
+                            pruner_type = 'MedianPruner'
+                            pruner = pruner_type
+                            print(Fore.GREEN + Style.BRIGHT + "\nUsing default: MedianPruner")
+                            break
+                        if pruner_choice.isdigit() and 1 <= int(pruner_choice) <= len(available_pruners):
+                            pruner_type = available_pruners[int(pruner_choice) - 1]
+                            pruner = pruner_type
+                            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {pruner_type}")
+                            break
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 1-5.")
+                    except (EOFError, KeyboardInterrupt):
+                        print(Fore.RED + Style.BRIGHT + "\nPruner selection cancelled")
+                        return None
+                
+                # update algo_configs for custom config
+                algo_configs['5'] = {
+                    'sampler': sampler_type,
+                    'pruner': pruner_type,
+                    'name': 'Custom Configuration',
+                    'description': 'User-defined HPO settings',
+                    'best_for': 'Users needing specific control over HPO parameters'
+                }
+                #print(Fore.GREEN + Style.BRIGHT + f"\nCustom algorithm configured: {sampler_type} + {pruner_type}")
+                
+            algo_config = algo_configs[algo_choice]
+            #algo_config = algo_configs.get(algo_choice, algo_configs['1'])
+            sampler_type =algo_config['sampler']
+            sampler = sampler_type
+            pruner_type = algo_config['pruner']
+            pruner = pruner_type
+            
+            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{algo_config['name']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{sampler}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{pruner}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{algo_config['description']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Best for: " + Fore.YELLOW + Style.BRIGHT + f"{algo_config['best_for']}")
         
         # Model types selection
         if model_types is None and not (non_interactive or skip_prompt):
             print(Fore.MAGENTA + Style.BRIGHT + "\nMODEL TYPES TO OPTIMIZE")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             
+            # Model selection recommendation
+            model_recommendation = '2'  # Enhanced + Ensemble by default
+            
+            if system_class in ["limited", "standard"]:
+                model_recommendation = '4'  # Enhanced only for limited systems
+            elif goal_name in ["Quick Scan"]:
+                model_recommendation = '5'  # Simple only for quick scans
+            
             model_type_configs = {
-                '1': {'models': ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble'], 'name': 'All models'},
-                '2': {'models': ['EnhancedAutoencoder', 'AutoencoderEnsemble'], 'name': 'Enhanced + Ensemble'},
-                '3': {'models': ['SimpleAutoencoder', 'EnhancedAutoencoder'], 'name': 'Simple + Enhanced'},
-                '4': {'models': ['EnhancedAutoencoder'], 'name': 'Enhanced only'}
+                '1': {
+                    'models': ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble'], 'name': 'All models',
+                    'description': 'Comprehensive search across all model architectures',
+                    'coverage': 'Full architecture space exploration', 'time_impact': 'High',
+                    'best_for': 'Research, architecture comparison, maximum coverage'
+                },
+                '2': {
+                    'models': ['EnhancedAutoencoder', 'AutoencoderEnsemble'], 'name': 'Enhanced + Ensemble',
+                    'description': 'Focus on high-performance models with ensemble capability',
+                    'coverage': 'Best performing architectures', 'time_impact': 'Medium-High',
+                    'best_for': 'Production optimization, best performance focus'
+                },
+                '3': {
+                    'models': ['SimpleAutoencoder', 'EnhancedAutoencoder'], 'name': 'Simple + Enhanced',
+                    'description': 'Balanced approach with baseline and enhanced models',
+                    'coverage': 'Performance vs complexity trade-off', 'time_impact': 'Medium',
+                    'best_for': 'Balanced optimization, performance-complexity analysis'
+                },
+                '4': {
+                    'models': ['EnhancedAutoencoder'], 'name': 'Enhanced only',
+                    'description': 'Focus on the most capable single model architecture',
+                    'coverage': 'Single high-performance architecture', 'time_impact': 'Low-Medium',
+                    'best_for': 'Standard optimization, resource-constrained environments'
+                },
+                '5': {
+                    'models': ['SimpleAutoencoder'], 'name': 'Simple only',
+                    'description': 'Fast optimization of basic autoencoder architecture',
+                    'coverage': 'Basic architecture only', 'time_impact': 'Low',
+                    'best_for': 'Quick experiments, baseline establishment, limited resources'
+                },
+                '6': {
+                    'models': ['AutoencoderEnsemble'], 'name': 'Ensemble only',
+                    'description': 'Optimize ensemble configurations and combinations',
+                    'coverage': 'Ensemble-specific parameters', 'time_impact': 'Medium',
+                    'best_for': 'Ensemble specialization, combination optimization'
+                }
             }
             
             # Display options with estimated time impact
@@ -61266,19 +61808,26 @@ def _interactive_hpo_express_setup(
                     hardware_info=hardware_data,
                     system_class=system_class
                 )
-                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']} " + 
-                      Fore.GREEN + Style.BRIGHT + f"({n_model_types} model{'s' if n_model_types > 1 else ''} - {time_impact})")
+                recommendation_indicator = " " + Fore.GREEN + "*" + Style.RESET_ALL if key == model_recommendation else ""
+                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']}{recommendation_indicator}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ " + Fore.CYAN + Style.BRIGHT + f"{config['description']}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ {n_model_types} Model{'s' if n_model_types > 1 else ''}: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(config['models'])}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ Coverage: " + Fore.GREEN + Style.BRIGHT + f"{config['coverage']}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ Time Impact: " + Fore.MAGENTA + Style.BRIGHT + f"{config['time_impact']} - {time_impact}")
+                print(Fore.WHITE + Style.BRIGHT + f"   └─ Best for: " + Fore.GREEN + Style.BRIGHT + f"{config['best_for']}")
             
-            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+            print(Fore.RED + Style.BRIGHT + "\n0. Cancel and return to previous menu")
             
             model_choice = None
             while not model_choice:
                 try:
-                    model_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect model types (0-4): ").strip()
-                    if not model_choice:
-                        continue
-                    if model_choice not in ['1', '2', '3', '4', '0']:
-                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-4.")
+                    model_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect model types (0-6) [Recommended: {model_recommendation}]: ").strip()
+                    if not model_choice and model_recommendation:
+                        model_choice = model_recommendation
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing recommended model selection: {model_choice}")
+
+                    if model_choice not in ['1', '2', '3', '4', '5', '6', '0']:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-6.")
                         model_choice = None
                         continue
                 except (EOFError, KeyboardInterrupt):
@@ -61289,19 +61838,55 @@ def _interactive_hpo_express_setup(
                 print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
                 return None
             
-            model_types = model_type_configs[model_choice]['models']
-            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {', '.join(model_types)}")
+            model_config = model_type_configs[model_choice]
+            model_types = model_config['models']
+            
+            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{model_config['name']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Models: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(model_types)}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{model_config['description']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Coverage: " + Fore.YELLOW + Style.BRIGHT + f"{model_config['coverage']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Best for: " + Fore.YELLOW + Style.BRIGHT + f"{model_config['best_for']}")
         
         # Cross-validation selection
         cv_folds = 3  # Default
+        cv_name = "3-fold CV"
         if not (non_interactive or skip_prompt):
             print(Fore.MAGENTA + Style.BRIGHT + "\nVALIDATION STRATEGY")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             
+            # CV recommendation based on data and resources
+            cv_recommendation = '2'  # 5-fold CV by default
+            
+            if n_trials > 50 or system_class in ["limited", "standard"]:
+                cv_recommendation = '1'  # 3-fold for larger trials or limited resources
+            elif data_mode == 'synthetic':
+                cv_recommendation = '3'  # Single split for synthetic data
+            
             cv_configs = {
-                '1': {'cv_folds': 3, 'name': '3-fold CV'},
-                '2': {'cv_folds': 5, 'name': '5-fold CV'},
-                '3': {'cv_folds': 1, 'name': 'Single split'}
+                '1': {
+                    'cv_folds': 3, 'name': '3-fold Cross Validation',
+                    'description': 'Balanced approach between robustness and speed',
+                    'robustness': 'Good', 'variance': 'Medium',
+                    'best_for': 'Most use cases, balanced validation, general optimization'
+                },
+                '2': {
+                    'cv_folds': 5, 'name': '5-fold Cross Validation',
+                    'description': 'More robust validation with better performance estimation',
+                    'robustness': 'High', 'variance': 'Low',
+                    'best_for': 'Production optimization, reliable performance estimation'
+                },
+                '3': {
+                    'cv_folds': 1, 'name': 'Single split validation',
+                    'description': 'Fastest validation with single train-test split',
+                    'robustness': 'Basic', 'variance': 'High',
+                    'best_for': 'Quick experiments, large datasets, synthetic data'
+                },
+                '4': {
+                    'cv_folds': 10, 'name': '10-fold Cross Validation',
+                    'description': 'Maximum robustness for performance estimation',
+                    'robustness': 'Very High', 'variance': 'Very Low',
+                    'best_for': 'Small datasets, critical applications, research papers'
+                }
             }
             
             # Display options with estimated time impact
@@ -61314,19 +61899,26 @@ def _interactive_hpo_express_setup(
                     hardware_info=hardware_data,
                     system_class=system_class
                 )
-                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']} " + 
-                      Fore.GREEN + Style.BRIGHT + f"({time_impact})")
+                recommendation_indicator = " " + Fore.GREEN + "*" + Style.RESET_ALL if key == cv_recommendation else ""
+                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']}{recommendation_indicator}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ " + Fore.CYAN + Style.BRIGHT + f"{config['description']}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ Robustness: " + Fore.GREEN + Style.BRIGHT + f"{config['robustness']}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ Variance: " + Fore.GREEN + Style.BRIGHT + f"{config['variance']}")
+                print(Fore.WHITE + Style.BRIGHT + f"   ├─ Time Impact: " + Fore.MAGENTA + Style.BRIGHT + f"{time_impact}")
+                print(Fore.WHITE + Style.BRIGHT + f"   └─ Best for: " + Fore.GREEN + Style.BRIGHT + f"{config['best_for']}")
             
+            print(Fore.WHITE + Style.BRIGHT + "\n5. Custom folds " + Fore.GREEN + Style.BRIGHT + "(Specify number of folds)")
             print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
             cv_choice = None
             while not cv_choice:
                 try:
-                    cv_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect validation strategy (0-3): ").strip()
-                    if not cv_choice:
-                        continue
-                    if cv_choice not in ['1', '2', '3', '0']:
-                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                    cv_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect validation strategy (0-4): ").strip()
+                    if not cv_choice and cv_recommendation:
+                        cv_choice = cv_recommendation
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing recommended validation: {cv_choice}")
+                    if cv_choice not in ['1', '2', '3', '4', '5', '0']:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-4.")
                         cv_choice = None
                         continue
                 except (EOFError, KeyboardInterrupt):
@@ -61337,10 +61929,130 @@ def _interactive_hpo_express_setup(
                 print(Fore.RED + Style.BRIGHT + "\nValidation strategy selection cancelled")
                 return None
             
+            if cv_choice == '5':
+                # Custom cross-validation configuration
+                print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM CROSS-VALIDATION CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                while True:
+                    try:
+                        user_folds = input(Fore.YELLOW + Style.BRIGHT + "Enter number of cross-validation folds (2-10): " + Style.RESET_ALL).strip()
+                        if not user_folds:
+                            cv_folds = 5
+                            print(Fore.GREEN + Style.BRIGHT + "Using default: 5-fold cross-validation")
+                            break
+                        cv_folds = int(user_folds)
+                        if cv_folds < 2:
+                            print(Fore.RED + Style.BRIGHT + "Minimum 2 folds required for cross-validation")
+                        elif cv_folds > 10:
+                            print(Fore.YELLOW + Style.BRIGHT + "Warning: High fold count will significantly increase runtime")
+                            confirm = input(Fore.YELLOW + Style.BRIGHT + "Continue with high fold count? (y/N): " + Style.RESET_ALL).strip().lower()
+                            if confirm in ('y', 'yes'):
+                                break
+                        else:
+                            break
+                    except ValueError:
+                        print(Fore.RED + Style.BRIGHT + "Invalid input. Please enter a valid number.")
+                
+                custom_cv_name = f"{cv_folds}-fold Cross Validation"
+                # update cv_configs for custom config
+                cv_configs['5'] = {
+                    'cv_folds': cv_folds,
+                    'name': custom_cv_name,
+                    'robustness': 'Unknown',
+                    'variance': 'Unknown',
+                    'best_for': 'Users needing specific control over HPO parameters'
+                }
+                #print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {cv_name}")
+                
             cv_config = cv_configs[cv_choice]
+            #cv_config = cv_configs.get(cv_choice, cv_configs['1'])
             cv_folds = cv_config['cv_folds']
             cv_name = cv_config['name']
-            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {cv_name}")
+            
+            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{cv_name}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Folds: " + Fore.YELLOW + Style.BRIGHT + f"{cv_folds}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Robustness: " + Fore.YELLOW + Style.BRIGHT + f"{cv_config['robustness']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Variance: " + Fore.YELLOW + Style.BRIGHT + f"{cv_config['variance']}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Best for: " + Fore.YELLOW + Style.BRIGHT + f"{cv_config['best_for']}")
+        
+        # Performance Configuration
+        print(Fore.MAGENTA + Style.BRIGHT + "\nPERFORMANCE CONFIGURATION")
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+        
+        # Plot Generation Configuration
+        if enable_plots is None and not (non_interactive or skip_prompt):
+            print(Fore.YELLOW + Style.BRIGHT + "Plot Generation (default: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if enable_plots else 'Disabled'})")
+            print(Fore.CYAN + Style.BRIGHT + "  └─ Generate optimization plots and visualizations")
+            
+            while True:
+                try:
+                    plot_choice = input(Fore.YELLOW + Style.BRIGHT + "\nEnable plot generation? (Y/n): " + Style.RESET_ALL).strip().lower()
+                    if not plot_choice or plot_choice in ('y', 'yes'):
+                        enable_plots = True
+                        print(Fore.GREEN + Style.BRIGHT + "\nPlot generation enabled")
+                        
+                        # Optional plot directory configuration
+                        default_plot_dir = "hpo_plots"
+                        user_plot_dir = input(Fore.YELLOW + Style.BRIGHT + f"\nPlot directory (default: {default_plot_dir}): " + Style.RESET_ALL).strip()
+                        if user_plot_dir:
+                            plot_dir = user_plot_dir
+                            Path(plot_dir).mkdir(parents=True, exist_ok=True)
+                            print(Fore.GREEN + Style.BRIGHT + f"\nPlot directory set to: {plot_dir}")
+                        else:
+                            plot_dir = default_plot_dir
+                            Path(plot_dir).mkdir(parents=True, exist_ok=True)
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUsing default plot directory: {plot_dir}")
+                        break
+                    elif plot_choice in ('n', 'no'):
+                        enable_plots = False
+                        print(Fore.MAGENTA + Style.BRIGHT + "\nPlot generation disabled")
+                        break
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please enter Y or N.")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nPlot configuration cancelled")
+                    return None
+        
+        # Result Storage Configuration
+        if enable_storage is None and not (non_interactive or skip_prompt):
+            print(Fore.YELLOW + Style.BRIGHT + "\nResult Storage (default: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if enable_storage else 'Disabled'})")
+            print(Fore.CYAN + Style.BRIGHT + "  └─ Save HPO results for future analysis")
+            
+            while True:
+                try:
+                    storage_choice = input(Fore.YELLOW + Style.BRIGHT + "\nEnable result storage? (Y/n): " + Style.RESET_ALL).strip().lower()
+                    if not storage_choice or storage_choice in ('y', 'yes'):
+                        enable_storage = True
+                        print(Fore.GREEN + Style.BRIGHT + "\nResult storage enabled")
+                        
+                        # Optional storage path configuration
+                        default_storage_path = f"hpo_results_{int(time.time())}"
+                        user_storage_path = input(Fore.YELLOW + Style.BRIGHT + f"\nStorage directory (default: {default_storage_path}): " + Style.RESET_ALL).strip()
+                        if user_storage_path:
+                            storage_dir = user_storage_path
+                            Path(storage_dir).mkdir(parents=True, exist_ok=True)
+                            print(Fore.GREEN + Style.BRIGHT + f"\nStorage directory set to: {storage_dir}")
+                        else:
+                            storage_dir = default_storage_path
+                            Path(storage_dir).mkdir(parents=True, exist_ok=True)
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUsing default storage directory: {storage_dir}")
+                        break
+                    elif storage_choice in ('n', 'no'):
+                        enable_storage = False
+                        print(Fore.MAGENTA + Style.BRIGHT + "\nResult storage disabled")
+                        break
+                    else:
+                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please enter Y or N.")
+                except (EOFError, KeyboardInterrupt):
+                    print(Fore.RED + Style.BRIGHT + "\nStorage configuration cancelled")
+                    return None
+        
+        # Set defaults for express setup
+        if enable_plots is None:
+            enable_plots = True
+        if enable_storage is None:
+            enable_storage = True
         
         # Calculate final estimated time with all parameters
         final_estimated_time = _estimate_hpo_time(
@@ -61352,28 +62064,16 @@ def _interactive_hpo_express_setup(
             system_class=system_class
         )
         
-        # Performance Configuration
-        print(Fore.MAGENTA + Style.BRIGHT + "\nPERFORMANCE CONFIGURATION")
-        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-        
-        # Set defaults for express setup
-        if enable_plots is None:
-            enable_plots = True
-        if enable_storage is None:
-            enable_storage = True
-        
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name() if torch.cuda.is_available() else "Unknown"
-            print(Fore.GREEN + Style.BRIGHT + f"GPU detected: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_name}")
-            print(Fore.GREEN + Style.BRIGHT + "  Using GPU-optimized HPO settings")
-        else:
-            print(Fore.MAGENTA + Style.BRIGHT + "CPU mode: Using CPU-optimized HPO settings")
-            print(Fore.MAGENTA + Style.BRIGHT + "  └─ Consider using GPU for faster HPO iterations")
-        
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Plot Generation: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled' if enable_plots else 'Disabled'}")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Result Storage: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled' if enable_storage else 'Disabled'}")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parallel Trials: " + Fore.YELLOW + Style.BRIGHT + f"{min(2, cpu_cores // 2) if cpu_cores > 4 else 1}")
-        print(Fore.GREEN + Style.BRIGHT + f"  └─ Estimated Duration: " + Fore.YELLOW + Style.BRIGHT + f"{final_estimated_time}")
+        # Resource optimization tips
+        print(Fore.CYAN + Style.BRIGHT + "\nResource Optimization Tips:")
+        if system_class in ["limited", "standard"]:
+            print(Fore.YELLOW + Style.BRIGHT + "  ├─ Consider reducing trial epochs for faster iterations")
+            print(Fore.YELLOW + Style.BRIGHT + "  ├─ Use single split validation to save time")
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ Focus on fewer model types for limited resources")
+        elif system_class in ["performance", "high-end"]:
+            print(Fore.GREEN + Style.BRIGHT + "  ├─ System can handle more parallel trials")
+            print(Fore.GREEN + Style.BRIGHT + "  ├─ Consider increasing CV folds for better robustness")
+            print(Fore.GREEN + Style.BRIGHT + "  └─ Can optimize multiple model types simultaneously")
         
         # Build final configuration with smart HPO defaults
         final_config = base_config.copy() if base_config else {}
@@ -61391,14 +62091,20 @@ def _interactive_hpo_express_setup(
         hpo_config = final_config.setdefault('hyperparameter_optimization', {})
         
         # Apply parameter overrides with defaults
-        final_sampler = sampler_type or hpo_config.get('sampler', 'TPESampler')
-        final_pruner = pruner_type or hpo_config.get('pruner', 'MedianPruner')
+        final_sampler = sampler or sampler_type or hpo_config.get('sampler', 'TPESampler')
+        final_pruner = pruner or pruner_type or hpo_config.get('pruner', 'MedianPruner')
         final_trial_count = trial_count if trial_count is not None else n_trials
         final_timeout = timeout_seconds if timeout_seconds is not None else timeout_minutes * 60
         final_optimization_focus = optimization_focus or 'balanced'
         final_model_types = model_types or ['EnhancedAutoencoder']
         final_cv_folds = cv_folds
         final_trial_epochs = trial_epochs if 'trial_epochs' in locals() else 20
+        final_use_real_data = use_real_data if use_real_data is not None else False
+        final_normal_samples = normal_samples if normal_samples is not None else 8000
+        final_attack_samples = attack_samples if attack_samples is not None else 2000
+        final_features = features if features is not None else 20
+        use_real_data = final_use_real_data
+        final_epochs = current_epochs if current_epochs is not None else 100
 
         hpo_config.update({
             'enabled': True,
@@ -61472,7 +62178,7 @@ def _interactive_hpo_express_setup(
         # Training Configuration - HPO optimized
         training_config = final_config.setdefault('training', {})
         training_config.update({
-            'epochs': 100,  # Fixed for HPO to ensure fair comparison
+            'epochs': final_epochs,  # Fixed for HPO to ensure fair comparison
             'batch_size': 64,  # Will be optimized
             'learning_rate': 0.001,  # Will be optimized
             'patience': 15,
@@ -61494,9 +62200,9 @@ def _interactive_hpo_express_setup(
         data_config = final_config.setdefault('data', {})
         data_config.update({
             'use_real_data': use_real_data,
-            'features': 20 if not use_real_data else None,
-            'normal_samples': 8000 if not use_real_data else None,
-            'attack_samples': 2000 if not use_real_data else None,
+            'features': final_features,
+            'normal_samples': final_normal_samples if not use_real_data else None,
+            'attack_samples': final_attack_samples if not use_real_data else None,
             'test_split': 0.2,
             'random_state': 42,
             'stratified_split': True,
@@ -61592,61 +62298,12 @@ def _interactive_hpo_express_setup(
             }
         })
         
-        # Display comprehensive HPO configuration summary
-        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS HPO SETUP - CONFIGURATION SUMMARY")
-        print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        
-        # Core HPO configuration display
-        print(Fore.YELLOW + Style.BRIGHT + "HPO Core Configuration:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Trials: " + Fore.GREEN + Style.BRIGHT + f"{final_trial_count}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Trial Epochs: " + Fore.GREEN + Style.BRIGHT + f"{final_trial_epochs}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Timeout: " + Fore.GREEN + Style.BRIGHT + f"{final_timeout//3600} hours")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Estimated Duration: " + Fore.GREEN + Style.BRIGHT + f"{final_estimated_time}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Optimization Focus: " + Fore.GREEN + Style.BRIGHT + f"{final_optimization_focus.title()}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Sampler: " + Fore.GREEN + Style.BRIGHT + f"{final_sampler}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Pruner: " + Fore.GREEN + Style.BRIGHT + f"{final_pruner}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Parallel Trials: " + Fore.GREEN + Style.BRIGHT + f"{hpo_config['parallel_trials']}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Storage: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if enable_storage else 'Disabled'}")
-        
-        # Search space details
-        print(Fore.YELLOW + Style.BRIGHT + "\nSearch Space Parameters:")
-        search_space = hpo_config['optimization_space']
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + Style.BRIGHT + f"{search_space['learning_rate']['min']:.0e} to {search_space['learning_rate']['max']:.0e}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + Style.BRIGHT + f"{search_space['batch_size']['choices']}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Encoding Dim: " + Fore.GREEN + Style.BRIGHT + f"{search_space['encoding_dim']['min']} to {search_space['encoding_dim']['max']}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Dropout Rate: " + Fore.GREEN + Style.BRIGHT + f"{search_space['dropout_rate']['min']} to {search_space['dropout_rate']['max']}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Weight Decay: " + Fore.GREEN + Style.BRIGHT + f"{search_space['weight_decay']['min']:.0e} to {search_space['weight_decay']['max']:.0e}")
-        
-        # Model and data configuration
-        print(Fore.YELLOW + Style.BRIGHT + "\nModel & Data Configuration:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model Types: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(final_model_types)}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Source: " + Fore.GREEN + Style.BRIGHT + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Epochs: " + Fore.GREEN + Style.BRIGHT + f"{training_config['epochs']} (fixed for HPO)")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Validation: " + Fore.GREEN + Style.BRIGHT + f"{cv_name if 'cv_name' in locals() else '3-fold CV'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Validation Split: " + Fore.GREEN + Style.BRIGHT + f"{training_config['validation_split']}")
-        
-        # System configuration
-        print(Fore.YELLOW + Style.BRIGHT + "\nSystem Configuration:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ System Class: " + Fore.GREEN + Style.BRIGHT + f"{system_class.upper()}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ CUDA Available: " + Fore.GREEN + Style.BRIGHT + f"{torch.cuda.is_available()}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if training_config['mixed_precision'] else 'Disabled'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Plot Generation: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if enable_plots else 'Disabled'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Result Storage: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if enable_storage else 'Disabled'}")
-        
-        # Estimated resource requirements
-        estimated_time_hours = final_timeout // 3600
-        print(Fore.YELLOW + Style.BRIGHT + "\nEstimated Resource Requirements:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Estimated Duration: " + Fore.GREEN + Style.BRIGHT + f"{final_estimated_time}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Memory Usage: " + Fore.GREEN + Style.BRIGHT + f"~{min(8.0, memory_gb * 0.8):.1f}GB peak")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Storage: " + Fore.GREEN + Style.BRIGHT + f"~{final_trial_count * 0.5:.1f}MB for results")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ CPU Usage: " + Fore.GREEN + Style.BRIGHT + f"{hpo_config['parallel_trials']} parallel trials")
-        
         # Skip confirmation if in non-interactive mode
         if non_interactive or skip_prompt:
             print(Fore.GREEN + Style.BRIGHT + "\nNon-interactive mode - launching express HPO automatically...")
             return _launch_hpo_with_config(config=final_config, **kwargs)
         
-        # Confirmation with enhanced styling
+        # Confirmation
         try:
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart hyperparameter optimization with these express settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -61655,12 +62312,12 @@ def _interactive_hpo_express_setup(
         
         if confirm in ('', 'y', 'yes'):
             print(Fore.GREEN + Style.BRIGHT + "\nLaunching hyperparameter optimization with express configuration...")
-            return _launch_hpo_with_config(final_config, **kwargs)
+            return _launch_hpo_with_config(config=final_config, **kwargs)
         elif confirm in ('c', 'cancel'):
             print(Fore.RED + Style.BRIGHT + "\nHPO cancelled")
             return None
         else:
-            # Enhanced fallback options with styling
+            # Fallback options
             print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?")
             print(Fore.WHITE + Style.BRIGHT + "1. Try express HPO setup again with different settings")
             print(Fore.WHITE + Style.BRIGHT + "2. Switch to custom HPO configuration for full control")
@@ -61680,7 +62337,7 @@ def _interactive_hpo_express_setup(
             if retry_choice == '1':
                 print(Fore.GREEN + Style.BRIGHT + "\nRestarting express HPO setup...")
                 return _interactive_hpo_express_setup(
-                    base_config, 
+                    base_config,
                     data_mode=data_mode,
                     hardware_data=hardware_data,
                     **kwargs
