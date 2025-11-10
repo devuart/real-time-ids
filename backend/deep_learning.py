@@ -449,6 +449,21 @@ RESULTS_DIR.mkdir(exist_ok=True)
 RESULTS_FILE_NAME = "training_results.json"
 RESULTS_FILE = RESULTS_DIR / RESULTS_FILE_NAME
 
+METRICS_DIR = Path("metrics")
+METRICS_DIR.mkdir(exist_ok=True)
+
+DATASETS_DIR = Path("datasets")
+DATASETS_DIR.mkdir(exist_ok=True)
+
+ARTIFACTS_DIR = Path("artifacts")
+ARTIFACTS_DIR.mkdir(exist_ok=True)
+
+FIGURES_DIR = Path("figures")
+FIGURES_DIR.mkdir(exist_ok=True)
+
+INFO_DIR = Path("info")
+INFO_DIR.mkdir(exist_ok=True)
+
 def configure_device(device_type='auto'):
     """
     Configure device settings based on preference and availability.
@@ -3383,6 +3398,11 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
     base_dir = Path(__file__).resolve().parent
     
     dirs = {
+        'artifacts': base_dir / "artifacts",
+        'datasets': base_dir / "datasets",
+        'figures': base_dir / "figures",
+        'info': base_dir / "info",
+        'metrics': base_dir / "metrics",
         'logs': base_dir / "logs",
         'models': base_dir / "models",
         'data': base_dir / "data",
@@ -3422,7 +3442,12 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
         dirs = setup_directories(logger)
         
         # Assign to global variables if needed
-        global LOG_DIR, DEFAULT_MODEL_DIR, DATA_DIR, CONFIG_DIR, REPORTS_DIR, TB_DIR, CACHE_DIR, EXPORTS_DIR, CHECKPOINTS_DIR, RESULTS_DIR
+        global LOG_DIR, DEFAULT_MODEL_DIR, DATA_DIR, CONFIG_DIR, REPORTS_DIR, TB_DIR, CACHE_DIR, EXPORTS_DIR, CHECKPOINTS_DIR, RESULTS_DIR, ARTIFACTS_DIR, DATASETS_DIR, FIGURES_DIR, INFO_DIR, METRICS_DIR
+        ARTIFACTS_DIR = dirs['artifacts']
+        DATASETS_DIR = dirs['datasets']
+        FIGURES_DIR = dirs['figures']
+        INFO_DIR = dirs['info']
+        METRICS_DIR = dirs['metrics']
         LOG_DIR = dirs['logs']
         DEFAULT_MODEL_DIR = dirs['models']
         DATA_DIR = dirs['data']
@@ -5594,7 +5619,7 @@ def log_system_configuration(
     include_seed_config: bool = True
 ) -> None:
     """
-    Log comprehensive system configuration using existing check functions.
+    Log system configuration using existing check functions.
     Replaces individual logging functions with unified configuration logging.
     
     Args:
@@ -5608,7 +5633,7 @@ def log_system_configuration(
         logger.info("SYSTEM CONFIGURATION SUMMARY")
         logger.info("=" * 80)
         
-        # Get comprehensive system info
+        # Get system info
         system_info = get_system_info(include_versions, include_hardware)
         
         # Log platform information
@@ -6575,58 +6600,47 @@ STABILITY_PRESET = {
         'validation_split': 0.25, 'test_split': 0.25, 'stratified_split': True,
         'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
         'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
-        'synthetic_generation': {'cluster_variance': 0.05, 'anomaly_sparsity': 0.2, 'noise_factor': 0.02,
-                               'correlation_strength': 0.2, 'outlier_ratio': 0.01},
-        'preprocessing': {'remove_outliers': True, 'outlier_threshold': 2.5, 'impute_missing': True,
-                         'imputation_strategy': 'median', 'feature_scaling': 'robust', 'data_cleaning': True},
+        'synthetic_generation': {'cluster_variance': 0.05, 'anomaly_sparsity': 0.2, 'noise_factor': 0.02, 'correlation_strength': 0.2, 'outlier_ratio': 0.01},
+        'preprocessing': {'remove_outliers': True, 'outlier_threshold': 2.5, 'impute_missing': True, 'imputation_strategy': 'median', 'feature_scaling': 'robust', 'data_cleaning': True},
         'shuffle': True, 'pin_memory': False
     },
     'monitoring': {
         'metrics_frequency': 5, 'checkpoint_frequency': 10, 'tensorboard_logging': False,
         'console_logging_level': 'DEBUG', 'save_best_model': True, 'save_model_history': True,
-        'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss', 'learning_rate', 'epoch_time',
-                           'gradient_norm', 'training_stability'],
+        'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss', 'learning_rate', 'epoch_time', 'gradient_norm', 'training_stability'],
         'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
         'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 5, 'save_checkpoints': True,
-        'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                       'max_scalars': 500, 'max_histograms': 50, 'max_images': 10, 'save_summary': False},
+        'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False, 'max_scalars': 500, 'max_histograms': 50, 'max_images': 10, 'save_summary': False},
         'stability_metrics': True
     },
     'hardware': {
-        'device': 'cpu', 'recommended_gpu_memory': 4,
-        'minimum_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
+        'device': 'cpu', 'recommended_gpu_memory': 4, 'minimum_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
         'optimal_system_requirements': {'cpu_cores': 4, 'ram_gb': 8, 'disk_space': 10, 'gpu_memory': 4},
         'memory_management': {'max_memory_fraction': 0.7, 'allow_memory_growth': False, 'memory_limit': 2048},
         'performance_optimization': {'use_cuda': False, 'use_amp': False, 'benchmark_mode': False, 'deterministic': True}
     },
     'system': {
-        'model_dir': str(DEFAULT_MODEL_DIR / "stability"), 'log_dir': str(LOG_DIR / "stability"),
-        'config_dir': str(CONFIG_DIR / "stability"), 'data_dir': str(DATA_DIR / "stability"),
+        'model_dir': str(DEFAULT_MODEL_DIR / "stability"), 'log_dir': str(LOG_DIR / "stability"), 'reports_dir': str(REPORTS_DIR / "stability"),
+        'config_dir': str(CONFIG_DIR / "stability"), 'data_dir': str(DATA_DIR / "stability"), 'metrics_dir': str(METRICS_DIR / "stability"),
         'checkpoint_dir': str(Path(CHECKPOINTS_DIR / "stability")), 'tensorboard_dir': str(TB_DIR / "stability"), 'results_dir': str(RESULTS_DIR / "stability"),
-        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
-        'parallel_processing': False, 'max_workers': 2, 'export_onnx': True, 'non_interactive': False,
+        'datasets_dir': str(DATASETS_DIR / "stability"), 'artifacts_dir': str(ARTIFACTS_DIR / "stability"), 'figures_dir': str(FIGURES_DIR / "stability"), 'info_dir': str(INFO_DIR / "stability"),
+        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True, 'parallel_processing': False, 'max_workers': 2, 'export_onnx': True, 'non_interactive': False,
         'cuda_optimizations': False,
-        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True,
-                       'optimize_for_mobile': False, 'runtime_validation': True,
-                       'validation_tolerance': 1e-5, 'verbose': False}
+        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True, 'optimize_for_mobile': False, 'runtime_validation': True, 'validation_tolerance': 1e-5, 'verbose': False}
     },
     'presets': {
-        'available_presets': get_available_presets(), 'current_preset': 'stability', 'current_override': None,
-        'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
-        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(),
-        'auto_apply': False, 'validate_compatibility': True
+        'available_presets': get_available_presets(), 'current_preset': 'stability', 'current_override': None, 'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
+        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(), 'auto_apply': False, 'validate_compatibility': True
     },
     'hyperparameter_optimization': {
-        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_stability',
-        'direction': 'minimize', 'n_trials': 50, 'timeout': 1800,
+        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_stability', 'direction': 'minimize', 'n_trials': 50, 'timeout': 1800,
         'sampler': 'RandomSampler', 'pruner': 'NopPruner', 'objective_metric': 'validation_loss',
         'optimization_space': {
             'learning_rate': {'type': 'float', 'low': 1e-4, 'high': 1e-2, 'log': True},
             'batch_size': {'type': 'categorical', 'choices': [16, 32, 64]},
             'dropout_rate': {'type': 'float', 'low': 0.1, 'high': 0.4}
         },
-        'early_stopping': {'enabled': True, 'patience': 8, 'min_improvement': 1e-4},
-        'timeout_seconds': 1800, 'trial_epochs': 50, 'trial_patience': 6,
+        'early_stopping': {'enabled': True, 'patience': 8, 'min_improvement': 1e-4}, 'timeout_seconds': 1800, 'trial_epochs': 50, 'trial_patience': 6,
         'cleanup_trials': True, 'generate_plots': False,
         'search_space': {
             'encoding_dim_min': 6, 'encoding_dim_max': 12, 'hidden_layers_min': 1, 'hidden_layers_max': 2,
@@ -6635,25 +6649,18 @@ STABILITY_PRESET = {
             'activations': ["relu", "leaky_relu"], 'normalizations': [None, "batch"],
             'percentile_min': 95, 'percentile_max': 99
         },
-        'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0,
-                   'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 10,
-                   'n_ei_candidates': 15, 'multivariate': False},
+        'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0, 'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 10, 'n_ei_candidates': 15, 'multivariate': False},
         'hpo_pruner': {'type': 'Nop', 'n_startup_trials': 0, 'n_warmup_steps': 0, 'interval_steps': 1},
-        'scoring': {'use_composite_score': False, 'validation_weight': 0.8, 'test_weight': 0.2,
-                   'complexity_weight': 0.1, 'max_params_penalty': 10000},
-        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/stability_study.db",
-                   'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
+        'scoring': {'use_composite_score': False, 'validation_weight': 0.8, 'test_weight': 0.2, 'complexity_weight': 0.1, 'max_params_penalty': 10000},
+        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/stability_study.db", 'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
     },
     'validation': {
         'cross_validation': {'enabled': True, 'folds': 4, 'stratified': True, 'random_state': 42},
-        'metrics': ['mse', 'mae', 'r2_score', 'explained_variance', 'precision', 'recall', 'f1_score',
-                   'auc_roc', 'stability_score'],
-        'validation_frequency': 1, 'save_validation_results': True, 'detailed_metrics': True,
-        'robustness_testing': True
+        'metrics': ['mse', 'mae', 'r2_score', 'explained_variance', 'precision', 'recall', 'f1_score', 'auc_roc', 'stability_score'],
+        'validation_frequency': 1, 'save_validation_results': True, 'detailed_metrics': True, 'robustness_testing': True
     },
     'experimental': {
-        'features': {'advanced_logging': False, 'model_interpretability': False, 'federated_learning': False,
-                    'active_learning': False, 'robust_training': True},
+        'features': {'advanced_logging': False, 'model_interpretability': False, 'federated_learning': False, 'active_learning': False, 'robust_training': True},
         'settings': {'experimental_mode': False, 'beta_features': False, 'research_mode': False}
     }
 }
@@ -6710,26 +6717,19 @@ PERFORMANCE_PRESET = {
         'performance_optimized_detection': True, 'real_time_monitoring': True
     },
     'data': {
-        'normal_samples': 10000, 'attack_samples': 3000, 'features': 30, 'use_real_data': True,
-        'data_normalization': 'standard', 'anomaly_factor': 1.2, 'random_state': 42,
-        'validation_split': 0.15, 'test_split': 0.15, 'stratified_split': True,
-        'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+        'normal_samples': 10000, 'attack_samples': 3000, 'features': 30, 'use_real_data': True, 'data_normalization': 'standard', 'anomaly_factor': 1.2, 'random_state': 42,
+        'validation_split': 0.15, 'test_split': 0.15, 'stratified_split': True, 'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
         'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
-        'synthetic_generation': {'cluster_variance': 0.15, 'anomaly_sparsity': 0.4, 'noise_factor': 0.03,
-                               'correlation_strength': 0.35, 'high_performance_mode': True},
-        'preprocessing': {'remove_outliers': True, 'outlier_threshold': 2.8, 'impute_missing': True,
-                         'imputation_strategy': 'mean', 'feature_scaling': 'standard', 'streaming_processing': True},
+        'synthetic_generation': {'cluster_variance': 0.15, 'anomaly_sparsity': 0.4, 'noise_factor': 0.03, 'correlation_strength': 0.35, 'high_performance_mode': True},
+        'preprocessing': {'remove_outliers': True, 'outlier_threshold': 2.8, 'impute_missing': True, 'imputation_strategy': 'mean', 'feature_scaling': 'standard', 'streaming_processing': True},
         'shuffle': True, 'pin_memory': True if torch.cuda.is_available() else False
     },
     'monitoring': {
-        'metrics_frequency': 20, 'checkpoint_frequency': 25, 'tensorboard_logging': True,
-        'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': True,
-        'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss', 'learning_rate', 'epoch_time',
-                           'memory_usage', 'throughput', 'latency', 'gpu_utilization'],
+        'metrics_frequency': 20, 'checkpoint_frequency': 25, 'tensorboard_logging': True, 'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': True,
+        'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss', 'learning_rate', 'epoch_time', 'memory_usage', 'throughput', 'latency', 'gpu_utilization'],
         'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
         'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 10, 'save_checkpoints': True,
-        'tensorboard': {'export_formats': ["json", "csv"], 'include_histograms': True, 'include_images': True,
-                       'max_scalars': 2000, 'max_histograms': 100, 'max_images': 15, 'save_summary': True},
+        'tensorboard': {'export_formats': ["json", "csv"], 'include_histograms': True, 'include_images': True, 'max_scalars': 2000, 'max_histograms': 100, 'max_images': 15, 'save_summary': True},
         'performance_metrics': True
     },
     'hardware': {
@@ -6737,30 +6737,24 @@ PERFORMANCE_PRESET = {
         'minimum_system_requirements': {'cpu_cores': 4, 'ram_gb': 8, 'disk_space': 10},
         'optimal_system_requirements': {'cpu_cores': 8, 'ram_gb': 16, 'disk_space': 20, 'gpu_memory': 8},
         'memory_management': {'max_memory_fraction': 0.85, 'allow_memory_growth': True, 'memory_limit': None},
-        'performance_optimization': {'use_cuda': True if torch.cuda.is_available() else False, 'use_amp': True if torch.cuda.is_available() else False, 'benchmark_mode': True, 
-                                   'deterministic': False, 'cudnn_benchmark': True if torch.cuda.is_available() else False}
+        'performance_optimization': {'use_cuda': True if torch.cuda.is_available() else False, 'use_amp': True if torch.cuda.is_available() else False, 'benchmark_mode': True, 'deterministic': False, 'cudnn_benchmark': True if torch.cuda.is_available() else False}
     },
     'system': {
-        'model_dir': str(DEFAULT_MODEL_DIR / "performance"), 'log_dir': str(LOG_DIR / "performance"),
-        'config_dir': str(CONFIG_DIR / "performance"), 'data_dir': str(DATA_DIR / "performance"),
+        'model_dir': str(DEFAULT_MODEL_DIR / "performance"), 'log_dir': str(LOG_DIR / "performance"), 'reports_dir': str(REPORTS_DIR / "performance"),
+        'config_dir': str(CONFIG_DIR / "performance"), 'data_dir': str(DATA_DIR / "performance"), 'metrics_dir': str(METRICS_DIR / "performance"),
         'checkpoint_dir': str(CHECKPOINTS_DIR / "performance"), 'tensorboard_dir': str(TB_DIR / "performance"), 'results_dir': str(RESULTS_DIR / "performance"),
-        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
-        'parallel_processing': True, 'max_workers': max(4, os.cpu_count() or 4),
+        'datasets_dir': str(DATASETS_DIR / "performance"), 'artifacts_dir': str(ARTIFACTS_DIR / "performance"), 'figures_dir': str(FIGURES_DIR / "performance"), 'info_dir': str(INFO_DIR / "performance"),
+        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True, 'parallel_processing': True, 'max_workers': max(4, os.cpu_count() or 4),
         'export_onnx': True, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
-        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True,
-                       'optimize_for_mobile': False, 'runtime_validation': True,
-                       'validation_tolerance': 1e-5, 'verbose': True},
+        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True, 'optimize_for_mobile': False, 'runtime_validation': True, 'validation_tolerance': 1e-5, 'verbose': True},
         'distributed_training': False
     },
     'presets': {
-        'available_presets': get_available_presets(), 'current_preset': 'performance', 'current_override': None,
-        'override_rules': {'security': True, 'monitoring': True, 'hardware': True},
-        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(),
-        'auto_apply': True, 'validate_compatibility': True
+        'available_presets': get_available_presets(), 'current_preset': 'performance', 'current_override': None, 'override_rules': {'security': True, 'monitoring': True, 'hardware': True},
+        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(), 'auto_apply': True, 'validate_compatibility': True
     },
     'hyperparameter_optimization': {
-        'enabled': True, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_performance',
-        'direction': 'minimize', 'n_trials': 200, 'timeout': 7200,
+        'enabled': True, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_performance', 'direction': 'minimize', 'n_trials': 200, 'timeout': 7200,
         'sampler': 'TPESampler', 'pruner': 'HyperbandPruner', 'objective_metric': 'validation_loss',
         'optimization_space': {
             'learning_rate': {'type': 'float', 'low': 1e-5, 'high': 1e-2, 'log': True},
@@ -6770,8 +6764,7 @@ PERFORMANCE_PRESET = {
             'dropout_rate': {'type': 'float', 'low': 0.0, 'high': 0.2},
             'diversity_factor': {'type': 'float', 'low': 0.1, 'high': 0.3}
         },
-        'early_stopping': {'enabled': True, 'patience': 12, 'min_improvement': 1e-5},
-        'timeout_seconds': 7200, 'trial_epochs': 80, 'trial_patience': 8,
+        'early_stopping': {'enabled': True, 'patience': 12, 'min_improvement': 1e-5}, 'timeout_seconds': 7200, 'trial_epochs': 80, 'trial_patience': 8,
         'cleanup_trials': True, 'generate_plots': True,
         'search_space': {
             'encoding_dim_min': 12, 'encoding_dim_max': 32, 'hidden_layers_min': 2, 'hidden_layers_max': 3,
@@ -6780,26 +6773,19 @@ PERFORMANCE_PRESET = {
             'activations': ["relu", "leaky_relu", "gelu", "swish"], 'normalizations': ["batch", "layer"],
             'percentile_min': 85, 'percentile_max': 95
         },
-        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0,
-                   'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 20,
-                   'n_ei_candidates': 24, 'multivariate': True},
-        'hpo_pruner': {'type': 'Hyperband', 'n_startup_trials': 10, 'n_warmup_steps': 5, 'interval_steps': 1,
-                   'min_resource': 1, 'max_resource': 'auto', 'reduction_factor': 3},
-        'scoring': {'use_composite_score': True, 'validation_weight': 0.6, 'test_weight': 0.2,
-                   'complexity_weight': 0.1, 'performance_weight': 0.1, 'max_params_penalty': 50000},
-        'storage': {'enabled': True, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/performance_study.db",
-                   'load_if_exists': True, 'heartbeat_interval': 60, 'grace_period': 120}
+        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0, 'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 20, 'n_ei_candidates': 24, 'multivariate': True},
+        'hpo_pruner': {'type': 'Hyperband', 'n_startup_trials': 10, 'n_warmup_steps': 5, 'interval_steps': 1, 'min_resource': 1, 'max_resource': 'auto', 'reduction_factor': 3},
+        'scoring': {'use_composite_score': True, 'validation_weight': 0.6, 'test_weight': 0.2, 'complexity_weight': 0.1, 'performance_weight': 0.1, 'max_params_penalty': 50000},
+        'storage': {'enabled': True, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/performance_study.db", 'load_if_exists': True, 'heartbeat_interval': 60, 'grace_period': 120}
     },
     'validation': {
         'cross_validation': {'enabled': True, 'folds': 3, 'stratified': True, 'random_state': 42},
-        'metrics': ['mse', 'mae', 'r2_score', 'explained_variance', 'precision', 'recall', 'f1_score',
-                   'auc_roc', 'inference_time', 'throughput'],
+        'metrics': ['mse', 'mae', 'r2_score', 'explained_variance', 'precision', 'recall', 'f1_score', 'auc_roc', 'inference_time', 'throughput'],
         'validation_frequency': 1, 'save_validation_results': True, 'detailed_metrics': True,
         'performance_benchmarking': True
     },
     'experimental': {
-        'features': {'advanced_logging': True, 'model_interpretability': False, 'federated_learning': False,
-                    'active_learning': False, 'performance_tuning': True},
+        'features': {'advanced_logging': True, 'model_interpretability': False, 'federated_learning': False, 'active_learning': False, 'performance_tuning': True},
         'settings': {'experimental_mode': False, 'beta_features': True, 'research_mode': False}
     }
 }
@@ -6855,10 +6841,8 @@ BASELINE_PRESET = {
         'alert_levels': ['low', 'medium', 'high', 'critical'], 'threshold_validation': True
     },
     'data': {
-        'normal_samples': 8000, 'attack_samples': 2000, 'features': 20, 'use_real_data': False,
-        'data_normalization': 'standard', 'anomaly_factor': 1.5, 'random_state': 42,
-        'validation_split': 0.2, 'test_split': 0.2, 'stratified_split': True,
-        'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+        'normal_samples': 8000, 'attack_samples': 2000, 'features': 20, 'use_real_data': False, 'data_normalization': 'standard', 'anomaly_factor': 1.5, 'random_state': 42,
+        'validation_split': 0.2, 'test_split': 0.2, 'stratified_split': True, 'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
         'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
         'synthetic_generation': {'cluster_variance': 0.1, 'anomaly_sparsity': 0.3, 'noise_factor': 0.05, 'correlation_strength': 0.3},
         'preprocessing': {'remove_outliers': True, 'outlier_threshold': 3.0, 'impute_missing': True, 'imputation_strategy': 'mean'},
@@ -6870,36 +6854,30 @@ BASELINE_PRESET = {
         'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss', 'learning_rate', 'epoch_time', 'memory_usage'],
         'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
         'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 10, 'save_checkpoints': True,
-        'tensorboard': {'export_formats': ["json", "csv"], 'include_histograms': True, 'include_images': False,
-                       'max_scalars': 1000, 'max_histograms': 50, 'max_images': 10, 'save_summary': True}
+        'tensorboard': {'export_formats': ["json", "csv"], 'include_histograms': True, 'include_images': False, 'max_scalars': 1000, 'max_histograms': 50, 'max_images': 10, 'save_summary': True}
     },
     'hardware': {
-        'device': 'auto', 'recommended_gpu_memory': 6,
-        'minimum_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
+        'device': 'auto', 'recommended_gpu_memory': 6, 'minimum_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
         'optimal_system_requirements': {'cpu_cores': 4, 'ram_gb': 8, 'disk_space': 10, 'gpu_memory': 6},
         'memory_management': {'max_memory_fraction': 0.8, 'allow_memory_growth': True, 'memory_limit': None},
         'performance_optimization': {'use_cuda': True if torch.cuda.is_available() else False, 'use_amp': False, 'benchmark_mode': False, 'deterministic': True}
     },
     'system': {
-        'model_dir': str(DEFAULT_MODEL_DIR / "baseline"), 'log_dir': str(LOG_DIR / "baseline"),
-        'config_dir': str(CONFIG_DIR / "baseline"), 'data_dir': str(DATA_DIR / "baseline"),
+        'model_dir': str(DEFAULT_MODEL_DIR / "baseline"), 'log_dir': str(LOG_DIR / "baseline"), 'reports_dir': str(REPORTS_DIR / "baseline"),
+        'config_dir': str(CONFIG_DIR / "baseline"), 'data_dir': str(DATA_DIR / "baseline"), 'metrics_dir': str(METRICS_DIR / "baseline"),
         'checkpoint_dir': str(CHECKPOINTS_DIR / "baseline"), 'tensorboard_dir': str(TB_DIR / "baseline"), 'results_dir': str(RESULTS_DIR / "baseline"),
+        'datasets_dir': str(DATASETS_DIR / "baseline"), 'artifacts_dir': str(ARTIFACTS_DIR / "baseline"), 'figures_dir': str(FIGURES_DIR / "baseline"), 'info_dir': str(INFO_DIR / "baseline"),
         'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
         'parallel_processing': True, 'max_workers': min(4, os.cpu_count() or 1),
         'export_onnx': True, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
-        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True,
-                       'optimize_for_mobile': False, 'runtime_validation': True,
-                       'validation_tolerance': 1e-5, 'verbose': False}
+        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True, 'optimize_for_mobile': False, 'runtime_validation': True, 'validation_tolerance': 1e-5, 'verbose': False}
     },
     'presets': {
-        'available_presets': get_available_presets(), 'current_preset': 'baseline', 'current_override': None,
-        'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
-        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(),
-        'auto_apply': False, 'validate_compatibility': True
+        'available_presets': get_available_presets(), 'current_preset': 'baseline', 'current_override': None, 'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
+        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(), 'auto_apply': False, 'validate_compatibility': True
     },
     'hyperparameter_optimization': {
-        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_baseline',
-        'direction': 'minimize', 'n_trials': 100, 'timeout': 3600,
+        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_baseline', 'direction': 'minimize', 'n_trials': 100, 'timeout': 3600,
         'sampler': 'TPESampler', 'pruner': 'MedianPruner', 'objective_metric': 'validation_loss',
         'optimization_space': {
             'learning_rate': {'type': 'float', 'low': 1e-5, 'high': 1e-1, 'log': True},
@@ -6908,8 +6886,7 @@ BASELINE_PRESET = {
             'hidden_dims': {'type': 'suggest', 'options': [[64], [128, 64], [256, 128]]},
             'dropout_rate': {'type': 'float', 'low': 0.1, 'high': 0.4}
         },
-        'early_stopping': {'enabled': True, 'patience': 10, 'min_improvement': 1e-4},
-        'timeout_seconds': 3600, 'trial_epochs': 50, 'trial_patience': 7,
+        'early_stopping': {'enabled': True, 'patience': 10, 'min_improvement': 1e-4}, 'timeout_seconds': 3600, 'trial_epochs': 50, 'trial_patience': 7,
         'cleanup_trials': True, 'generate_plots': True,
         'search_space': {
             'encoding_dim_min': 8, 'encoding_dim_max': 24, 'hidden_layers_min': 1, 'hidden_layers_max': 2,
@@ -6918,14 +6895,10 @@ BASELINE_PRESET = {
             'activations': ["relu", "leaky_relu", "gelu"], 'normalizations': ["batch", None],
             'percentile_min': 90, 'percentile_max': 98
         },
-        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0,
-                   'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 20,
-                   'n_ei_candidates': 24, 'multivariate': True},
+        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0, 'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 20, 'n_ei_candidates': 24, 'multivariate': True},
         'hpo_pruner': {'type': 'Median', 'n_startup_trials': 5, 'n_warmup_steps': 10, 'interval_steps': 1},
-        'scoring': {'use_composite_score': False, 'validation_weight': 0.7, 'test_weight': 0.2,
-                   'complexity_weight': 0.1, 'max_params_penalty': 50000},
-        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/baseline_study.db",
-                   'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
+        'scoring': {'use_composite_score': False, 'validation_weight': 0.7, 'test_weight': 0.2, 'complexity_weight': 0.1, 'max_params_penalty': 50000},
+        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/baseline_study.db", 'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
     },
     'validation': {
         'cross_validation': {'enabled': False, 'folds': 3, 'stratified': True, 'random_state': 42},
@@ -6961,86 +6934,63 @@ DEBUG_PRESET = {
         }
     },
     'training': {
-        'batch_size': 16, 'epochs': 5, 'learning_rate': 0.01, 'patience': 3, 'weight_decay': 0.0,
-        'gradient_clip': 5.0, 'gradient_accumulation_steps': 1, 'mixed_precision': False,
-        'num_workers': 1, 'optimizer': 'SGD', 'scheduler': None, 'scheduler_params': {},
-        'early_stopping': False, 'validation_split': 0.3, 'shuffle': True,
-        'pin_memory': False, 'persistent_workers': False,
-        'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 2, 'lr_factor': 0.5, 'min_lr': 1e-7
+        'batch_size': 16, 'epochs': 5, 'learning_rate': 0.01, 'patience': 3, 'weight_decay': 0.0, 'gradient_clip': 5.0, 'gradient_accumulation_steps': 1, 'mixed_precision': False,
+        'num_workers': 1, 'optimizer': 'SGD', 'scheduler': None, 'scheduler_params': {}, 'early_stopping': False, 'validation_split': 0.3, 'shuffle': True,
+        'pin_memory': False, 'persistent_workers': False, 'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 2, 'lr_factor': 0.5, 'min_lr': 1e-7
     },
     'model': {
-        'model_type': 'SimpleAutoencoder', 'input_dim': 10, 'encoding_dim': 4, 'hidden_dims': [32],
-        'dropout_rates': [0.1], 'activation': 'relu', 'activation_param': 0.0,
-        'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
-        'diversity_factor': 0.0, 'min_features': 3, 'num_models': 1, 'skip_connection': False,
-        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
-        'model_types': list(MODEL_VARIANTS.keys()),
-        'available_activations': ['relu', 'leaky_relu', 'gelu'],
-        'available_normalizations': ['batch', 'layer', None],
-        'available_initializers': ['xavier_uniform', 'xavier_normal'],
-        'legacy_mode': False, 'use_attention': False
+        'model_type': 'SimpleAutoencoder', 'input_dim': 10, 'encoding_dim': 4, 'hidden_dims': [32], 'dropout_rates': [0.1], 'activation': 'relu', 'activation_param': 0.0,
+        'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False, 'diversity_factor': 0.0, 'min_features': 3, 'num_models': 1, 'skip_connection': False,
+        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform', 'model_types': list(MODEL_VARIANTS.keys()),
+        'available_activations': ['relu', 'leaky_relu', 'gelu'], 'available_normalizations': ['batch', 'layer', None],
+        'available_initializers': ['xavier_uniform', 'xavier_normal'], 'legacy_mode': False, 'use_attention': False
     },
     'security': {
-        'percentile': 85, 'attack_threshold': 0.5, 'false_negative_cost': 1.0,
-        'enable_security_metrics': False, 'anomaly_threshold_strategy': 'fixed_percentile',
-        'early_warning_threshold': 0.45, 'adaptive_threshold': False, 'confidence_interval': 0.8,
-        'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium'],
+        'percentile': 85, 'attack_threshold': 0.5, 'false_negative_cost': 1.0, 'enable_security_metrics': False, 'anomaly_threshold_strategy': 'fixed_percentile',
+        'early_warning_threshold': 0.45, 'adaptive_threshold': False, 'confidence_interval': 0.8, 'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium'],
         'threshold_validation': False
     },
     'data': {
-        'normal_samples': 100, 'attack_samples': 50, 'features': 10, 'use_real_data': False,
-        'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
-        'validation_split': 0.3, 'test_split': 0.3, 'stratified_split': False,
-        'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+        'normal_samples': 100, 'attack_samples': 50, 'features': 10, 'use_real_data': False, 'data_normalization': 'minmax', 'anomaly_factor': 2.0, 'random_state': 42,
+        'validation_split': 0.3, 'test_split': 0.3, 'stratified_split': False, 'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
         'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
         'synthetic_generation': {'cluster_variance': 0.2, 'anomaly_sparsity': 0.5, 'noise_factor': 0.15, 'correlation_strength': 0.1},
         'preprocessing': {'remove_outliers': False, 'outlier_threshold': 3.0, 'impute_missing': False, 'imputation_strategy': 'mean'},
         'shuffle': True, 'pin_memory': False
     },
     'monitoring': {
-        'metrics_frequency': 1, 'checkpoint_frequency': 1, 'tensorboard_logging': False,
-        'console_logging_level': 'DEBUG', 'save_best_model': False, 'save_model_history': False,
-        'metrics_to_track': ['loss', 'reconstruction_error'], 'early_stopping_metric': 'loss',
-        'checkpoint_format': 'pytorch', 'log_model_summary': True, 'tensorboard_dir': str(TB_DIR),
+        'metrics_frequency': 1, 'checkpoint_frequency': 1, 'tensorboard_logging': False, 'console_logging_level': 'DEBUG', 'save_best_model': False, 'save_model_history': False,
+        'metrics_to_track': ['loss', 'reconstruction_error'], 'early_stopping_metric': 'loss', 'checkpoint_format': 'pytorch', 'log_model_summary': True, 'tensorboard_dir': str(TB_DIR),
         'log_frequency': 1, 'save_checkpoints': False,
-        'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                       'max_scalars': 100, 'max_histograms': 10, 'max_images': 5, 'save_summary': False}
+        'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False, 'max_scalars': 100, 'max_histograms': 10, 'max_images': 5, 'save_summary': False}
     },
     'hardware': {
-        'device': 'cpu', 'recommended_gpu_memory': 2,
-        'minimum_system_requirements': {'cpu_cores': 1, 'ram_gb': 2, 'disk_space': 2},
-        'optimal_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
-        'memory_management': {'max_memory_fraction': 0.5, 'allow_memory_growth': False, 'memory_limit': 512},
+        'device': 'cpu', 'recommended_gpu_memory': 2, 'minimum_system_requirements': {'cpu_cores': 1, 'ram_gb': 2, 'disk_space': 2},
+        'optimal_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5}, 'memory_management': {'max_memory_fraction': 0.5, 'allow_memory_growth': False, 'memory_limit': 512},
         'performance_optimization': {'use_cuda': False, 'use_amp': False, 'benchmark_mode': False, 'deterministic': True}
     },
     'system': {
-        'model_dir': str(DEFAULT_MODEL_DIR / "debug"), 'log_dir': str(LOG_DIR / "debug"),
-        'config_dir': str(CONFIG_DIR / "debug"), 'data_dir': str(DATA_DIR / "debug"),
+        'model_dir': str(DEFAULT_MODEL_DIR / "debug"), 'log_dir': str(LOG_DIR / "debug"), 'reports_dir': str(REPORTS_DIR / "debug"),
+        'config_dir': str(CONFIG_DIR / "debug"), 'data_dir': str(DATA_DIR / "debug"), 'metrics_dir': str(METRICS_DIR / "debug"),
         'checkpoint_dir': str(CHECKPOINTS_DIR / "debug"), 'tensorboard_dir': str(TB_DIR / "debug"), 'results_dir': str(RESULTS_DIR / "debug"),
+        'datasets_dir': str(DATASETS_DIR / "debug"), 'artifacts_dir': str(ARTIFACTS_DIR / "debug"), 'figures_dir': str(FIGURES_DIR / "debug"), 'info_dir': str(INFO_DIR / "debug"),
         'debug': True, 'verbose': True, 'random_seed': 42, 'reproducible': False,
-        'parallel_processing': False, 'max_workers': 1, 'export_onnx': False, 'non_interactive': False,
-        'cuda_optimizations': False,
-        'onnx_export': {'opset_version': 14, 'dynamic_axes': False, 'constant_folding': False,
-                       'optimize_for_mobile': False, 'runtime_validation': False,
-                       'validation_tolerance': 1e-5, 'verbose': False}
+        'parallel_processing': False, 'max_workers': 1, 'export_onnx': False, 'non_interactive': False, 'cuda_optimizations': False,
+        'onnx_export': {'opset_version': 14, 'dynamic_axes': False, 'constant_folding': False, 'optimize_for_mobile': False, 'runtime_validation': False, 'validation_tolerance': 1e-5, 'verbose': False}
     },
     'presets': {
-        'available_presets': get_available_presets(), 'current_preset': 'debug', 'current_override': None,
-        'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
-        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(),
-        'auto_apply': False, 'validate_compatibility': False
+        'available_presets': get_available_presets(), 'current_preset': 'debug', 'current_override': None, 'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
+        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(), 'auto_apply': False, 'validate_compatibility': False
     },
     'hyperparameter_optimization': {
-        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_debug',
-        'direction': 'minimize', 'n_trials': 10, 'timeout': 600,
+        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_debug', 'direction': 'minimize', 'n_trials': 10, 'timeout': 600,
         'sampler': 'RandomSampler', 'pruner': 'NopPruner', 'objective_metric': 'loss',
         'optimization_space': {
             'learning_rate': {'type': 'float', 'low': 1e-3, 'high': 1e-1, 'log': True},
             'batch_size': {'type': 'categorical', 'choices': [8, 16, 32]},
             'encoding_dim': {'type': 'int', 'low': 2, 'high': 8}
         },
-        'early_stopping': {'enabled': False, 'patience': 3, 'min_improvement': 1e-2},
-        'timeout_seconds': 600, 'trial_epochs': 5, 'trial_patience': 2,
+        'early_stopping': {'enabled': False, 'patience': 3, 'min_improvement': 1e-2}, 'timeout_seconds': 600, 'trial_epochs': 5, 'trial_patience': 2,
         'cleanup_trials': False, 'generate_plots': False,
         'search_space': {
             'encoding_dim_min': 2, 'encoding_dim_max': 8, 'hidden_layers_min': 1, 'hidden_layers_max': 1,
@@ -7048,23 +6998,17 @@ DEBUG_PRESET = {
             'weight_decay_min': 0.0, 'weight_decay_max': 0.0, 'dropout_min': 0.0, 'dropout_max': 0.1,
             'activations': ["relu"], 'normalizations': [None], 'percentile_min': 80, 'percentile_max': 90
         },
-        'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0,
-                   'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 5,
-                   'n_ei_candidates': 10, 'multivariate': False},
+        'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0, 'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 5, 'n_ei_candidates': 10, 'multivariate': False},
         'hpo_pruner': {'type': 'Nop', 'n_startup_trials': 0, 'n_warmup_steps': 0, 'interval_steps': 1},
-        'scoring': {'use_composite_score': False, 'validation_weight': 1.0, 'test_weight': 0.0,
-                   'complexity_weight': 0.0, 'max_params_penalty': 1000},
-        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/debug_study.db",
-                   'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
+        'scoring': {'use_composite_score': False, 'validation_weight': 1.0, 'test_weight': 0.0, 'complexity_weight': 0.0, 'max_params_penalty': 1000},
+        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/debug_study.db", 'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
     },
     'validation': {
-        'cross_validation': {'enabled': False, 'folds': 2, 'stratified': False, 'random_state': 42},
-        'metrics': ['mse', 'mae'], 'validation_frequency': 1,
+        'cross_validation': {'enabled': False, 'folds': 2, 'stratified': False, 'random_state': 42}, 'metrics': ['mse', 'mae'], 'validation_frequency': 1,
         'save_validation_results': False, 'detailed_metrics': False
     },
     'experimental': {
-        'features': {'advanced_logging': True, 'model_interpretability': False,
-                    'federated_learning': False, 'active_learning': False},
+        'features': {'advanced_logging': True, 'model_interpretability': False, 'federated_learning': False, 'active_learning': False},
         'settings': {'experimental_mode': True, 'beta_features': False, 'research_mode': False}
     }
 }
@@ -7092,78 +7036,54 @@ LIGHTWEIGHT_PRESET = {
         }
     },
     'training': {
-        'batch_size': 8, 'epochs': 30, 'learning_rate': 0.005, 'patience': 5, 'weight_decay': 0.0,
-        'gradient_clip': 2.0, 'gradient_accumulation_steps': 1, 'mixed_precision': False,
-        'num_workers': 1, 'optimizer': 'Adam', 'scheduler': None, 'scheduler_params': {},
-        'early_stopping': True, 'validation_split': 0.25, 'shuffle': True,
-        'pin_memory': False, 'persistent_workers': False,
-        'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 3, 'lr_factor': 0.7, 'min_lr': 1e-6
+        'batch_size': 8, 'epochs': 30, 'learning_rate': 0.005, 'patience': 5, 'weight_decay': 0.0, 'gradient_clip': 2.0, 'gradient_accumulation_steps': 1, 'mixed_precision': False,
+        'num_workers': 1, 'optimizer': 'Adam', 'scheduler': None, 'scheduler_params': {}, 'early_stopping': True, 'validation_split': 0.25, 'shuffle': True,
+        'pin_memory': False, 'persistent_workers': False, 'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 3, 'lr_factor': 0.7, 'min_lr': 1e-6
     },
     'model': {
-        'model_type': 'SimpleAutoencoder', 'input_dim': 12, 'encoding_dim': 6, 'hidden_dims': [48],
-        'dropout_rates': [0.15], 'activation': 'relu', 'activation_param': 0.0,
-        'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
-        'diversity_factor': 0.0, 'min_features': 4, 'num_models': 1, 'skip_connection': False,
-        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
-        'model_types': list(MODEL_VARIANTS.keys()),
-        'available_activations': ['relu', 'leaky_relu', 'gelu'],
-        'available_normalizations': ['batch', 'layer', None],
-        'available_initializers': ['xavier_uniform', 'xavier_normal'],
-        'legacy_mode': False, 'use_attention': False
+        'model_type': 'SimpleAutoencoder', 'input_dim': 12, 'encoding_dim': 6, 'hidden_dims': [48], 'dropout_rates': [0.15], 'activation': 'relu', 'activation_param': 0.0,
+        'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False, 'diversity_factor': 0.0, 'min_features': 4, 'num_models': 1, 'skip_connection': False,
+        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform', 'model_types': list(MODEL_VARIANTS.keys()), 'available_activations': ['relu', 'leaky_relu', 'gelu'],
+        'available_normalizations': ['batch', 'layer', None], 'available_initializers': ['xavier_uniform', 'xavier_normal'], 'legacy_mode': False, 'use_attention': False
     },
     'security': {
-        'percentile': 92, 'attack_threshold': 0.35, 'false_negative_cost': 1.2,
-        'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
-        'early_warning_threshold': 0.3, 'adaptive_threshold': False, 'confidence_interval': 0.9,
-        'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium', 'high'],
+        'percentile': 92, 'attack_threshold': 0.35, 'false_negative_cost': 1.2, 'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
+        'early_warning_threshold': 0.3, 'adaptive_threshold': False, 'confidence_interval': 0.9, 'detection_methods': ['reconstruction_error'], 'alert_levels': ['low', 'medium', 'high'],
         'threshold_validation': False
     },
     'data': {
-        'normal_samples': 2000, 'attack_samples': 500, 'features': 12, 'use_real_data': False,
-        'data_normalization': 'minmax', 'anomaly_factor': 1.8, 'random_state': 42,
-        'validation_split': 0.25, 'test_split': 0.25, 'stratified_split': False,
-        'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+        'normal_samples': 2000, 'attack_samples': 500, 'features': 12, 'use_real_data': False, 'data_normalization': 'minmax', 'anomaly_factor': 1.8, 'random_state': 42,
+        'validation_split': 0.25, 'test_split': 0.25, 'stratified_split': False, 'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
         'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
         'synthetic_generation': {'cluster_variance': 0.08, 'anomaly_sparsity': 0.25, 'noise_factor': 0.1, 'correlation_strength': 0.2},
-        'preprocessing': {'remove_outliers': False, 'outlier_threshold': 3.0, 'impute_missing': True, 'imputation_strategy': 'mean'},
-        'shuffle': True, 'pin_memory': False
+        'preprocessing': {'remove_outliers': False, 'outlier_threshold': 3.0, 'impute_missing': True, 'imputation_strategy': 'mean'}, 'shuffle': True, 'pin_memory': False
     },
     'monitoring': {
-        'metrics_frequency': 5, 'checkpoint_frequency': 5, 'tensorboard_logging': False,
-        'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': False,
-        'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss'],
-        'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
+        'metrics_frequency': 5, 'checkpoint_frequency': 5, 'tensorboard_logging': False, 'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': False,
+        'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss'], 'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
         'log_model_summary': False, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 5, 'save_checkpoints': True,
-        'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                       'max_scalars': 100, 'max_histograms': 10, 'max_images': 5, 'save_summary': False}
+        'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False, 'max_scalars': 100, 'max_histograms': 10, 'max_images': 5, 'save_summary': False}
     },
     'hardware': {
-        'device': 'cpu', 'recommended_gpu_memory': 1,
-        'minimum_system_requirements': {'cpu_cores': 1, 'ram_gb': 2, 'disk_space': 2},
-        'optimal_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
-        'memory_management': {'max_memory_fraction': 0.6, 'allow_memory_growth': False, 'memory_limit': 1024},
+        'device': 'cpu', 'recommended_gpu_memory': 1, 'minimum_system_requirements': {'cpu_cores': 1, 'ram_gb': 2, 'disk_space': 2},
+        'optimal_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5}, 'memory_management': {'max_memory_fraction': 0.6, 'allow_memory_growth': False, 'memory_limit': 1024},
         'performance_optimization': {'use_cuda': False, 'use_amp': False, 'benchmark_mode': False, 'deterministic': True}
     },
     'system': {
-        'model_dir': str(DEFAULT_MODEL_DIR / "lightweight"), 'log_dir': str(LOG_DIR / "lightweight"),
-        'config_dir': str(CONFIG_DIR / "lightweight"), 'data_dir': str(DATA_DIR / "lightweight"),
+        'model_dir': str(DEFAULT_MODEL_DIR / "lightweight"), 'log_dir': str(LOG_DIR / "lightweight"), 'reports_dir': str(REPORTS_DIR / "lightweight"),
+        'config_dir': str(CONFIG_DIR / "lightweight"), 'data_dir': str(DATA_DIR / "lightweight"), 'metrics_dir': str(METRICS_DIR / "lightweight"),
         'checkpoint_dir': str(CHECKPOINTS_DIR / "lightweight"), 'tensorboard_dir': str(TB_DIR / "lightweight"), 'results_dir': str(RESULTS_DIR / "lightweight"),
-        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
-        'parallel_processing': False, 'max_workers': 1, 'export_onnx': True, 'non_interactive': False,
+        'datasets_dir': str(DATASETS_DIR / "lightweight"), 'artifacts_dir': str(ARTIFACTS_DIR / "lightweight"), 'figures_dir': str(FIGURES_DIR / "lightweight"), 'info_dir': str(INFO_DIR / "lightweight"),
+        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True, 'parallel_processing': False, 'max_workers': 1, 'export_onnx': True, 'non_interactive': False,
         'cuda_optimizations': False,
-        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True,
-                       'optimize_for_mobile': True, 'runtime_validation': True,
-                       'validation_tolerance': 1e-5, 'verbose': False}
+        'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True, 'optimize_for_mobile': True, 'runtime_validation': True, 'validation_tolerance': 1e-5, 'verbose': False}
     },
     'presets': {
-        'available_presets': get_available_presets(), 'current_preset': 'lightweight', 'current_override': None,
-        'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
-        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(),
-        'auto_apply': False, 'validate_compatibility': True
+        'available_presets': get_available_presets(), 'current_preset': 'lightweight', 'current_override': None, 'override_rules': {'security': False, 'monitoring': False, 'hardware': False},
+        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(), 'auto_apply': False, 'validate_compatibility': True
     },
     'hyperparameter_optimization': {
-        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_lightweight',
-        'direction': 'minimize', 'n_trials': 20, 'timeout': 1800,
+        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_lightweight', 'direction': 'minimize', 'n_trials': 20, 'timeout': 1800,
         'sampler': 'RandomSampler', 'pruner': 'NopPruner', 'objective_metric': 'validation_loss',
         'optimization_space': {
             'learning_rate': {'type': 'float', 'low': 1e-4, 'high': 1e-2, 'log': True},
@@ -7171,8 +7091,7 @@ LIGHTWEIGHT_PRESET = {
             'encoding_dim': {'type': 'int', 'low': 4, 'high': 12},
             'dropout_rate': {'type': 'float', 'low': 0.0, 'high': 0.3}
         },
-        'early_stopping': {'enabled': False, 'patience': 5, 'min_improvement': 1e-3},
-        'timeout_seconds': 1800, 'trial_epochs': 20, 'trial_patience': 4,
+        'early_stopping': {'enabled': False, 'patience': 5, 'min_improvement': 1e-3}, 'timeout_seconds': 1800, 'trial_epochs': 20, 'trial_patience': 4,
         'cleanup_trials': True, 'generate_plots': False,
         'search_space': {
             'encoding_dim_min': 4, 'encoding_dim_max': 12, 'hidden_layers_min': 1, 'hidden_layers_max': 1,
@@ -7180,23 +7099,17 @@ LIGHTWEIGHT_PRESET = {
             'weight_decay_min': 0.0, 'weight_decay_max': 1e-4, 'dropout_min': 0.0, 'dropout_max': 0.3,
             'activations': ["relu", "leaky_relu"], 'normalizations': [None], 'percentile_min': 90, 'percentile_max': 95
         },
-        'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0,
-                   'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 10,
-                   'n_ei_candidates': 15, 'multivariate': False},
+        'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0, 'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 10, 'n_ei_candidates': 15, 'multivariate': False},
         'hpo_pruner': {'type': 'Nop', 'n_startup_trials': 0, 'n_warmup_steps': 0, 'interval_steps': 1},
-        'scoring': {'use_composite_score': False, 'validation_weight': 0.8, 'test_weight': 0.2,
-                   'complexity_weight': 0.1, 'max_params_penalty': 5000},
-        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/lightweight_study.db",
-                   'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
+        'scoring': {'use_composite_score': False, 'validation_weight': 0.8, 'test_weight': 0.2, 'complexity_weight': 0.1, 'max_params_penalty': 5000},
+        'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/lightweight_study.db", 'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
     },
     'validation': {
-        'cross_validation': {'enabled': False, 'folds': 3, 'stratified': False, 'random_state': 42},
-        'metrics': ['mse', 'mae', 'precision', 'recall', 'f1_score'],
+        'cross_validation': {'enabled': False, 'folds': 3, 'stratified': False, 'random_state': 42}, 'metrics': ['mse', 'mae', 'precision', 'recall', 'f1_score'],
         'validation_frequency': 2, 'save_validation_results': False, 'detailed_metrics': False
     },
     'experimental': {
-        'features': {'advanced_logging': False, 'model_interpretability': False,
-                    'federated_learning': False, 'active_learning': False},
+        'features': {'advanced_logging': False, 'model_interpretability': False, 'federated_learning': False, 'active_learning': False},
         'settings': {'experimental_mode': False, 'beta_features': False, 'research_mode': False}
     }
 }
@@ -7228,76 +7141,58 @@ ADVANCED_PRESET = {
         'gradient_clip': 0.05, 'gradient_accumulation_steps': 16, 'mixed_precision': True if torch.cuda.is_available() else False,
         'num_workers': max(8, os.cpu_count() or 8), 'optimizer': 'AdamW', 'scheduler': 'CosineAnnealingWarmRestarts',
         'scheduler_params': {'T_0': 50, 'T_mult': 2, 'eta_min': 1e-7, 'last_epoch': -1},
-        'early_stopping': True, 'validation_split': 0.1, 'shuffle': True,
-        'pin_memory': True if torch.cuda.is_available() else False, 'persistent_workers': True,
+        'early_stopping': True, 'validation_split': 0.1, 'shuffle': True, 'pin_memory': True if torch.cuda.is_available() else False, 'persistent_workers': True,
         'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 10, 'lr_factor': 0.5, 'min_lr': 1e-8
     },
     'model': {
         'model_type': 'AutoencoderEnsemble', 'input_dim': 50, 'encoding_dim': 24, 'hidden_dims': [512, 256, 128, 64],
-        'dropout_rates': [0.05, 0.05, 0.03, 0.02], 'activation': 'gelu', 'activation_param': 0.0,
-        'normalization': 'layer', 'use_batch_norm': False, 'use_layer_norm': True,
-        'diversity_factor': 0.3, 'min_features': 15, 'num_models': 7, 'skip_connection': True,
-        'residual_blocks': True, 'bias': True, 'weight_init': 'kaiming_normal',
-        'model_types': list(MODEL_VARIANTS.keys()),
-        'available_activations': ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish'],
-        'available_normalizations': ['batch', 'layer', 'instance', 'group', None],
-        'available_initializers': ['xavier_uniform', 'xavier_normal', 'kaiming_uniform', 'kaiming_normal', 'orthogonal'],
+        'dropout_rates': [0.05, 0.05, 0.03, 0.02], 'activation': 'gelu', 'activation_param': 0.0, 'normalization': 'layer', 'use_batch_norm': False, 'use_layer_norm': True,
+        'diversity_factor': 0.3, 'min_features': 15, 'num_models': 7, 'skip_connection': True, 'residual_blocks': True, 'bias': True, 'weight_init': 'kaiming_normal',
+        'model_types': list(MODEL_VARIANTS.keys()), 'available_activations': ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish'],
+        'available_normalizations': ['batch', 'layer', 'instance', 'group', None], 'available_initializers': ['xavier_uniform', 'xavier_normal', 'kaiming_uniform', 'kaiming_normal', 'orthogonal'],
         'legacy_mode': False, 'use_attention': True
     },
     'security': {
-        'percentile': 88, 'attack_threshold': 0.45, 'false_negative_cost': 1.0,
-        'enable_security_metrics': True, 'anomaly_threshold_strategy': 'dynamic_percentile',
-        'early_warning_threshold': 0.4, 'adaptive_threshold': True, 'confidence_interval': 0.99,
-        'detection_methods': ['reconstruction_error', 'statistical_analysis', 'mahalanobis_distance', 'isolation_forest'],
-        'alert_levels': ['low', 'medium', 'high', 'critical'], 'threshold_validation': True,
-        'ensemble_voting': 'weighted', 'uncertainty_threshold': 0.2
+        'percentile': 88, 'attack_threshold': 0.45, 'false_negative_cost': 1.0, 'enable_security_metrics': True, 'anomaly_threshold_strategy': 'dynamic_percentile',
+        'early_warning_threshold': 0.4, 'adaptive_threshold': True, 'confidence_interval': 0.99, 'detection_methods': ['reconstruction_error', 'statistical_analysis', 'mahalanobis_distance', 'isolation_forest'],
+        'alert_levels': ['low', 'medium', 'high', 'critical'], 'threshold_validation': True, 'ensemble_voting': 'weighted', 'uncertainty_threshold': 0.2
     },
     'data': {
-        'normal_samples': 20000, 'attack_samples': 5000, 'features': 50, 'use_real_data': True,
-        'data_normalization': 'standard', 'anomaly_factor': 1.1, 'random_state': 42,
-        'validation_split': 0.1, 'test_split': 0.1, 'stratified_split': True,
-        'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+        'normal_samples': 20000, 'attack_samples': 5000, 'features': 50, 'use_real_data': True, 'data_normalization': 'standard', 'anomaly_factor': 1.1, 'random_state': 42,
+        'validation_split': 0.1, 'test_split': 0.1, 'stratified_split': True, 'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
         'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
         'synthetic_generation': {'cluster_variance': 0.2, 'anomaly_sparsity': 0.5, 'noise_factor': 0.02, 'correlation_strength': 0.4, 'feature_interactions': True},
         'preprocessing': {'remove_outliers': True, 'outlier_threshold': 2.5, 'impute_missing': True, 'imputation_strategy': 'median', 'feature_scaling': 'robust', 'dimensionality_reduction': 'auto'},
         'shuffle': True, 'pin_memory': True if torch.cuda.is_available() else False
     },
     'monitoring': {
-        'metrics_frequency': 50, 'checkpoint_frequency': 50, 'tensorboard_logging': True,
-        'console_logging_level': 'DEBUG', 'save_best_model': True, 'save_model_history': True,
+        'metrics_frequency': 50, 'checkpoint_frequency': 50, 'tensorboard_logging': True, 'console_logging_level': 'DEBUG', 'save_best_model': True, 'save_model_history': True,
         'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss', 'training_accuracy', 'validation_accuracy', 'learning_rate', 'epoch_time', 'memory_usage', 'gradient_norm', 'parameter_updates'],
-        'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
-        'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 10, 'save_checkpoints': True,
+        'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch', 'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 10, 'save_checkpoints': True,
         'tensorboard': {'export_formats': ["json", "csv"], 'include_histograms': True, 'include_images': True, 'max_scalars': 5000, 'max_histograms': 200, 'max_images': 20, 'save_summary': True},
         'profiling_enabled': True, 'performance_metrics': True
     },
     'hardware': {
-        'device': 'cuda' if torch.cuda.is_available() else 'cpu', 'recommended_gpu_memory': 16,
-        'minimum_system_requirements': {'cpu_cores': 8, 'ram_gb': 16, 'disk_space': 20},
-        'optimal_system_requirements': {'cpu_cores': 16, 'ram_gb': 32, 'disk_space': 50, 'gpu_memory': 16},
-        'memory_management': {'max_memory_fraction': 0.9, 'allow_memory_growth': True, 'memory_limit': None},
-        'performance_optimization': {'use_cuda': True if torch.cuda.is_available() else False, 'use_amp': True if torch.cuda.is_available() else False, 'benchmark_mode': True, 
-                                   'deterministic': False, 'cudnn_benchmark': True if torch.cuda.is_available() else False}
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu', 'recommended_gpu_memory': 16, 'minimum_system_requirements': {'cpu_cores': 8, 'ram_gb': 16, 'disk_space': 20},
+        'optimal_system_requirements': {'cpu_cores': 16, 'ram_gb': 32, 'disk_space': 50, 'gpu_memory': 16}, 'memory_management': {'max_memory_fraction': 0.9, 'allow_memory_growth': True, 'memory_limit': None},
+        'performance_optimization': {'use_cuda': True if torch.cuda.is_available() else False, 'use_amp': True if torch.cuda.is_available() else False, 'benchmark_mode': True, 'deterministic': False, 'cudnn_benchmark': True if torch.cuda.is_available() else False}
     },
     'system': {
-        'model_dir': str(DEFAULT_MODEL_DIR / "advanced"), 'log_dir': str(LOG_DIR / "advanced"),
-        'config_dir': str(CONFIG_DIR / "advanced"), 'data_dir': str(DATA_DIR / "advanced"),
+        'model_dir': str(DEFAULT_MODEL_DIR / "advanced"), 'log_dir': str(LOG_DIR / "advanced"), 'reports_dir': str(REPORTS_DIR / "advanced"),
+        'config_dir': str(CONFIG_DIR / "advanced"), 'data_dir': str(DATA_DIR / "advanced"), 'metrics_dir': str(METRICS_DIR / "advanced"),
         'checkpoint_dir': str(CHECKPOINTS_DIR / "advanced"), 'tensorboard_dir': str(TB_DIR / "advanced"), 'results_dir': str(RESULTS_DIR / "advanced"),
-        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
-        'parallel_processing': True, 'max_workers': max(8, os.cpu_count() or 8),
+        'datasets_dir': str(DATASETS_DIR / "advanced"), 'artifacts_dir': str(ARTIFACTS_DIR / "advanced"), 'figures_dir': str(FIGURES_DIR / "advanced"), 'info_dir': str(INFO_DIR / "advanced"),
+        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True, 'parallel_processing': True, 'max_workers': max(8, os.cpu_count() or 8),
         'export_onnx': True, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
         'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True, 'optimize_for_mobile': False, 'runtime_validation': True, 'validation_tolerance': 1e-5, 'verbose': True},
         'distributed_training': False
     },
     'presets': {
-        'available_presets': get_available_presets(), 'current_preset': 'advanced', 'current_override': None,
-        'override_rules': {'security': True, 'monitoring': True, 'hardware': True},
-        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(),
-        'auto_apply': True, 'validate_compatibility': True
+        'available_presets': get_available_presets(), 'current_preset': 'advanced', 'current_override': None, 'override_rules': {'security': True, 'monitoring': True, 'hardware': True},
+        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(), 'auto_apply': True, 'validate_compatibility': True
     },
     'hyperparameter_optimization': {
-        'enabled': True, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_advanced',
-        'direction': 'minimize', 'n_trials': 500, 'timeout': 14400,
+        'enabled': True, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo_advanced', 'direction': 'minimize', 'n_trials': 500, 'timeout': 14400,
         'sampler': 'TPESampler', 'pruner': 'HyperbandPruner', 'objective_metric': 'validation_loss',
         'optimization_space': {
             'learning_rate': {'type': 'float', 'low': 1e-6, 'high': 1e-3, 'log': True},
@@ -7308,8 +7203,7 @@ ADVANCED_PRESET = {
             'diversity_factor': {'type': 'float', 'low': 0.1, 'high': 0.5},
             'weight_decay': {'type': 'float', 'low': 1e-7, 'high': 1e-4, 'log': True}
         },
-        'early_stopping': {'enabled': True, 'patience': 15, 'min_improvement': 1e-5},
-        'timeout_seconds': 14400, 'trial_epochs': 100, 'trial_patience': 10,
+        'early_stopping': {'enabled': True, 'patience': 15, 'min_improvement': 1e-5}, 'timeout_seconds': 14400, 'trial_epochs': 100, 'trial_patience': 10,
         'cleanup_trials': True, 'generate_plots': True,
         'search_space': {
             'encoding_dim_min': 16, 'encoding_dim_max': 64, 'hidden_layers_min': 2, 'hidden_layers_max': 4,
@@ -7318,8 +7212,7 @@ ADVANCED_PRESET = {
             'activations': ["relu", "leaky_relu", "gelu", "swish"], 'normalizations': ["batch", "layer", "instance"],
             'percentile_min': 85, 'percentile_max': 95
         },
-        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0,
-                   'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 20, 'n_ei_candidates': 24, 'multivariate': True},
+        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0, 'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 20, 'n_ei_candidates': 24, 'multivariate': True},
         'hpo_pruner': {'type': 'Hyperband', 'n_startup_trials': 10, 'n_warmup_steps': 5, 'interval_steps': 1, 'min_resource': 1, 'max_resource': 'auto', 'reduction_factor': 3},
         'scoring': {'use_composite_score': True, 'validation_weight': 0.7, 'test_weight': 0.2, 'complexity_weight': 0.1, 'max_params_penalty': 100000},
         'storage': {'enabled': True, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/advanced_study.db", 'load_if_exists': True, 'heartbeat_interval': 60, 'grace_period': 120}
@@ -7327,8 +7220,7 @@ ADVANCED_PRESET = {
     'validation': {
         'cross_validation': {'enabled': True, 'folds': 5, 'stratified': True, 'random_state': 42},
         'metrics': ['mse', 'mae', 'r2_score', 'explained_variance', 'precision', 'recall', 'f1_score', 'auc_roc', 'average_precision', 'brier_score'],
-        'validation_frequency': 1, 'save_validation_results': True, 'detailed_metrics': True,
-        'confidence_intervals': True
+        'validation_frequency': 1, 'save_validation_results': True, 'detailed_metrics': True, 'confidence_intervals': True
     },
     'experimental': {
         'features': {'advanced_logging': True, 'model_interpretability': True, 'federated_learning': False, 'active_learning': True, 'bayesian_optimization': True},
@@ -7377,66 +7269,51 @@ DEFAULT_PRESET = {
         'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 2, 'lr_factor': 0.5, 'min_lr': 1e-7
     },
     'model': {
-        'model_type': 'EnhancedAutoencoder', 'input_dim': 20, 'encoding_dim': 12, 'hidden_dims': [128, 64],
-        'dropout_rates': [0.2, 0.15], 'activation': 'leaky_relu', 'activation_param': 0.2,
-        'normalization': 'batch', 'use_batch_norm': True, 'use_layer_norm': False,
-        'diversity_factor': 0.1, 'min_features': 5, 'num_models': 1, 'skip_connection': True,
-        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
-        'model_types': list(MODEL_VARIANTS.keys()),
-        'available_activations': ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid'],
-        'available_normalizations': ['batch', 'layer', 'instance', None],
-        'available_initializers': ['xavier_uniform', 'xavier_normal', 'kaiming_uniform', 'kaiming_normal'],
-        'legacy_mode': False, 'use_attention': False
+        'model_type': 'EnhancedAutoencoder', 'input_dim': 20, 'encoding_dim': 12, 'hidden_dims': [128, 64], 'dropout_rates': [0.2, 0.15], 'activation': 'leaky_relu', 'activation_param': 0.2,
+        'normalization': 'batch', 'use_batch_norm': True, 'use_layer_norm': False, 'diversity_factor': 0.1, 'min_features': 5, 'num_models': 1, 'skip_connection': True,
+        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform', 'model_types': list(MODEL_VARIANTS.keys()),
+        'available_activations': ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid'], 'available_normalizations': ['batch', 'layer', 'instance', None],
+        'available_initializers': ['xavier_uniform', 'xavier_normal', 'kaiming_uniform', 'kaiming_normal'], 'legacy_mode': False, 'use_attention': False
     },
     'security': {
-        'percentile': 95, 'attack_threshold': 0.3, 'false_negative_cost': 2.0,
-        'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
-        'early_warning_threshold': 0.25, 'adaptive_threshold': True, 'confidence_interval': 0.95,
-        'detection_methods': ['reconstruction_error', 'statistical_analysis'],
+        'percentile': 95, 'attack_threshold': 0.3, 'false_negative_cost': 2.0, 'enable_security_metrics': True, 'anomaly_threshold_strategy': 'fixed_percentile',
+        'early_warning_threshold': 0.25, 'adaptive_threshold': True, 'confidence_interval': 0.95, 'detection_methods': ['reconstruction_error', 'statistical_analysis'],
         'alert_levels': ['low', 'medium', 'high', 'critical'], 'threshold_validation': True
-    },#noise
+    },
     'data': {
-        'normal_samples': 8000, 'attack_samples': 2000, 'features': 20, 'use_real_data': False,
-        'data_normalization': 'standard', 'anomaly_factor': 1.5, 'random_state': 42,
-        'validation_split': 0.2, 'test_split': 0.2, 'stratified_split': True,
-        'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+        'normal_samples': 8000, 'attack_samples': 2000, 'features': 20, 'use_real_data': False, 'data_normalization': 'standard', 'anomaly_factor': 1.5, 'random_state': 42,
+        'validation_split': 0.2, 'test_split': 0.2, 'stratified_split': True, 'data_path': str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
         'artifacts_path': str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
         'synthetic_generation': {'cluster_variance': 0.1, 'anomaly_sparsity': 0.3, 'noise_factor': 0.05, 'correlation_strength': 0.3},
         'preprocessing': {'remove_outliers': True, 'outlier_threshold': 3.0, 'impute_missing': True, 'imputation_strategy': 'mean'},
         'shuffle': True, 'pin_memory': True if torch.cuda.is_available() else False
     },
     'monitoring': {
-        'metrics_frequency': 10, 'checkpoint_frequency': 5, 'tensorboard_logging': True,
-        'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': True,
+        'metrics_frequency': 10, 'checkpoint_frequency': 5, 'tensorboard_logging': True, 'console_logging_level': 'INFO', 'save_best_model': True, 'save_model_history': True,
         'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss', 'learning_rate', 'epoch_time', 'memory_usage'],
-        'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
-        'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 1, 'save_checkpoints': True,
+        'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch', 'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 1, 'save_checkpoints': True,
         'tensorboard': {'export_formats': ["json", "csv"], 'include_histograms': False, 'include_images': False, 'max_scalars': 1000, 'max_histograms': 100, 'max_images': 10, 'save_summary': True}
     },
     'hardware': {
-        'device': 'auto', 'recommended_gpu_memory': 8,
-        'minimum_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
+        'device': 'auto', 'recommended_gpu_memory': 8, 'minimum_system_requirements': {'cpu_cores': 2, 'ram_gb': 4, 'disk_space': 5},
         'optimal_system_requirements': {'cpu_cores': 4, 'ram_gb': 8, 'disk_space': 10, 'gpu_memory': 8},
         'memory_management': {'max_memory_fraction': 0.8, 'allow_memory_growth': True, 'memory_limit': None},
         'performance_optimization': {'use_cuda': True if torch.cuda.is_available() else False, 'use_amp': True if torch.cuda.is_available() else False, 'benchmark_mode': True, 'deterministic': False}
     },
     'system': {
-        'model_dir': str(DEFAULT_MODEL_DIR), 'log_dir': str(LOG_DIR), 'config_dir': str(CONFIG_DIR),
-        'data_dir': str(DATA_DIR), 'checkpoint_dir': str(CHECKPOINTS_DIR), 'tensorboard_dir': str(TB_DIR), 'results_dir': str(RESULTS_DIR),
-        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True,
-        'parallel_processing': True, 'max_workers': min(4, os.cpu_count() or 1),
+        'model_dir': str(DEFAULT_MODEL_DIR), 'log_dir': str(LOG_DIR), 'config_dir': str(CONFIG_DIR), 'reports_dir': str(REPORTS_DIR / "default"), 'metrics_dir': str(METRICS_DIR / "default"),
+        'data_dir': str(DATA_DIR / "default"), 'checkpoint_dir': str(CHECKPOINTS_DIR / "default"), 'tensorboard_dir': str(TB_DIR / "default"), 'results_dir': str(RESULTS_DIR / "default"),
+        'datasets_dir': str(DATASETS_DIR / "default"), 'artifacts_dir': str(ARTIFACTS_DIR / "default"), 'figures_dir': str(FIGURES_DIR / "default"), 'info_dir': str(INFO_DIR / "default"),
+        'debug': False, 'verbose': True, 'random_seed': 42, 'reproducible': True, 'parallel_processing': True, 'max_workers': min(4, os.cpu_count() or 1),
         'export_onnx': False, 'non_interactive': False, 'cuda_optimizations': True if torch.cuda.is_available() else False,
         'onnx_export': {'opset_version': 14, 'dynamic_axes': True, 'constant_folding': True, 'optimize_for_mobile': False, 'runtime_validation': True, 'validation_tolerance': 1e-5, 'verbose': False}
     },
     'presets': {
-        'available_presets': get_available_presets(), 'current_preset': 'default', 'current_override': None,
-        'override_rules': {'security': False, 'monitoring': True, 'hardware': False},
-        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(),
-        'auto_apply': False, 'validate_compatibility': True
+        'available_presets': get_available_presets(), 'current_preset': 'default', 'current_override': None, 'override_rules': {'security': False, 'monitoring': True, 'hardware': False},
+        'preset_configs': get_preset_descriptions(), 'custom_presets_available': list_custom_presets(), 'auto_apply': False, 'validate_compatibility': True
     },
     'hyperparameter_optimization': {
-        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo',
-        'direction': 'minimize', 'n_trials': 50, 'timeout': 3600,
+        'enabled': False, 'strategy': 'optuna', 'study_name': 'autoencoder_hpo', 'direction': 'minimize', 'n_trials': 50, 'timeout': 3600,
         'sampler': 'TPESampler', 'pruner': 'MedianPruner', 'objective_metric': 'validation_loss',
         'optimization_space': {
             'learning_rate': {'type': 'float', 'low': 1e-5, 'high': 1e-1, 'log': True},
@@ -7445,8 +7322,7 @@ DEFAULT_PRESET = {
             'hidden_dims': {'type': 'suggest', 'options': [[64], [128, 64], [256, 128, 64]]},
             'dropout_rate': {'type': 'float', 'low': 0.0, 'high': 0.5}
         },
-        'early_stopping': {'enabled': True, 'patience': 10, 'min_improvement': 1e-4},
-        'timeout_seconds': 3600, 'trial_epochs': 30, 'trial_patience': 5,
+        'early_stopping': {'enabled': True, 'patience': 10, 'min_improvement': 1e-4}, 'timeout_seconds': 3600, 'trial_epochs': 30, 'trial_patience': 5,
         'cleanup_trials': True, 'generate_plots': True,
         'search_space': {
             'encoding_dim_min': 4, 'encoding_dim_max': 64, 'hidden_layers_min': 1, 'hidden_layers_max': 3,
@@ -7455,9 +7331,7 @@ DEFAULT_PRESET = {
             'activations': ["relu", "leaky_relu", "gelu"], 'normalizations': [None, "batch", "layer"],
             'percentile_min': 90, 'percentile_max': 99
         },
-        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0,
-                   'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 10,
-                   'n_ei_candidates': 24, 'multivariate': False},
+        'hpo_sampler': {'type': 'TPE', 'seed': 42, 'consider_prior': True, 'prior_weight': 1.0, 'consider_magic_clip': True, 'consider_endpoints': False, 'n_startup_trials': 10, 'n_ei_candidates': 24, 'multivariate': False},
         'hpo_pruner': {'type': 'Median', 'n_startup_trials': 5, 'n_warmup_steps': 10, 'interval_steps': 1},
         'scoring': {'use_composite_score': False, 'validation_weight': 0.7, 'test_weight': 0.2, 'complexity_weight': 0.1, 'max_params_penalty': 100000},
         'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/study.db", 'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
@@ -7599,11 +7473,16 @@ def ensure_preset_consistency(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @enhanced_monitor_performance(include_memory=True, log_level=logging.DEBUG)
-def get_system_info(include_versions: bool = True, include_hardware: bool = True, 
-                   include_memory_usage: bool = True, include_detailed_analysis: bool = False,
-                   include_performance_baseline: bool = False, include_memory_optimization: bool = False) -> Dict[str, Any]:
+def get_system_info(
+    include_versions: bool = True,
+    include_hardware: bool = True,
+    include_memory_usage: bool = True,
+    include_detailed_analysis: bool = False,
+    include_performance_baseline: bool = False,
+    include_memory_optimization: bool = False
+) -> Dict[str, Any]:
     """
-    Gather comprehensive system information by fully leveraging existing check functions.
+    Gather system information by fully leveraging existing check functions.
     Now enhanced with performance monitoring, baseline establishment, and memory management.
     All helper functions are integrated directly for optimal performance.
     
@@ -7616,10 +7495,10 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
         include_memory_optimization: Whether to perform memory optimization during collection
         
     Returns:
-        Dictionary with comprehensive system information, analysis, and recommendations
+        Dictionary with system information, analysis, and recommendations
     """
     try:
-        # Initialize comprehensive system info structure with performance tracking
+        # Initialize system info structure with performance tracking
         system_info = {
             'timestamp': datetime.now().isoformat(),
             'collection_metadata': {
@@ -7752,7 +7631,7 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
             system_info['python_error'] = str(e)
             system_info['collection_metadata']['errors'].append(f"Python info collection failed: {e}")
         
-        # Leverage check_versions() for comprehensive package analysis - monitored
+        # Package analysis - monitored
         if include_versions:
             try:
                 with _monitored_operation("version_analysis") as op_monitor:
@@ -7760,7 +7639,7 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                     system_info['package_versions'] = version_data
                     system_info['collection_metadata']['data_sources'].append('check_versions')
                     
-                    # Enhanced version analysis
+                    # Version analysis
                     version_analysis = {
                         'total_packages': len(version_data),
                         'available_packages': sum(1 for pkg in version_data.values() if pkg.get('available', False)),
@@ -7796,15 +7675,13 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                     
                     # Add warnings for missing critical packages
                     if version_analysis['missing_required']:
-                        system_info['collection_metadata']['warnings'].append(
-                            f"Missing required packages: {', '.join(version_analysis['missing_required'])}"
-                        )
+                        system_info['collection_metadata']['warnings'].append(f"Missing required packages: {', '.join(version_analysis['missing_required'])}")
                         
             except Exception as e:
                 system_info['package_versions_error'] = str(e)
                 system_info['collection_metadata']['errors'].append(f"Package version collection failed: {e}")
         
-        # Leverage check_hardware() for comprehensive hardware analysis - monitored
+        # Hardware analysis - monitored
         if include_hardware:
             try:
                 with _monitored_operation("hardware_analysis") as op_monitor:
@@ -7812,7 +7689,7 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                     system_info['hardware'] = hardware_data
                     system_info['collection_metadata']['data_sources'].append('check_hardware')
                     
-                    # Enhanced hardware analysis
+                    # Hardware analysis
                     hardware_analysis = {
                         'components_detected': len(hardware_data),
                         'components_healthy': sum(1 for comp in hardware_data.values() if comp.get('status') == 'PASS'),
@@ -8018,20 +7895,17 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                     
                     # Add warnings for hardware issues
                     if hardware_analysis['required_failures'] > 0:
-                        failed_components = [name for name, comp in hardware_data.items() 
-                                           if comp.get('status') == 'FAIL' and comp.get('required', False)]
-                        system_info['collection_metadata']['warnings'].append(
-                            f"Critical hardware failures: {', '.join(failed_components)}"
-                        )
+                        failed_components = [name for name, comp in hardware_data.items() if comp.get('status') == 'FAIL' and comp.get('required', False)]
+                        system_info['collection_metadata']['warnings'].append(f"Critical hardware failures: {', '.join(failed_components)}")
                         
             except Exception as e:
                 system_info['hardware_error'] = str(e)
                 system_info['collection_metadata']['errors'].append(f"Hardware collection failed: {e}")
         
-        # Enhanced performance baseline establishment
+        # Performance baseline establishment
         if include_performance_baseline:
             try:
-                logger.debug("Establishing comprehensive performance baseline")
+                logger.debug("Establishing performance baseline")
                 with _monitored_operation("performance_baseline_establishment") as op_monitor:
                     # Use hardware data from previous step if available
                     baseline_hardware_data = system_info.get('hardware') if include_hardware else None
@@ -8056,7 +7930,7 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                 system_info['performance_baseline_error'] = str(e)
                 system_info['collection_metadata']['errors'].append(f"Performance baseline establishment failed: {e}")
         
-        # Detailed analysis with performance context
+        # Analysis with performance context
         if include_detailed_analysis:
             try:
                 with _monitored_operation("detailed_analysis") as op_monitor:
@@ -8077,37 +7951,25 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                         if 'cpu' in capabilities:
                             cpu = capabilities['cpu']
                             if cpu.get('logical_cores', 0) < 4:
-                                analysis['system_recommendations'].append(
-                                    "Consider upgrading to a system with at least 4 CPU cores for optimal performance"
-                                )
+                                analysis['system_recommendations'].append("Consider upgrading to a system with at least 4 CPU cores for optimal performance")
                             if cpu.get('performance_class') == 'low':
-                                analysis['performance_optimizations'].append(
-                                    "CPU performance is limited - consider enabling CPU-optimized algorithms"
-                                )
+                                analysis['performance_optimizations'].append("CPU performance is limited - consider enabling CPU-optimized algorithms")
                         
-                        # Memory recommendations  
+                        # Memory recommendations
                         if 'memory' in capabilities:
                             memory = capabilities['memory']
                             if memory.get('total_gb', 0) < 8:
-                                analysis['system_recommendations'].append(
-                                    "Consider upgrading to at least 8GB RAM for better performance"
-                                )
+                                analysis['system_recommendations'].append("Consider upgrading to at least 8GB RAM for better performance")
                             if memory.get('usage_percent', 0) > 80:
-                                analysis['resource_warnings'].append(
-                                    f"High memory usage detected ({memory.get('usage_percent', 0):.1f}%) - consider closing unnecessary applications"
-                                )
+                                analysis['resource_warnings'].append(f"High memory usage detected ({memory.get('usage_percent', 0):.1f}%) - consider closing unnecessary applications")
                         
                         # GPU recommendations
                         if 'gpu' in capabilities:
                             gpu = capabilities['gpu']
                             if not gpu.get('available'):
-                                analysis['performance_optimizations'].append(
-                                    "CUDA not available - training will use CPU (slower performance expected)"
-                                )
+                                analysis['performance_optimizations'].append("CUDA not available - training will use CPU (slower performance expected)")
                             elif gpu.get('total_memory_gb', 0) < 6:
-                                analysis['configuration_suggestions'].append(
-                                    "Limited GPU memory detected - consider using smaller batch sizes"
-                                )
+                                analysis['configuration_suggestions'].append("Limited GPU memory detected - consider using smaller batch sizes")
                     
                     # Performance baseline integration
                     if include_performance_baseline and 'performance_baseline' in system_info:
@@ -8119,13 +7981,9 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                             gflops = cpu_baseline.get('gflops', 0)
                             
                             if gflops < 1:
-                                analysis['performance_optimizations'].append(
-                                    f"CPU performance is very low ({gflops:.2f} GFLOPS) - consider optimized algorithms"
-                                )
+                                analysis['performance_optimizations'].append(f"CPU performance is very low ({gflops:.2f} GFLOPS) - consider optimized algorithms")
                             elif gflops > 10:
-                                analysis['configuration_suggestions'].append(
-                                    f"Excellent CPU performance ({gflops:.1f} GFLOPS) - can handle complex computations"
-                                )
+                                analysis['configuration_suggestions'].append(f"Excellent CPU performance ({gflops:.1f} GFLOPS) - can handle complex computations")
                         
                         # Memory performance analysis
                         if 'memory' in baseline.get('baselines', {}):
@@ -8137,13 +7995,9 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                             ])
                             
                             if avg_speed < 50:
-                                analysis['performance_optimizations'].append(
-                                    f"Memory allocation is slow ({avg_speed:.0f} MB/s) - consider memory optimization"
-                                )
+                                analysis['performance_optimizations'].append(f"Memory allocation is slow ({avg_speed:.0f} MB/s) - consider memory optimization")
                             elif avg_speed > 500:
-                                analysis['configuration_suggestions'].append(
-                                    f"Fast memory allocation ({avg_speed:.0f} MB/s) - can handle large datasets"
-                                )
+                                analysis['configuration_suggestions'].append(f"Fast memory allocation ({avg_speed:.0f} MB/s) - can handle large datasets")
                         
                         # GPU performance analysis
                         if 'gpu' in baseline.get('baselines', {}):
@@ -8155,32 +8009,22 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
                             ], default=0)
                             
                             if max_gpu_gflops > 100:
-                                analysis['configuration_suggestions'].append(
-                                    f"High-performance GPU available ({max_gpu_gflops:.0f} GFLOPS) - enable mixed precision and large batch sizes"
-                                )
+                                analysis['configuration_suggestions'].append(f"High-performance GPU available ({max_gpu_gflops:.0f} GFLOPS) - enable mixed precision and large batch sizes")
                             elif max_gpu_gflops > 0 and max_gpu_gflops < 50:
-                                analysis['performance_optimizations'].append(
-                                    f"Limited GPU performance ({max_gpu_gflops:.0f} GFLOPS) - use smaller models and batch sizes"
-                                )
+                                analysis['performance_optimizations'].append(f"Limited GPU performance ({max_gpu_gflops:.0f} GFLOPS) - use smaller models and batch sizes")
                     
                     # Package compatibility analysis
                     if 'package_analysis' in system_info:
                         pkg_analysis = system_info['package_analysis']
                         
                         if pkg_analysis.get('missing_required'):
-                            analysis['compatibility_issues'].extend([
-                                f"Missing required package: {pkg}" for pkg in pkg_analysis['missing_required']
-                            ])
+                            analysis['compatibility_issues'].extend([f"Missing required package: {pkg}" for pkg in pkg_analysis['missing_required']])
                         
                         if pkg_analysis.get('incompatible_packages'):
-                            analysis['compatibility_issues'].extend([
-                                f"Incompatible package version: {pkg}" for pkg in pkg_analysis['incompatible_packages']
-                            ])
+                            analysis['compatibility_issues'].extend([f"Incompatible package version: {pkg}" for pkg in pkg_analysis['incompatible_packages']])
                         
                         if pkg_analysis['environment_health']['compatibility_score'] < 90:
-                            analysis['system_recommendations'].append(
-                                "Package environment needs attention - some dependencies may be outdated"
-                            )
+                            analysis['system_recommendations'].append("Package environment needs attention - some dependencies may be outdated")
                     
                     # System class based recommendations
                     if 'hardware_analysis' in system_info:
@@ -8260,7 +8104,7 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
         # Post-collection memory state and optimization
         if include_memory_usage or include_memory_optimization:
             try:
-                # Capture detailed memory state for monitoring system info collection impact
+                # Capture memory state for monitoring system info collection impact
                 final_memory_state = {
                     'timestamp': datetime.now().isoformat()
                 }
@@ -8482,7 +8326,7 @@ def get_system_info(include_versions: bool = True, include_hardware: bool = True
             
         return error_response
 
-# Helper functions for enhanced system info collection
+# Helper functions for system info collection
 @contextmanager
 def _monitored_operation(operation_name: str):
     """Context manager for monitoring individual operations within get_system_info()."""
@@ -15312,8 +15156,7 @@ def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str
                     'metrics_to_track': ['loss'], 'early_stopping_metric': 'loss',
                     'checkpoint_format': 'pytorch', 'log_model_summary': False,
                     'tensorboard_dir': str(TB_DIR), 'log_frequency': 1, 'save_checkpoints': False,
-                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                                   'max_scalars': 50, 'max_histograms': 0, 'max_images': 0, 'save_summary': False}
+                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False, 'max_scalars': 50, 'max_histograms': 0, 'max_images': 0, 'save_summary': False}
                 }
             })
             
@@ -15367,8 +15210,7 @@ def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str
                     'metrics_to_track': ['loss', 'reconstruction_error'], 'early_stopping_metric': 'loss',
                     'checkpoint_format': 'pytorch', 'log_model_summary': False,
                     'tensorboard_dir': str(TB_DIR), 'log_frequency': 2, 'save_checkpoints': True,
-                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                                   'max_scalars': 100, 'max_histograms': 10, 'max_images': 0, 'save_summary': False}
+                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False, 'max_scalars': 100, 'max_histograms': 10, 'max_images': 0, 'save_summary': False}
                 },
                 'fallback_info': {
                     'is_fallback': True, 'level': 'standard', 'creation_time': current_time,
@@ -15430,8 +15272,7 @@ def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str
                     'metrics_to_track': ['loss', 'reconstruction_error', 'validation_loss'],
                     'early_stopping_metric': 'validation_loss', 'checkpoint_format': 'pytorch',
                     'log_model_summary': True, 'tensorboard_dir': str(TB_DIR), 'log_frequency': 5, 'save_checkpoints': True,
-                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False,
-                                   'max_scalars': 200, 'max_histograms': 20, 'max_images': 5, 'save_summary': False}
+                    'tensorboard': {'export_formats': [], 'include_histograms': False, 'include_images': False, 'max_scalars': 200, 'max_histograms': 20, 'max_images': 5, 'save_summary': False}
                 }
             })
 
@@ -15451,9 +15292,7 @@ def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str
                 'debug': True if fallback_level == 'emergency' else False, 'verbose': True,
                 'random_seed': 42, 'reproducible': True, 'parallel_processing': False, 'max_workers': 1,
                 'export_onnx': False, 'non_interactive': False, 'cuda_optimizations': False,
-                'onnx_export': {'opset_version': 14, 'dynamic_axes': False, 'constant_folding': False,
-                               'optimize_for_mobile': False, 'runtime_validation': False,
-                               'validation_tolerance': 1e-5, 'verbose': False}
+                'onnx_export': {'opset_version': 14, 'dynamic_axes': False, 'constant_folding': False, 'optimize_for_mobile': False, 'runtime_validation': False, 'validation_tolerance': 1e-5, 'verbose': False}
             },
             'presets': {
                 'available_presets': [], 'current_preset': f'{fallback_level}_fallback', 'current_override': None,
@@ -15478,14 +15317,10 @@ def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str
                     'weight_decay_min': 0.0, 'weight_decay_max': 0.0, 'dropout_min': 0.0, 'dropout_max': 0.1,
                     'activations': ["relu"], 'normalizations': [None], 'percentile_min': 80, 'percentile_max': 90
                 },
-                'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0,
-                           'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 2,
-                           'n_ei_candidates': 5, 'multivariate': False},
+                'hpo_sampler': {'type': 'Random', 'seed': 42, 'consider_prior': False, 'prior_weight': 1.0, 'consider_magic_clip': False, 'consider_endpoints': False, 'n_startup_trials': 2, 'n_ei_candidates': 5, 'multivariate': False},
                 'hpo_pruner': {'type': 'Nop', 'n_startup_trials': 0, 'n_warmup_steps': 0, 'interval_steps': 1},
-                'scoring': {'use_composite_score': False, 'validation_weight': 1.0, 'test_weight': 0.0,
-                           'complexity_weight': 0.0, 'max_params_penalty': 1000},
-                'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/{fallback_level}_study.db",
-                           'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
+                'scoring': {'use_composite_score': False, 'validation_weight': 1.0, 'test_weight': 0.0, 'complexity_weight': 0.0, 'max_params_penalty': 1000},
+                'storage': {'enabled': False, 'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/{fallback_level}_study.db", 'load_if_exists': False, 'heartbeat_interval': 60, 'grace_period': 120}
             },
             'validation': {
                 'cross_validation': {'enabled': False, 'folds': 2, 'stratified': False, 'random_state': 42},
@@ -15493,10 +15328,8 @@ def _create_minimal_fallback_config(fallback_level: str = 'minimal') -> Dict[str
                 'save_validation_results': False, 'detailed_metrics': False
             },
             'experimental': {
-                'features': {'advanced_logging': True if fallback_level == 'emergency' else False, 
-                            'model_interpretability': False, 'federated_learning': False, 'active_learning': False},
-                'settings': {'experimental_mode': True if fallback_level == 'emergency' else False, 
-                            'beta_features': False, 'research_mode': False}
+                'features': {'advanced_logging': True if fallback_level == 'emergency' else False, 'model_interpretability': False, 'federated_learning': False, 'active_learning': False},
+                'settings': {'experimental_mode': True if fallback_level == 'emergency' else False, 'beta_features': False, 'research_mode': False}
             }
         })
         
@@ -17590,8 +17423,7 @@ def handle_validation_failure(error: ValueError, failed_config: Dict, default_co
     return True
 
 def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
-    """Initialize or load configuration with enhanced preset awareness, validation, 
-    robust fallback handling, and intelligent memory management.
+    """Initialize or load configuration with preset awareness, validation, fallback handling, and intelligent memory management.
     
     Args:
         config_path: Path to the configuration file
@@ -17608,7 +17440,6 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
     try:
         logger.info(f"Initializing configuration from {config_path}")
         
-        # INITIAL MEMORY OPTIMIZATION
         # Get hardware context early and perform initial memory cleanup
         hardware_data = None
         try:
@@ -17643,7 +17474,7 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             'checkpoints': []
         }
         
-        # Step 1: Enhanced Configuration Loading with Memory Management
+        # Step 1: Configuration Loading with Memory Management
         loaded_config = None
         load_error = None
         load_method = None
@@ -17699,7 +17530,7 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
         if not loaded_config and load_error:
             logger.info(f"Primary configuration load failed ({load_error}), attempting fallback strategies")
             
-            # Clear memory before intensive fallback processing
+            # Clear memory before fallback processing
             try:
                 fallback_clear = enhanced_clear_memory(
                     aggressive=True,  # More aggressive clearing before fallbacks
@@ -17771,14 +17602,19 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                         load_method = "json_recovery"
                         logger.info("Successfully recovered configuration from corrupted file")
                         
-                        # Save recovered config as backup
+                        # Save recovered config as backup using the dedicated function
                         try:
-                            recovery_backup_path = config_path.with_suffix(f".recovered_{int(time.time())}.json")
-                            with open(recovery_backup_path, 'w', encoding='utf-8') as f:
-                                json.dump(recovered_config, f, indent=4)
-                            logger.info(f"Recovered configuration saved as backup: {recovery_backup_path}")
+                            save_metadata = {
+                                'version': recovered_config.get('metadata', {}).get('version', '2.1'),
+                                'config': {
+                                    'preset_used': recovered_config.get('system', {}).get('preset_applied', {}).get('preset', 'recovered'),
+                                    'recovery_source': 'json_recovery'
+                                }
+                            }
+                            create_config_backup(config_path, save_metadata)
+                            logger.info("Recovered configuration saved as backup using dedicated backup function")
                         except Exception as e:
-                            logger.warning(f"Failed to save recovery backup: {e}")
+                            logger.warning(f"Failed to save recovery backup using dedicated function: {e}")
                     else:
                         logger.debug("JSON recovery failed - file too corrupted")
                         
@@ -18161,14 +17997,39 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             logger.debug(f"Pre-save memory optimization failed: {e}")
         
         try:
-            # Create backup if original file exists and is valid
+            # Create backup if original file exists and is valid using the dedicated backup function
             if config_path.exists() and loaded_config and load_method == "primary_path":
                 try:
-                    backup_path = config_path.with_suffix(f".backup_init_{int(time.time())}.json")
-                    shutil.copy2(config_path, backup_path)
-                    logger.info(f"Created backup of original config: {backup_path}")
+                    # Prepare metadata for the backup function
+                    save_metadata = {
+                        'version': loaded_config.get('metadata', {}).get('version', '2.1'),
+                        'config': {
+                            'preset_used': loaded_config.get('system', {}).get('preset_applied', {}).get('preset', 'unknown'),
+                            'backup_reason': 'initialization_backup',
+                            'load_method': load_method
+                        }
+                    }
+                    
+                    # Use the dedicated backup function
+                    backup_created = create_config_backup(config_path, save_metadata)
+                    if backup_created:
+                        logger.info("Configuration backup created using dedicated backup function")
+                    else:
+                        logger.warning("Failed to create backup using dedicated function, falling back to simple backup")
+                        # Fallback to simple backup
+                        backup_path = config_path.with_suffix(f".backup_init_{int(time.time())}.json")
+                        shutil.copy2(config_path, backup_path)
+                        logger.info(f"Created fallback backup: {backup_path}")
+                        
                 except Exception as backup_error:
-                    logger.warning(f"Failed to create backup: {backup_error}")
+                    logger.warning(f"Failed to create backup using dedicated function: {backup_error}")
+                    # Fallback to simple backup
+                    try:
+                        backup_path = config_path.with_suffix(f".backup_init_{int(time.time())}.json")
+                        shutil.copy2(config_path, backup_path)
+                        logger.info(f"Created fallback backup after error: {backup_path}")
+                    except Exception as fallback_error:
+                        logger.warning(f"Even fallback backup failed: {fallback_error}")
             
             save_config(merged_config, config_path)
             save_successful = True
@@ -18187,7 +18048,6 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                 logger.error(f"Failed to save to fallback location: {fallback_save_error}")
                 # Continue with in-memory config even if save fails
         
-        # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
         # Aggressive cleanup after initialization completion
         try:
             final_clear_results = enhanced_clear_memory(
@@ -18211,7 +18071,7 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             logger.debug(f"Final memory optimization failed: {e}")
             memory_optimization_log['final_cleanup_error'] = str(e)
         
-        # Add comprehensive memory optimization metadata
+        # Add memory optimization metadata
         initialization_time = time.time() - initialization_start_time
         total_memory_actions = (
             len(memory_optimization_log.get('initial_cleanup', {}).get('actions', [])) +
@@ -18247,7 +18107,7 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
         
         merged_config['metadata']['initialization'] = initialization_summary
         
-        # Enhanced logging with memory optimization summary
+        # Logging with memory optimization summary
         preset_used = merged_config.get('presets', {}).get('current_preset', 'none')
         model_type = merged_config.get('model', {}).get('model_type', 'unknown')
         total_sections = len(merged_config)
@@ -18304,40 +18164,341 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
 
 # Helper functions for the updated configuration system
 def save_change_log(changes: Dict[str, Any]) -> None:
-    """Save configuration change log for audit trail."""
+    """
+    Save configuration change log for audit trail using consolidated daily files.
+    
+    This function has been updated to follow the same pattern as save_initialization_report(),
+    creating consolidated daily log files with entries appended as array elements for better
+    organization, easier analysis, and improved audit trail capabilities.
+    
+    Args:
+        changes: Dictionary containing configuration change information with metadata
+        
+    The changes dictionary should contain:
+        - section: Configuration section affected
+        - parameter: Parameter name that changed
+        - old_value: Previous value
+        - new_value: New value
+        - source: Source of the change (e.g., 'user_input', 'auto_optimization')
+        - timestamp: When the change occurred (added automatically if not present)
+        - additional metadata as needed
+    """
     try:
+        # Ensure we have a timestamp
+        #from datetime import datetime
+        if 'timestamp' not in changes:
+            changes['timestamp'] = datetime.now().isoformat()
+        
+        # Get or create log directory
         log_dir = Path(globals().get('LOG_DIR', './logs'))
-        log_dir.mkdir(exist_ok=True)
+        log_dir.mkdir(exist_ok=True, parents=True)
         change_log_dir = log_dir / "deep_learning_config_changes"
-        change_log_dir.mkdir(exist_ok=True)
+        change_log_dir.mkdir(exist_ok=True, parents=True)
         
-        log_file = change_log_dir / f"change_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        # Create timestamp for file naming
+        timestamp_obj = datetime.now()
+        date_str = timestamp_obj.strftime('%Y%m%d')
+        time_str = timestamp_obj.strftime('%H%M%S')
+        sequence_id = f"{date_str}_{time_str}"
         
-        # Load existing log or create new
-        if log_file.exists():
-            with open(log_file, 'r', encoding='utf-8') as f:
-                log_data = json.load(f)
-                logger.debug(f"Loaded existing change log from {log_file}")
+        # Define consolidated log file path (daily file)
+        consolidated_log_file = change_log_dir / f"config_changes_{date_str}.json"
+        
+        # Create entry metadata
+        entry_metadata = {
+            'sequence_id': sequence_id,
+            'timestamp': timestamp_obj.isoformat(),
+            'time_str': time_str,
+            'entry_type': 'configuration_change'
+        }
+        
+        # Create the change entry
+        change_entry = {
+            **entry_metadata,
+            'data': changes
+        }
+        
+        # Load existing log data or create new structure
+        if consolidated_log_file.exists():
+            try:
+                with open(consolidated_log_file, 'r', encoding='utf-8') as f:
+                    log_data = json.load(f)
+                
+                # Validate structure
+                if not isinstance(log_data, dict) or 'changes' not in log_data:
+                    logger.warning(f"Invalid log structure in {consolidated_log_file}, recreating")
+                    log_data = {
+                        'date': date_str,
+                        'changes': [],
+                        'metadata': {
+                            'version': '2.0',
+                            'created_at': timestamp_obj.isoformat(),
+                            'total_changes': 0,
+                            'last_updated': timestamp_obj.isoformat(),
+                            'log_type': 'consolidated_config_changes'
+                        }
+                    }
+                
+                logger.debug(f"Loaded existing change log from {consolidated_log_file}")
+                
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Failed to load existing change log, creating new: {e}")
+                log_data = {
+                    'date': date_str,
+                    'changes': [],
+                    'metadata': {
+                        'version': '2.0',
+                        'created_at': timestamp_obj.isoformat(),
+                        'total_changes': 0,
+                        'last_updated': timestamp_obj.isoformat(),
+                        'log_type': 'consolidated_config_changes'
+                    }
+                }
         else:
-            log_data = {'changes': []}
-            logger.debug(f"Created new change log at {log_file}")
+            # Create new log structure
+            log_data = {
+                'date': date_str,
+                'changes': [change_entry],
+                'metadata': {
+                    'version': '2.0',
+                    'created_at': timestamp_obj.isoformat(),
+                    'total_changes': 1,
+                    'last_updated': timestamp_obj.isoformat(),
+                    'log_type': 'consolidated_config_changes'
+                }
+            }
         
-        # Add new changes
-        log_data['changes'].append(changes)
-        logger.debug(f"Added {len(changes)} changes to the log")
+        # Append new change entry if we loaded existing data
+        if consolidated_log_file.exists():
+            log_data['changes'].append(change_entry)
+            log_data['metadata']['total_changes'] = len(log_data['changes'])
+            log_data['metadata']['last_updated'] = timestamp_obj.isoformat()
         
-        # Keep only last 100 changes
-        if len(log_data['changes']) > 100:
-            logger.debug(f"Trimming change log to last 100 entries")
-            log_data['changes'] = log_data['changes'][-100:]
+        # Keep only last 500 changes per day to prevent files from growing too large
+        max_changes_per_day = 500
+        if len(log_data['changes']) > max_changes_per_day:
+            logger.debug(f"Trimming change log to last {max_changes_per_day} entries")
+            log_data['changes'] = log_data['changes'][-max_changes_per_day:]
+            log_data['metadata']['total_changes'] = len(log_data['changes'])
+            log_data['metadata']['trimmed'] = True
+            log_data['metadata']['trim_threshold'] = max_changes_per_day
         
-        # Save updated log
-        with open(log_file, 'w', encoding='utf-8') as f:
-            json.dump(log_data, f, indent=2, ensure_ascii=False)
-            logger.debug(f"Saved change log to {log_file}")
+        # Generate analytics if this is a significant number of changes
+        if log_data['metadata']['total_changes'] % 50 == 0:
+            try:
+                analytics = {
+                    'date': date_str,
+                    'total_changes': log_data['metadata']['total_changes'],
+                    'generated_at': datetime.now().isoformat(),
+                    'by_section': {},
+                    'by_parameter': {},
+                    'by_source': {},
+                    'frequent_changes': [],
+                    'recent_changes': []
+                }
+                
+                # Analyze changes
+                for entry in log_data['changes']:
+                    change_data = entry.get('data', {})
+                    
+                    # Extract source from metadata
+                    source = change_data.get('metadata', {}).get('source', 'unknown')
+                    analytics['by_source'][source] = analytics['by_source'].get(source, 0) + 1
+                    
+                    # Count changes by section and parameter from the nested structure
+                    for section_name, section_data in change_data.items():
+                        if section_name == 'metadata' or section_name == 'timestamp':
+                            continue
+                            
+                        if section_name not in analytics['by_section']:
+                            analytics['by_section'][section_name] = 0
+                        analytics['by_section'][section_name] += 1
+                        
+                        # Count individual parameter changes within the section
+                        for param_name, param_data in section_data.items():
+                            if isinstance(param_data, dict) and 'from' in param_data and 'to' in param_data:
+                                full_param_name = f"{section_name}.{param_name}"
+                                analytics['by_parameter'][full_param_name] = analytics['by_parameter'].get(full_param_name, 0) + 1
+                
+                # Get most frequent changes
+                sorted_params = sorted(analytics['by_parameter'].items(), key=lambda x: x[1], reverse=True)
+                analytics['frequent_changes'] = [
+                    {'parameter': param, 'count': count}
+                    for param, count in sorted_params[:10]
+                ]
+                
+                # Get recent changes (last 10)
+                analytics['recent_changes'] = []
+                for entry in log_data['changes'][-10:]:
+                    change_data = entry.get('data', {})
+                    source = change_data.get('metadata', {}).get('source', 'unknown')
+                    
+                    # Extract first section and parameter for recent changes display
+                    first_section = None
+                    first_param = None
+                    for section_name, section_data in change_data.items():
+                        if section_name == 'metadata' or section_name == 'timestamp':
+                            continue
+                        if isinstance(section_data, dict):
+                            for param_name in section_data.keys():
+                                first_section = section_name
+                                first_param = param_name
+                                break
+                        if first_section:
+                            break
+                    
+                    analytics['recent_changes'].append({
+                        'timestamp': entry.get('timestamp'),
+                        'section': first_section or 'unknown',
+                        'parameter': first_param or 'unknown',
+                        'source': source
+                    })
+                
+                # Save analytics
+                analytics_file = change_log_dir / f"config_changes_analytics_{date_str}.json"
+                with open(analytics_file, 'w', encoding='utf-8') as f:
+                    json.dump(analytics, f, indent=2, ensure_ascii=False)
+                
+                logger.debug(f"Generated change analytics: {analytics_file}")
+                
+            except Exception as analytics_error:
+                logger.debug(f"Failed to generate change analytics: {analytics_error}")
+        
+        # Save updated log with proper error handling
+        try:
+            with open(consolidated_log_file, 'w', encoding='utf-8') as f:
+                json.dump(log_data, f, indent=2, ensure_ascii=False, default=str)
+            logger.debug(f"Saved change log to {consolidated_log_file}")
+            logger.debug(f"Total changes in log: {log_data['metadata']['total_changes']}")
             
+        except Exception as write_error:
+            logger.error(f"Failed to write change log: {write_error}")
+            
+            # Try to save to backup location
+            try:
+                backup_file = change_log_dir / f"config_changes_{date_str}_backup.json"
+                with open(backup_file, 'w', encoding='utf-8') as f:
+                    json.dump(log_data, f, indent=2, ensure_ascii=False, default=str)
+                logger.warning(f"Saved change log to backup location: {backup_file}")
+            except Exception as backup_error:
+                logger.error(f"Failed to save change log backup: {backup_error}")
+        
+        # Also append to a human-readable summary file for easier review
+        try:
+            summary_file = change_log_dir / f"config_changes_summary_{date_str}.txt"
+            
+            # Extract meaningful change information from the nested structure
+            source = changes.get('metadata', {}).get('source', 'unknown')
+            preset_info = changes.get('system', {}).get('preset_applied', {})
+            preset_name = preset_info.get('preset', 'unknown') if isinstance(preset_info, dict) else 'unknown'
+            
+            # Count total parameter changes
+            total_param_changes = 0
+            changed_sections = []
+            
+            for section_name, section_data in changes.items():
+                if section_name in ['metadata', 'timestamp']:
+                    continue
+                    
+                if isinstance(section_data, dict):
+                    section_changes = 0
+                    for param_name, param_data in section_data.items():
+                        if isinstance(param_data, dict) and 'from' in param_data and 'to' in param_data:
+                            section_changes += 1
+                            total_param_changes += 1
+                    
+                    if section_changes > 0:
+                        changed_sections.append(f"{section_name}({section_changes})")
+            
+            # Get sample changes for display (first 3 parameters)
+            sample_changes = []
+            for section_name, section_data in changes.items():
+                if section_name in ['metadata', 'timestamp']:
+                    continue
+                    
+                if isinstance(section_data, dict):
+                    for param_name, param_data in section_data.items():
+                        if isinstance(param_data, dict) and 'from' in param_data and 'to' in param_data:
+                            sample_changes.append(f"{section_name}.{param_name}: {param_data['from']} → {param_data['to']}")
+                            if len(sample_changes) >= 3:
+                                break
+                if len(sample_changes) >= 3:
+                    break
+            
+            # Format change summary with extracted information
+            change_summary = (
+                f"\n{'=' * 80}\n"
+                f"Configuration Change - {timestamp_obj.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"Sequence: {sequence_id} (Total today: {log_data['metadata']['total_changes']})\n"
+                f"{'=' * 80}\n"
+                f"Source: {source}\n"
+                f"Preset: {preset_name}\n"
+                f"Total Changes: {total_param_changes} parameters across {len(changed_sections)} sections\n"
+                f"Sections: {', '.join(changed_sections) if changed_sections else 'none'}\n"
+            )
+            
+            # Add sample changes
+            if sample_changes:
+                change_summary += f"Sample Changes:\n"
+                for change in sample_changes:
+                    change_summary += f"  - {change}\n"
+            
+            # Add metadata information if present
+            metadata = changes.get('metadata', {})
+            if 'config_version' in metadata:
+                change_summary += f"Config Version: {metadata['config_version']}\n"
+            if 'memory_optimizations_applied' in metadata:
+                change_summary += f"Memory Optimizations: {metadata['memory_optimizations_applied']}\n"
+            
+            change_summary += f"{'=' * 80}\n"
+            
+            # Append to summary file
+            with open(summary_file, 'a', encoding='utf-8') as f:
+                f.write(change_summary)
+            
+            logger.debug(f"Appended change summary to {summary_file}")
+            
+        except Exception as summary_error:
+            logger.debug(f"Failed to update summary file: {summary_error}")
+        
+        # Update latest change log symlink/pointer
+        try:
+            latest_log_pointer = change_log_dir / "latest_config_changes.json"
+            if latest_log_pointer.exists() or latest_log_pointer.is_symlink():
+                latest_log_pointer.unlink()
+            
+            try:
+                # Try to create symlink
+                latest_log_pointer.symlink_to(consolidated_log_file.name)
+            except (OSError, NotImplementedError):
+                # Fallback to text file with path
+                with open(change_log_dir / "latest_config_changes.txt", 'w') as f:
+                    f.write(f"Latest log: {consolidated_log_file.name}\n")
+                    f.write(f"Updated: {timestamp_obj.strftime('%Y-%m-%d %H:%M:%S')}\n")
+            
+        except Exception as symlink_error:
+            logger.debug(f"Failed to update latest log pointer: {symlink_error}")
+        
     except Exception as e:
-        logger.debug(f"Failed to save change log: {e}")
+        logger.error(f"Failed to save change log: {e}", exc_info=True)
+        
+        # Emergency fallback - try to save to a simple timestamped file
+        try:
+            emergency_file = Path(globals().get('LOG_DIR', './logs')) / f"config_change_emergency_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            emergency_file.parent.mkdir(exist_ok=True, parents=True)
+            
+            with open(emergency_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'timestamp': datetime.now().isoformat(),
+                    'change': changes,
+                    'error': str(e),
+                    'emergency_save': True
+                }, f, indent=2, default=str)
+            
+            logger.warning(f"Emergency change log saved to: {emergency_file}")
+            
+        except Exception as emergency_error:
+            logger.critical(f"Failed to save emergency change log: {emergency_error}")
 
 def validate_global_config_state() -> None:
     """Validate the current global configuration state for consistency."""
@@ -18497,6 +18658,11 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             # Create minimal essential directories manually
             base_dir = Path(__file__).resolve().parent
             essential_dirs = {
+                'artifacts': base_dir / "artifacts",
+                'datasets': base_dir / "datasets",
+                'figures': base_dir / "figures",
+                'info': base_dir / "info",
+                'metrics': base_dir / "metrics",
                 'logs': base_dir / "logs",
                 'models': base_dir / "models",
                 'data': base_dir / "data",
@@ -18536,7 +18702,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         # Hardware-aware system configuration
         config_result = configure_system()
         
-        # Enhanced seed configuration with hardware awareness
+        # Seed configuration with hardware awareness
         seed_config = set_seed(42, system_state.get('hardware_detected'))
 
         # Configure global directories to ensure consistency across the system
@@ -18559,7 +18725,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         system_state['health_metrics']['early_setup'] = early_health
         
         add_step(
-            "Enhanced Early Setup", 
+            "Early Setup", 
             "SUCCESS" if early_health >= 80 else "WARNING", 
             step_duration,
             f"Hardware-aware configuration applied\n"
@@ -18569,7 +18735,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             early_health
         )
         
-        # Enhanced logging initialization 
+        # Logging initialization 
         logger.info("=" * 80)
         logger.info("DEEP LEARNING SYSTEM INITIALIZATION STARTING")
         logger.info("=" * 80)
@@ -18651,8 +18817,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['health_metrics']['system_validation'] = validation_health
             
             add_step(
-                "Comprehensive System Validation", 
-                "SUCCESS" if validation_health >= 80 else "PARTIAL" if validation_health >= 60 else "WARNING", 
+                "System Validation",
+                "SUCCESS" if validation_health >= 80 else "PARTIAL" if validation_health >= 60 else "WARNING",
                 step_duration,
                 f"Extended system checks completed\n" + "\n".join(additional_checks),
                 validation_health
@@ -18664,8 +18830,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['health_metrics']['system_validation'] = 0
             
             add_step(
-                "Comprehensive System Validation", 
-                "FAILED", 
+                "System Validation",
+                "FAILED",
                 step_duration,
                 f"System validation failed: {str(e)}\nCritical components may be unavailable",
                 0
@@ -18803,8 +18969,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['active_config'] = config
             
             add_step(
-                "Enhanced Configuration System", 
-                "FAILED", 
+                "Configuration System",
+                "FAILED",
                 step_duration,
                 f"Configuration system failed: {str(e)}\nUsing emergency default configuration",
                 25
@@ -18883,8 +19049,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             }
             
             add_step(
-                "Enhanced Model Variants", 
-                "SUCCESS" if model_health >= 80 else "PARTIAL" if model_health >= 60 else "WARNING", 
+                "Model Variants",
+                "SUCCESS" if model_health >= 80 else "PARTIAL" if model_health >= 60 else "WARNING",
                 step_duration,
                 "\n".join(model_details),
                 model_health
@@ -18895,8 +19061,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['errors_encountered'].append(f"Model initialization failed: {e}")
             system_state['health_metrics']['models'] = 0
             add_step(
-                "Enhanced Model Variants", 
-                "FAILED", 
+                "Model Variants",
+                "FAILED",
                 step_duration,
                 f"Model initialization failed: {str(e)}\nDeep learning models unavailable",
                 0
@@ -18991,8 +19157,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['performance_baseline'] = performance_metrics
             
             add_step(
-                "Enhanced Performance Baseline", 
-                "SUCCESS" if performance_health >= 80 else "PARTIAL" if performance_health >= 60 else "WARNING", 
+                "Performance Baseline",
+                "SUCCESS" if performance_health >= 80 else "PARTIAL" if performance_health >= 60 else "WARNING",
                 step_duration,
                 "\n".join(baseline_details),
                 max(0, performance_health)
@@ -19005,8 +19171,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['health_metrics']['performance'] = 25
             system_state['performance_baseline'] = performance_metrics
             add_step(
-                "Enhanced Performance Baseline", 
-                "WARNING", 
+                "Performance Baseline",
+                "WARNING",
                 step_duration,
                 f"Performance baseline failed: {str(e)}\nContinuing with default performance assumptions",
                 25
@@ -19094,8 +19260,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['health_metrics']['integration'] = max(0, integration_health)
             
             add_step(
-                "System Integration Validation", 
-                "SUCCESS" if integration_health >= 90 else "PARTIAL" if integration_health >= 70 else "WARNING", 
+                "System Integration Validation",
+                "SUCCESS" if integration_health >= 90 else "PARTIAL" if integration_health >= 70 else "WARNING",
                 step_duration,
                 "\n".join(integration_details),
                 max(0, integration_health)
@@ -19107,8 +19273,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             system_state['health_metrics']['integration'] = 50
             
             add_step(
-                "System Integration Validation", 
-                "FAILED", 
+                "System Integration Validation",
+                "FAILED",
                 step_duration,
                 f"Integration validation failed: {str(e)}\nSystem may have compatibility issues",
                 50
@@ -19120,7 +19286,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         # Calculate weighted overall health score
         health_weights = {
             'early_setup': 0.15,
-            'system_validation': 0.20, 
+            'system_validation': 0.20,
             'configuration': 0.20,
             'models': 0.20,
             'performance': 0.10,
@@ -19570,6 +19736,11 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 'cpu_cores': logical_cores,
                 'total_ram_gb': total_ram_gb,
                 'working_directory': str(Path.cwd()),
+                'datasets_directory': str(essential_dirs.get('datasets', Path(__file__).resolve().parent / "datasets")),
+                'artifacts_directory': str(essential_dirs.get('artifacts', Path(__file__).resolve().parent / "artifacts")),
+                'figures_directory': str(essential_dirs.get('figures', Path(__file__).resolve().parent / "figures")),
+                'info_directory': str(essential_dirs.get('info', Path(__file__).resolve().parent / "info")),
+                'metrics_directory': str(essential_dirs.get('metrics', Path(__file__).resolve().parent / "metrics")),
                 'log_directory': str(essential_dirs.get('logs', Path(__file__).resolve().parent / "logs")),
                 'model_directory': str(essential_dirs.get('models', Path(__file__).resolve().parent / "models")),
                 'config_directory': str(essential_dirs.get('config', Path(__file__).resolve().parent / "config")),
@@ -19638,9 +19809,9 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             logger.warning(f"Failed to save initialization report: {e}")
         
         # Final logging summary with health metrics
-        logger.debug("=" * 50)
+        logger.debug("-" * 40)
         logger.debug("DEEP LEARNING SYSTEM INITIALIZATION COMPLETED")
-        logger.debug("=" * 50)
+        logger.debug("-" * 40)
         logger.debug(f"Overall Health Score: {overall_health:.1f}%")
         logger.debug(f"Initialization Time: {initialization_time:.2f} seconds")
         logger.debug(f"Configuration: {config.get('_preset_name', 'custom')} preset")
@@ -19659,7 +19830,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             for warning in system_state['warnings_issued'][:5]:
                 logger.debug(f"  - {warning}")
         
-        logger.debug("=" * 50)
+        logger.debug("-" * 40)
         
         return system_status, config, logger
         
@@ -19747,31 +19918,323 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             }
         }
         
-        logger.critical("=" * 80)
+        logger.critical("-" * 40)
         logger.critical("CRITICAL: SYSTEM INITIALIZATION FAILED")
-        logger.critical("=" * 80)
+        logger.critical("-" * 40)
         logger.critical(f"Error: {str(e)}")
         logger.critical(f"Error Type: {type(e).__name__}")
         logger.critical(f"Duration: {initialization_time:.2f} seconds")
         logger.critical(f"Steps completed: {len(initialization_steps)}")
         logger.critical(f"Total errors: {len(system_state.get('errors_encountered', [])) + 1}")
         logger.exception("Detailed error information:")
-        logger.critical("=" * 80)
+        logger.critical("-" * 40)
         
         # Save error report
         try:
-            error_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            #from datetime import datetime
+            error_timestamp = datetime.now()
+            date_str = error_timestamp.strftime('%Y%m%d')
+            time_str = error_timestamp.strftime('%H%M%S')
+            sequence_id = f"{date_str}_{time_str}"
+            
             reports_dir = essential_dirs.get('reports', Path(__file__).resolve().parent / "reports")
             reports_dir.mkdir(parents=True, exist_ok=True)
-            error_report_path = reports_dir / f"deep_init_critical_failure_{error_timestamp}.json"
             
-            with open(error_report_path, 'w', encoding='utf-8') as f:
-                json.dump(error_status, f, indent=2, default=str, ensure_ascii=False)
+            # Define consolidated error report file path (daily file)
+            consolidated_error_file = reports_dir / f"system_initialization_errors_{date_str}.json"
             
-            logger.error(f"Critical failure report saved to {error_report_path}")
+            # Create a fully serializable error status
+            serializable_error_status = {
+                'initialization': {
+                    'start_time': system_state.get('initialization_start', datetime.now()).isoformat(),
+                    'end_time': datetime.now().isoformat(),
+                    'duration_seconds': initialization_time,
+                    'status': 'critical_failure',
+                    'error': str(e),
+                    'error_type': type(e).__name__,
+                    'overall_health_score': 0,
+                    'steps_attempted': len(initialization_steps),
+                    'errors_encountered': system_state.get('errors_encountered', []) + [str(e)],
+                    'warnings_issued': system_state.get('warnings_issued', []),
+                    'critical_failure_point': initialization_steps[-1][0] if initialization_steps else 'unknown'
+                },
+                'system': {
+                    'platform': platform.platform(),
+                    'python_version': sys.version.split()[0],
+                    'pytorch_version': torch.__version__,
+                    'cuda_available': cuda_available,
+                    'cpu_cores': logical_cores,
+                    'total_ram_gb': total_ram_gb,
+                    'working_directory': str(Path.cwd()),
+                    'final_state': 'unusable'
+                },
+                'hardware': {
+                    # Convert hardware detected to serializable format
+                    'cpu_cores': logical_cores,
+                    'memory_gb': total_ram_gb,
+                    'cuda_available': cuda_available,
+                    'cuda_device_count': torch.cuda.device_count() if cuda_available else 0,
+                    'disk_space_gb': shutil.disk_usage('.').free / (1024**3) if hasattr(shutil, 'disk_usage') else 0
+                },
+                'steps_completed': [
+                    {
+                        'step_name': step[0],
+                        'status': step[1],
+                        'duration': step[2],
+                        'health_score': float(step[6]) if step[6] and step[6].replace('%', '').replace('[bold red]', '').replace('[/]', '').strip().isdigit() else 0.0
+                    }
+                    for step in initialization_steps
+                ] if initialization_steps else [],
+                'health_metrics': {
+                    metric: float(score) if isinstance(score, (int, float)) else 0.0
+                    for metric, score in system_state.get('health_metrics', {}).items()
+                },
+                'diagnostics': {
+                    'recovery_possible': False,
+                    'suggested_actions': [
+                        "Check system requirements",
+                        "Verify Python environment", 
+                        "Check available disk space and memory",
+                        "Review error logs for specific issues",
+                        "Check for conflicting dependencies"
+                    ],
+                    'system_checks_passed': sum(1 for result in system_state.get('system_check_results', {}).values() if hasattr(result, 'passed') and result.passed),
+                    'system_checks_total': len(system_state.get('system_check_results', {})),
+                    'model_variants_available': system_state.get('model_variants', {}).get('available', 0),
+                    'model_variants_total': system_state.get('model_variants', {}).get('total', 0)
+                }
+            }
+            
+            # Create entry metadata
+            entry_metadata = {
+                'sequence_id': sequence_id,
+                'timestamp': error_timestamp.isoformat(),
+                'time_str': time_str,
+                'entry_type': 'critical_initialization_failure',
+                'error_type': type(e).__name__,
+                'initialization_duration_seconds': float(initialization_time),
+                'steps_completed': len(initialization_steps),
+                'failure_point': initialization_steps[-1][0] if initialization_steps else 'unknown'
+            }
+            
+            # Create the error entry with serializable data
+            error_entry = {
+                **entry_metadata,
+                'data': serializable_error_status
+            }
+            
+            # Load existing error log data or create new structure
+            if consolidated_error_file.exists():
+                try:
+                    with open(consolidated_error_file, 'r', encoding='utf-8') as f:
+                        error_log_data = json.load(f)
+                    
+                    # Validate structure
+                    if not isinstance(error_log_data, dict) or 'errors' not in error_log_data:
+                        logger.warning(f"Invalid error log structure in {consolidated_error_file}, recreating")
+                        error_log_data = {
+                            'date': date_str,
+                            'errors': [],
+                            'metadata': {
+                                'version': '2.0',
+                                'created_at': error_timestamp.isoformat(),
+                                'total_errors': 0,
+                                'last_updated': error_timestamp.isoformat(),
+                                'log_type': 'consolidated_initialization_errors'
+                            }
+                        }
+                    
+                    logger.debug(f"Loaded existing error log from {consolidated_error_file}")
+                    
+                except (json.JSONDecodeError, IOError) as load_error:
+                    logger.warning(f"Failed to load existing error log, creating new: {load_error}")
+                    error_log_data = {
+                        'date': date_str,
+                        'errors': [],
+                        'metadata': {
+                            'version': '2.0',
+                            'created_at': error_timestamp.isoformat(),
+                            'total_errors': 0,
+                            'last_updated': error_timestamp.isoformat(),
+                            'log_type': 'consolidated_initialization_errors'
+                        }
+                    }
+            else:
+                # Create new error log structure
+                error_log_data = {
+                    'date': date_str,
+                    'errors': [error_entry],
+                    'metadata': {
+                        'version': '2.0',
+                        'created_at': error_timestamp.isoformat(),
+                        'total_errors': 1,
+                        'last_updated': error_timestamp.isoformat(),
+                        'log_type': 'consolidated_initialization_errors'
+                    }
+                }
+            
+            # Append new error entry if we loaded existing data
+            if consolidated_error_file.exists():
+                error_log_data['errors'].append(error_entry)
+                error_log_data['metadata']['total_errors'] = len(error_log_data['errors'])
+                error_log_data['metadata']['last_updated'] = error_timestamp.isoformat()
+            
+            # Keep only last 100 errors per day to prevent files from growing too large
+            max_errors_per_day = 100
+            if len(error_log_data['errors']) > max_errors_per_day:
+                logger.debug(f"Trimming error log to last {max_errors_per_day} entries")
+                error_log_data['errors'] = error_log_data['errors'][-max_errors_per_day:]
+                error_log_data['metadata']['total_errors'] = len(error_log_data['errors'])
+                error_log_data['metadata']['trimmed'] = True
+                error_log_data['metadata']['trim_threshold'] = max_errors_per_day
+            
+            # Save updated error log - no need for default=str since everything is serializable
+            try:
+                with open(consolidated_error_file, 'w', encoding='utf-8') as f:
+                    json.dump(error_log_data, f, indent=2, ensure_ascii=False)
+                logger.error(f"Saved critical failure to consolidated error log: {consolidated_error_file}")
+                logger.error(f"Total errors in log today: {error_log_data['metadata']['total_errors']}")
+                
+            except Exception as write_error:
+                logger.error(f"Failed to write consolidated error log: {write_error}")
+                
+                # Try to save to backup location
+                try:
+                    backup_file = reports_dir / f"system_initialization_errors_{date_str}_backup.json"
+                    with open(backup_file, 'w', encoding='utf-8') as f:
+                        json.dump(error_log_data, f, indent=2, ensure_ascii=False)
+                    logger.warning(f"Saved error log to backup location: {backup_file}")
+                except Exception as backup_error:
+                    logger.error(f"Failed to save error log backup: {backup_error}")
+            
+            # Also append to a human-readable summary file for easier review
+            try:
+                summary_file = reports_dir / f"system_initialization_errors_summary_{date_str}.txt"
+                
+                # Format error summary
+                error_summary = (
+                    f"\n{'=' * 80}\n"
+                    f"CRITICAL INITIALIZATION FAILURE - {error_timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"Sequence: {sequence_id} (Total today: {error_log_data['metadata']['total_errors']})\n"
+                    f"{'=' * 80}\n"
+                    f"Error Type: {type(e).__name__}\n"
+                    f"Error Message: {str(e)}\n"
+                    f"Initialization Duration: {initialization_time:.2f} seconds\n"
+                    f"Steps Completed: {len(initialization_steps)}/{len(initialization_steps) + 1}\n"
+                    f"Failure Point: {initialization_steps[-1][0] if initialization_steps else 'unknown'}\n"
+                )
+                
+                # Add system context
+                error_summary += f"Platform: {platform.platform()}\n"
+                error_summary += f"Python Version: {sys.version.split()[0]}\n"
+                error_summary += f"PyTorch Version: {torch.__version__}\n"
+                error_summary += f"CUDA Available: {cuda_available}\n"
+                
+                # Add recent errors if available
+                if system_state.get('errors_encountered'):
+                    error_summary += f"Previous Errors: {len(system_state['errors_encountered'])}\n"
+                    # Show last 3 errors
+                    for prev_error in system_state['errors_encountered'][-3:]:
+                        error_summary += f"  - {prev_error[:100]}...\n" if len(prev_error) > 100 else f"  - {prev_error}\n"
+                
+                error_summary += f"{'=' * 80}\n"
+                
+                # Append to summary file
+                with open(summary_file, 'a', encoding='utf-8') as f:
+                    f.write(error_summary)
+                
+                logger.debug(f"Appended error summary to {summary_file}")
+                
+            except Exception as summary_error:
+                logger.debug(f"Failed to update error summary file: {summary_error}")
+            
+            # Update latest error log symlink/pointer
+            try:
+                latest_error_pointer = reports_dir / "latest_initialization_errors.json"
+                if latest_error_pointer.exists() or latest_error_pointer.is_symlink():
+                    latest_error_pointer.unlink()
+                
+                try:
+                    # Try to create symlink
+                    latest_error_pointer.symlink_to(consolidated_error_file.name)
+                except (OSError, NotImplementedError):
+                    # Fallback to text file with path
+                    with open(reports_dir / "latest_initialization_errors.txt", 'w') as f:
+                        f.write(f"Latest error log: {consolidated_error_file.name}\n")
+                        f.write(f"Updated: {error_timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                        f.write(f"Total errors today: {error_log_data['metadata']['total_errors']}\n")
+                
+            except Exception as symlink_error:
+                logger.debug(f"Failed to update latest error pointer: {symlink_error}")
+            
+            # Generate error analytics if this is a significant number of errors
+            if error_log_data['metadata']['total_errors'] % 20 == 0:
+                try:
+                    # Generate error analytics
+                    analytics = {
+                        'date': date_str,
+                        'total_errors': error_log_data['metadata']['total_errors'],
+                        'generated_at': datetime.now().isoformat(),
+                        'by_error_type': {},
+                        'by_failure_point': {},
+                        'recent_errors': []
+                    }
+                    
+                    # Analyze errors
+                    for entry in error_log_data['errors']:
+                        # Count by error type
+                        error_type = entry.get('error_type', 'unknown')
+                        analytics['by_error_type'][error_type] = analytics['by_error_type'].get(error_type, 0) + 1
+                        
+                        # Count by failure point
+                        failure_point = entry.get('failure_point', 'unknown')
+                        analytics['by_failure_point'][failure_point] = analytics['by_failure_point'].get(failure_point, 0) + 1
+                    
+                    # Get recent errors (last 10)
+                    analytics['recent_errors'] = [
+                        {
+                            'timestamp': entry.get('timestamp'),
+                            'error_type': entry.get('error_type'),
+                            'failure_point': entry.get('failure_point'),
+                            'steps_completed': entry.get('steps_completed')
+                        }
+                        for entry in error_log_data['errors'][-10:]
+                    ]
+                    
+                    # Save analytics
+                    analytics_file = reports_dir / f"initialization_errors_analytics_{date_str}.json"
+                    with open(analytics_file, 'w', encoding='utf-8') as f:
+                        json.dump(analytics, f, indent=2, ensure_ascii=False)
+                    
+                    logger.debug(f"Generated error analytics: {analytics_file}")
+                    
+                except Exception as analytics_error:
+                    logger.debug(f"Failed to generate error analytics: {analytics_error}")
+            
         except Exception as save_error:
-            logger.error(f"Failed to save critical failure report: {save_error}")
-        
+            logger.error(f"Failed to save critical failure report using consolidated system: {save_error}")
+            
+            # Emergency fallback - try to save to a simple timestamped file
+            try:
+                emergency_file = Path(globals().get('LOG_DIR', './logs')) / f"init_critical_failure_emergency_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                emergency_file.parent.mkdir(exist_ok=True, parents=True)
+                
+                with open(emergency_file, 'w', encoding='utf-8') as f:
+                    json.dump({
+                        'timestamp': datetime.now().isoformat(),
+                        'error': str(e),
+                        'error_type': type(e).__name__,
+                        'save_error': str(save_error),
+                        'emergency_save': True,
+                        'steps_completed': len(initialization_steps),
+                        'initialization_time': float(initialization_time)
+                    }, f, indent=2, ensure_ascii=False)
+                
+                logger.warning(f"Emergency error report saved to: {emergency_file}")
+                
+            except Exception as emergency_error:
+                logger.critical(f"Failed to save emergency error report: {emergency_error}")
+
         raise RuntimeError(f"System initialization failed: {e}") from e
 
 def display_configuration_changes(changes: List[Dict], console: Console = None, logger: logging.Logger = None):
@@ -20167,7 +20630,7 @@ def display_configuration_changes(changes: List[Dict], console: Console = None, 
 
 def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) -> None:
     """
-    Save a comprehensive initialization report to disk with multiple formats.
+    Save an initialization report to disk with multiple formats.
     
     This function creates both machine-readable (JSON) and human-readable (TXT)
     reports that match the comprehensive system_status structure from initialize_system.
@@ -20177,8 +20640,7 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
         report_dir: Directory to save the report (should be a Path object)
         
     Raises:
-        Exception: If report saving fails (logged but not re-raised to avoid
-                  interrupting initialization)
+        Exception: If report saving fails (logged but not re-raised to avoid interrupting initialization)
     """
     from datetime import datetime
     
@@ -20202,7 +20664,7 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
         time_str = timestamp_obj.strftime('%H%M%S')
         timestamp = f"{date_str}_{time_str}"
         
-        # Enhance system_status with additional diagnostic information using existing functions
+        # System status with additional diagnostic information using existing functions
         enhanced_status = system_status.copy()
         
         # Add hardware information using check_hardware()
@@ -20272,7 +20734,7 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
         except Exception as e:
             enhanced_status['comprehensive_system_info_error'] = str(e)
         
-        # Create a serializable version of the enhanced report
+        # Create a serializable version of the report
         serializable_status = {}
         for key, value in enhanced_status.items():
             try:
@@ -20502,7 +20964,7 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
         summary_content += f"Python Version: {sys_info.get('python_version', 'unknown')}\n"
         summary_content += f"PyTorch Version: {sys_info.get('pytorch_version', 'unknown')}\n"
         
-        # Enhanced hardware details
+        # Hardware details
         cpu_info = detailed_hw.get('cpu_cores', {})
         if cpu_info.get('available'):
             summary_content += f"CPU: {cpu_info.get('logical_cores', '?')} logical cores, {cpu_info.get('physical_cores', '?')} physical\n"
@@ -20521,7 +20983,7 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
         if disk_info.get('available') is not None:
             summary_content += f"Disk Space: {disk_info.get('free_gb', 0):.1f}GB free of {disk_info.get('total_gb', 0):.1f}GB total\n"
         
-        # Enhanced CUDA information
+        # CUDA information
         cuda_info = detailed_hw.get('cuda', {})
         summary_content += f"CUDA Available: {cuda_info.get('available', False)}\n"
         if cuda_info.get('available'):
@@ -20552,7 +21014,7 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
         available_presets = config_info.get('available_presets', [])
         summary_content += f"Available Presets: {', '.join(available_presets) if available_presets else 'none'}\n"
         
-        # Enhanced configuration parameters
+        # Configuration parameters
         active_config = config_info.get('active_config', {})
         if isinstance(active_config, dict) and active_config:
             summary_content += "Key Configuration Parameters:\n"
@@ -20584,7 +21046,7 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
         else:
             summary_content += "Variant Names: None\n"
         
-        # Enhanced variant status
+        # Variant status
         variant_status = model_info.get('variant_status', {})
         if variant_status:
             summary_content += "Variant Status Details:\n"
@@ -20593,7 +21055,7 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
                 summary_content += f"  {status_indicator} {name}: {status}\n"
         summary_content += "\n"
         
-        # Enhanced Performance Metrics
+        # Performance Metrics
         summary_content += "PERFORMANCE BASELINE\n"
         summary_content += "-" * 22 + "\n"
         
@@ -20635,14 +21097,14 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
             summary_content += "No performance metrics available\n"
         summary_content += "\n"
         
-        # Enhanced Dependencies Information
+        # Dependencies Information
         summary_content += "DEPENDENCIES\n"
         summary_content += "-" * 14 + "\n"
         summary_content += f"PyTorch Version: {deps_info.get('torch_version', 'unknown')}\n"
         summary_content += f"Python Version: {deps_info.get('python_version', 'unknown')}\n"
         summary_content += f"Platform: {deps_info.get('platform', 'unknown')}\n"
         
-        # Enhanced dependency status from check_versions
+        # Dependency status from check_versions
         if detailed_versions:
             summary_content += "\nCore Dependencies:\n"
             core_deps = {k: v for k, v in detailed_versions.items() if isinstance(v, dict) and v.get('required', False)}
@@ -20756,7 +21218,7 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
             summary_content += f"Python Build: {arch_info.get('python_build', 'unknown')}\n"
             summary_content += "\n"
         
-        # Enhanced Footer with Diagnostic Summary
+        # Footer with Diagnostic Summary
         summary_content += "=" * 80 + "\n"
         summary_content += "DIAGNOSTIC SUMMARY\n"
         summary_content += "=" * 80 + "\n"
@@ -22467,9 +22929,8 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
         logger.info(f"  - Total entries today: {report_data['metadata']['total_reports']}")
         
     except Exception as e:
-        # Log the error but don't raise it - we don't want report saving
-        # to interrupt the initialization process
-        error_msg = f"Failed to save comprehensive initialization report: {str(e)}"
+        # Log the error but don't raise it - we don't want report saving to interrupt the initialization process
+        error_msg = f"Failed to save initialization report: {str(e)}"
         logger.error(error_msg)
         logger.debug(f"Report save error details:", exc_info=True)
         
@@ -22479,7 +22940,7 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
             error_path = report_dir / f"deep_report_error_{error_timestamp}.txt"
             
             with open(error_path, 'w', encoding='utf-8') as f:
-                f.write(f"COMPREHENSIVE INITIALIZATION REPORT SAVE FAILED\n")
+                f.write(f"INITIALIZATION REPORT SAVE FAILED\n")
                 f.write(f"Timestamp: {datetime.now().isoformat()}\n")
                 f.write(f"Error: {str(e)}\n")
                 f.write(f"Error Type: {type(e).__name__}\n")
@@ -25390,7 +25851,6 @@ def _create_model_test_definition(
     num_models: int,
     diversity_factor: float,
     mixed_precision: bool,
-    # ADDED: Missing parameters that were causing issues
     input_dim: int,
     activation: str = 'leaky_relu',
     activation_param: float = 0.2,
@@ -25398,354 +25858,488 @@ def _create_model_test_definition(
     use_batch_norm: bool = True,
     use_layer_norm: bool = False
 ) -> Dict[str, Any]:
-    """Creates a model test definition dictionary."""
+    """
+    Creates a model test definition dictionary with class checking.
     
+    This function now performs upfront validation of class availability before
+    creating lambda functions, preventing runtime errors and providing clear
+    feedback about missing classes.
+        
+    Returns:
+        Dictionary mapping model names to their test definitions
+        
+    Raises:
+        RuntimeError: If no model classes are available for definition creation
+    """
     # Common hardware data for all configs
     hardware_data = {'gpu_available': torch.cuda.is_available()}
     
-    model_definitions = {
-        'SimpleAutoencoder': {
-            'class_check': lambda: SimpleAutoencoder is not None and callable(SimpleAutoencoder),
-            'class_getter': lambda: SimpleAutoencoder,
-            'primary_config': _create_model_test_config(
-                encoding_dim=encoding_dim,
-                hidden_dims=[hidden_dims[0]] if hidden_dims else [128],
-                dropout_rates=[dropout_rates[0]] if dropout_rates else [0.2],
-                activation=activation,  # Use parameter instead of hardcoded
-                activation_param=activation_param,  # Use parameter instead of hardcoded
-                normalization=normalization,  # Use parameter instead of hardcoded
-                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
-                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
-                skip_connection=False,  # SimpleAutoencoder doesn't use skip connections
-                residual_blocks=False,  # SimpleAutoencoder doesn't use residual blocks
-                use_attention=False,  # SimpleAutoencoder doesn't use attention
-                legacy_mode=legacy_mode,
-                num_models=1,
-                diversity_factor=0.0,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=mixed_precision,
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'SimpleAutoencoder',
-                        'use_attention': False,
-                        'residual_blocks': False,
-                        'skip_connection': False  # Explicitly disable for SimpleAutoencoder
+    # Initialize model definitions dictionary
+    model_definitions = {}
+    
+    # Track unavailable models for reporting
+    unavailable_models = []
+    availability_warnings = []
+    
+    # SimpleAutoencoder Class Checking
+    try:
+        # Verify class exists
+        if 'SimpleAutoencoder' in globals() and callable(globals()['SimpleAutoencoder']):
+            model_definitions['SimpleAutoencoder'] = {
+                'class_check': lambda: SimpleAutoencoder is not None and callable(SimpleAutoencoder),
+                'class_getter': lambda: SimpleAutoencoder,
+                'primary_config': _create_model_test_config(
+                    encoding_dim=encoding_dim,
+                    hidden_dims=[hidden_dims[0]] if hidden_dims else [128],
+                    dropout_rates=[dropout_rates[0]] if dropout_rates else [0.2],
+                    activation=activation,
+                    activation_param=activation_param,
+                    normalization=normalization,
+                    use_batch_norm=use_batch_norm,
+                    use_layer_norm=use_layer_norm,
+                    skip_connection=False,
+                    residual_blocks=False,
+                    use_attention=False,
+                    legacy_mode=legacy_mode,
+                    num_models=1,
+                    diversity_factor=0.0,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=mixed_precision,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'SimpleAutoencoder',
+                            'use_attention': False,
+                            'residual_blocks': False,
+                            'skip_connection': False
+                        }
                     }
-                }
-            ),
-            'fallback_config': _create_model_test_config(
-                encoding_dim=max(4, encoding_dim // 2),
-                hidden_dims=[64],
-                dropout_rates=[0.2],
-                activation='relu',  # Simplified for fallback
-                activation_param=0.0,  # Simplified for fallback
-                normalization=None,  # Simplified for fallback
-                use_batch_norm=False,  # Simplified for fallback
-                use_layer_norm=False,  # Simplified for fallback
-                skip_connection=False,
-                residual_blocks=False,
-                use_attention=False,
-                legacy_mode=True,  # Force legacy mode for fallback
-                num_models=1,
-                diversity_factor=0.0,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=False,  # Disable mixed precision for fallback
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'SimpleAutoencoder',
-                        'legacy_mode': True,
-                        'use_attention': False,
-                        'residual_blocks': False,
-                        'skip_connection': False
+                ),
+                'fallback_config': _create_model_test_config(
+                    encoding_dim=max(4, encoding_dim // 2),
+                    hidden_dims=[64],
+                    dropout_rates=[0.2],
+                    activation='relu',
+                    activation_param=0.0,
+                    normalization=None,
+                    use_batch_norm=False,
+                    use_layer_norm=False,
+                    skip_connection=False,
+                    residual_blocks=False,
+                    use_attention=False,
+                    legacy_mode=True,
+                    num_models=1,
+                    diversity_factor=0.0,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=False,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'SimpleAutoencoder',
+                            'legacy_mode': True,
+                            'use_attention': False,
+                            'residual_blocks': False,
+                            'skip_connection': False
+                        }
                     }
-                }
-            ),
-            'minimal_config': _create_model_test_config(
-                encoding_dim=8,
-                hidden_dims=[32],
-                dropout_rates=[0.1],
-                activation='relu',  # Simplified for minimal
-                activation_param=0.0,  # Simplified for minimal
-                normalization=None,  # Simplified for minimal
-                use_batch_norm=False,  # Simplified for minimal
-                use_layer_norm=False,  # Simplified for minimal
-                skip_connection=False,
-                residual_blocks=False,
-                use_attention=False,
-                legacy_mode=True,  # Force legacy mode for minimal
-                num_models=1,
-                diversity_factor=0.0,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=False,  # Disable mixed precision for minimal
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=max(20, input_dim // 2),  # Use scaled input_dim
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'SimpleAutoencoder',
-                        'use_attention': False,
-                        'residual_blocks': False,
-                        'skip_connection': False
-                    },
-                    'data': {
-                        'features': max(20, input_dim // 2)  # Consistent with input_dim
+                ),
+                'minimal_config': _create_model_test_config(
+                    encoding_dim=8,
+                    hidden_dims=[32],
+                    dropout_rates=[0.1],
+                    activation='relu',
+                    activation_param=0.0,
+                    normalization=None,
+                    use_batch_norm=False,
+                    use_layer_norm=False,
+                    skip_connection=False,
+                    residual_blocks=False,
+                    use_attention=False,
+                    legacy_mode=True,
+                    num_models=1,
+                    diversity_factor=0.0,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=False,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=max(20, input_dim // 2),
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'SimpleAutoencoder',
+                            'use_attention': False,
+                            'residual_blocks': False,
+                            'skip_connection': False
+                        },
+                        'data': {
+                            'features': max(20, input_dim // 2)
+                        }
                     }
-                }
-            ),
-            'required_params': ['input_dim'],
-            'description': 'Basic autoencoder with simple encoder-decoder architecture'
-        },
-        'EnhancedAutoencoder': {
-            'class_check': lambda: EnhancedAutoencoder is not None and callable(EnhancedAutoencoder),
-            'class_getter': lambda: EnhancedAutoencoder,
-            'primary_config': _create_model_test_config(
-                encoding_dim=encoding_dim,
-                hidden_dims=hidden_dims.copy(),
-                dropout_rates=dropout_rates.copy(),
-                activation=activation,  # Use parameter instead of hardcoded
-                activation_param=activation_param,  # Use parameter instead of hardcoded
-                normalization=normalization,  # Use parameter instead of hardcoded
-                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
-                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
-                skip_connection=skip_connection,  # Use parameter
-                residual_blocks=residual_blocks,  # Use parameter
-                use_attention=use_attention and encoding_dim >= 32,  # Use parameter with condition
-                legacy_mode=legacy_mode,
-                num_models=1,
-                diversity_factor=0.0,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=mixed_precision,
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'EnhancedAutoencoder'
+                ),
+                'required_params': ['input_dim'],
+                'description': 'Basic autoencoder with simple encoder-decoder architecture'
+            }
+            logger.debug("SimpleAutoencoder class available and registered")
+        else:
+            warning_msg = "SimpleAutoencoder class not available - skipping"
+            logger.warning(warning_msg)
+            unavailable_models.append('SimpleAutoencoder')
+            availability_warnings.append(warning_msg)
+    except NameError as e:
+        error_msg = f"SimpleAutoencoder not defined: {e}"
+        logger.error(error_msg)
+        unavailable_models.append('SimpleAutoencoder')
+        availability_warnings.append(error_msg)
+    except Exception as e:
+        error_msg = f"Unexpected error checking SimpleAutoencoder: {e}"
+        logger.error(error_msg)
+        unavailable_models.append('SimpleAutoencoder')
+        availability_warnings.append(error_msg)
+    
+    # EnhancedAutoencoder Class Checking
+    try:
+        if 'EnhancedAutoencoder' in globals() and callable(globals()['EnhancedAutoencoder']):
+            model_definitions['EnhancedAutoencoder'] = {
+                'class_check': lambda: EnhancedAutoencoder is not None and callable(EnhancedAutoencoder),
+                'class_getter': lambda: EnhancedAutoencoder,
+                'primary_config': _create_model_test_config(
+                    encoding_dim=encoding_dim,
+                    hidden_dims=hidden_dims.copy(),
+                    dropout_rates=dropout_rates.copy(),
+                    activation=activation,
+                    activation_param=activation_param,
+                    normalization=normalization,
+                    use_batch_norm=use_batch_norm,
+                    use_layer_norm=use_layer_norm,
+                    skip_connection=skip_connection,
+                    residual_blocks=residual_blocks,
+                    use_attention=use_attention and encoding_dim >= 32,
+                    legacy_mode=legacy_mode,
+                    num_models=1,
+                    diversity_factor=0.0,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=mixed_precision,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'EnhancedAutoencoder'
+                        }
                     }
-                }
-            ),
-            'fallback_config': _create_model_test_config(
-                encoding_dim=max(8, encoding_dim // 2),
-                hidden_dims=[96, 48] if len(hidden_dims) > 1 else [64],
-                dropout_rates=[0.2, 0.15] if len(dropout_rates) > 1 else [0.2],
-                activation=activation,  # Use parameter instead of hardcoded
-                activation_param=activation_param,  # Use parameter instead of hardcoded
-                normalization=normalization,  # Use parameter instead of hardcoded
-                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
-                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
-                skip_connection=True,  # Enable skip connection for fallback stability
-                residual_blocks=False,  # Disable residual blocks for fallback
-                use_attention=False,  # Disable attention for fallback
-                legacy_mode=False,
-                num_models=1,
-                diversity_factor=0.0,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=mixed_precision and torch.cuda.is_available(),
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'EnhancedAutoencoder',
-                        'use_attention': False  # Explicitly disable for fallback
+                ),
+                'fallback_config': _create_model_test_config(
+                    encoding_dim=max(8, encoding_dim // 2),
+                    hidden_dims=[96, 48] if len(hidden_dims) > 1 else [64],
+                    dropout_rates=[0.2, 0.15] if len(dropout_rates) > 1 else [0.2],
+                    activation=activation,
+                    activation_param=activation_param,
+                    normalization=normalization,
+                    use_batch_norm=use_batch_norm,
+                    use_layer_norm=use_layer_norm,
+                    skip_connection=True,
+                    residual_blocks=False,
+                    use_attention=False,
+                    legacy_mode=False,
+                    num_models=1,
+                    diversity_factor=0.0,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=mixed_precision and torch.cuda.is_available(),
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'EnhancedAutoencoder',
+                            'use_attention': False
+                        }
                     }
-                }
-            ),
-            'minimal_config': _create_model_test_config(
-                encoding_dim=12,
-                hidden_dims=[48],
-                dropout_rates=[0.15],
-                activation='relu',  # Simplified for minimal
-                activation_param=0.0,  # Simplified for minimal
-                normalization=None,  # Simplified for minimal
-                use_batch_norm=False,  # Simplified for minimal
-                use_layer_norm=False,  # Simplified for minimal
-                skip_connection=False,  # Disable for minimal
-                residual_blocks=False,  # Disable for minimal
-                use_attention=False,  # Disable for minimal
-                legacy_mode=True,  # Force legacy mode for minimal
-                num_models=1,
-                diversity_factor=0.0,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=False,  # Disable mixed precision for minimal
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'EnhancedAutoencoder',
-                        'use_attention': False,  # Explicitly disable for minimal
-                        'residual_blocks': False,  # Explicitly disable for minimal
-                        'skip_connection': False  # Explicitly disable for minimal
+                ),
+                'minimal_config': _create_model_test_config(
+                    encoding_dim=12,
+                    hidden_dims=[48],
+                    dropout_rates=[0.15],
+                    activation='relu',
+                    activation_param=0.0,
+                    normalization=None,
+                    use_batch_norm=False,
+                    use_layer_norm=False,
+                    skip_connection=False,
+                    residual_blocks=False,
+                    use_attention=False,
+                    legacy_mode=True,
+                    num_models=1,
+                    diversity_factor=0.0,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=False,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'EnhancedAutoencoder',
+                            'use_attention': False,
+                            'residual_blocks': False,
+                            'skip_connection': False
+                        }
                     }
-                }
-            ),
-            'required_params': ['input_dim'],
-            'description': 'Advanced autoencoder with enhanced features and configurable architecture'
-        },
-        'AutoencoderEnsemble': {
-            'class_check': lambda: AutoencoderEnsemble is not None and callable(AutoencoderEnsemble),
-            'class_getter': lambda: AutoencoderEnsemble,
-            'primary_config': _create_model_test_config(
-                encoding_dim=encoding_dim,
-                hidden_dims=hidden_dims.copy(),
-                dropout_rates=dropout_rates.copy(),
-                activation=activation,  # Use parameter instead of hardcoded
-                activation_param=activation_param,  # Use parameter instead of hardcoded
-                normalization=normalization,  # Use parameter instead of hardcoded
-                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
-                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
-                skip_connection=skip_connection,  # Use parameter
-                residual_blocks=residual_blocks and not legacy_mode,  # Use parameter with condition
-                use_attention=use_attention and not legacy_mode,  # Use parameter with condition
-                legacy_mode=legacy_mode,
-                num_models=min(3, num_models),
-                diversity_factor=diversity_factor,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=mixed_precision,
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'AutoencoderEnsemble'
+                ),
+                'required_params': ['input_dim'],
+                'description': 'Advanced autoencoder with enhanced features and configurable architecture'
+            }
+            logger.debug("EnhancedAutoencoder class available and registered")
+        else:
+            warning_msg = "EnhancedAutoencoder class not available - skipping"
+            logger.warning(warning_msg)
+            unavailable_models.append('EnhancedAutoencoder')
+            availability_warnings.append(warning_msg)
+    except NameError as e:
+        error_msg = f"EnhancedAutoencoder not defined: {e}"
+        logger.error(error_msg)
+        unavailable_models.append('EnhancedAutoencoder')
+        availability_warnings.append(error_msg)
+    except Exception as e:
+        error_msg = f"Unexpected error checking EnhancedAutoencoder: {e}"
+        logger.error(error_msg)
+        unavailable_models.append('EnhancedAutoencoder')
+        availability_warnings.append(error_msg)
+    
+    # AutoencoderEnsemble Class Checking
+    try:
+        if 'AutoencoderEnsemble' in globals() and callable(globals()['AutoencoderEnsemble']):
+            model_definitions['AutoencoderEnsemble'] = {
+                'class_check': lambda: AutoencoderEnsemble is not None and callable(AutoencoderEnsemble),
+                'class_getter': lambda: AutoencoderEnsemble,
+                'primary_config': _create_model_test_config(
+                    encoding_dim=encoding_dim,
+                    hidden_dims=hidden_dims.copy(),
+                    dropout_rates=dropout_rates.copy(),
+                    activation=activation,
+                    activation_param=activation_param,
+                    normalization=normalization,
+                    use_batch_norm=use_batch_norm,
+                    use_layer_norm=use_layer_norm,
+                    skip_connection=skip_connection,
+                    residual_blocks=residual_blocks and not legacy_mode,
+                    use_attention=use_attention and not legacy_mode,
+                    legacy_mode=legacy_mode,
+                    num_models=min(3, num_models),
+                    diversity_factor=diversity_factor,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=mixed_precision,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'AutoencoderEnsemble'
+                        }
                     }
-                }
-            ),
-            'fallback_config': _create_model_test_config(
-                encoding_dim=max(8, encoding_dim // 2),
-                hidden_dims=[80, 40] if len(hidden_dims) > 1 else [60],
-                dropout_rates=[0.2, 0.15] if len(dropout_rates) > 1 else [0.2],
-                activation=activation,  # Use parameter instead of hardcoded
-                activation_param=activation_param,  # Use parameter instead of hardcoded
-                normalization=normalization,  # Use parameter instead of hardcoded
-                use_batch_norm=use_batch_norm,  # Use parameter instead of hardcoded
-                use_layer_norm=use_layer_norm,  # Use parameter instead of hardcoded
-                skip_connection=False,  # Disable for fallback stability
-                residual_blocks=False,  # Disable for fallback stability
-                use_attention=False,  # Disable for fallback stability
-                legacy_mode=False,
-                num_models=2,
-                diversity_factor=0.1,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=False,  # Disable mixed precision for fallback
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'AutoencoderEnsemble',
-                        'use_attention': False,  # Explicitly disable for fallback
-                        'residual_blocks': False  # Explicitly disable for fallback
+                ),
+                'fallback_config': _create_model_test_config(
+                    encoding_dim=max(8, encoding_dim // 2),
+                    hidden_dims=[80, 40] if len(hidden_dims) > 1 else [60],
+                    dropout_rates=[0.2, 0.15] if len(dropout_rates) > 1 else [0.2],
+                    activation=activation,
+                    activation_param=activation_param,
+                    normalization=normalization,
+                    use_batch_norm=use_batch_norm,
+                    use_layer_norm=use_layer_norm,
+                    skip_connection=False,
+                    residual_blocks=False,
+                    use_attention=False,
+                    legacy_mode=False,
+                    num_models=2,
+                    diversity_factor=0.1,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=False,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'AutoencoderEnsemble',
+                            'use_attention': False,
+                            'residual_blocks': False
+                        }
                     }
-                }
-            ),
-            'minimal_config': _create_model_test_config(
-                encoding_dim=8,
-                hidden_dims=[40],
-                dropout_rates=[0.15],
-                activation='relu',  # Simplified for minimal
-                activation_param=0.0,  # Simplified for minimal
-                normalization=None,  # Simplified for minimal
-                use_batch_norm=False,  # Simplified for minimal
-                use_layer_norm=False,  # Simplified for minimal
-                skip_connection=False,  # Disable for minimal
-                residual_blocks=False,  # Disable for minimal
-                use_attention=False,  # Disable for minimal
-                legacy_mode=True,  # Force legacy mode for minimal
-                num_models=2,
-                diversity_factor=0.05,
-                learning_rate=0.001,
-                batch_size=32,
-                mixed_precision=False,  # Disable mixed precision for minimal
-                optimizer_type='adam',
-                device_setting='auto',
-                random_seed=42,
-                input_dim=input_dim,  # Use parameter instead of hardcoded
-                hardware_data=hardware_data,
-                model_specific_overrides={
-                    'model': {
-                        'model_type': 'AutoencoderEnsemble',
-                        'use_attention': False,  # Explicitly disable for minimal
-                        'residual_blocks': False  # Explicitly disable for minimal
+                ),
+                'minimal_config': _create_model_test_config(
+                    encoding_dim=8,
+                    hidden_dims=[40],
+                    dropout_rates=[0.15],
+                    activation='relu',
+                    activation_param=0.0,
+                    normalization=None,
+                    use_batch_norm=False,
+                    use_layer_norm=False,
+                    skip_connection=False,
+                    residual_blocks=False,
+                    use_attention=False,
+                    legacy_mode=True,
+                    num_models=2,
+                    diversity_factor=0.05,
+                    learning_rate=0.001,
+                    batch_size=32,
+                    mixed_precision=False,
+                    optimizer_type='adam',
+                    device_setting='auto',
+                    random_seed=42,
+                    input_dim=input_dim,
+                    hardware_data=hardware_data,
+                    model_specific_overrides={
+                        'model': {
+                            'model_type': 'AutoencoderEnsemble',
+                            'use_attention': False,
+                            'residual_blocks': False
+                        }
                     }
-                }
-            ),
-            'required_params': ['input_dim'],
-            'description': 'Ensemble of diverse autoencoders for improved robustness and performance'
+                ),
+                'required_params': ['input_dim'],
+                'description': 'Ensemble of diverse autoencoders for improved robustness and performance'
+            }
+            logger.debug("AutoencoderEnsemble class available and registered")
+        else:
+            warning_msg = "AutoencoderEnsemble class not available - skipping"
+            logger.warning(warning_msg)
+            unavailable_models.append('AutoencoderEnsemble')
+            availability_warnings.append(warning_msg)
+    except NameError as e:
+        error_msg = f"AutoencoderEnsemble not defined: {e}"
+        logger.error(error_msg)
+        unavailable_models.append('AutoencoderEnsemble')
+        availability_warnings.append(error_msg)
+    except Exception as e:
+        error_msg = f"Unexpected error checking AutoencoderEnsemble: {e}"
+        logger.error(error_msg)
+        unavailable_models.append('AutoencoderEnsemble')
+        availability_warnings.append(error_msg)
+    
+    # Final validation and error handling
+    if not model_definitions:
+        # No models are available - this is a critical error
+        error_details = {
+            'unavailable_models': unavailable_models,
+            'warnings': availability_warnings,
+            'globals_check': {
+                'SimpleAutoencoder': 'SimpleAutoencoder' in globals(),
+                'EnhancedAutoencoder': 'EnhancedAutoencoder' in globals(),
+                'AutoencoderEnsemble': 'AutoencoderEnsemble' in globals()
+            },
+            'callable_check': {
+                'SimpleAutoencoder': callable(globals().get('SimpleAutoencoder', None)),
+                'EnhancedAutoencoder': callable(globals().get('EnhancedAutoencoder', None)),
+                'AutoencoderEnsemble': callable(globals().get('AutoencoderEnsemble', None))
+            }
+        }
+        
+        error_message = (
+            f"No model classes available for test definition creation. "
+            f"Unavailable models: {', '.join(unavailable_models)}. "
+            f"This indicates that model classes have not been defined or imported properly. "
+            f"Details: {error_details}"
+        )
+        
+        logger.error(error_message)
+        raise RuntimeError(error_message)
+    
+    # Log summary of available models
+    available_count = len(model_definitions)
+    unavailable_count = len(unavailable_models)
+    
+    logger.info(
+        f"Model test definitions created successfully: "
+        f"{available_count} available, {unavailable_count} unavailable"
+    )
+    
+    if unavailable_models:
+        logger.warning(
+            f"The following models were not available and were skipped: "
+            f"{', '.join(unavailable_models)}"
+        )
+    
+    # Add metadata to the definitions dictionary
+    model_definitions['_metadata'] = {
+        'creation_timestamp': datetime.now().isoformat(),
+        'total_definitions': available_count,
+        'unavailable_models': unavailable_models,
+        'availability_warnings': availability_warnings,
+        'input_dim': input_dim,
+        'encoding_dim': encoding_dim,
+        'parameters': {
+            'activation': activation,
+            'normalization': normalization,
+            'use_attention': use_attention,
+            'residual_blocks': residual_blocks,
+            'skip_connection': skip_connection,
+            'legacy_mode': legacy_mode,
+            'num_models': num_models,
+            'diversity_factor': diversity_factor,
+            'mixed_precision': mixed_precision
         }
     }
     
     return model_definitions
 
-def _create_adaptive_config(model_name, model_class, system_class, input_dim, encoding_dim, 
-                           hidden_dims, dropout_rates, activation, activation_param, 
-                           normalization, use_batch_norm, use_layer_norm, skip_connection, 
-                           residual_blocks, use_attention, legacy_mode, num_models, 
-                           diversity_factor, learning_rate, batch_size, mixed_precision, 
-                           optimizer_type, device_setting, random_seed, hardware_data):
+def _create_adaptive_config(
+    model_name,
+    model_class,
+    system_class,
+    input_dim,
+    encoding_dim,
+    hidden_dims,
+    dropout_rates,
+    activation,
+    activation_param,
+    normalization,
+    use_batch_norm,
+    use_layer_norm,
+    skip_connection,
+    residual_blocks,
+    use_attention,
+    legacy_mode,
+    num_models,
+    diversity_factor,
+    learning_rate,
+    batch_size,
+    mixed_precision,
+    optimizer_type,
+    device_setting,
+    random_seed,
+    hardware_data
+) -> Dict[str, Any]:
     """
     Create adaptive configuration for a specific model type when no predefined test definitions are available.
     
     This function generates model-specific configurations using _create_model_test_config
     with appropriate parameters tailored to each model type's characteristics.
-    
-    Args:
-        model_name (str): Name of the model to create configuration for
-        model_class: The model class reference
-        system_class: System classification for hardware adaptation
-        input_dim (int): Input dimension size
-        encoding_dim (int): Encoding/latent dimension size
-        hidden_dims (list): List of hidden layer dimensions
-        dropout_rates (list): List of dropout rates
-        activation (str): Activation function name
-        activation_param: Activation function parameters
-        normalization (str): Normalization type
-        use_batch_norm (bool): Whether to use batch normalization
-        use_layer_norm (bool): Whether to use layer normalization
-        skip_connection (bool): Whether to use skip connections
-        residual_blocks (bool): Whether to use residual blocks
-        use_attention (bool): Whether to use attention mechanisms
-        legacy_mode (bool): Whether to use legacy mode
-        num_models (int): Number of models for ensemble
-        diversity_factor (float): Diversity factor for ensemble
-        learning_rate (float): Learning rate
-        batch_size (int): Batch size
-        mixed_precision (bool): Whether to use mixed precision
-        optimizer_type (str): Optimizer type
-        device_setting (str): Device setting ('auto', 'cuda', 'cpu')
-        random_seed (int): Random seed
-        hardware_data (dict): Hardware information data
     
     Returns:
         dict: Adaptive configuration for the specified model
@@ -25884,10 +26478,16 @@ def _create_adaptive_config(model_name, model_class, system_class, input_dim, en
     
     return adaptive_config
 
-def _extract_and_validate_config_param(config: Dict, key: str, default: Any, 
-                                     global_name: str = None, validator=None, 
-                                     description: str = "", silent: bool = False) -> Any:
-    """Extract and validate configuration parameters from multiple config sections with comprehensive fallbacks and validation."""
+def _extract_and_validate_config_param(
+    config: Dict,
+    key: str,
+    default: Any,
+    global_name: str = None,
+    validator=None,
+    description: str = "",
+    silent: bool = False
+) -> Any:
+    """Extract and validate configuration parameters from multiple config sections with fallbacks and validation."""
     try:
         # Try configuration first
         if key in config:
@@ -32387,8 +32987,8 @@ def _structure_kwargs_into_config_sections(kwargs: Dict[str, Any]) -> Dict[str, 
             'real_time_monitoring', 'ensemble_voting', 'uncertainty_threshold'
         ],
         'monitoring': [
-            'metrics_frequency', 'checkpoint_frequency', 'tensorboard_logging',
-            'console_logging_level', 'save_best_model', 'save_model_history',
+            'metrics_frequency', 'checkpoint_frequency', 'tensorboard_logging', 'progress_bar',
+            'console_logging_level', 'save_best_model', 'save_model_history', 'silent',
             'metrics_to_track', 'early_stopping_metric', 'checkpoint_format',
             'log_model_summary', 'tensorboard_dir', 'log_frequency', 'save_checkpoints',
             'tensorboard', 'stability_metrics', 'performance_metrics', 'profiling_enabled'
@@ -36766,6 +37366,7 @@ def load_and_validate_data(
     verbose: Optional[bool] = None,
     log_level: Optional[str] = None,
     progress_bar: Optional[bool] = None,
+    silent: Optional[bool] = None,
     save_statistics: Optional[bool] = None,
     statistics_path: Optional[Union[str, Path]] = None,
     
@@ -36809,56 +37410,48 @@ def load_and_validate_data(
     
     # Remove non-parameter items
     params_to_remove = {'config', 'kwargs', 'start_time', 'datetime', 'traceback', 'hashlib', 'train_test_split', 'StratifiedShuffleSplit',
-                       'StandardScaler', 'MinMaxScaler', 'RobustScaler', 'QuantileTransformer','SelectKBest', 'f_classif', 'VarianceThreshold', 'SimpleImputer', 
-                       'KNNImputer', 'IsolationForest', 'stats'}
+                       'StandardScaler', 'MinMaxScaler', 'RobustScaler', 'QuantileTransformer','SelectKBest', 'f_classif', 'VarianceThreshold',
+                       'SimpleImputer', 'KNNImputer', 'IsolationForest', 'stats', 'joblib', 'os', 'pd', 'np'}
     
     cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
     
     # Organize parameters into logical sections
     param_sections = {
         'data_loading': [
-            'use_real_data', 'data_format', 'encoding', 'delimiter', 'header', 
-            'index_col', 'skiprows', 'nrows', 'chunk_size', 'low_memory', 'memory_map'
+            'use_real_data', 'data_format', 'encoding', 'delimiter', 'header', 'index_col', 'skiprows', 'nrows', 'chunk_size', 'low_memory', 'memory_map'
         ],
         'data_validation': [
-            'min_samples', 'max_samples', 'min_features', 'max_features', 
-            'required_columns', 'label_column', 'feature_columns', 'exclude_columns'
+            'min_samples', 'max_samples', 'min_features', 'max_features', 'required_columns', 'label_column', 'feature_columns', 'exclude_columns'
         ],
         'data_processing': [
-            'normalization', 'scaling_method', 'handle_missing', 'missing_value_strategy',
-            'outlier_detection', 'outlier_method', 'outlier_threshold'
+            'normalization', 'scaling_method', 'handle_missing', 'missing_value_strategy', 'outlier_detection', 'outlier_method', 'outlier_threshold'
         ],
         'data_splitting': [
-            'train_split', 'validation_split', 'test_split', 'stratified_split',
-            'shuffle', 'random_state'
+            'train_split', 'validation_split', 'test_split', 'stratified_split', 'shuffle', 'random_state'
         ],
         'class_balance': [
             'balance_classes', 'balance_method', 'min_class_samples', 'max_class_ratio'
         ],
         'feature_engineering': [
-            'feature_selection', 'feature_selection_method', 'n_features_select',
-            'correlation_threshold', 'variance_threshold'
+            'feature_selection', 'feature_selection_method', 'n_features_select', 'correlation_threshold', 'variance_threshold'
         ],
         'synthetic_data': [
-            'synthetic_normal_samples', 'synthetic_attack_samples', 
-            'synthetic_generation_method', 'synthetic_noise_level', 'synthetic_seed'
+            'synthetic_normal_samples', 'synthetic_attack_samples', 'synthetic_generation_method', 'synthetic_noise_level', 'synthetic_seed'
         ],
         'performance': [
             'parallel_loading', 'n_jobs', 'batch_processing', 'memory_efficient', 'cache_data'
         ],
         'security': [
-            'validate_data_integrity', 'check_data_corruption', 
-            'anomaly_detection_threshold', 'security_validation'
+            'validate_data_integrity', 'check_data_corruption', 'anomaly_detection_threshold', 'security_validation'
         ],
         'monitoring': [
-            'verbose', 'log_level', 'progress_bar', 'save_statistics', 'statistics_path'
+            'verbose', 'log_level', 'progress_bar', 'silent', 'save_statistics', 'statistics_path'
         ],
         'compatibility': [
             'legacy_format', 'backward_compatibility', 'version_check'
         ],
         'advanced': [
-            'data_quality_checks', 'statistical_validation', 'distribution_checks',
-            'cross_validation_ready', 'experimental_features', 'advanced_preprocessing'
+            'data_quality_checks', 'statistical_validation', 'distribution_checks', 'cross_validation_ready', 'experimental_features', 'advanced_preprocessing'
         ]
     }
     
@@ -36882,6 +37475,13 @@ def load_and_validate_data(
     monitoring_config = final_config.setdefault('monitoring', {})
     compatibility_config = final_config.setdefault('compatibility', {})
     advanced_config = final_config.setdefault('advanced', {})
+    
+    # Handle silent mode - override verbose and progress_bar if silent is True
+    silent_mode = monitoring_config.get('silent', False)
+    if silent_mode:
+        # Force silent mode behavior
+        monitoring_config['verbose'] = False
+        monitoring_config['progress_bar'] = False
     
     # Set intelligent defaults
     use_real_data = data_loading_config.setdefault('use_real_data', True)
@@ -36921,21 +37521,22 @@ def load_and_validate_data(
     validate_data_integrity = security_config.setdefault('validate_data_integrity', True)
     check_data_corruption = security_config.setdefault('check_data_corruption', False)
     
-    # Monitoring parameters
+    # Monitoring parameters - respect silent mode
     verbose = monitoring_config.setdefault('verbose', False)
-    progress_bar = monitoring_config.setdefault('progress_bar', True)
+    progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     save_statistics = monitoring_config.setdefault('save_statistics', True)
     
     # Advanced parameters
     data_quality_checks = advanced_config.setdefault('data_quality_checks', True)
     statistical_validation = advanced_config.setdefault('statistical_validation', False)
     
-    # Set up logging level
-    if verbose:
+    # Set up logging level based on silent mode
+    if not silent_mode and verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
-    logger.info("Starting comprehensive data loading and validation")
+    if not silent_mode:
+        logger.info("Starting comprehensive data loading and validation")
     
     # Initialize progress tracking
     progress_data = {
@@ -36965,17 +37566,33 @@ def load_and_validate_data(
         # Calculate total stages for progress tracking
         total_stages = 8  # Configuration, Paths, Loading, Validation, Processing, Splitting, Statistics, Finalization
         
-        with alive_bar(total_stages, title='Data Loading & Validation\t', unit='stages') as main_bar:
+        # Use progress bar only if not in silent mode and progress_bar is True
+        if not silent_mode and progress_bar:
+            bar_context = alive_bar(total_stages, title='Data Loading & Validation\t', unit='stages')
+        else:
+            # Create a dummy context manager that does nothing
+            class DummyBar:
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    pass
+                def __call__(self):
+                    pass
+                def __setattr__(self, name, value):
+                    pass
+            bar_context = DummyBar()
+        
+        with bar_context as main_bar:
             
             # STAGE 1: Configuration and Setup
             progress_data['current_stage'] = "Configuration Setup"
-            main_bar.text = "Setting up configuration and parameters..."
+            if not silent_mode:
+                main_bar.text = "Setting up configuration and parameters..."
             
             # Determine paths with multiple fallback strategies
             if data_path is None:
                 # Try to get from config
-                data_path = final_config.get('data', {}).get('data_path') or \
-                           final_config.get('system', {}).get('data_dir')
+                data_path = final_config.get('data', {}).get('data_path') or final_config.get('system', {}).get('data_dir')
                 
                 if data_path is None:
                     # Use default path
@@ -36998,16 +37615,20 @@ def load_and_validate_data(
             loading_stats['data_path'] = str(data_path)
             loading_stats['artifacts_path'] = str(artifacts_path)
             
-            logger.info(f"Data path: {data_path}")
-            logger.info(f"Artifacts path: {artifacts_path}")
+            if not silent_mode:
+                logger.info(f"Data path: {data_path}")
+                logger.info(f"Artifacts path: {artifacts_path}")
             
-            main_bar.text = "Configuration complete"
+            if not silent_mode:
+                main_bar.text = "Configuration complete"
             loading_stats['stages_completed'].append('configuration')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 2: Path Validation and File Discovery
             progress_data['current_stage'] = "Path Validation"
-            main_bar.text = "Validating paths and discovering files..."
+            if not silent_mode:
+                main_bar.text = "Validating paths and discovering files..."
             
             # Validate file existence with helpful error messages
             if use_real_data:
@@ -37027,7 +37648,8 @@ def load_and_validate_data(
                             break
                     
                     if found_alternative:
-                        logger.warning(f"Data file not found at {data_path}, using {found_alternative}")
+                        if not silent_mode:
+                            logger.warning(f"Data file not found at {data_path}, using {found_alternative}")
                         data_path = found_alternative
                         loading_stats['data_path'] = str(data_path)
                         loading_stats['warnings_encountered'].append(f"Used alternative path: {found_alternative}")
@@ -37037,20 +37659,25 @@ def load_and_validate_data(
                         raise FileNotFoundError(error_msg)
                 
                 if not artifacts_path.exists() and normalization != 'none':
-                    logger.warning(f"Artifacts file not found: {artifacts_path}")
-                    logger.info("Will attempt to load data without preprocessing artifacts")
+                    if not silent_mode:
+                        logger.warning(f"Artifacts file not found: {artifacts_path}")
+                        logger.info("Will attempt to load data without preprocessing artifacts")
                     loading_stats['warnings_encountered'].append("Artifacts file not found")
             
-            main_bar.text = "Path validation complete"
+            if not silent_mode:
+                main_bar.text = "Path validation complete"
             loading_stats['stages_completed'].append('path_validation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 3: Data Loading
             progress_data['current_stage'] = "Data Loading"
-            main_bar.text = "Loading data from source..."
+            if not silent_mode:
+                main_bar.text = "Loading data from source..."
             
             # Load data based on format and parameters
-            logger.info(f"Loading data in {data_format} format")
+            if not silent_mode:
+                logger.info(f"Loading data in {data_format} format")
             
             if use_real_data:
                 try:
@@ -37072,17 +37699,25 @@ def load_and_validate_data(
                         
                         if chunk_size is not None:
                             # Handle large files with chunking
-                            logger.info(f"Loading data in chunks of size {chunk_size}")
+                            if not silent_mode:
+                                logger.info(f"Loading data in chunks of size {chunk_size}")
                             chunk_iter = pd.read_csv(data_path, chunksize=chunk_size, **load_params)
                             df_chunks = []
                             
-                            # Show chunk loading progress
-                            total_chunks = (os.path.getsize(data_path) // (chunk_size * 1000)) + 1
-                            with alive_bar(total_chunks, title='Loading Chunks\t\t', unit='chunks') as chunk_bar:
+                            # Show chunk loading progress only if not in silent mode and progress_bar is True
+                            if not silent_mode and progress_bar:
+                                total_chunks = (os.path.getsize(data_path) // (chunk_size * 1000)) + 1
+                                with alive_bar(total_chunks, title='Loading Chunks\t\t', unit='chunks') as chunk_bar:
+                                    for i, chunk in enumerate(chunk_iter):
+                                        df_chunks.append(chunk)
+                                        chunk_bar.text = f"Chunk {i+1}: {len(chunk)} rows"
+                                        chunk_bar()
+                                        if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
+                                            break
+                            else:
+                                # Silent mode or no progress bar - just load chunks
                                 for i, chunk in enumerate(chunk_iter):
                                     df_chunks.append(chunk)
-                                    chunk_bar.text = f"Chunk {i+1}: {len(chunk)} rows"
-                                    chunk_bar()
                                     if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
                                         break
                             
@@ -37104,23 +37739,28 @@ def load_and_validate_data(
                     progress_data['rows_processed'] = len(df)
                     progress_data['features_processed'] = len(df.columns)
                     
-                    logger.info(f"Loaded {len(df)} rows and {len(df.columns)} columns")
+                    if not silent_mode:
+                        logger.info(f"Loaded {len(df)} rows and {len(df.columns)} columns")
                     
                 except Exception as e:
-                    logger.error(f"Failed to load data from {data_path}: {e}")
+                    if not silent_mode:
+                        logger.error(f"Failed to load data from {data_path}: {e}")
                     loading_stats['errors_encountered'].append(f"Data loading failed: {str(e)}")
                     
                     if not use_real_data:
-                        logger.info("Falling back to synthetic data generation")
+                        if not silent_mode:
+                            logger.info("Falling back to synthetic data generation")
                     else:
                         raise RuntimeError(f"Data loading failed: {str(e)}")
             
             # Generate synthetic data if needed
             if not use_real_data or (use_real_data and 'df' not in locals()):
                 progress_data['current_substage'] = "Synthetic Data Generation"
-                main_bar.text = "Generating synthetic data..."
+                if not silent_mode:
+                    main_bar.text = "Generating synthetic data..."
                 
-                logger.info("Generating synthetic data")
+                if not silent_mode:
+                    logger.info("Generating synthetic data")
                 
                 normal_samples = synthetic_data_config.get('synthetic_normal_samples', 1000)
                 attack_samples = synthetic_data_config.get('synthetic_attack_samples', 200)
@@ -37175,17 +37815,22 @@ def load_and_validate_data(
                 progress_data['rows_processed'] = len(df)
                 progress_data['features_processed'] = len(df.columns)
                 
-                logger.info(f"Generated synthetic data: {normal_samples} normal, {attack_samples} attack samples")
+                if not silent_mode:
+                    logger.info(f"Generated synthetic data: {normal_samples} normal, {attack_samples} attack samples")
             
-            main_bar.text = "Data loading complete"
+            if not silent_mode:
+                main_bar.text = "Data loading complete"
             loading_stats['stages_completed'].append('data_loading')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 4: Data Validation
             progress_data['current_stage'] = "Data Validation"
-            main_bar.text = "Validating data structure and quality..."
+            if not silent_mode:
+                main_bar.text = "Validating data structure and quality..."
             
-            logger.info("Performing comprehensive data validation")
+            if not silent_mode:
+                logger.info("Performing comprehensive data validation")
             
             if df is None or df.empty:
                 error_msg = "No data loaded or generated"
@@ -37211,7 +37856,8 @@ def load_and_validate_data(
                 numeric_columns.remove(label_column)
             
             if len(numeric_columns) < min_features:
-                logger.warning(f"Only {len(numeric_columns)} numeric features found, minimum is {min_features}")
+                if not silent_mode:
+                    logger.warning(f"Only {len(numeric_columns)} numeric features found, minimum is {min_features}")
                 loading_stats['warnings_encountered'].append(f"Low numeric features: {len(numeric_columns)}")
                 
                 # Try to convert non-numeric columns
@@ -37226,7 +37872,7 @@ def load_and_validate_data(
                         except Exception:
                             continue
                 
-                if conversion_attempts > 0:
+                if conversion_attempts > 0 and not silent_mode:
                     logger.info(f"Converted {conversion_attempts} columns to numeric")
             
             # Update feature columns
@@ -37244,7 +37890,8 @@ def load_and_validate_data(
                 raise ValueError(error_msg)
             
             if max_features and len(feature_columns) > max_features:
-                logger.info(f"Reducing features from {len(feature_columns)} to {max_features}")
+                if not silent_mode:
+                    logger.info(f"Reducing features from {len(feature_columns)} to {max_features}")
                 feature_columns = feature_columns[:max_features]
             
             loading_stats['feature_columns'] = feature_columns
@@ -37256,25 +37903,31 @@ def load_and_validate_data(
             y = df[label_column].values
             
             progress_data['validation_passed'] += 1
-            main_bar.text = "Data validation complete"
+            if not silent_mode:
+                main_bar.text = "Data validation complete"
             loading_stats['stages_completed'].append('data_validation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 5: Data Processing
             progress_data['current_stage'] = "Data Processing"
-            main_bar.text = "Processing data (cleaning, scaling, etc.)..."
+            if not silent_mode:
+                main_bar.text = "Processing data (cleaning, scaling, etc.)..."
             
             # Validate data quality
             if data_quality_checks:
                 progress_data['current_substage'] = "Quality Checks"
-                main_bar.text = "Performing data quality checks..."
+                if not silent_mode:
+                    main_bar.text = "Performing data quality checks..."
                 
-                logger.info("Performing comprehensive data quality checks")
+                if not silent_mode:
+                    logger.info("Performing comprehensive data quality checks")
                 
                 # Check for infinite values
                 inf_mask = np.isinf(X)
                 if inf_mask.any():
-                    logger.warning(f"Found {inf_mask.sum()} infinite values, replacing with NaN")
+                    if not silent_mode:
+                        logger.warning(f"Found {inf_mask.sum()} infinite values, replacing with NaN")
                     X[inf_mask] = np.nan
                     loading_stats['warnings_encountered'].append(f"Fixed {inf_mask.sum()} infinite values")
                 
@@ -37283,7 +37936,8 @@ def load_and_validate_data(
                 problematic_features = np.where(missing_per_feature > 0.5)[0]
                 if len(problematic_features) > 0:
                     warning_msg = f"Features with >50% missing values: {problematic_features}"
-                    logger.warning(warning_msg)
+                    if not silent_mode:
+                        logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
                 
                 # Check for zero variance features
@@ -37292,15 +37946,18 @@ def load_and_validate_data(
                     zero_var_features = np.where(variances < feature_engineering_config['variance_threshold'])[0]
                     if len(zero_var_features) > 0:
                         warning_msg = f"Low variance features detected: {zero_var_features}"
-                        logger.warning(warning_msg)
+                        if not silent_mode:
+                            logger.warning(warning_msg)
                         loading_stats['warnings_encountered'].append(warning_msg)
             
             # Handle missing values
             if handle_missing and np.isnan(X).any():
                 progress_data['current_substage'] = "Missing Value Handling"
-                main_bar.text = "Handling missing values..."
+                if not silent_mode:
+                    main_bar.text = "Handling missing values..."
                 
-                logger.info(f"Handling missing values using strategy: {handle_missing}")
+                if not silent_mode:
+                    logger.info(f"Handling missing values using strategy: {handle_missing}")
                 
                 if handle_missing == 'drop':
                     # Drop rows with any missing values
@@ -37308,7 +37965,8 @@ def load_and_validate_data(
                     rows_dropped = (~valid_mask).sum()
                     X = X[valid_mask]
                     y = y[valid_mask]
-                    logger.info(f"Dropped {rows_dropped} rows with missing values")
+                    if not silent_mode:
+                        logger.info(f"Dropped {rows_dropped} rows with missing values")
                     loading_stats['rows_dropped_missing'] = rows_dropped
                     
                 elif handle_missing == 'fill':
@@ -37321,7 +37979,8 @@ def load_and_validate_data(
                         imputer = SimpleImputer(strategy='mean')
                     
                     X = imputer.fit_transform(X)
-                    logger.info(f"Filled missing values using {strategy} strategy")
+                    if not silent_mode:
+                        logger.info(f"Filled missing values using {strategy} strategy")
                     loading_stats['missing_values_filled'] = True
                     loading_stats['imputation_strategy'] = strategy
             
@@ -37332,7 +37991,8 @@ def load_and_validate_data(
                 raise ValueError(error_msg)
             
             if max_samples and len(X) > max_samples:
-                logger.info(f"Limiting dataset to {max_samples} samples")
+                if not silent_mode:
+                    logger.info(f"Limiting dataset to {max_samples} samples")
                 indices = np.random.choice(len(X), max_samples, replace=False)
                 X = X[indices]
                 y = y[indices]
@@ -37342,7 +38002,8 @@ def load_and_validate_data(
             unique_labels = np.unique(y)
             label_counts = {label: np.sum(y == label) for label in unique_labels}
             
-            logger.info(f"Label distribution: {label_counts}")
+            if not silent_mode:
+                logger.info(f"Label distribution: {label_counts}")
             loading_stats['label_distribution'] = label_counts
             
             # Check for class balance issues
@@ -37350,7 +38011,8 @@ def load_and_validate_data(
                 min_class_size = min(label_counts.values())
                 if min_class_size < class_balance_config['min_class_samples']:
                     warning_msg = f"Smallest class has only {min_class_size} samples"
-                    logger.warning(warning_msg)
+                    if not silent_mode:
+                        logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
             
             if class_balance_config.get('max_class_ratio', 10):
@@ -37359,15 +38021,18 @@ def load_and_validate_data(
                 class_ratio = max_class_size / min_class_size if min_class_size > 0 else float('inf')
                 if class_ratio > class_balance_config['max_class_ratio']:
                     warning_msg = f"Class imbalance ratio: {class_ratio:.2f}"
-                    logger.warning(warning_msg)
+                    if not silent_mode:
+                        logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
             
             # Outlier detection and handling
             if outlier_detection:
                 progress_data['current_substage'] = "Outlier Detection"
-                main_bar.text = "Detecting and handling outliers..."
+                if not silent_mode:
+                    main_bar.text = "Detecting and handling outliers..."
                 
-                logger.info(f"Detecting outliers using {outlier_method} method")
+                if not silent_mode:
+                    logger.info(f"Detecting outliers using {outlier_method} method")
                 
                 if outlier_method == 'iqr':
                     Q1 = np.percentile(X, 25, axis=0)
@@ -37388,17 +38053,20 @@ def load_and_validate_data(
                     outlier_mask = outlier_labels == -1
                     
                 else:
-                    logger.warning(f"Unknown outlier method: {outlier_method}")
+                    if not silent_mode:
+                        logger.warning(f"Unknown outlier method: {outlier_method}")
                     outlier_mask = np.zeros(len(X), dtype=bool)
                     loading_stats['warnings_encountered'].append(f"Unknown outlier method: {outlier_method}")
                 
                 n_outliers = outlier_mask.sum()
                 if n_outliers > 0:
-                    logger.info(f"Detected {n_outliers} outliers ({n_outliers/len(X)*100:.1f}%)")
+                    if not silent_mode:
+                        logger.info(f"Detected {n_outliers} outliers ({n_outliers/len(X)*100:.1f}%)")
                     # Remove outliers
                     X = X[~outlier_mask]
                     y = y[~outlier_mask]
-                    logger.info(f"Removed outliers, dataset size: {len(X)}")
+                    if not silent_mode:
+                        logger.info(f"Removed outliers, dataset size: {len(X)}")
                     loading_stats['outliers_removed'] = n_outliers
                     loading_stats['outlier_percentage'] = n_outliers/len(X)*100
             
@@ -37410,18 +38078,21 @@ def load_and_validate_data(
             if artifacts_path.exists():
                 try:
                     progress_data['current_substage'] = "Loading Artifacts"
-                    main_bar.text = "Loading preprocessing artifacts..."
+                    if not silent_mode:
+                        main_bar.text = "Loading preprocessing artifacts..."
                     
-                    logger.info("Loading preprocessing artifacts")
+                    if not silent_mode:
+                        logger.info("Loading preprocessing artifacts")
                     artifacts = joblib.load(artifacts_path)
                     
                     # Validate artifacts
                     artifacts_features = artifacts.get("feature_names", [])
                     if artifacts_features and set(artifacts_features) != set(feature_columns):
                         warning_msg = "Feature names in artifacts don't match current features"
-                        logger.warning(warning_msg)
-                        logger.warning(f"Artifacts features: {len(artifacts_features)}")
-                        logger.warning(f"Current features: {len(feature_columns)}")
+                        if not silent_mode:
+                            logger.warning(warning_msg)
+                            logger.warning(f"Artifacts features: {len(artifacts_features)}")
+                            logger.warning(f"Current features: {len(feature_columns)}")
                         loading_stats['warnings_encountered'].append(warning_msg)
                     
                     scaler = artifacts.get("scaler")
@@ -37432,28 +38103,33 @@ def load_and_validate_data(
                     
                 except Exception as e:
                     warning_msg = f"Failed to load artifacts: {e}"
-                    logger.warning(warning_msg)
+                    if not silent_mode:
+                        logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
                     artifacts = {}
             
             # Apply or create scaling
             if normalization and normalization != 'none':
                 progress_data['current_substage'] = "Feature Scaling"
-                main_bar.text = "Applying feature scaling..."
+                if not silent_mode:
+                    main_bar.text = "Applying feature scaling..."
                 
                 if scaler is not None:
-                    logger.info(f"Applying existing {type(scaler).__name__} scaler")
+                    if not silent_mode:
+                        logger.info(f"Applying existing {type(scaler).__name__} scaler")
                     try:
                         X_scaled = scaler.transform(X)
                         loading_stats['scaling_applied'] = 'existing'
                     except Exception as e:
                         warning_msg = f"Failed to apply existing scaler: {e}"
-                        logger.warning(warning_msg)
+                        if not silent_mode:
+                            logger.warning(warning_msg)
                         loading_stats['warnings_encountered'].append(warning_msg)
                         scaler = None
                 
                 if scaler is None:
-                    logger.info(f"Creating new {normalization} scaler")
+                    if not silent_mode:
+                        logger.info(f"Creating new {normalization} scaler")
                     
                     if normalization == 'standard':
                         scaler = StandardScaler()
@@ -37464,7 +38140,8 @@ def load_and_validate_data(
                     elif normalization == 'quantile':
                         scaler = QuantileTransformer()
                     else:
-                        logger.warning(f"Unknown normalization method: {normalization}, using standard")
+                        if not silent_mode:
+                            logger.warning(f"Unknown normalization method: {normalization}, using standard")
                         scaler = StandardScaler()
                     
                     X_scaled = scaler.fit_transform(X)
@@ -37477,12 +38154,14 @@ def load_and_validate_data(
             # Feature selection
             if feature_engineering_config.get('feature_selection', False):
                 progress_data['current_substage'] = "Feature Selection"
-                main_bar.text = "Performing feature selection..."
+                if not silent_mode:
+                    main_bar.text = "Performing feature selection..."
                 
                 n_features_select = feature_engineering_config.get('n_features_select', min(50, len(feature_columns)))
                 selection_method = feature_engineering_config.get('feature_selection_method', 'k_best')
                 
-                logger.info(f"Performing feature selection: {selection_method}")
+                if not silent_mode:
+                    logger.info(f"Performing feature selection: {selection_method}")
                 
                 if selection_method == 'k_best':
                     if feature_selector is None:
@@ -37499,17 +38178,21 @@ def load_and_validate_data(
                     X = X_selected
                     feature_columns = selected_feature_names
                     
-                    logger.info(f"Selected {len(feature_columns)} features from {len(selected_features)}")
+                    if not silent_mode:
+                        logger.info(f"Selected {len(feature_columns)} features from {len(selected_features)}")
                     loading_stats['features_selected'] = len(feature_columns)
             
             progress_data['validation_passed'] += 1
-            main_bar.text = "Data processing complete"
+            if not silent_mode:
+                main_bar.text = "Data processing complete"
             loading_stats['stages_completed'].append('data_processing')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 6: Data Splitting
             progress_data['current_stage'] = "Data Splitting"
-            main_bar.text = "Splitting data into train/validation/test sets..."
+            if not silent_mode:
+                main_bar.text = "Splitting data into train/validation/test sets..."
             
             # Split data into normal and attack samples
             normal_mask = (y == 0)
@@ -37518,7 +38201,8 @@ def load_and_validate_data(
             X_normal = X[normal_mask]
             X_attack = X[attack_mask]
             
-            logger.info(f"Data split: {len(X_normal)} normal, {len(X_attack)} attack samples")
+            if not silent_mode:
+                logger.info(f"Data split: {len(X_normal)} normal, {len(X_attack)} attack samples")
             
             # Perform train/validation/test splits
             if len(X_normal) == 0:
@@ -37565,17 +38249,21 @@ def load_and_validate_data(
             })
             
             progress_data['validation_passed'] += 1
-            main_bar.text = "Data splitting complete"
+            if not silent_mode:
+                main_bar.text = "Data splitting complete"
             loading_stats['stages_completed'].append('data_splitting')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 7: Statistical Validation and Quality Assessment
             progress_data['current_stage'] = "Quality Assessment"
-            main_bar.text = "Performing final quality assessment..."
+            if not silent_mode:
+                main_bar.text = "Performing final quality assessment..."
             
             # Statistical validation
             if statistical_validation:
-                logger.info("Performing statistical validation")
+                if not silent_mode:
+                    logger.info("Performing statistical validation")
                 
                 # Check data distributions
                 if advanced_config.get('distribution_checks', False):
@@ -37592,7 +38280,7 @@ def load_and_validate_data(
                                 'p_value': p_value,
                                 'normal': p_value >= 0.05
                             })
-                            if p_value < 0.05:
+                            if p_value < 0.05 and not silent_mode:
                                 logger.debug(f"Feature {feature_name} may not be normally distributed (p={p_value:.4f})")
                     
                     loading_stats['normality_tests'] = normality_results
@@ -37629,13 +38317,16 @@ def load_and_validate_data(
             loading_stats['data_quality_score'] = quality_score
             loading_stats['quality_metrics'] = dict(quality_metrics)
             
-            main_bar.text = "Quality assessment complete"
+            if not silent_mode:
+                main_bar.text = "Quality assessment complete"
             loading_stats['stages_completed'].append('quality_assessment')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 8: Finalization and Statistics
             progress_data['current_stage'] = "Finalization"
-            main_bar.text = "Finalizing data preparation..."
+            if not silent_mode:
+                main_bar.text = "Finalizing data preparation..."
             
             # Prepare final data dictionary
             data_dict = {
@@ -37699,7 +38390,8 @@ def load_and_validate_data(
             }
             
             # Validate final data shapes and consistency
-            logger.info("Performing final data validation")
+            if not silent_mode:
+                logger.info("Performing final data validation")
             
             # Shape consistency checks
             expected_features = len(feature_columns)
@@ -37714,14 +38406,14 @@ def load_and_validate_data(
             # Data type consistency
             for key in ["X_train", "X_val", "X_test"]:
                 if data_dict[key].dtype != np.float32:
-                    logger.warning(f"{key} has dtype {data_dict[key].dtype}, converting to float32")
+                    if not silent_mode:
+                        logger.warning(f"{key} has dtype {data_dict[key].dtype}, converting to float32")
                     data_dict[key] = data_dict[key].astype(np.float32)
             
             # Save statistics if requested
             if save_statistics:
                 stats_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
                 try:
-                    import json
                     with open(stats_path, 'w') as f:
                         # Make loading_stats JSON serializable
                         serializable_stats = {}
@@ -37732,36 +38424,41 @@ def load_and_validate_data(
                                 serializable_stats[key] = str(value)
                         
                         json.dump(serializable_stats, f, indent=2)
-                    logger.info(f"Saved loading statistics to {stats_path}")
+                    if not silent_mode:
+                        logger.info(f"Saved loading statistics to {stats_path}")
                 except Exception as e:
-                    logger.warning(f"Failed to save statistics: {e}")
+                    if not silent_mode:
+                        logger.warning(f"Failed to save statistics: {e}")
             
-            main_bar.text = "Finalization complete"
+            if not silent_mode:
+                main_bar.text = "Finalization complete"
             loading_stats['stages_completed'].append('finalization')
-            main_bar()
+            if not silent_mode:
+                main_bar()
         
-        # Log summary
+        # Log summary only if not in silent mode
         total_time = (datetime.now() - start_time).total_seconds()
         loading_stats['total_processing_time'] = total_time
         loading_stats['completion_status'] = 'success'
         
-        logger.info("=" * 80)
-        logger.info("DATA LOADING SUMMARY")
-        logger.info("=" * 80)
-        logger.info(f"Data source: {'Real data' if use_real_data else 'Synthetic data'}")
-        logger.info(f"Total samples: {len(X):,} ({len(X_normal):,} normal, {len(X_attack):,} attack)")
-        logger.info(f"Features: {len(feature_columns)} (after processing)")
-        logger.info(f"Train/Val/Test split: {len(X_train_normal)}/{len(X_val_normal)}/{len(X_test)}")
-        logger.info(f"Normalization: {normalization} ({'applied' if scaler else 'none'})")
-        logger.info(f"Feature selection: {'applied' if feature_selector else 'none'}")
-        logger.info(f"Data quality score: {quality_score:.3f}")
-        logger.info(f"Processing time: {total_time:.2f} seconds")
-        logger.info(f"Stages completed: {len(loading_stats['stages_completed'])}/{total_stages}")
-        logger.info(f"Warnings encountered: {len(loading_stats['warnings_encountered'])}")
-        logger.info("=" * 80)
+        if not silent_mode:
+            logger.info("-" * 40)
+            logger.info("DATA LOADING SUMMARY")
+            logger.info("-" * 40)
+            logger.info(f"Data source: {'Real data' if use_real_data else 'Synthetic data'}")
+            logger.info(f"Total samples: {len(X):,} ({len(X_normal):,} normal, {len(X_attack):,} attack)")
+            logger.info(f"Features: {len(feature_columns)} (after processing)")
+            logger.info(f"Train/Val/Test split: {len(X_train_normal)}/{len(X_val_normal)}/{len(X_test)}")
+            logger.info(f"Normalization: {normalization} ({'applied' if scaler else 'none'})")
+            logger.info(f"Feature selection: {'applied' if feature_selector else 'none'}")
+            logger.info(f"Data quality score: {quality_score:.3f}")
+            logger.info(f"Processing time: {total_time:.2f} seconds")
+            logger.info(f"Stages completed: {len(loading_stats['stages_completed'])}/{total_stages}")
+            logger.info(f"Warnings encountered: {len(loading_stats['warnings_encountered'])}")
+            logger.info("-" * 40)
         
-        # Restore original logging level
-        if verbose and 'original_level' in locals():
+        # Restore original logging level if it was changed
+        if not silent_mode and verbose and 'original_level' in locals():
             logger.setLevel(original_level)
         
         return data_dict
@@ -37773,17 +38470,18 @@ def load_and_validate_data(
         loading_stats['error_traceback'] = traceback.format_exc()
         
         # Restore original logging level on error
-        if verbose and 'original_level' in locals():
+        if not silent_mode and verbose and 'original_level' in locals():
             logger.setLevel(original_level)
         
         error_msg = f"Data loading and validation failed: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        # Provide helpful error context
-        logger.error(f"Error occurred while processing: {data_path}")
-        logger.error(f"Configuration used: {final_config}")
-        logger.error(f"Stages completed: {loading_stats['stages_completed']}")
+        if not silent_mode:
+            logger.error(error_msg)
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Provide helpful error context
+            logger.error(f"Error occurred while processing: {data_path}")
+            logger.error(f"Configuration used: {final_config}")
+            logger.error(f"Stages completed: {loading_stats['stages_completed']}")
         
         raise RuntimeError(error_msg)
 
@@ -38049,6 +38747,12 @@ def generate_synthetic_data(
     quality_metrics: Optional[List[str]] = None,
     distribution_tests: Optional[bool] = None,
     
+    # Directory Parameters
+    data_dir: Optional[Union[str, Path]] = None,
+    dataset_dir: Optional[Union[str, Path]] = None,
+    results_dir: Optional[Union[str, Path]] = None,
+    reports_dir: Optional[Union[str, Path]] = None,
+
     # Export Parameters
     save_data: Optional[bool] = None,
     output_path: Optional[Union[str, Path]] = None,
@@ -38057,6 +38761,7 @@ def generate_synthetic_data(
     metadata_file: Optional[bool] = None,
     
     # Monitoring Parameters
+    silent: Optional[bool] = None,
     verbose: Optional[bool] = None,
     progress_bar: Optional[bool] = None,
     log_generation_stats: Optional[bool] = None,
@@ -38083,7 +38788,7 @@ def generate_synthetic_data(
     # Start timing
     start_time = datetime.now()
     
-    # Initialize configuration with defaults
+    # Initialize configuration
     if config is None:
         try:
             config = get_current_config() if 'get_current_config' in globals() else {}
@@ -38105,7 +38810,10 @@ def generate_synthetic_data(
     params.update(kwargs)
     
     # Remove non-parameter items
-    params_to_remove = {'config', 'synthetic_config', 'kwargs', 'start_time', 'datetime', 'traceback', 'stats', 'make_classification', 'make_blobs', 'StandardScaler', 'MinMaxScaler', 'train_test_split'}
+    params_to_remove = {
+        'config', 'synthetic_config', 'kwargs', 'start_time', 'datetime', 'traceback', 'stats', 'make_classification', 'make_blobs',
+        'StandardScaler', 'MinMaxScaler', 'train_test_split'
+    }
     
     cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
     
@@ -38174,7 +38882,7 @@ def generate_synthetic_data(
             'save_data', 'output_path', 'file_format', 'compression', 'metadata_file'
         ],
         'monitoring': [
-            'verbose', 'progress_bar', 'log_generation_stats', 'generation_report'
+            'verbose', 'progress_bar', 'log_generation_stats', 'generation_report', 'silent'
         ],
         'compatibility': [
             'sklearn_format', 'pandas_output', 'torch_tensors', 'numpy_arrays'
@@ -38204,6 +38912,14 @@ def generate_synthetic_data(
     quality_config = final_config.setdefault('quality_control', {})
     advanced_config = final_config.setdefault('advanced_generation', {})
     monitoring_config = final_config.setdefault('monitoring', {})
+    export_config = final_config.setdefault('export', {})
+    
+    # Handle silent mode - override verbose and progress_bar if silent is True
+    silent_mode = monitoring_config.get('silent', False)
+    if silent_mode:
+        # Force silent mode behavior
+        monitoring_config['verbose'] = False
+        monitoring_config['progress_bar'] = False
     
     # Set intelligent defaults
     normal_samples = core_config.setdefault('normal_samples', NORMAL_SAMPLES)
@@ -38260,17 +38976,19 @@ def generate_synthetic_data(
     class_balance_ratio = quality_config.setdefault('class_balance_ratio', attack_samples / normal_samples)
     minimum_separation = quality_config.setdefault('minimum_separation', 0.1)
     
-    # Monitoring defaults
+    # Monitoring defaults - respect silent mode
     verbose = monitoring_config.setdefault('verbose', False)
-    progress_bar = monitoring_config.setdefault('progress_bar', True)
+    progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     log_generation_stats = monitoring_config.setdefault('log_generation_stats', True)
+    generation_report = monitoring_config.setdefault('generation_report', True)
     
     # Set up logging level
     if verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
-    logger.info("Starting comprehensive synthetic data generation")
+    if verbose:
+        logger.info("Starting comprehensive synthetic data generation")
     
     # Initialize progress tracking
     progress_data = {
@@ -38295,7 +39013,8 @@ def generate_synthetic_data(
         'config_applied': final_config,
         'stages_completed': [],
         'warnings_encountered': [],
-        'performance_metrics': {}
+        'performance_metrics': {},
+        'log_generation_stats': {}
     }
     
     try:
@@ -38315,48 +39034,77 @@ def generate_synthetic_data(
         # Calculate total stages for progress tracking
         total_stages = 10  # Configuration, Setup, Normal Data, Attack Data, Correlation, Noise, Scaling, Splitting, Validation, Finalization
         
-        with alive_bar(total_stages, title='Synthetic Data Generation\t', unit='stages') as main_bar:
+        # Use progress bar only if not in silent mode and progress_bar is True
+        if not silent_mode and progress_bar:
+            bar_context = alive_bar(total_stages, title='Synthetic Data Generation\t', unit='stages')
+        else:
+            # Create a dummy context manager that does nothing
+            class DummyBar:
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    pass
+                def __call__(self):
+                    pass
+                def __setattr__(self, name, value):
+                    pass
+            bar_context = DummyBar()
+        
+        with bar_context as main_bar:
             
             # STAGE 1: Configuration and Validation
             progress_data['current_stage'] = "Configuration"
-            main_bar.text = "Validating parameters and setting up configuration..."
+            if not silent_mode:
+                main_bar.text = "Validating parameters and setting up configuration..."
             
-            logger.info(f"Generating synthetic data: {normal_samples} normal, {attack_samples} attack samples")
-            logger.info(f"Features: {features}, method: {generation_method}, anomaly_factor: {anomaly_factor}")
+            if verbose:
+                logger.info(f"Generating synthetic data: {normal_samples} normal, {attack_samples} attack samples")
+                logger.info(f"Features: {features}, method: {generation_method}, anomaly_factor: {anomaly_factor}")
             
             # Generate feature names
             if feature_names is None:
                 feature_names = [f"{feature_prefix}_{i}" for i in range(features)]
             elif len(feature_names) != features:
-                logger.warning(f"Feature names length ({len(feature_names)}) doesn't match features ({features})")
+                if verbose:
+                    logger.warning(f"Feature names length ({len(feature_names)}) doesn't match features ({features})")
                 feature_names = [f"{feature_prefix}_{i}" for i in range(features)]
             
             progress_data['features_created'] = len(feature_names)
-            main_bar.text = "Configuration complete"
+            if not silent_mode:
+                main_bar.text = "Configuration complete"
             generation_stats['stages_completed'].append('configuration')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 2: Data Generation Setup
             progress_data['current_stage'] = "Initialization"
-            main_bar.text = "Initializing data generation framework..."
+            if not silent_mode:
+                main_bar.text = "Initializing data generation framework..."
             
             # Initialize data containers
             X_normal = None
             X_attack_parts = []
             attack_type_counts = {}
             
-            main_bar.text = "Initialization complete"
+            if not silent_mode:
+                main_bar.text = "Initialization complete"
             generation_stats['stages_completed'].append('initialization')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 3: Normal Data Generation
             progress_data['current_stage'] = "Normal Data Generation"
-            main_bar.text = f"Generating {normal_samples} normal samples..."
+            if not silent_mode:
+                main_bar.text = f"Generating {normal_samples} normal samples..."
             
             # Generate normal data based on method
             if generation_method == 'sklearn':
-                logger.info("Using sklearn-based generation")
-                main_bar.text = f"Using sklearn: {normal_samples} samples, {features} features..."
+                if not silent_mode:
+                    main_bar.text = f"Using sklearn: {normal_samples} samples, {features} features..."
+                
+                if verbose:
+                    logger.info(f"Using sklearn: {normal_samples} samples, {features} features, {informative_features} informative features, {normal_clusters} clusters")
+                
                 X_normal, _ = make_classification(
                     n_samples=normal_samples,
                     n_features=features,
@@ -38367,13 +39115,18 @@ def generate_synthetic_data(
                     random_state=random_state
                 )
                 # Convert to probability-like values
-                main_bar.text = "Scaling sklearn data to [0,1] range..."
+                if not silent_mode:
+                    main_bar.text = "Scaling sklearn data to [0,1] range..."
                 scaler = MinMaxScaler()
                 X_normal = scaler.fit_transform(X_normal)
                 
             elif generation_method == 'clustering':
-                logger.info("Using clustering-based generation")
-                main_bar.text = f"Using clustering: {normal_samples} samples, {normal_clusters} clusters..."
+                if not silent_mode:
+                    main_bar.text = f"Using clustering: {normal_samples} samples, {normal_clusters} clusters..."
+                
+                if verbose:
+                    logger.info(f"Using clustering: {normal_samples} samples, {features} features, {normal_clusters} clusters")
+
                 X_normal, _ = make_blobs(
                     n_samples=normal_samples,
                     centers=normal_clusters,
@@ -38382,12 +39135,16 @@ def generate_synthetic_data(
                     random_state=random_state
                 )
                 # Normalize to [0, 1] range
-                main_bar.text = "Normalizing cluster data to [0,1] range..."
+                if not silent_mode:
+                    main_bar.text = "Normalizing cluster data to [0,1] range..."
                 X_normal = (X_normal - X_normal.min()) / (X_normal.max() - X_normal.min())
                 
             elif generation_method == 'mixed':
-                logger.info("Using mixed distribution generation")
-                main_bar.text = f"Using {normal_distribution} distribution for normal data..."
+                if not silent_mode:
+                    main_bar.text = f"Using {normal_distribution} distribution for normal data..."
+                
+                if verbose:
+                    logger.info(f"Using mixed distribution generation: {normal_distribution} for normal data, {normal_samples} samples, {features} features")
                 
                 if normal_distribution == 'gaussian':
                     X_normal = np.random.normal(normal_mean, normal_std, (normal_samples, features))
@@ -38401,26 +39158,32 @@ def generate_synthetic_data(
                     shape, scale = normal_config.get('distribution_parameters', {}).get('gamma_params', (2, 0.1))
                     X_normal = np.random.gamma(shape, scale, (normal_samples, features))
                 else:
-                    logger.warning(f"Unknown normal distribution '{normal_distribution}', using gaussian")
+                    if verbose:
+                        logger.warning(f"Unknown normal distribution '{normal_distribution}', using gaussian")
                     X_normal = np.random.normal(normal_mean, normal_std, (normal_samples, features))
                 
                 # Ensure values are in reasonable range
-                main_bar.text = "Clipping normal data to [0,1] range..."
+                if not silent_mode:
+                    main_bar.text = "Clipping normal data to [0,1] range..."
                 X_normal = np.clip(X_normal, 0.0, 1.0)
                 
             else:
                 raise ValueError(f"Unknown generation method: {generation_method}")
             
             progress_data['samples_generated'] += normal_samples
-            main_bar.text = f"Generated {normal_samples} normal samples"
+            if not silent_mode:
+                main_bar.text = f"Generated {normal_samples} normal samples"
             generation_stats['stages_completed'].append('normal_data_generation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 4: Attack Data Generation
             progress_data['current_stage'] = "Attack Data Generation"
-            main_bar.text = f"Generating {attack_samples} attack samples across {len(attack_types)} types..."
+            if not silent_mode:
+                main_bar.text = f"Generating {attack_samples} attack samples across {len(attack_types)} types..."
             
-            logger.info(f"Generating attack data with types: {attack_types}")
+            if verbose:
+                logger.info(f"Generating attack data with types: {attack_types}")
             
             # Calculate samples per attack type
             samples_per_type = attack_samples // len(attack_types)
@@ -38429,7 +39192,8 @@ def generate_synthetic_data(
             # Generate each attack type with progress tracking using the main bar
             for i, attack_type in enumerate(attack_types):
                 progress_data['current_substage'] = f"Attack Type: {attack_type}"
-                main_bar.text = f"Generating {attack_type}: {i+1}/{len(attack_types)} attack types..."
+                if not silent_mode:
+                    main_bar.text = f"Generating {attack_type}: {i+1}/{len(attack_types)} attack types..."
                 
                 n_samples = samples_per_type + (1 if i < remainder else 0)
                 attack_type_counts[attack_type] = n_samples
@@ -38493,7 +39257,8 @@ def generate_synthetic_data(
                         X_attack_type[mask, cf] *= (1 + anomaly_factor)
                         
                 else:
-                    logger.warning(f"Unknown attack type '{attack_type}', using high_variance")
+                    if verbose:
+                        logger.warning(f"Unknown attack type '{attack_type}', using high_variance")
                     X_attack_type = np.random.normal(
                         normal_mean, 
                         normal_std * anomaly_factor * 2, 
@@ -38506,61 +39271,74 @@ def generate_synthetic_data(
                 
                 progress_data['samples_generated'] += n_samples
                 progress_data['attack_types_processed'] += 1
-                main_bar.text = f"Generated {n_samples} {attack_type} samples ({i+1}/{len(attack_types)})"
+                if not silent_mode:
+                    main_bar.text = f"Generated {n_samples} {attack_type} samples ({i+1}/{len(attack_types)})"
             
             # Combine all attack data
-            main_bar.text = "Combining all attack data..."
+            if not silent_mode:
+                main_bar.text = "Combining all attack data..."
             X_attack = np.vstack(X_attack_parts)
             generation_stats['attack_type_counts'] = attack_type_counts
             
-            main_bar.text = f"Generated {attack_samples} attack samples across {len(attack_types)} types"
+            if not silent_mode:
+                main_bar.text = f"Generated {attack_samples} attack samples across {len(attack_types)} types"
             generation_stats['stages_completed'].append('attack_data_generation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 5: Feature Correlation
             progress_data['current_stage'] = "Feature Engineering"
-            main_bar.text = "Applying feature correlation structure..."
+            if not silent_mode:
+                main_bar.text = "Applying feature correlation structure..."
             
             # Add correlation structure if requested
             if correlated_features and features > 1:
-                logger.info("Adding correlation structure to normal data")
+                if verbose:
+                    logger.info("Adding correlation structure to normal data")
                 
                 correlation_strength = normal_config.get('normal_correlation', 0.3)
                 
                 if correlation_matrix is not None and correlation_matrix.shape == (features, features):
                     # Use provided correlation matrix
-                    main_bar.text = "Applying provided correlation matrix..."
+                    if not silent_mode:
+                        main_bar.text = "Applying provided correlation matrix..."
                     L = np.linalg.cholesky(correlation_matrix)
                     X_normal = X_normal @ L.T
                 else:
                     # Create simple correlation structure
-                    main_bar.text = "Creating correlation structure..."
+                    if not silent_mode:
+                        main_bar.text = "Creating correlation structure..."
                     correlation_indices = np.random.choice(features, size=min(features//2, 5), replace=False)
                     for i in range(len(correlation_indices)-1):
                         idx1, idx2 = correlation_indices[i], correlation_indices[i+1]
-                        X_normal[:, idx2] = (X_normal[:, idx2] * (1 - correlation_strength) + 
-                                           X_normal[:, idx1] * correlation_strength)
+                        X_normal[:, idx2] = (X_normal[:, idx2] * (1 - correlation_strength) + X_normal[:, idx1] * correlation_strength)
                 
                 # Renormalize
-                main_bar.text = "Renormalizing correlated data..."
+                if not silent_mode:
+                    main_bar.text = "Renormalizing correlated data..."
                 X_normal = np.clip(X_normal, 0.0, 1.0)
                 generation_stats['correlation_applied'] = True
             
-            main_bar.text = "Feature engineering complete"
+            if not silent_mode:
+                main_bar.text = "Feature engineering complete"
             generation_stats['stages_completed'].append('feature_engineering')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 6: Noise Addition
             progress_data['current_stage'] = "Noise Addition"
-            main_bar.text = f"Adding {noise_type} noise..."
+            if not silent_mode:
+                main_bar.text = f"Adding {noise_type} noise..."
             
             # Add noise if requested
             if noise_level > 0:
-                logger.info(f"Adding {noise_type} noise with level {noise_level}")
+                if verbose:
+                    logger.info(f"Adding {noise_type} noise with level {noise_level}")
                 
                 if noise_type == 'gaussian':
                     noise_std = noise_config.get('gaussian_noise_std', noise_level)
-                    main_bar.text = f"Adding Gaussian noise (std={noise_std:.3f})..."
+                    if not silent_mode:
+                        main_bar.text = f"Adding Gaussian noise (std={noise_std:.3f})..."
                     normal_noise = np.random.normal(0, noise_std, X_normal.shape)
                     attack_noise = np.random.normal(0, noise_std, X_attack.shape)
                     
@@ -38569,7 +39347,8 @@ def generate_synthetic_data(
                     
                 elif noise_type == 'uniform':
                     noise_range = noise_config.get('uniform_noise_range', noise_level)
-                    main_bar.text = f"Adding uniform noise (range=±{noise_range:.3f})..."
+                    if not silent_mode:
+                        main_bar.text = f"Adding uniform noise (range=±{noise_range:.3f})..."
                     normal_noise = np.random.uniform(-noise_range, noise_range, X_normal.shape)
                     attack_noise = np.random.uniform(-noise_range, noise_range, X_attack.shape)
                     
@@ -38578,7 +39357,8 @@ def generate_synthetic_data(
                     
                 elif noise_type == 'salt_pepper':
                     sp_ratio = noise_config.get('salt_pepper_ratio', 0.5)
-                    main_bar.text = f"Adding salt & pepper noise (ratio={sp_ratio:.2f})..."
+                    if not silent_mode:
+                        main_bar.text = f"Adding salt & pepper noise (ratio={sp_ratio:.2f})..."
                     
                     # Apply salt and pepper noise
                     for X_data in [X_normal, X_attack]:
@@ -38590,33 +39370,41 @@ def generate_synthetic_data(
                         X_data[pepper_mask] = 0.0
                 
                 # Ensure values remain in valid range
-                main_bar.text = "Clipping noisy data to [0,1] range..."
+                if not silent_mode:
+                    main_bar.text = "Clipping noisy data to [0,1] range..."
                 X_normal = np.clip(X_normal, 0.0, 1.0)
                 X_attack = np.clip(X_attack, 0.0, 1.0)
                 generation_stats['noise_applied'] = True
                 generation_stats['noise_type'] = noise_type
                 generation_stats['noise_level'] = noise_level
             
-            main_bar.text = "Noise addition complete"
+            if not silent_mode:
+                main_bar.text = "Noise addition complete"
             generation_stats['stages_completed'].append('noise_addition')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 7: Feature Scaling
             progress_data['current_stage'] = "Feature Scaling"
-            main_bar.text = "Applying feature scaling..."
+            if not silent_mode:
+                main_bar.text = "Applying feature scaling..."
             
             # Apply feature scaling if requested
             scaler = None
             if feature_scaling:
-                logger.info(f"Applying {feature_scaling} scaling")
-                main_bar.text = f"Applying {feature_scaling} scaling..."
+                if not silent_mode:
+                    main_bar.text = f"Applying {feature_scaling} scaling..."
+                
+                if verbose:
+                    logger.info(f"Applying {feature_scaling} scaling to data")
                 
                 if feature_scaling == 'standard':
                     scaler = StandardScaler()
                 elif feature_scaling == 'minmax':
                     scaler = MinMaxScaler()
                 else:
-                    logger.warning(f"Unknown scaling method '{feature_scaling}'")
+                    if verbose:
+                        logger.warning(f"Unknown scaling method '{feature_scaling}'")
                     scaler = MinMaxScaler()
                 
                 # Fit on normal data and transform both
@@ -38625,24 +39413,29 @@ def generate_synthetic_data(
                 generation_stats['scaling_applied'] = True
                 generation_stats['scaling_method'] = feature_scaling
             
-            main_bar.text = "Feature scaling complete"
+            if not silent_mode:
+                main_bar.text = "Feature scaling complete"
             generation_stats['stages_completed'].append('feature_scaling')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 8: Data Splitting
             progress_data['current_stage'] = "Data Splitting"
-            main_bar.text = "Splitting data into train/validation/test sets..."
+            if not silent_mode:
+                main_bar.text = "Splitting data into train/validation/test sets..."
             
             # Create labels
             y_normal = np.zeros(normal_samples, dtype=np.int32)
             y_attack = np.ones(attack_samples, dtype=np.int32)
             
             # Perform data splitting
-            logger.info(f"Splitting data: validation={validation_split}, test={test_split}")
+            if verbose:
+                logger.info(f"Splitting data: validation={validation_split}, test={test_split}")
             
             # Split normal data for training and validation
             if validation_split > 0:
-                main_bar.text = f"Splitting normal data (validation={validation_split:.1%})..."
+                if not silent_mode:
+                    main_bar.text = f"Splitting normal data (validation={validation_split:.1%})..."
                 X_train_normal, X_val_normal, y_train_normal, y_val_normal = train_test_split(
                     X_normal, y_normal,
                     test_size=validation_split,
@@ -38658,13 +39451,15 @@ def generate_synthetic_data(
             # Handle test data
             if test_split > 0 and test_split <= 1.0:
                 if test_split < 1.0:
-                    main_bar.text = f"Splitting attack data (test={test_split:.1%})..."
+                    if not silent_mode:
+                        main_bar.text = f"Splitting attack data (test={test_split:.1%})..."
                     test_size = int(len(X_attack) * test_split)
                     indices = np.random.choice(len(X_attack), size=test_size, replace=False)
                     X_test = X_attack[indices]
                     y_test = y_attack[indices]
                 else:
-                    main_bar.text = "Using all attack data for testing..."
+                    if not silent_mode:
+                        main_bar.text = "Using all attack data for testing..."
                     X_test = X_attack
                     y_test = y_attack
             else:
@@ -38677,20 +39472,24 @@ def generate_synthetic_data(
                 'test_samples': len(X_test)
             })
             
-            main_bar.text = "Data splitting complete"
+            if not silent_mode:
+                main_bar.text = "Data splitting complete"
             generation_stats['stages_completed'].append('data_splitting')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 9: Data Validation
             progress_data['current_stage'] = "Data Validation"
-            main_bar.text = "Validating generated data quality..."
+            if not silent_mode:
+                main_bar.text = "Validating generated data quality..."
             
             # Data quality validation if requested
             validation_results = {}
             quality_score = 0.5  # Default quality score
             
             if final_config.get('validation', {}).get('validate_generation', True):
-                logger.info("Performing data quality validation")
+                if verbose:
+                    logger.info("Performing data quality validation")
                 
                 # Basic statistics
                 validation_results['normal_data_stats'] = {
@@ -38710,8 +39509,11 @@ def generate_synthetic_data(
                 
                 # Statistical tests if requested
                 if final_config.get('validation', {}).get('statistical_tests', False):
-                    logger.info("Performing statistical tests")
-                    main_bar.text = "Running statistical tests..."
+                    if not silent_mode:
+                        main_bar.text = "Running statistical tests..."
+                    
+                    if verbose:
+                        logger.info(f"Performing statistical tests on generated data")
                     
                     validation_results['statistical_tests'] = {}
                     
@@ -38728,7 +39530,8 @@ def generate_synthetic_data(
                                     'is_normal': p_value > 0.05
                                 }
                             except Exception as e:
-                                logger.warning(f"Normality test failed for feature {i}: {e}")
+                                if verbose:
+                                    logger.warning(f"Normality test failed for feature {i}: {e}")
                     
                     # Separation test
                     if len(X_test) > 0:
@@ -38743,10 +39546,12 @@ def generate_synthetic_data(
                                 'normalized_distance': float(separation / np.sqrt(features))
                             }
                         except Exception as e:
-                            logger.warning(f"Separation test failed: {e}")
+                            if verbose:
+                                logger.warning(f"Separation test failed: {e}")
                 
                 # Calculate data quality score
-                main_bar.text = "Calculating data quality metrics..."
+                if not silent_mode:
+                    main_bar.text = "Calculating data quality metrics..."
                 quality_metrics = []
                 
                 # Sample adequacy
@@ -38775,25 +39580,268 @@ def generate_synthetic_data(
                 validation_results['quality_score'] = quality_score
                 validation_results['quality_metrics'] = dict(quality_metrics)
             
-            main_bar.text = f"Data validation complete (Quality: {quality_score:.3f})"
+            if not silent_mode:
+                main_bar.text = f"Data validation complete (Quality: {quality_score:.3f})"
             generation_stats['stages_completed'].append('data_validation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 10: Finalization
             progress_data['current_stage'] = "Finalization"
-            main_bar.text = "Finalizing data preparation and metadata..."
+            if not silent_mode:
+                main_bar.text = "Finalizing data preparation and metadata..."
             
             # Convert to specified data type
             if data_type == 'float32':
-                main_bar.text = "Converting to float32..."
+                if not silent_mode:
+                    main_bar.text = "Converting to float32..."
                 X_train_normal = X_train_normal.astype(np.float32)
                 X_val_normal = X_val_normal.astype(np.float32)
                 X_test = X_test.astype(np.float32)
             elif data_type == 'float64':
-                main_bar.text = "Converting to float64..."
+                if not silent_mode:
+                    main_bar.text = "Converting to float64..."
                 X_train_normal = X_train_normal.astype(np.float64)
                 X_val_normal = X_val_normal.astype(np.float64)
                 X_test = X_test.astype(np.float64)
+            
+            # Collect log generation statistics
+            if log_generation_stats:
+                # Calculate statistics
+                total_samples = normal_samples + attack_samples
+                current_time = datetime.now()
+                generation_duration = (current_time - start_time).total_seconds()
+                
+                # Calculate data quality metrics
+                normal_data_quality = 0.0
+                attack_data_quality = 0.0
+                separation_quality = 0.0
+                effective_noise_level = 0.0
+                
+                try:
+                    # Normal data quality (based on consistency)
+                    if len(X_train_normal) > 0:
+                        normal_variance = np.mean(np.var(X_train_normal, axis=0))
+                        normal_data_quality = max(0.0, 1.0 - normal_variance * 2)  # Lower variance = higher quality
+                    
+                    # Attack data separation quality
+                    if len(X_test) > 0 and len(X_train_normal) > 0:
+                        normal_mean = np.mean(X_train_normal, axis=0)
+                        attack_mean = np.mean(X_test, axis=0)
+                        separation_distance = np.linalg.norm(normal_mean - attack_mean)
+                        separation_quality = min(1.0, separation_distance / np.sqrt(features))
+                        attack_data_quality = separation_quality
+                    
+                    # Estimate effective noise impact
+                    if noise_level > 0:
+                        effective_noise_level = min(1.0, noise_level * 5)  # Simplified estimation
+                except Exception as e:
+                    if verbose:
+                        logger.warning(f"Could not calculate some quality metrics: {e}")
+                
+                # Feature statistics
+                informative_count = feature_config.get('informative_features', min(features, max(5, features // 2)))
+                redundant_count = feature_config.get('redundant_features', 0)
+                
+                # Compile log statistics
+                stats = {
+                    # Core sample statistics
+                    'total_samples': total_samples,
+                    'normal_samples': normal_samples,
+                    'attack_samples': attack_samples,
+                    'class_imbalance_ratio': attack_samples / normal_samples if normal_samples > 0 else float('inf'),
+                    'samples_per_second': total_samples / generation_duration if generation_duration > 0 else 0,
+                    
+                    # Feature configuration
+                    'features': features,
+                    'informative_features': informative_count,
+                    'redundant_features': redundant_count,
+                    'feature_names_count': len(feature_names),
+                    'feature_prefix': feature_prefix,
+                    
+                    # Generation methodology
+                    'generation_method': generation_method,
+                    'generation_strategy': generation_config.get('generation_strategy', 'default'),
+                    'distribution_type': distribution_type,
+                    'cluster_centers': cluster_centers,
+                    'cluster_variance': cluster_variance,
+                    
+                    # Normal data characteristics
+                    'normal_distribution': normal_distribution,
+                    'normal_mean': normal_mean,
+                    'normal_std': normal_std,
+                    'normal_clusters': normal_clusters,
+                    'normal_data_quality': normal_data_quality,
+                    
+                    # Attack data characteristics
+                    'attack_distribution': attack_distribution,
+                    'attack_mean': attack_mean,
+                    'attack_std': attack_std,
+                    'attack_types': attack_types,
+                    'attack_type_counts': attack_type_counts,
+                    'attack_data_quality': attack_data_quality,
+                    
+                    # Anomaly configuration
+                    'anomaly_factor': anomaly_factor,
+                    'anomaly_sparsity': anomaly_sparsity,
+                    'anomaly_intensity': anomaly_intensity,
+                    'anomaly_patterns': anomaly_config.get('anomaly_patterns', []),
+                    'point_anomalies': point_anomalies,
+                    'collective_anomalies': collective_anomalies,
+                    'contextual_anomalies': contextual_anomalies,
+                    'seasonal_anomalies': seasonal_anomalies,
+                    
+                    # Data splits
+                    'train_samples': len(X_train_normal),
+                    'validation_samples': len(X_val_normal),
+                    'test_samples': len(X_test),
+                    'validation_split': validation_split,
+                    'test_split': test_split,
+                    'shuffle_enabled': shuffle,
+                    'stratified_splitting': splitting_config.get('stratified_split', False),
+                    
+                    # Noise and preprocessing
+                    'noise_level': noise_level,
+                    'effective_noise_level': effective_noise_level,
+                    'noise_type': noise_type,
+                    'gaussian_noise_std': noise_config.get('gaussian_noise_std', noise_level),
+                    'salt_pepper_ratio': noise_config.get('salt_pepper_ratio', 0.5),
+                    'feature_scaling': feature_scaling,
+                    'scaling_method': generation_stats.get('scaling_method', 'none'),
+                    
+                    # Feature engineering
+                    'correlated_features': correlated_features,
+                    'correlation_strength': normal_config.get('normal_correlation', 0.3),
+                    'correlation_applied': generation_stats.get('correlation_applied', False),
+                    
+                    # Data quality metrics
+                    'overall_quality_score': quality_score,
+                    'separation_quality': separation_quality,
+                    'class_balance_ratio': class_balance_ratio,
+                    'minimum_separation': minimum_separation,
+                    'overlap_factor': quality_config.get('overlap_factor', 0.0),
+                    'separability_score': quality_config.get('separability_score', 0.0),
+                    
+                    # Performance metrics
+                    'generation_duration_seconds': generation_duration,
+                    'stages_completed': len(generation_stats['stages_completed']),
+                    'total_stages': total_stages,
+                    'completion_percentage': (len(generation_stats['stages_completed']) / total_stages) * 100,
+                    'memory_estimate_mb': (total_samples * features * 4) / (1024 * 1024),  # float32 estimate
+                    
+                    # Configuration and reproducibility
+                    'random_state': random_state,
+                    'deterministic': final_config.get('reproducibility', {}).get('deterministic', True),
+                    'config_sections_used': list(final_config.keys()),
+                    
+                    # Advanced features usage
+                    'multimodal_data': advanced_config.get('multimodal_data', False),
+                    'mixture_components': advanced_config.get('mixture_components', 1),
+                    'non_linear_relationships': advanced_config.get('non_linear_relationships', False),
+                    'interaction_features': advanced_config.get('interaction_features', False),
+                    'polynomial_degree': advanced_config.get('polynomial_degree', 1),
+                    
+                    # Temporal features
+                    'temporal_data': final_config.get('temporal_parameters', {}).get('temporal_data', False),
+                    'time_steps': final_config.get('temporal_parameters', {}).get('time_steps', 1),
+                    'temporal_pattern': final_config.get('temporal_parameters', {}).get('temporal_pattern', 'none'),
+                    
+                    # Statistical properties
+                    'skewness_constraint': final_config.get('statistical_properties', {}).get('skewness'),
+                    'kurtosis_constraint': final_config.get('statistical_properties', {}).get('kurtosis'),
+                    'heavy_tails': final_config.get('statistical_properties', {}).get('heavy_tails', False),
+                    
+                    # Scalability configuration
+                    'batch_generation': final_config.get('scalability', {}).get('batch_generation', False),
+                    'batch_size': final_config.get('scalability', {}).get('batch_size', total_samples),
+                    'memory_efficient': final_config.get('scalability', {}).get('memory_efficient', False),
+                    'parallel_generation': final_config.get('scalability', {}).get('parallel_generation', False),
+                    'n_jobs': final_config.get('scalability', {}).get('n_jobs', 1),
+                    
+                    # Validation and monitoring
+                    'validation_performed': final_config.get('validation', {}).get('validate_generation', True),
+                    'statistical_tests_performed': final_config.get('validation', {}).get('statistical_tests', False),
+                    'quality_metrics_tracked': final_config.get('validation', {}).get('quality_metrics', []),
+                    'verbose_logging': verbose,
+                    'progress_bar_enabled': progress_bar and not silent_mode,
+                    'silent_mode': silent_mode,
+                    
+                    # Output configuration
+                    'output_format': output_format,
+                    'data_type': data_type,
+                    'label_column': label_column,
+                    'save_to_disk': export_config.get('save_data', False),
+                    'file_format': export_config.get('file_format', 'none'),
+                    'metadata_saved': export_config.get('metadata_file', False),
+                    
+                    # Progress tracking summary
+                    'progress_data': {
+                        'current_stage': progress_data['current_stage'],
+                        'samples_generated': progress_data['samples_generated'],
+                        'features_created': progress_data['features_created'],
+                        'attack_types_processed': progress_data['attack_types_processed'],
+                        'data_quality_score': progress_data['data_quality_score'],
+                        'generation_quality': progress_data['generation_quality']
+                    },
+                    
+                    # Timestamps and timing
+                    'generation_start_time': start_time.isoformat(),
+                    'generation_end_time': current_time.isoformat(),
+                    'generation_date': current_time.strftime('%Y-%m-%d'),
+                    'generation_time': current_time.strftime('%H:%M:%S'),
+                    
+                    # Success and error tracking
+                    'completion_status': 'success',
+                    'warnings_encountered': len(generation_stats.get('warnings_encountered', [])),
+                    'warning_messages': generation_stats.get('warnings_encountered', []),
+                    'error_occurred': False,
+                    
+                    # Resource usage summary
+                    'estimated_memory_footprint': {
+                        'normal_data_mb': (normal_samples * features * 4) / (1024 * 1024),
+                        'attack_data_mb': (attack_samples * features * 4) / (1024 * 1024),
+                        'total_mb': (total_samples * features * 4) / (1024 * 1024)
+                    },
+                    
+                    # Data characteristics summary
+                    'data_characteristics': {
+                        'data_range': (0.0, 1.0),
+                        'has_labels': True,
+                        'label_types': ['normal', 'attack'],
+                        'feature_data_type': data_type,
+                        'is_synthetic': True,
+                        'generation_version': '1.0'  # Could be made dynamic
+                    }
+                }
+                
+                # Add validation results summary if available
+                if 'validation_results' in locals() and validation_results:
+                    stats['validation_summary'] = {
+                        'quality_score': validation_results.get('quality_score', 0.0),
+                        'quality_metrics': validation_results.get('quality_metrics', {}),
+                        'statistical_tests_count': len(validation_results.get('statistical_tests', {})),
+                        'has_normal_stats': 'normal_data_stats' in validation_results,
+                        'has_attack_stats': 'attack_data_stats' in validation_results
+                    }
+                
+                # Add configuration fingerprint
+                stats['configuration_fingerprint'] = {
+                    'core_parameters_hash': hash(frozenset({
+                        'normal_samples': normal_samples,
+                        'attack_samples': attack_samples,
+                        'features': features,
+                        'random_state': random_state
+                    }.items())),
+                    'method_signature': f"{generation_method}_{distribution_type}",
+                    'anomaly_config_hash': hash(frozenset({
+                        'factor': anomaly_factor,
+                        'sparsity': anomaly_sparsity,
+                        'intensity': anomaly_intensity
+                    }.items()))
+                }
+                
+                # Store in generation stats
+                generation_stats['log_generation_stats'] = stats
             
             # Prepare metadata
             total_time = (datetime.now() - start_time).total_seconds()
@@ -38855,9 +39903,11 @@ def generate_synthetic_data(
                 }
             }
             
-            main_bar.text = "Finalization complete"
+            if not silent_mode:
+                main_bar.text = "Finalization complete"
             generation_stats['stages_completed'].append('finalization')
-            main_bar()
+            if not silent_mode:
+                main_bar()
         
         # Prepare output data structure
         if output_format == 'dict':
@@ -38874,7 +39924,8 @@ def generate_synthetic_data(
             
         elif output_format == 'dataframe':
             # Create DataFrames
-            main_bar.text = "Creating DataFrames..." if 'main_bar' in locals() else None
+            if not silent_mode and 'main_bar' in locals():
+                main_bar.text = "Creating DataFrames..."
             train_df = pd.DataFrame(X_train_normal, columns=feature_names)
             train_df[label_column] = y_train_normal
             
@@ -38893,7 +39944,8 @@ def generate_synthetic_data(
             
         elif output_format == 'sklearn':
             # sklearn-compatible format
-            main_bar.text = "Creating sklearn-compatible format..." if 'main_bar' in locals() else None
+            if not silent_mode and 'main_bar' in locals():
+                main_bar.text = "Creating sklearn-compatible format..."
             X_combined = np.vstack([X_train_normal, X_val_normal, X_test]) if len(X_val_normal) > 0 and len(X_test) > 0 else X_train_normal
             y_combined = np.hstack([y_train_normal, y_val_normal, y_test]) if len(y_val_normal) > 0 and len(y_test) > 0 else y_train_normal
             
@@ -38923,7 +39975,8 @@ def generate_synthetic_data(
             output_path = export_config.get('output_path', 'synthetic_data.csv')
             file_format = export_config.get('file_format', 'csv')
             
-            logger.info(f"Saving synthetic data to {output_path}")
+            if verbose:
+                logger.info(f"Saving synthetic data to {output_path}")
             
             try:
                 output_path = Path(output_path)
@@ -38931,7 +39984,8 @@ def generate_synthetic_data(
                 
                 if file_format == 'csv':
                     # Save as CSV
-                    main_bar.text = "Saving as CSV..." if 'main_bar' in locals() else None
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving as CSV..."
                     combined_X = np.vstack([X_train_normal, X_val_normal, X_test])
                     combined_y = np.hstack([y_train_normal, y_val_normal, y_test])
                     
@@ -38941,13 +39995,15 @@ def generate_synthetic_data(
                     
                 elif file_format == 'pickle':
                     # Save as pickle
-                    main_bar.text = "Saving as pickle..." if 'main_bar' in locals() else None
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving as pickle..."
                     with open(output_path, 'wb') as f:
                         pickle.dump(result, f)
                         
                 elif file_format == 'numpy':
                     # Save as numpy arrays
-                    main_bar.text = "Saving as numpy arrays..." if 'main_bar' in locals() else None
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving as numpy arrays..."
                     np.savez(
                         output_path,
                         X_train=X_train_normal,
@@ -38963,7 +40019,8 @@ def generate_synthetic_data(
                 # Save metadata if requested
                 if export_config.get('metadata_file', False):
                     metadata_path = output_path.with_suffix('.json')
-                    main_bar.text = "Saving metadata..." if 'main_bar' in locals() else None
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving metadata..."
                     with open(metadata_path, 'w') as f:
                         # Make metadata JSON serializable
                         serializable_metadata = {}
@@ -38977,34 +40034,89 @@ def generate_synthetic_data(
                         
                         json.dump(serializable_metadata, f, indent=2)
                     
-                    logger.info(f"Saved metadata to {metadata_path}")
+                    if verbose:
+                        logger.info(f"Saved metadata to {metadata_path}")
                 
             except Exception as e:
-                logger.error(f"Failed to save data: {e}")
+                if verbose:
+                    logger.error(f"Failed to save data: {e}")
         
         # Log summary
-        generation_stats['completion_status'] = 'success'
-        generation_stats['total_processing_time'] = total_time
-        
-        logger.info("=" * 80)
-        logger.info("SYNTHETIC DATA GENERATION SUMMARY")
-        logger.info("=" * 80)
-        logger.info(f"Generation method: {generation_method}")
-        logger.info(f"Total samples: {normal_samples + attack_samples:,} ({normal_samples:,} normal, {attack_samples:,} attack)")
-        logger.info(f"Features: {features} ({data_type})")
-        logger.info(f"Attack types: {len(attack_types)} types")
-        logger.info(f"Train/Val/Test split: {len(X_train_normal)}/{len(X_val_normal)}/{len(X_test)}")
-        logger.info(f"Anomaly factor: {anomaly_factor}")
-        logger.info(f"Noise level: {noise_level} ({noise_type})")
-        logger.info(f"Feature scaling: {feature_scaling or 'none'}")
-        logger.info(f"Correlated features: {correlated_features}")
-        logger.info(f"Data quality score: {quality_score:.3f}")
-        logger.info(f"Output format: {output_format}")
-        logger.info(f"Generation time: {total_time:.2f} seconds")
-        logger.info(f"Stages completed: {len(generation_stats['stages_completed'])}/{total_stages}")
-        logger.info("=" * 80)
-        
-        # Restore original logging level
+        if verbose:
+            generation_stats['completion_status'] = 'success'
+            generation_stats['total_processing_time'] = total_time
+            
+            logger.info("-" * 40)
+            logger.info("SYNTHETIC DATA GENERATION SUMMARY")
+            logger.info("-" * 40)
+            logger.info(f"Generation method: {generation_method}")
+            logger.info(f"Total samples: {normal_samples + attack_samples:,} ({normal_samples:,} normal, {attack_samples:,} attack)")
+            logger.info(f"Features: {features} ({data_type})")
+            logger.info(f"Attack types: {len(attack_types)} types")
+            logger.info(f"Train/Val/Test split: {len(X_train_normal)}/{len(X_val_normal)}/{len(X_test)}")
+            logger.info(f"Anomaly factor: {anomaly_factor}")
+            logger.info(f"Noise level: {noise_level} ({noise_type})")
+            logger.info(f"Feature scaling: {feature_scaling or 'none'}")
+            logger.info(f"Correlated features: {correlated_features}")
+            logger.info(f"Data quality score: {quality_score:.3f}")
+            logger.info(f"Output format: {output_format}")
+            logger.info(f"Generation time: {total_time:.2f} seconds")
+            logger.info(f"Stages completed: {len(generation_stats['stages_completed'])}/{total_stages}")
+            
+            # If log generation stats were collected
+            if log_generation_stats and 'log_generation_stats' in generation_stats:
+                stats = generation_stats['log_generation_stats']
+                logger.info("-" * 40)
+                logger.info("LOG GENERATION STATISTICS")
+                logger.info("-" * 40)
+                logger.info(f"Samples: {stats['total_samples']:,} total ({stats['normal_samples']:,} normal, {stats['attack_samples']:,} attack)")
+                logger.info(f"Features: {stats['features']} ({stats['informative_features']} informative, {stats['redundant_features']} redundant)")
+                logger.info(f"Quality: {stats['overall_quality_score']:.3f} overall, {stats['separation_quality']:.3f} separation")
+                logger.info(f"Performance: {stats['generation_duration_seconds']:.2f}s, {stats['samples_per_second']:.1f} samples/sec")
+                logger.info(f"Methods: {stats['generation_method']}, {len(stats['attack_types'])} attack types")
+                logger.info(f"Completion: {stats['stages_completed']}/{stats['total_stages']} stages ({stats['completion_percentage']:.1f}%)")
+                logger.info(f"Memory estimate: {stats['memory_estimate_mb']:.2f} MB")
+                logger.info(f"Class imbalance: {stats['class_imbalance_ratio']:.3f}")
+                logger.info(f"Normal data quality: {stats['normal_data_quality']:.3f}")
+                logger.info(f"Attack data quality: {stats['attack_data_quality']:.3f}")
+                logger.info(f"Noise impact: {stats['effective_noise_level']:.3f}")
+                
+                # Configuration details
+                logger.info(f"Distribution: {stats['distribution_type']}")
+                logger.info(f"Clusters: {stats['cluster_centers']} centers, {stats['cluster_variance']:.3f} variance")
+                logger.info(f"Anomaly config: factor={stats['anomaly_factor']}, sparsity={stats['anomaly_sparsity']:.3f}, intensity={stats['anomaly_intensity']:.2f}")
+                logger.info(f"Validation performed: {stats['validation_performed']}")
+                logger.info(f"Statistical tests: {stats['statistical_tests_performed']}")
+                
+                # Advanced features summary
+                advanced_features = []
+                if stats['multimodal_data']:
+                    advanced_features.append(f"multimodal({stats['mixture_components']} components)")
+                if stats['non_linear_relationships']:
+                    advanced_features.append(f"non-linear(degree {stats['polynomial_degree']})")
+                if stats['interaction_features']:
+                    advanced_features.append("interactions")
+                if stats['temporal_data']:
+                    advanced_features.append(f"temporal({stats['time_steps']} steps)")
+                
+                if advanced_features:
+                    logger.info(f"Advanced features: {', '.join(advanced_features)}")
+                
+                # Resource usage
+                memory_footprint = stats['estimated_memory_footprint']
+                logger.info(f"Memory footprint: {memory_footprint['total_mb']:.2f} MB total ({memory_footprint['normal_data_mb']:.2f} MB normal, {memory_footprint['attack_data_mb']:.2f} MB attack)")
+                
+                # Configuration sections used
+                config_sections = len(stats['config_sections_used'])
+                logger.info(f"Configuration sections: {config_sections} sections used")
+                
+                # Warnings and errors
+                if stats['warnings_encountered'] > 0:
+                    logger.info(f"Warnings encountered: {stats['warnings_encountered']}")
+            
+            logger.info("-" * 40)
+
+        # Restore original logging level if it was changed
         if verbose and 'original_level' in locals():
             logger.setLevel(original_level)
         
@@ -39021,13 +40133,14 @@ def generate_synthetic_data(
             logger.setLevel(original_level)
         
         error_msg = f"Synthetic data generation failed: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        # Provide helpful error context
-        logger.error(f"Generation parameters: normal={normal_samples}, attack={attack_samples}, features={features}")
-        logger.error(f"Configuration used: {final_config}")
-        logger.error(f"Stages completed: {generation_stats['stages_completed']}")
+        if verbose:
+            logger.error(error_msg)
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Provide helpful error context
+            logger.error(f"Generation parameters: normal={normal_samples}, attack={attack_samples}, features={features}")
+            logger.error(f"Configuration used: {final_config}")
+            logger.error(f"Stages completed: {generation_stats['stages_completed']}")
         
         raise RuntimeError(error_msg)
 
@@ -39626,6 +40739,8 @@ def create_dataloaders(
     memory_profiling: Optional[bool] = None,
     bottleneck_detection: Optional[bool] = None,
     verbose: Optional[bool] = None,
+    progress_bar: Optional[bool] = None,
+    silent: Optional[bool] = None,
     debug_mode: Optional[bool] = None,
     
     # Error Handling and Resilience
@@ -39673,7 +40788,7 @@ def create_dataloaders(
     # Start timing
     start_time = datetime.now()
     
-    # Initialize configuration with comprehensive defaults
+    # Initialize configuration with defaults
     if config is None:
         try:
             config = get_current_config() if 'get_current_config' in globals() else {}
@@ -39692,9 +40807,11 @@ def create_dataloaders(
             for key, value in preset_config.items():
                 if key not in config:
                     config[key] = value
-            logger.info(f"Applied preset configuration: {preset}")
+            if not silent_mode:
+                logger.info(f"Applied preset configuration: {preset}")
         except Exception as e:
-            logger.warning(f"Failed to apply preset '{preset}': {e}")
+            if not silent_mode:
+                logger.warning(f"Failed to apply preset '{preset}': {e}")
     
     # Apply all parameters to configuration
     final_config = {}
@@ -39718,67 +40835,54 @@ def create_dataloaders(
     # Organize parameters into logical sections
     param_sections = {
         'core': [
-            'batch_size', 'shuffle', 'num_workers', 'pin_memory', 'drop_last',
-            'timeout', 'worker_init_fn', 'multiprocessing_context', 'generator',
+            'batch_size', 'shuffle', 'num_workers', 'pin_memory', 'drop_last', 'timeout', 'worker_init_fn', 'multiprocessing_context', 'generator',
             'prefetch_factor', 'persistent_workers'
         ],
         'batch_configuration': [
-            'train_batch_size', 'val_batch_size', 'test_batch_size', 'eval_batch_size',
-            'dynamic_batch_sizing', 'adaptive_batch_size', 'max_batch_size', 'min_batch_size'
+            'train_batch_size', 'val_batch_size', 'test_batch_size', 'eval_batch_size', 'dynamic_batch_sizing', 'adaptive_batch_size', 'max_batch_size', 'min_batch_size'
         ],
         'sampling': [
-            'train_shuffle', 'val_shuffle', 'test_shuffle', 'sampler', 'batch_sampler',
-            'shuffle_seed', 'stratified_sampling', 'weighted_sampling', 'sample_weights'
+            'train_shuffle', 'val_shuffle', 'test_shuffle', 'sampler', 'batch_sampler', 'shuffle_seed', 'stratified_sampling', 'weighted_sampling', 'sample_weights'
         ],
         'performance': [
-            'optimization_level', 'memory_efficient', 'cpu_count', 'max_workers',
-            'worker_memory_limit', 'dataloader_optimization', 'fast_dev_run', 'benchmark_mode'
+            'optimization_level', 'memory_efficient', 'cpu_count', 'max_workers', 'worker_memory_limit', 'dataloader_optimization', 'fast_dev_run', 'benchmark_mode'
         ],
         'data_processing': [
-            'data_transforms', 'train_transforms', 'val_transforms', 'test_transforms',
-            'augmentation_pipeline', 'normalize_data', 'standardize_data'
+            'data_transforms', 'train_transforms', 'val_transforms', 'test_transforms', 'augmentation_pipeline', 'normalize_data', 'standardize_data'
         ],
         'data_format': [
-            'dtype', 'device', 'tensor_format', 'data_format', 'squeeze_dims',
-            'unsqueeze_dims', 'transpose_dims'
+            'dtype', 'device', 'tensor_format', 'data_format', 'squeeze_dims', 'unsqueeze_dims', 'transpose_dims'
         ],
         'memory_management': [
-            'memory_management', 'shared_memory', 'mmap_mode', 'cache_datasets',
-            'preload_data', 'lazy_loading', 'memory_mapping', 'gc_collection'
+            'memory_management', 'shared_memory', 'mmap_mode', 'cache_datasets', 'preload_data', 'lazy_loading', 'memory_mapping', 'gc_collection'
         ],
         'validation': [
-            'validate_data', 'check_data_integrity', 'handle_nan_values', 'handle_inf_values',
-            'data_consistency_checks', 'shape_validation', 'dtype_validation'
+            'validate_data', 'check_data_integrity', 'handle_nan_values', 'handle_inf_values', 'data_consistency_checks', 'shape_validation', 'dtype_validation'
         ],
         'distributed': [
-            'distributed', 'world_size', 'rank', 'local_rank', 'distributed_sampler',
-            'ddp_backend', 'sync_batchnorm'
+            'distributed', 'world_size', 'rank', 'local_rank', 'distributed_sampler', 'ddp_backend', 'sync_batchnorm'
         ],
         'advanced_features': [
-            'collate_fn', 'custom_collate', 'variable_length_sequences', 'padding_strategy',
-            'sequence_length', 'max_sequence_length'
+            'collate_fn', 'custom_collate', 'variable_length_sequences', 'padding_strategy', 'sequence_length', 'max_sequence_length'
         ],
         'monitoring': [
-            'profile_dataloaders', 'benchmark_dataloaders', 'dataloader_stats',
-            'timing_analysis', 'memory_profiling', 'bottleneck_detection', 'verbose', 'debug_mode'
+            'profile_dataloaders', 'benchmark_dataloaders', 'dataloader_stats', 'timing_analysis', 'memory_profiling', 'bottleneck_detection', 'verbose',
+            'progress_bar', 'silent', 'debug_mode'
         ],
         'error_handling': [
-            'error_handling', 'retry_failed_batches', 'max_retries', 'fallback_batch_size',
-            'graceful_degradation', 'fault_tolerance'
+            'error_handling', 'retry_failed_batches', 'max_retries', 'fallback_batch_size', 'graceful_degradation', 'fault_tolerance'
         ],
         'cross_validation': [
             'cross_validation', 'cv_folds', 'cv_strategy', 'fold_dataloaders', 'stratified_cv'
         ],
         'experimental': [
-            'experimental_features', 'mixed_precision_loading', 'gradient_checkpointing',
-            'dataloader_sharding', 'pipeline_parallelism'
+            'experimental_features', 'mixed_precision_loading', 'gradient_checkpointing', 'dataloader_sharding', 'pipeline_parallelism'
         ],
         'system_integration': [
             'system_optimization', 'numa_awareness', 'cpu_affinity', 'gpu_affinity', 'io_optimization'
         ],
         'compatibility': [
-            'pytorch_version_check', 'legacy_compatibility', 'backwards_compatibility',
-            'version_specific_optimizations'
+            'pytorch_version_check', 'legacy_compatibility', 'backwards_compatibility', 'version_specific_optimizations'
         ]
     }
     
@@ -39789,7 +40893,7 @@ def create_dataloaders(
             if param in cleaned_params:
                 section_config[param] = cleaned_params[param]
     
-    # Set up comprehensive defaults
+    # Set up defaults
     core_config = final_config.setdefault('core', {})
     batch_config = final_config.setdefault('batch_configuration', {})
     sampling_config = final_config.setdefault('sampling', {})
@@ -39805,6 +40909,13 @@ def create_dataloaders(
     cv_config = final_config.setdefault('cross_validation', {})
     experimental_config = final_config.setdefault('experimental', {})
     
+    # Handle silent mode - override verbose and progress_bar if silent is True
+    silent_mode = monitoring_config.get('silent', False)
+    if silent_mode:
+        # Force silent mode behavior
+        monitoring_config['verbose'] = False
+        monitoring_config['progress_bar'] = False
+    
     # Apply intelligent defaults with system awareness
     batch_size = core_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
     shuffle = core_config.setdefault('shuffle', True)
@@ -39812,8 +40923,7 @@ def create_dataloaders(
     pin_memory = core_config.setdefault('pin_memory', torch.cuda.is_available())
     drop_last = core_config.setdefault('drop_last', False)
     timeout = core_config.setdefault('timeout', 0)
-    #prefetch_factor = core_config.setdefault('prefetch_factor', 2)
-    #persistent_workers = core_config.setdefault('persistent_workers', num_workers > 0)
+    
     if num_workers > 0:
         prefetch_factor = core_config.setdefault('prefetch_factor', 2)
         persistent_workers = core_config.setdefault('persistent_workers', True)
@@ -39843,10 +40953,11 @@ def create_dataloaders(
     handle_nan_values = validation_config.setdefault('handle_nan_values', 'error')
     handle_inf_values = validation_config.setdefault('handle_inf_values', 'error')
     
-    # Monitoring defaults
+    # Monitoring defaults - respect silent mode
     verbose = monitoring_config.setdefault('verbose', False)
+    progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     debug_mode = monitoring_config.setdefault('debug_mode', False)
-    profile_dataloaders = monitoring_config.setdefault('profile_dataloaders', False)
+    profile_dataloaders = monitoring_config.setdefault('profile_dataloaders', True)
     dataloader_stats = monitoring_config.setdefault('dataloader_stats', True)
     
     # Error handling defaults
@@ -39859,7 +40970,8 @@ def create_dataloaders(
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
-    logger.info("Starting comprehensive DataLoader creation")
+    if verbose:
+        logger.info("Starting comprehensive DataLoader creation")
     
     # Initialize progress tracking
     progress_data = {
@@ -39892,23 +41004,43 @@ def create_dataloaders(
         # Calculate total stages for progress tracking
         total_stages = 12  # Configuration, Data Validation, System Optimization, Transforms, Datasets, Samplers, Collate, Training DL, Validation DL, Test DL, CV DL, Finalization
         
-        with alive_bar(total_stages, title='DataLoader Creation\t\t', unit='stages') as main_bar:
+        # Use progress bar only if not in silent mode and progress_bar is True
+        if not silent_mode and progress_bar:
+            bar_context = alive_bar(total_stages, title='DataLoader Creation\t\t', unit='stages')
+        else:
+            # Create a dummy context manager that does nothing
+            class DummyBar:
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    pass
+                def __call__(self):
+                    pass
+                def __setattr__(self, name, value):
+                    pass
+            bar_context = DummyBar()
+        
+        with bar_context as main_bar:
             
             # STAGE 1: Configuration and Setup
             progress_data['current_stage'] = "Configuration"
-            main_bar.text = "Setting up configuration and parameters..."
+            if not silent_mode:
+                main_bar.text = "Setting up configuration and parameters..."
             
             # Determine device configuration
             if device == 'auto':
                 device = 'cuda' if torch.cuda.is_available() else 'cpu'
             
-            main_bar.text = "Configuration complete"
+            if not silent_mode:
+                main_bar.text = "Configuration complete"
             creation_stats['stages_completed'].append('configuration')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 2: Data Validation
             progress_data['current_stage'] = "Data Validation"
-            main_bar.text = "Validating and preparing input data..."
+            if not silent_mode:
+                main_bar.text = "Validating and preparing input data..."
             
             # Extract data from various input formats
             datasets = {}
@@ -39928,7 +41060,8 @@ def create_dataloaders(
             
             # Data validation if requested
             if validate_data:
-                logger.info("Performing comprehensive data validation")
+                if verbose:
+                    logger.info("Performing comprehensive data validation")
                 
                 def validate_array(arr, name):
                     if arr is None:
@@ -39941,7 +41074,8 @@ def create_dataloaders(
                             raise TypeError(f"{name} could not be converted to numpy array: {e}")
                     
                     if arr.size == 0:
-                        logger.warning(f"{name} is empty")
+                        if verbose:
+                            logger.warning(f"{name} is empty")
                         return arr
                     
                     # Check for invalid values
@@ -39953,10 +41087,12 @@ def create_dataloaders(
                             elif handle_nan_values == 'remove':
                                 valid_mask = ~np.isnan(arr).any(axis=1)
                                 arr = arr[valid_mask]
-                                logger.warning(f"Removed {(~valid_mask).sum()} samples with NaN values from {name}")
+                                if verbose:
+                                    logger.warning(f"Removed {(~valid_mask).sum()} samples with NaN values from {name}")
                             elif handle_nan_values == 'replace':
                                 arr = np.nan_to_num(arr, nan=0.0)
-                                logger.warning(f"Replaced {nan_count} NaN values with 0.0 in {name}")
+                                if verbose:
+                                    logger.warning(f"Replaced {nan_count} NaN values with 0.0 in {name}")
                     
                     if handle_inf_values != 'ignore':
                         inf_count = np.isinf(arr).sum()
@@ -39965,7 +41101,8 @@ def create_dataloaders(
                                 raise ValueError(f"{name} contains {inf_count} infinite values")
                             elif handle_inf_values == 'replace':
                                 arr = np.nan_to_num(arr, posinf=1e6, neginf=-1e6)
-                                logger.warning(f"Replaced {inf_count} infinite values in {name}")
+                                if verbose:
+                                    logger.warning(f"Replaced {inf_count} infinite values in {name}")
                     
                     return arr
                 
@@ -39998,17 +41135,21 @@ def create_dataloaders(
             }
             
             progress_data['datasets_processed'] = 1 + (1 if X_val is not None else 0) + (1 if X_test is not None else 0)
-            main_bar.text = f"Data validation complete ({progress_data['datasets_processed']} datasets)"
+            if not silent_mode:
+                main_bar.text = f"Data validation complete ({progress_data['datasets_processed']} datasets)"
             creation_stats['stages_completed'].append('data_validation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 3: System Optimization
             progress_data['current_stage'] = "System Optimization"
-            main_bar.text = "Optimizing system parameters..."
+            if not silent_mode:
+                main_bar.text = "Optimizing system parameters..."
             
             # Optimize system parameters based on available resources
             if system_optimization:
-                logger.info("Applying system optimizations")
+                if verbose:
+                    logger.info("Applying system optimizations")
                 
                 # Memory-based optimization
                 available_memory_gb = psutil.virtual_memory().available / (1024**3)
@@ -40020,12 +41161,14 @@ def create_dataloaders(
                         prefetch_factor = 1
                     else:
                         prefetch_factor = None
-                    logger.info("Applied memory-constrained optimizations")
+                    if verbose:
+                        logger.info("Applied memory-constrained optimizations")
                 # More than 16GB
                 elif available_memory_gb > 16:
                     num_workers = min(num_workers, max_workers)
                     prefetch_factor = min(prefetch_factor, 4)
-                    logger.info("Applied high-memory optimizations")
+                    if verbose:
+                        logger.info("Applied high-memory optimizations")
                 
                 # CPU-based optimization
                 if system_cpu_count <= 2:
@@ -40042,7 +41185,8 @@ def create_dataloaders(
             
             # Adaptive batch sizing based on data size and memory
             if batch_config.get('adaptive_batch_size', False):
-                logger.info("Applying adaptive batch sizing")
+                if verbose:
+                    logger.info("Applying adaptive batch sizing")
                 
                 def calculate_optimal_batch_size(data_size, base_batch_size, memory_factor=1.0):
                     # Calculate based on data size and available memory
@@ -40074,13 +41218,16 @@ def create_dataloaders(
             val_shuffle = sampling_config.get('val_shuffle', False)
             test_shuffle = sampling_config.get('test_shuffle', False)
             
-            main_bar.text = "System optimization complete"
+            if not silent_mode:
+                main_bar.text = "System optimization complete"
             creation_stats['stages_completed'].append('system_optimization')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 4: Transform Pipeline Setup
             progress_data['current_stage'] = "Transform Setup"
-            main_bar.text = "Setting up data transforms..."
+            if not silent_mode:
+                main_bar.text = "Setting up data transforms..."
             
             # Setup multiprocessing context
             mp_context = core_config.get('multiprocessing_context')
@@ -40089,12 +41236,15 @@ def create_dataloaders(
                     import multiprocessing as mp
                     if mp_context in ['spawn', 'fork', 'forkserver']:
                         mp_ctx = mp.get_context(mp_context)
-                        logger.info(f"Using multiprocessing context: {mp_context}")
+                        if verbose:
+                            logger.info(f"Using multiprocessing context: {mp_context}")
                     else:
                         mp_ctx = None
-                        logger.warning(f"Invalid multiprocessing context: {mp_context}")
+                        if verbose:
+                            logger.warning(f"Invalid multiprocessing context: {mp_context}")
                 except Exception as e:
-                    logger.warning(f"Failed to set multiprocessing context: {e}")
+                    if verbose:
+                        logger.warning(f"Failed to set multiprocessing context: {e}")
                     mp_ctx = None
             else:
                 mp_ctx = None
@@ -40132,15 +41282,18 @@ def create_dataloaders(
                 generic_transform = None
             
             progress_data['transforms_applied'] = sum(1 for t in [train_transform, val_transform, test_transform, generic_transform] if t is not None)
-            main_bar.text = f"Transform setup complete ({progress_data['transforms_applied']} transforms)"
+            if not silent_mode:
+                main_bar.text = f"Transform setup complete ({progress_data['transforms_applied']} transforms)"
             creation_stats['stages_completed'].append('transform_setup')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 5: Dataset Creation
             progress_data['current_stage'] = "Dataset Creation"
-            main_bar.text = "Creating tensor datasets..."
+            if not silent_mode:
+                main_bar.text = "Creating tensor datasets..."
             
-            # Create tensor datasets with enhanced functionality
+            # Create tensor datasets
             def create_enhanced_dataset(X, y=None, transform=None):
                 # Convert to tensors
                 X_tensor = torch.tensor(X, dtype=dtype)
@@ -40186,19 +41339,23 @@ def create_dataloaders(
                 return dataset
             
             # Create datasets
-            logger.info("Creating tensor datasets")
+            if verbose:
+                logger.info("Creating tensor datasets")
             
             train_dataset = create_enhanced_dataset(X_train, y_train, train_transform)
             val_dataset = create_enhanced_dataset(X_val, y_val, val_transform) if X_val is not None else None
             test_dataset = create_enhanced_dataset(X_test, y_test, test_transform) if X_test is not None else None
             
-            main_bar.text = "Dataset creation complete"
+            if not silent_mode:
+                main_bar.text = "Dataset creation complete"
             creation_stats['stages_completed'].append('dataset_creation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 6: Sampler Configuration
             progress_data['current_stage'] = "Sampler Configuration"
-            main_bar.text = "Configuring data samplers..."
+            if not silent_mode:
+                main_bar.text = "Configuring data samplers..."
             
             # Setup samplers
             train_sampler = None
@@ -40210,7 +41367,8 @@ def create_dataloaders(
                 world_size = distributed_config.get('world_size', 1)
                 rank = distributed_config.get('rank', 0)
                 
-                logger.info(f"Setting up distributed samplers: world_size={world_size}, rank={rank}")
+                if verbose:
+                    logger.info(f"Setting up distributed samplers: world_size={world_size}, rank={rank}")
                 
                 train_sampler = DistributedSampler(
                     train_dataset,
@@ -40245,7 +41403,8 @@ def create_dataloaders(
             
             # Weighted sampling for training data
             elif sampling_config.get('weighted_sampling', False) and y_train is not None:
-                logger.info("Setting up weighted sampling")
+                if verbose:
+                    logger.info("Setting up weighted sampling")
                 
                 if sampling_config.get('sample_weights') is not None:
                     sample_weights = sampling_config['sample_weights']
@@ -40264,7 +41423,8 @@ def create_dataloaders(
             
             # Stratified sampling
             elif sampling_config.get('stratified_sampling', False) and y_train is not None:
-                logger.info("Setting up stratified sampling")
+                if verbose:
+                    logger.info("Setting up stratified sampling")
                 
                 # Create stratified sampler (simplified implementation)
                 class_indices = defaultdict(list)
@@ -40312,13 +41472,16 @@ def create_dataloaders(
                 generator.manual_seed(sampling_config['shuffle_seed'])
             
             progress_data['samplers_configured'] = sum(1 for s in [train_sampler, val_sampler, test_sampler] if s is not None)
-            main_bar.text = f"Sampler configuration complete ({progress_data['samplers_configured']} samplers)"
+            if not silent_mode:
+                main_bar.text = f"Sampler configuration complete ({progress_data['samplers_configured']} samplers)"
             creation_stats['stages_completed'].append('sampler_configuration')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 7: Collate Function Setup
             progress_data['current_stage'] = "Collate Function"
-            main_bar.text = "Setting up collate functions..."
+            if not silent_mode:
+                main_bar.text = "Setting up collate functions..."
             
             # Custom collate function
             enhanced_collate_fn = None
@@ -40334,7 +41497,8 @@ def create_dataloaders(
             )
             
             if needs_enhanced_collate:
-                logger.debug("Creating enhanced collate function with custom processing")
+                if verbose:
+                    logger.debug("Creating enhanced collate function with custom processing")
                 
                 # Create the enhanced collate function with current configuration
                 enhanced_collate_fn = EnhancedCollateFn(
@@ -40347,20 +41511,24 @@ def create_dataloaders(
                 if num_workers > 0:
                     try:
                         pickle.dumps(enhanced_collate_fn)
-                        logger.debug("Enhanced collate function is picklable and ready for multiprocessing")
+                        if verbose:
+                            logger.debug("Enhanced collate function is picklable and ready for multiprocessing")
                     except Exception as pickle_error:
-                        logger.warning(f"Enhanced collate function pickling test failed: {pickle_error}")
-                        logger.info("Falling back to default collate function to avoid multiprocessing issues")
+                        if verbose:
+                            logger.warning(f"Enhanced collate function pickling test failed: {pickle_error}")
+                            logger.info("Falling back to default collate function to avoid multiprocessing issues")
                         enhanced_collate_fn = None
                 
             else:
-                logger.debug("Using default PyTorch collate function (no custom processing needed)")
+                if verbose:
+                    logger.debug("Using default PyTorch collate function (no custom processing needed)")
                 # Use default collate
                 enhanced_collate_fn = None
             
             # Additional fallback for problematic scenarios
             if enhanced_collate_fn is None and needs_enhanced_collate:
-                logger.warning("Enhanced collate features requested but not available - some functionality may be limited")
+                if verbose:
+                    logger.warning("Enhanced collate features requested but not available - some functionality may be limited")
             
             # Worker initialization function
             worker_init_fn = None
@@ -40381,24 +41549,30 @@ def create_dataloaders(
                     # Test if the worker initializer is picklable
                     try:
                         pickle.dumps(worker_init_fn)
-                        logger.debug("Worker initializer is picklable and ready for multiprocessing")
+                        if verbose:
+                            logger.debug("Worker initializer is picklable and ready for multiprocessing")
                     except Exception as pickle_error:
-                        logger.warning(f"Worker initializer pickling test failed: {pickle_error}")
-                        logger.info("Disabling custom worker initialization to avoid multiprocessing issues")
+                        if verbose:
+                            logger.warning(f"Worker initializer pickling test failed: {pickle_error}")
+                            logger.info("Disabling custom worker initialization to avoid multiprocessing issues")
                         worker_init_fn = None
                 else:
-                    logger.debug("No custom worker initialization needed")
+                    if verbose:
+                        logger.debug("No custom worker initialization needed")
                     worker_init_fn = None
             else:
                 worker_init_fn = None
             
-            main_bar.text = "Collate function setup complete"
+            if not silent_mode:
+                main_bar.text = "Collate function setup complete"
             creation_stats['stages_completed'].append('collate_setup')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 8: Training DataLoader Creation
             progress_data['current_stage'] = "Training DataLoader"
-            main_bar.text = "Creating training DataLoader..."
+            if not silent_mode:
+                main_bar.text = "Creating training DataLoader..."
             
             # Common DataLoader parameters
             common_params = {
@@ -40407,7 +41581,7 @@ def create_dataloaders(
                 'generator': generator
             }
             
-            # CRITICAL FIX: Only add prefetch_factor if num_workers > 0
+            # Only add prefetch_factor if num_workers > 0
             if num_workers > 0:
                 common_params['prefetch_factor'] = prefetch_factor
             
@@ -40431,8 +41605,9 @@ def create_dataloaders(
                     'collate_fn': enhanced_collate_fn
                 })
             
-            # Create training DataLoader with comprehensive error handling
-            logger.info(f"Creating training DataLoader: batch_size={train_batch_size}, num_workers={num_workers}")
+            # Create training DataLoader with error handling
+            if verbose:
+                logger.info(f"Creating training DataLoader: batch_size={train_batch_size}, num_workers={num_workers}")
             
             train_loader_params = common_params.copy()
             train_loader_params.update({
@@ -40450,25 +41625,29 @@ def create_dataloaders(
             for attempt in range(max_retries):
                 try:
                     train_loader = DataLoader(train_dataset, **train_loader_params)
-                    logger.debug(f"Training DataLoader created successfully on attempt {attempt + 1}")
+                    if verbose:
+                        logger.debug(f"Training DataLoader created successfully on attempt {attempt + 1}")
                     break
                     
                 except Exception as e:
                     fallback_attempts += 1
                     error_str = str(e).lower()
                     
-                    # CRITICAL FIX: Handle prefetch_factor error specifically
+                    # Handle prefetch_factor error specifically
                     if "prefetch_factor" in error_str and train_loader_params.get('num_workers', 0) == 0:
-                        logger.warning(f"Attempt {attempt + 1}: Removing prefetch_factor for single-threaded mode")
+                        if verbose:
+                            logger.warning(f"Attempt {attempt + 1}: Removing prefetch_factor for single-threaded mode")
                         if 'prefetch_factor' in train_loader_params:
                             del train_loader_params['prefetch_factor']
                     
                     elif "pickle" in error_str or "worker_init" in error_str:
-                        logger.warning(f"Attempt {attempt + 1}: Worker initialization pickling error detected: {e}")
+                        if verbose:
+                            logger.warning(f"Attempt {attempt + 1}: Worker initialization pickling error detected: {e}")
                         # Progressive fallback strategy
                         if attempt == 0:
                             # First attempt: Remove custom worker_init_fn and reduce workers
-                            logger.info("Fallback 1: Removing custom worker initialization and reducing workers")
+                            if verbose:
+                                logger.info("Fallback 1: Removing custom worker initialization and reducing workers")
                             train_loader_params['worker_init_fn'] = None
                             train_loader_params['num_workers'] = min(2, num_workers)
                             train_loader_params['persistent_workers'] = False
@@ -40477,7 +41656,8 @@ def create_dataloaders(
                                 del train_loader_params['prefetch_factor']
                         elif attempt == 1:
                             # Second attempt: Single-threaded
-                            logger.info("Fallback 2: Switching to single-threaded DataLoader")
+                            if verbose:
+                                logger.info("Fallback 2: Switching to single-threaded DataLoader")
                             train_loader_params.update({
                                 'num_workers': 0,
                                 'worker_init_fn': None,
@@ -40492,7 +41672,8 @@ def create_dataloaders(
                                 del train_loader_params['multiprocessing_context']
                         else:
                             # Final attempt: Minimal configuration
-                            logger.info("Fallback 3: Using minimal DataLoader configuration")
+                            if verbose:
+                                logger.info("Fallback 3: Using minimal DataLoader configuration")
                             train_loader_params = {
                                 'batch_size': error_config.get('fallback_batch_size', 32),
                                 'shuffle': train_shuffle,
@@ -40502,7 +41683,8 @@ def create_dataloaders(
                             }
                     
                     elif "memory" in error_str or "out of memory" in error_str:
-                        logger.warning(f"Memory error detected: {e}")
+                        if verbose:
+                            logger.warning(f"Memory error detected: {e}")
                         # Reduce batch size and workers
                         current_batch_size = train_loader_params.get('batch_size', batch_size)
                         new_batch_size = max(1, current_batch_size // 2)
@@ -40511,13 +41693,16 @@ def create_dataloaders(
                         # Remove prefetch_factor if switching to single-threaded
                         if train_loader_params['num_workers'] == 0 and 'prefetch_factor' in train_loader_params:
                             del train_loader_params['prefetch_factor']
-                        logger.info(f"Reduced batch size to {new_batch_size} and workers to {train_loader_params['num_workers']}")
+                        if verbose:
+                            logger.info(f"Reduced batch size to {new_batch_size} and workers to {train_loader_params['num_workers']}")
                     
                     else:
-                        logger.warning(f"Attempt {attempt + 1}: Unexpected error: {e}")
+                        if verbose:
+                            logger.warning(f"Attempt {attempt + 1}: Unexpected error: {e}")
                         if attempt == max_retries - 1:
                             if graceful_degradation:
-                                logger.warning("Using absolute minimal DataLoader configuration")
+                                if verbose:
+                                    logger.warning("Using absolute minimal DataLoader configuration")
                                 train_loader_params = {
                                     'batch_size': 1,
                                     'shuffle': False,
@@ -40531,18 +41716,22 @@ def create_dataloaders(
             
             progress_data['dataloaders_created'] += 1
             progress_data['fallback_attempts'] = fallback_attempts
-            main_bar.text = f"Training DataLoader created (attempts: {fallback_attempts + 1})"
+            if not silent_mode:
+                main_bar.text = f"Training DataLoader created (attempts: {fallback_attempts + 1})"
             creation_stats['stages_completed'].append('training_dataloader')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 9: Validation DataLoader Creation
             progress_data['current_stage'] = "Validation DataLoader"
-            main_bar.text = "Creating validation DataLoader..."
+            if not silent_mode:
+                main_bar.text = "Creating validation DataLoader..."
             
             # Create validation DataLoader
             val_loader = None
             if val_dataset is not None:
-                logger.info(f"Creating validation DataLoader: batch_size={val_batch_size}")
+                if verbose:
+                    logger.info(f"Creating validation DataLoader: batch_size={val_batch_size}")
                 val_loader_params = common_params.copy()
                 val_loader_params.update({
                     'batch_size': val_batch_size,
@@ -40569,18 +41758,22 @@ def create_dataloaders(
                 
                 progress_data['dataloaders_created'] += 1
             
-            main_bar.text = f"Validation DataLoader {'created' if val_loader else 'skipped'}"
+            if not silent_mode:
+                main_bar.text = f"Validation DataLoader {'created' if val_loader else 'skipped'}"
             creation_stats['stages_completed'].append('validation_dataloader')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 10: Test DataLoader Creation
             progress_data['current_stage'] = "Test DataLoader"
-            main_bar.text = "Creating test DataLoader..."
+            if not silent_mode:
+                main_bar.text = "Creating test DataLoader..."
             
             # Create test DataLoader
             test_loader = None
             if test_dataset is not None:
-                logger.info(f"Creating test DataLoader: batch_size={test_batch_size}")
+                if verbose:
+                    logger.info(f"Creating test DataLoader: batch_size={test_batch_size}")
                 test_loader_params = common_params.copy()
                 test_loader_params.update({
                     'batch_size': test_batch_size,
@@ -40607,18 +41800,22 @@ def create_dataloaders(
                 
                 progress_data['dataloaders_created'] += 1
             
-            main_bar.text = f"Test DataLoader {'created' if test_loader else 'skipped'}"
+            if not silent_mode:
+                main_bar.text = f"Test DataLoader {'created' if test_loader else 'skipped'}"
             creation_stats['stages_completed'].append('test_dataloader')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 11: Cross-validation DataLoaders
             progress_data['current_stage'] = "Cross-validation"
-            main_bar.text = "Creating cross-validation DataLoaders..."
+            if not silent_mode:
+                main_bar.text = "Creating cross-validation DataLoaders..."
             
             # Cross-validation DataLoaders
             cv_loaders = None
             if cv_config.get('cross_validation', False):
-                logger.info("Creating cross-validation DataLoaders")
+                if verbose:
+                    logger.info("Creating cross-validation DataLoaders")
                 
                 cv_folds = cv_config.get('cv_folds', 5)
                 cv_strategy = cv_config.get('cv_strategy', 'kfold')
@@ -40634,10 +41831,16 @@ def create_dataloaders(
                     
                     cv_loaders = []
                     
-                    # Create progress bar for CV folds
-                    with alive_bar(cv_folds, title='CV Folds\t\t\t', unit='folds') as cv_bar:
+                    # Create progress bar for CV folds only if not in silent mode and progress_bar is True
+                    if not silent_mode and progress_bar:
+                        cv_bar_context = alive_bar(cv_folds, title='CV Folds\t\t\t', unit='folds')
+                    else:
+                        cv_bar_context = DummyBar()
+                    
+                    with cv_bar_context as cv_bar:
                         for fold_idx, (train_idx, val_idx) in enumerate(splits):
-                            cv_bar.text = f"Creating fold {fold_idx + 1}/{cv_folds}"
+                            if not silent_mode:
+                                cv_bar.text = f"Creating fold {fold_idx + 1}/{cv_folds}"
                             
                             fold_train_X = X_train[train_idx]
                             fold_val_X = X_train[val_idx]
@@ -40672,25 +41875,32 @@ def create_dataloaders(
                                 'val': fold_val_loader
                             })
                             
-                            cv_bar()
+                            if not silent_mode:
+                                cv_bar()
                     
-                    logger.info(f"Created {cv_folds} cross-validation fold DataLoaders")
+                    if verbose:
+                        logger.info(f"Created {cv_folds} cross-validation fold DataLoaders")
                     
                 except Exception as e:
-                    logger.error(f"Failed to create cross-validation DataLoaders: {e}")
+                    if verbose:
+                        logger.error(f"Failed to create cross-validation DataLoaders: {e}")
                     cv_loaders = None
             
-            main_bar.text = f"Cross-validation {'completed' if cv_loaders else 'skipped'}"
+            if not silent_mode:
+                main_bar.text = f"Cross-validation {'completed' if cv_loaders else 'skipped'}"
             creation_stats['stages_completed'].append('cross_validation')
-            main_bar()
+            if not silent_mode:
+                main_bar()
             
             # STAGE 12: Finalization and Performance Analysis
             progress_data['current_stage'] = "Finalization"
-            main_bar.text = "Finalizing DataLoader creation..."
+            if not silent_mode:
+                main_bar.text = "Finalizing DataLoader creation..."
             
             # Performance profiling and benchmarking
             if profile_dataloaders or benchmark_dataloaders:
-                logger.info("Performing DataLoader performance analysis")
+                if verbose:
+                    logger.info("Performing DataLoader performance analysis")
                 
                 def benchmark_dataloader(dataloader, name, num_batches=10):
                     if dataloader is None:
@@ -40707,7 +41917,8 @@ def create_dataloaders(
                         except StopIteration:
                             break
                         except Exception as e:
-                            logger.warning(f"Benchmark error for {name} batch {i}: {e}")
+                            if verbose:
+                                logger.warning(f"Benchmark error for {name} batch {i}: {e}")
                             continue
                     
                     if times:
@@ -40732,7 +41943,8 @@ def create_dataloaders(
                     
                     for name, result in benchmark_results.items():
                         if result:
-                            logger.info(f"{name.title()} DataLoader: {result['avg_batch_time']:.4f}s avg batch time")
+                            if verbose:
+                                logger.info(f"{name.title()} DataLoader: {result['avg_batch_time']:.4f}s avg batch time")
             
             # Collect DataLoader statistics
             if dataloader_stats:
@@ -40775,7 +41987,8 @@ def create_dataloaders(
             # Garbage collection if requested
             if memory_config.get('gc_collection', False):
                 gc.collect()
-                logger.debug("Performed garbage collection")
+                if verbose:
+                    logger.debug("Performed garbage collection")
             
             # Calculate performance score
             performance_metrics = []
@@ -40797,9 +42010,11 @@ def create_dataloaders(
             progress_data['performance_score'] = performance_score
             creation_stats['performance_score'] = performance_score
             
-            main_bar.text = f"Finalization complete (Performance: {performance_score:.3f})"
+            if not silent_mode:
+                main_bar.text = f"Finalization complete (Performance: {performance_score:.3f})"
             creation_stats['stages_completed'].append('finalization')
-            main_bar()
+            if not silent_mode:
+                main_bar()
         
         # Prepare return value based on configuration
         total_time = (datetime.now() - start_time).total_seconds()
@@ -40875,16 +42090,18 @@ def create_dataloaders(
             logger.setLevel(original_level)
         
         error_msg = f"DataLoader creation failed: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        # Provide helpful error context
-        logger.error(f"Configuration used: {final_config}")
-        logger.error(f"Stages completed: {creation_stats['stages_completed']}")
+        if verbose:
+            logger.error(error_msg)
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Provide helpful error context
+            logger.error(f"Configuration used: {final_config}")
+            logger.error(f"Stages completed: {creation_stats['stages_completed']}")
         
         # Attempt graceful fallback if enabled
         if graceful_degradation and data is not None and X_train is not None:
-            logger.warning("Attempting graceful fallback to basic DataLoaders")
+            if verbose:
+                logger.warning("Attempting graceful fallback to basic DataLoaders")
             
             try:
                 # Create minimal DataLoaders
@@ -40898,7 +42115,8 @@ def create_dataloaders(
                 val_loader = DataLoader(val_data, batch_size=fallback_batch_size, shuffle=False, num_workers=0) if val_data else None
                 test_loader = DataLoader(test_data, batch_size=fallback_batch_size, shuffle=False, num_workers=0) if test_data else None
                 
-                logger.warning("Created fallback DataLoaders with minimal configuration")
+                if verbose:
+                    logger.warning("Created fallback DataLoaders with minimal configuration")
                 
                 # Restore original logging level
                 if verbose and 'original_level' in locals():
@@ -40907,7 +42125,8 @@ def create_dataloaders(
                 return (train_loader, val_loader, test_loader)
                 
             except Exception as fallback_error:
-                logger.error(f"Fallback DataLoader creation also failed: {fallback_error}")
+                if verbose:
+                    logger.error(f"Fallback DataLoader creation also failed: {fallback_error}")
                 raise RuntimeError(f"Both primary and fallback DataLoader creation failed: {error_msg}")
         
         raise RuntimeError(error_msg)
@@ -40917,12 +42136,12 @@ def create_dataloaders(
         if verbose and 'original_level' in locals():
             logger.setLevel(original_level)
         
-        # Final cleanup
+        # Final cleanup and summary logging
         if final_config.get('monitoring', {}).get('log_creation_summary', True):
             total_time = (datetime.now() - start_time).total_seconds()
-            logger.info("=" * 80)
+            logger.info("-" * 40)
             logger.info("DATALOADER CREATION SUMMARY")
-            logger.info("=" * 80)
+            logger.info("-" * 40)
             logger.info(f"Creation time: {total_time:.2f} seconds")
             logger.info(f"Training DataLoader: batch_size={train_batch_size}, num_batches={len(train_loader) if 'train_loader' in locals() else 'N/A'}")
             logger.info(f"Validation DataLoader: {'Created' if val_loader else 'Not created'}")
@@ -40933,7 +42152,7 @@ def create_dataloaders(
             logger.info(f"Fallback attempts: {progress_data.get('fallback_attempts', 0)}")
             if 'cv_loaders' in locals() and cv_loaders:
                 logger.info(f"Cross-validation folds: {len(cv_loaders)}")
-            logger.info("=" * 80)
+            logger.info("-" * 40)
 
 def train_epoch(
     # Core Training Parameters
@@ -41177,7 +42396,7 @@ def train_epoch(
     original_level = None
     
     try:
-        # Initialize configuration with comprehensive defaults
+        # Initialize configuration
         if config is None:
             try:
                 config = get_current_config() if 'get_current_config' in globals() else {}
@@ -41200,8 +42419,7 @@ def train_epoch(
         
         # Remove non-parameter items
         params_to_remove = {
-            'config', 'training_config', 'kwargs', 'start_time', 'epoch_start_time',
-            'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
+            'config', 'training_config', 'kwargs', 'start_time', 'epoch_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
             'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast'
         }
         
@@ -41210,98 +42428,73 @@ def train_epoch(
         # Organize parameters into logical sections
         param_sections = {
             'core_training': [
-                'learning_rate', 'batch_size', 'gradient_clip', 'gradient_accumulation_steps',
-                'max_grad_norm', 'gradient_clipping_mode', 'gradient_scaling'
+                'learning_rate', 'batch_size', 'gradient_clip', 'gradient_accumulation_steps', 'max_grad_norm', 'gradient_clipping_mode', 'gradient_scaling'
             ],
             'mixed_precision': [
-                'mixed_precision', 'amp_enabled', 'scaler', 'loss_scaling',
-                'dynamic_loss_scaling', 'init_scale', 'growth_factor', 'backoff_factor',
-                'growth_interval'
+                'mixed_precision', 'amp_enabled', 'scaler', 'loss_scaling', 'dynamic_loss_scaling', 'init_scale', 'growth_factor', 'backoff_factor', 'growth_interval'
             ],
             'scheduler': [
-                'scheduler_step_on_epoch', 'scheduler_step_on_batch', 'scheduler_step_after_epoch',
-                'scheduler_metric', 'warmup_steps', 'warmup_scheduler'
+                'scheduler_step_on_epoch', 'scheduler_step_on_batch', 'scheduler_step_after_epoch', 'scheduler_metric', 'warmup_steps', 'warmup_scheduler'
             ],
             'loss_function': [
-                'loss_function', 'loss_weights', 'multi_task_learning', 'auxiliary_loss_weight',
-                'regularization_loss_weight', 'reconstruction_loss_weight'
+                'loss_function', 'loss_weights', 'multi_task_learning', 'auxiliary_loss_weight', 'regularization_loss_weight', 'reconstruction_loss_weight'
             ],
             'monitoring': [
-                'track_metrics', 'metrics_to_track', 'calculate_detailed_metrics',
-                'metrics_frequency', 'log_frequency', 'progress_bar', 'progress_bar_desc'
+                'track_metrics', 'metrics_to_track', 'calculate_detailed_metrics', 'metrics_frequency', 'log_frequency', 'progress_bar', 'progress_bar_desc'
             ],
             'performance': [
-                'performance_mode', 'benchmark_mode', 'cudnn_benchmark', 'cudnn_deterministic',
-                'channels_last', 'compile_model', 'torch_compile_mode'
+                'performance_mode', 'benchmark_mode', 'cudnn_benchmark', 'cudnn_deterministic', 'channels_last', 'compile_model', 'torch_compile_mode'
             ],
             'memory_management': [
-                'memory_efficient', 'memory_optimization', 'gradient_checkpointing',
-                'empty_cache_frequency', 'gc_collection_frequency', 'pin_memory',
-                'non_blocking_transfer'
+                'memory_efficient', 'memory_optimization', 'gradient_checkpointing', 'empty_cache_frequency', 'gc_collection_frequency', 'pin_memory', 'non_blocking_transfer'
             ],
             'data_processing': [
-                'data_preprocessing', 'input_transforms', 'target_transforms',
-                'augmentation_during_training', 'mixup_alpha', 'cutmix_alpha'
+                'data_preprocessing', 'input_transforms', 'target_transforms', 'augmentation_during_training', 'mixup_alpha', 'cutmix_alpha'
             ],
             'validation': [
-                'validate_inputs', 'check_finite', 'detect_anomaly', 'handle_nan_loss',
-                'loss_spike_detection', 'loss_spike_threshold', 'gradient_explosion_detection'
+                'validate_inputs', 'check_finite', 'detect_anomaly', 'handle_nan_loss', 'loss_spike_detection', 'loss_spike_threshold', 'gradient_explosion_detection'
             ],
             'distributed': [
-                'distributed', 'world_size', 'rank', 'local_rank', 'ddp_backend',
-                'find_unused_parameters', 'broadcast_buffers', 'gradient_as_bucket_view'
+                'distributed', 'world_size', 'rank', 'local_rank', 'ddp_backend', 'find_unused_parameters', 'broadcast_buffers', 'gradient_as_bucket_view'
             ],
             'checkpointing': [
-                'save_checkpoint', 'checkpoint_frequency', 'checkpoint_path',
-                'save_best_model', 'best_metric', 'model_state_dict',
-                'save_optimizer_state', 'save_scheduler_state'
+                'save_checkpoint', 'checkpoint_frequency', 'checkpoint_path', 'save_best_model', 'best_metric', 'model_state_dict', 'save_optimizer_state', 'save_scheduler_state'
             ],
             'early_stopping': [
-                'early_stopping', 'early_stopping_patience', 'early_stopping_delta',
-                'early_stopping_metric', 'early_stopping_mode', 'restore_best_weights'
+                'early_stopping', 'early_stopping_patience', 'early_stopping_delta', 'early_stopping_metric', 'early_stopping_mode', 'restore_best_weights'
             ],
             'debugging': [
-                'debug_mode', 'verbose', 'log_level', 'profile_training',
-                'profile_memory', 'profile_compute', 'timing_analysis', 'bottleneck_detection'
+                'debug_mode', 'verbose', 'log_level', 'profile_training', 'profile_memory', 'profile_compute', 'timing_analysis', 'bottleneck_detection'
             ],
             'advanced_training': [
-                'teacher_forcing_ratio', 'curriculum_learning', 'curriculum_schedule',
-                'progressive_training', 'adaptive_training', 'self_supervised_pretext'
+                'teacher_forcing_ratio', 'curriculum_learning', 'curriculum_schedule', 'progressive_training', 'adaptive_training', 'self_supervised_pretext'
             ],
             'regularization': [
-                'dropout_rate', 'weight_decay', 'l1_regularization', 'l2_regularization',
-                'spectral_normalization', 'batch_norm_momentum', 'layer_norm_eps'
+                'dropout_rate', 'weight_decay', 'l1_regularization', 'l2_regularization', 'spectral_normalization', 'batch_norm_momentum', 'layer_norm_eps'
             ],
             'loss_stability': [
-                'label_smoothing', 'focal_loss_alpha', 'focal_loss_gamma',
-                'loss_smoothing', 'stable_loss_computation'
+                'label_smoothing', 'focal_loss_alpha', 'focal_loss_gamma', 'loss_smoothing', 'stable_loss_computation'
             ],
             'batch_processing': [
-                'batch_processing_mode', 'variable_batch_size', 'dynamic_batching',
-                'batch_size_adaptation', 'max_tokens_per_batch'
+                'batch_processing_mode', 'variable_batch_size', 'dynamic_batching', 'batch_size_adaptation', 'max_tokens_per_batch'
             ],
             'hardware_optimization': [
-                'use_gpu', 'multi_gpu', 'gpu_ids', 'device_placement',
-                'tensor_parallel', 'data_parallel', 'pipeline_parallel'
+                'use_gpu', 'multi_gpu', 'gpu_ids', 'device_placement', 'tensor_parallel', 'data_parallel', 'pipeline_parallel'
             ],
             'reproducibility': [
                 'random_seed', 'deterministic', 'reproducible', 'seed_workers'
             ],
             'callbacks': [
-                'callbacks', 'custom_training_step', 'custom_loss_computation',
-                'custom_metric_computation', 'pre_batch_callback', 'post_batch_callback'
+                'callbacks', 'custom_training_step', 'custom_loss_computation', 'custom_metric_computation', 'pre_batch_callback', 'post_batch_callback'
             ],
             'export_logging': [
-                'export_metrics', 'export_path', 'tensorboard_logging', 'wandb_logging',
-                'mlflow_logging', 'log_images', 'log_gradients', 'log_weights'
+                'export_metrics', 'export_path', 'tensorboard_logging', 'wandb_logging', 'mlflow_logging', 'log_images', 'log_gradients', 'log_weights'
             ],
             'compatibility': [
-                'pytorch_version_check', 'legacy_mode', 'backward_compatibility',
-                'version_specific_optimizations'
+                'pytorch_version_check', 'legacy_mode', 'backward_compatibility', 'version_specific_optimizations'
             ],
             'error_handling': [
-                'error_handling', 'continue_on_error', 'max_retries',
-                'fallback_mode', 'graceful_degradation'
+                'error_handling', 'continue_on_error', 'max_retries', 'fallback_mode', 'graceful_degradation'
             ],
             'experimental': [
                 'experimental_features', 'experimental_optimizations', 'beta_features'
@@ -41315,7 +42508,7 @@ def train_epoch(
                 if param in cleaned_params:
                     section_config[param] = cleaned_params[param]
         
-        # Set up comprehensive defaults
+        # Set up defaults
         core_config = final_config.setdefault('core_training', {})
         mixed_precision_config = final_config.setdefault('mixed_precision', {})
         scheduler_config = final_config.setdefault('scheduler', {})
@@ -41351,8 +42544,7 @@ def train_epoch(
         gradient_scaling = core_config.setdefault('gradient_scaling', True)
         
         # Mixed precision defaults
-        mixed_precision = mixed_precision_config.setdefault('mixed_precision', 
-                                                           MIXED_PRECISION and torch.cuda.is_available())
+        mixed_precision = mixed_precision_config.setdefault('mixed_precision', MIXED_PRECISION and torch.cuda.is_available())
         amp_enabled = mixed_precision_config.setdefault('amp_enabled', mixed_precision)
         dynamic_loss_scaling = mixed_precision_config.setdefault('dynamic_loss_scaling', True)
         init_scale = mixed_precision_config.setdefault('init_scale', 65536.0)
@@ -41368,8 +42560,7 @@ def train_epoch(
         
         # Monitoring defaults
         track_metrics = monitoring_config.setdefault('track_metrics', True)
-        metrics_to_track = monitoring_config.setdefault('metrics_to_track', 
-                                                       ['loss', 'learning_rate', 'gradient_norm', 'batch_time'])
+        metrics_to_track = monitoring_config.setdefault('metrics_to_track', ['loss', 'learning_rate', 'gradient_norm', 'batch_time'])
         calculate_detailed_metrics = monitoring_config.setdefault('calculate_detailed_metrics', False)
         metrics_frequency = monitoring_config.setdefault('metrics_frequency', 10)
         log_frequency = monitoring_config.setdefault('log_frequency', 10)
@@ -41429,7 +42620,7 @@ def train_epoch(
         #     original_level = logger.level
         #     logger.setLevel(getattr(logging, log_level.upper()))
         
-        logger.info(f"Starting comprehensive training epoch {epoch if epoch is not None else 'N/A'}")
+        logger.info(f"Starting training epoch {epoch if epoch is not None else 'N/A'}")
         
         # Parameter validation
         if model is None:
@@ -41520,12 +42711,11 @@ def train_epoch(
             try:
                 pbar = alive_bar(
                     total=len(loader),
-                    #title=f'Training Epoch {epoch if epoch is not None else "N/A"}\t',
                     title=f'Training {progress_bar_desc}\t',
                     unit='batches',
                     bar='smooth',
                     spinner='dots',
-                    stats=False,  # We'll handle stats manually for better control
+                    stats=False,
                     monitor=True,
                     elapsed=True,
                     stats_end=False
@@ -41889,19 +43079,15 @@ def train_epoch(
                                 f"LR: {current_lr:.2e}"
                             )
                     
-                    # Update alive-progress bar with enhanced styling
+                    # Update alive-progress bar
                     if pbar:
                         current_loss_display = loss.item() * gradient_accumulation_steps
                         avg_loss_display = total_loss / num_batches
                         current_lr_display = optimizer.param_groups[0]['lr']
                         
                         # Format the text for the progress bar
-                        progress_text = (
-                            f"Loss: {current_loss_display:.4f} | "
-                            f"Avg: {avg_loss_display:.4f} | "
-                            f"LR: {current_lr_display:.2e} | "
-                            f"Batch: {batch_idx+1}/{len(loader)}"
-                        )
+                        progress_text = (f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}")
+                        #progress_text = f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}"
                         
                         # Update the progress bar text
                         pbar.text(progress_text)
@@ -42000,7 +43186,7 @@ def train_epoch(
         total_epoch_time = epoch_end_time - epoch_start_time
         avg_loss = total_loss / num_batches if num_batches > 0 else default_loss
         
-        # Comprehensive metrics dictionary
+        # Metrics dictionary
         metrics = {
             'loss': avg_loss,
             'epoch': epoch if epoch is not None else 0,
@@ -42025,7 +43211,6 @@ def train_epoch(
                 'data_loading_time': data_loading_time,
                 'avg_forward_time': forward_time / num_batches if num_batches > 0 else 0,
                 'avg_backward_time': backward_time / num_batches if num_batches > 0 else 0,
-                #'avg_optimizer_time': optimizer_time / (accumulated_steps // gradient_accumulation_steps) if accumulated_steps > 0 else 0,
                 'avg_optimizer_time': optimizer_time / max(accumulated_steps // gradient_accumulation_steps, 1) if accumulated_steps > 0 else 0,
                 'avg_data_loading_time': data_loading_time / num_batches if num_batches > 0 else 0
             },
@@ -42095,7 +43280,7 @@ def train_epoch(
         # Cleanup
         try:
             if pbar:
-                # For alive_bar, we need to manually close it since we manually entered the context
+                # Close progress bars
                 if hasattr(pbar, '__exit__'):
                     pbar.__exit__(None, None, None)
                 else:
@@ -44459,7 +45644,7 @@ def train_model(
     model_type: Optional[str] = None,
     input_dim: Optional[int] = None,
     
-    # ALL Model Architecture Parameters (matching autoencoder classes)
+    # Model Architecture Parameters
     encoding_dim: Optional[int] = None,
     hidden_dims: Optional[List[int]] = None,
     dropout_rates: Optional[List[float]] = None,
@@ -44497,9 +45682,9 @@ def train_model(
     mixed_precision: Optional[bool] = None,
     num_workers: Optional[int] = None,
     optimizer: Optional[str] = None,
-    optimizer_type: Optional[str] = None,  # Keep both for backward compatibility
+    optimizer_type: Optional[str] = None,
     scheduler: Optional[str] = None,
-    scheduler_type: Optional[str] = None,  # Keep both for backward compatibility
+    scheduler_type: Optional[str] = None,
     scheduler_params: Optional[Dict[str, Any]] = None,
     early_stopping: Optional[bool] = None,
     validation_split: Optional[float] = None,
@@ -44526,7 +45711,7 @@ def train_model(
     stratified_split: Optional[bool] = None,
     synthetic_generation: Optional[Dict[str, Any]] = None,
     preprocessing: Optional[Dict[str, Any]] = None,
-    synthetic_config: Optional[Dict[str, Any]] = None,  # Keep both for backward compatibility
+    synthetic_config: Optional[Dict[str, Any]] = None,
     data_preprocessing: Optional[bool] = None,
     normalization_method: Optional[str] = None,
     
@@ -44548,7 +45733,7 @@ def train_model(
     real_time_monitoring: Optional[bool] = None,
     ensemble_voting: Optional[str] = None,
     uncertainty_threshold: Optional[float] = None,
-    threshold_method: Optional[str] = None,  # Keep for backward compatibility
+    threshold_method: Optional[str] = None,
     
     # Monitoring Parameters
     metrics_frequency: Optional[int] = None,
@@ -44562,7 +45747,7 @@ def train_model(
     checkpoint_format: Optional[str] = None,
     log_model_summary: Optional[bool] = None,
     tensorboard_dir: Optional[Union[str, Path]] = None,
-    tb_dir: Optional[Union[str, Path]] = None,  # Keep both for backward compatibility
+    tb_dir: Optional[Union[str, Path]] = None,
     log_frequency: Optional[int] = None,
     save_checkpoints: Optional[bool] = None,
     tensorboard: Optional[Dict[str, Any]] = None,
@@ -44639,7 +45824,7 @@ def train_model(
     
     # Validation Parameters
     cross_validation: Optional[Dict[str, Any]] = None,
-    cv_folds: Optional[int] = None,  # Keep both for backward compatibility
+    cv_folds: Optional[int] = None,
     metrics: Optional[List[str]] = None,
     validation_frequency: Optional[int] = None,
     save_validation_results: Optional[bool] = None,
@@ -44647,12 +45832,12 @@ def train_model(
     robustness_testing: Optional[bool] = None,
     performance_benchmarking: Optional[bool] = None,
     confidence_intervals: Optional[bool] = None,
-    calculate_detailed_metrics: Optional[bool] = None,  # Keep for backward compatibility
+    calculate_detailed_metrics: Optional[bool] = None,
     
     # Experimental Parameters
     experimental_features: Optional[Dict[str, bool]] = None,
     experimental_settings: Optional[Dict[str, bool]] = None,
-    auto_optimize: Optional[bool] = None,  # Keep for backward compatibility
+    auto_optimize: Optional[bool] = None,
     
     # Metadata Parameters
     description: Optional[str] = None,
@@ -44681,7 +45866,8 @@ def train_model(
     recommendations: Optional[List[str]] = None,
     configuration_health: Optional[Dict[str, Any]] = None,
     
-    # Training System Parameters (keeping existing ones for compatibility)
+    # Training System Parameters
+    silent: Optional[bool] = None,
     verbose: Optional[bool] = None,
     debug: Optional[bool] = None,
     debug_mode: Optional[bool] = None,
@@ -44713,7 +45899,7 @@ def train_model(
     **kwargs
 ) -> Dict[str, Any]:
     """
-    Comprehensive model training function with full parameter compatibility.
+    Model training function with full parameter compatibility.
     
     This function now accepts ALL parameters supported by the autoencoder classes
     (SimpleAutoencoder, EnhancedAutoencoder, AutoencoderEnsemble) and uses the
@@ -44724,13 +45910,13 @@ def train_model(
         helper functions (_initialize_autoencoder_config, _structure_kwargs_into_config_sections)
         
     Returns:
-        Dictionary containing comprehensive training results and metadata
+        Dictionary containing training results and metadata
     """
     # Start timing
     start_time = datetime.now()
     training_start_time = time.time()
     
-    # Initialize configuration with comprehensive defaults
+    # Initialize configuration
     if config is None:
         try:
             config = get_current_config() if 'get_current_config' in globals() else {}
@@ -44745,7 +45931,7 @@ def train_model(
     if preset and preset in globals().get('PRESET_CONFIGS', {}):
         try:
             preset_config = globals()['PRESET_CONFIGS'][preset].copy()
-            # Merge preset config using the same deep_update pattern as autoencoder classes
+            # Merge preset config
             config = deep_update(preset_config, config)
             logger.info(f"Applied preset configuration: {preset}")
         except Exception as e:
@@ -44768,10 +45954,8 @@ def train_model(
     # Collect all non-None parameters for processing
     local_params = locals().copy()
     params_to_remove = {
-        'config', 'training_config', 'preset', 'args', 'kwargs', 'start_time', 
-        'training_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 
-        'defaultdict', 'deque', 'nullcontext', 'nn', 'optim', 'DataLoader', 
-        'GradScaler', 'autocast', 'SummaryWriter', 'Path', 'np', 'torch'
+        'config', 'training_config', 'preset', 'args', 'kwargs', 'start_time', 'training_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings',
+        'defaultdict', 'deque', 'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast', 'SummaryWriter', 'Path', 'np', 'torch'
     }
     
     individual_params = {k: v for k, v in local_params.items() if k not in params_to_remove and v is not None}
@@ -44780,13 +45964,13 @@ def train_model(
     if kwargs:
         individual_params.update(kwargs)
     
-    # Use the SAME parameter structuring function as the autoencoder classes
+    # Parameter structuring
     if individual_params:
         structured_params = _structure_kwargs_into_config_sections(individual_params)
         config = deep_update(config, structured_params)
         logger.debug(f"Processed {len(individual_params)} individual parameters using centralized helper")
     
-    # Extract final configuration values using the same pattern as autoencoder classes
+    # Extract final configuration values
     model_config = config.get('model', {})
     training_config = config.get('training', {})
     data_config = config.get('data', {})
@@ -44799,7 +45983,7 @@ def train_model(
     error_config = config.get('error_handling', {}) if 'error_handling' in config else {}
     hardware_config = config.get('hardware', {})
     
-    # Apply intelligent defaults using the same extraction pattern as autoencoder classes
+    # Parameter extraction
     model_type = _extract_and_validate_config_param(
         model_config, 'model_type', 'EnhancedAutoencoder', 'MODEL_TYPE',
         lambda x: isinstance(x, str) and x in ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble'],
@@ -44817,7 +46001,7 @@ def train_model(
         system_config['tensorboard_dir'] = system_config['tb_dir']
     
     # Set default values using existing constants and patterns
-    input_dim = model_config.get('input_dim')  # Will be determined from data
+    input_dim = model_config.get('input_dim')
     encoding_dim = model_config.setdefault('encoding_dim', DEFAULT_ENCODING_DIM)
     hidden_dims = model_config.setdefault('hidden_dims', HIDDEN_LAYER_SIZES)
     dropout_rates = model_config.setdefault('dropout_rates', DROPOUT_RATES)
@@ -44852,7 +46036,6 @@ def train_model(
     config_dir = Path(system_config.setdefault('config_dir', CONFIG_DIR))
     if config_dir is None:
         config_dir = Path(__file__).resolve().parent / "config"
-    #config_dir = Path(config_dir)
     
     model_dir = Path(system_config.setdefault('model_dir', DEFAULT_MODEL_DIR))
     log_dir = Path(system_config.setdefault('log_dir', LOG_DIR))
@@ -44863,6 +46046,12 @@ def train_model(
     device = system_config.setdefault('device', 'auto')
     random_seed = system_config.setdefault('random_seed', RANDOM_STATE)
     reproducible = system_config.setdefault('reproducible', True)
+
+    # Handle silent mode - override progress_bar if silent is True
+    silent_mode = monitoring_config.get('silent', False)
+    # if silent_mode:
+    #     # Force silent mode behavior
+    #     monitoring_config['progress_bar'] = False
     
     # Monitoring defaults
     verbose = monitoring_config.setdefault('verbose', True)
@@ -44872,6 +46061,7 @@ def train_model(
     checkpoint_frequency = monitoring_config.setdefault('checkpoint_frequency', 10)
     log_frequency = monitoring_config.setdefault('log_frequency', 1)
     progress_bar = monitoring_config.setdefault('progress_bar', True)
+    #progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     
     # Export defaults
     export_onnx = export_config.setdefault('export_onnx', False)
@@ -44891,7 +46081,7 @@ def train_model(
     error_handling = error_config.setdefault('error_handling', 'strict')
     graceful_degradation = error_config.setdefault('graceful_degradation', True)
     
-    logger.info("Starting comprehensive model training pipeline with full parameter compatibility")
+    logger.info("Starting model training pipeline...")
     
     # Initialize alive_bar context managers
     main_pbar = None
@@ -44923,7 +46113,7 @@ def train_model(
             torch.backends.cudnn.deterministic = False
             logger.info("Enabled benchmark mode for performance")
         
-        # Device configuration with comprehensive support
+        # Device configuration
         if device == 'auto':
             if torch.cuda.is_available():
                 device = torch.device('cuda')
@@ -44971,7 +46161,7 @@ def train_model(
         training_stats['experiment_dir'] = str(experiment_dir)
         
         logger.info("-"*40)
-        logger.info("COMPREHENSIVE TRAINING CONFIGURATION")
+        logger.info("TRAINING CONFIGURATION")
         logger.info("-"*40)
         logger.info(f"Model Configuration:")
         logger.info(f"  Type: {model_type}")
@@ -45006,7 +46196,7 @@ def train_model(
         logger.info(f"  Parameter Compatibility: Full Autoencoder Class Support")
         logger.info("-"*40)
         
-        # Data preparation with comprehensive configuration
+        # Data preparation
         logger.info("PREPARING DATA")
         logger.info("-" * 40)
         
@@ -45019,6 +46209,7 @@ def train_model(
                 data = load_and_validate_data(
                     data_path=data_config.get('data_path'),
                     artifacts_path=data_config.get('artifacts_path'),
+                    silent=silent_mode,
                     config=config,
                     **{k: v for k, v in data_config.items() if k not in ['data_path', 'artifacts_path']}
                 )
@@ -45066,7 +46257,7 @@ def train_model(
                 if data_config.get('synthetic_generation'):
                     synthetic_params.update(data_config['synthetic_generation'])
                 
-                data = generate_synthetic_data(**synthetic_params)
+                data = generate_synthetic_data(silent=silent_mode, **synthetic_params)
                 data_metadata = data.get("metadata", {})
                 logger.info(f"Generated synthetic data: {len(data['X_train'])} train, {len(data['X_val'])} val, {len(data['X_test'])} test samples")
                 
@@ -45091,7 +46282,7 @@ def train_model(
         
         logger.info(f"Data prepared successfully: {input_dim} features, {len(data['X_train'])} training samples")
         
-        # Create comprehensive dataloaders
+        # Create dataloaders
         logger.info("CREATING DATA LOADERS")
         logger.info("-" * 40)
         
@@ -45108,6 +46299,7 @@ def train_model(
             
             train_loader, val_loader, test_loader = create_dataloaders(
                 data=data,
+                silent=silent_mode,
                 **dataloader_config
             )
             
@@ -45135,7 +46327,7 @@ def train_model(
             else:
                 raise RuntimeError(f"DataLoader creation failed: {e}") from e
         
-        # Model initialization using the SAME factory pattern as the autoencoder classes
+        # Model initialization
         logger.info("INITIALIZING MODEL")
         logger.info("-" * 40)
         
@@ -45144,7 +46336,7 @@ def train_model(
             initialize_model_variants(silent=False)
         
         try:
-            # Use the SAME create_model_instance function as used by autoencoder classes
+            # Model instantiation
             model = create_model_instance(
                 model_type=model_type,
                 input_dim=input_dim,
@@ -45326,10 +46518,8 @@ def train_model(
             try:
                 # Update epoch progress bar
                 if epoch_pbar:
-                    epoch_pbar.text = (
-                        f"Epoch {epoch+1}/{epochs} | "
-                        f"Train: {training_history['train_loss'][-1]:.4f}" if training_history['train_loss'] else "Initializing..."
-                    )
+                    train_loss_history = f"{training_history['train_loss'][-1]:.6f}" if training_history['train_loss'] else "Initializing..."
+                    epoch_pbar.text = (f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss_history}")
                 
                 # Training phase
                 train_loss, train_metrics = train_epoch(
@@ -45379,6 +46569,11 @@ def train_model(
                     memory_usage = torch.cuda.memory_allocated(device) / 1024**3  # GB
                     training_history['memory_usage'].append(memory_usage)
                 
+                if device.type == 'cpu':
+                    process = psutil.Process()
+                    memory_usage = process.memory_info().rss / 1024**3  #GB
+                    training_history['memory_usage'].append(memory_usage)
+                
                 # Store detailed metrics
                 if train_metrics:
                     for key, value in train_metrics.items():
@@ -45418,14 +46613,8 @@ def train_model(
                 
                 # Console logging
                 if epoch % log_frequency == 0 or epoch == epochs - 1:
-                    memory_info = f" | GPU: {memory_usage:.1f}GB" if device.type == 'cuda' and 'memory_usage' in locals() else ""
-                    logger.info(
-                        f"Epoch {epoch+1:3d}/{epochs} | "
-                        f"Train: {train_loss:.6f} | "
-                        f"Val: {val_loss:.6f} | "
-                        f"LR: {current_lr:.2e} | "
-                        f"Time: {epoch_time:.1f}s{memory_info}"
-                    )
+                    memory_info = f"GPU: {memory_usage:.3f}GB" if device.type == 'cuda' and 'memory_usage' in locals() else f"RAM: {memory_usage:.3f}GB" if device.type == 'cpu' and 'memory_usage' in locals() else "Mem: N/A"
+                    logger.info(f"Epoch {epoch+1:3d}/{epochs}, Train: {train_loss:.6f}, Val: {val_loss:.6f}, LR: {current_lr:.2e}, Time: {epoch_time:.1f}s, {memory_info}")
                 
                 # Model checkpointing and early stopping
                 is_best = val_loss < best_val_loss
@@ -45474,13 +46663,7 @@ def train_model(
                 if epoch_pbar:
                     epoch_pbar()
                     # Update the text with current metrics
-                    epoch_pbar.text = (
-                        f"Epoch {epoch+1}/{epochs} | "
-                        f"Train: {train_loss:.4f} | "
-                        f"Val: {val_loss:.4f} | "
-                        f"Best: {best_val_loss:.4f} | "
-                        f"LR: {current_lr:.2e}"
-                    )
+                    epoch_pbar.text = (f"Epoch {epoch+1}/{epochs} | Train: {train_loss:.4f} | Val: {val_loss:.4f} | Best: {best_val_loss:.4f} | LR: {current_lr:.2e}")
                 
             except Exception as e:
                 logger.error(f"Training error at epoch {epoch+1}: {e}")
@@ -45622,7 +46805,7 @@ def train_model(
             try:
                 final_model_path = model_dir / "autoencoder_model.pth"
                 
-                # Use model's save method if it has one (from centralized config classes)
+                # Use model's save method if it has one
                 if hasattr(model, 'save_model'):
                     model.save_model(str(final_model_path), include_config=True)
                     logger.info(f"Final model saved using model.save_model(): {final_model_path}")
@@ -45657,7 +46840,7 @@ def train_model(
                 # Get export configuration from config if available
                 export_config_section = config.get('export', {}).get('onnx_export', {})
                 
-                # Call export_to_onnx with comprehensive configuration
+                # Call export_to_onnx function
                 onnx_path = export_to_onnx(
                     model=model,
                     input_dim=input_dim,
@@ -45890,7 +47073,7 @@ def train_model(
             except Exception as e:
                 logger.warning(f"Failed to close TensorBoard writer: {e}")
         
-        # Log final summary with parameter compatibility information
+        # Log final summary
         logger.info("-"*40)
         logger.info("TRAINING COMPLETED SUCCESSFULLY")
         logger.info("-"*40)
@@ -45922,7 +47105,7 @@ def train_model(
         logger.error(error_msg)
         logger.error(f"Full traceback: {traceback.format_exc()}")
         
-        # Save error information with parameter compatibility context
+        # Save error information
         error_info = {
             "success": False,
             "error": str(e),
@@ -46191,8 +47374,7 @@ def train_model(
         # Add debugging information for development
         if locals().get('debug_mode', False):
             error_response["debug_info"] = {
-                "local_variables": {k: str(v) for k, v in locals().items() 
-                                  if not k.startswith('_') and not callable(v)},
+                "local_variables": {k: str(v) for k, v in locals().items() if not k.startswith('_') and not callable(v)},
                 "exception_context": {
                     "filename": traceback.extract_tb(e.__traceback__)[-1].filename,
                     "line_number": traceback.extract_tb(e.__traceback__)[-1].lineno,
@@ -49670,6 +50852,53 @@ def _display_training_results(results: Dict[str, Any]) -> None:
                 
                 if test_metrics:
                     for metric_name, metric_value in test_metrics.items():
+                        # Skip displaying the full config_applied dictionary
+                        if metric_name.lower() == 'config_applied':
+                            # Display a concise summary instead of the full config
+                            if isinstance(metric_value, dict):
+                                # Generate inline config summary
+                                summary_parts = []
+                                
+                                try:
+                                    # Extract key information from config
+                                    if 'metadata' in metric_value:
+                                        metadata = metric_value['metadata']
+                                        if 'version' in metadata:
+                                            summary_parts.append(f"v{metadata['version']}")
+                                        if 'last_preset_change' in metadata:
+                                            summary_parts.append(f"preset changed {metadata['last_preset_change']}")
+                                    
+                                    if 'model' in metric_value:
+                                        model_config = metric_value['model']
+                                        if 'model_type' in model_config:
+                                            summary_parts.append(f"model={model_config['model_type']}")
+                                        if 'encoding_dim' in model_config:
+                                            summary_parts.append(f"encoding={model_config['encoding_dim']}")
+                                    
+                                    if 'training' in metric_value:
+                                        training_config = metric_value['training']
+                                        if 'epochs' in training_config:
+                                            summary_parts.append(f"epochs={training_config['epochs']}")
+                                        if 'batch_size' in training_config:
+                                            summary_parts.append(f"batch={training_config['batch_size']}")
+                                    
+                                    # Count total sections
+                                    section_count = len([k for k in metric_value.keys() if isinstance(metric_value.get(k), dict)])
+                                    summary_parts.append(f"{section_count} sections")
+                                    
+                                    if summary_parts:
+                                        config_summary = " | ".join(summary_parts)
+                                    else:
+                                        config_summary = f"<{len(metric_value)} configuration items>"
+                                        
+                                except Exception as e:
+                                    config_summary = f"<configuration summary unavailable: {str(e)}>"
+                                
+                                print(f"Config Applied: {config_summary}")
+                            else:
+                                print(f"Config Applied: <configuration data available>")
+                            continue
+                        
                         if isinstance(metric_value, (int, float)):
                             if metric_name.lower().endswith('loss') or metric_name.lower().endswith('error'):
                                 print(f"{metric_name.replace('_', ' ').title()}: {metric_value:.6f}")
@@ -49679,7 +50908,7 @@ def _display_training_results(results: Dict[str, Any]) -> None:
                             print(f"{metric_name.replace('_', ' ').title()}: {metric_value}")
                 
                 if mse_stats:
-                    print(f"MSE Statistics:")
+                    print(f"\nMSE Statistics:")
                     for stat_name, stat_value in mse_stats.items():
                         if isinstance(stat_value, (int, float)):
                             print(f"  {stat_name.upper()}: {stat_value:.6f}")
@@ -49902,8 +51131,7 @@ def train_model_quick(
         
         # Remove non-parameter items
         params_to_remove = {
-            'config', 'quick_config', 'kwargs', 'start_time', 'quick_start_time',
-            'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path'
+            'config', 'quick_config', 'kwargs', 'start_time', 'quick_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path'
         }
         
         cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
@@ -51781,7 +53009,7 @@ def run_stability_test(
     
     **kwargs
 ) -> Dict[str, Any]:
-    """Comprehensive system stability test with context display and error handling."""
+    """Full system stability test with context display and error handling."""
     try:
         # Clear screen and show banner with config
         print("\033c", end="")
@@ -51814,7 +53042,6 @@ def run_stability_test(
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "SYSTEM STABILITY TEST")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
@@ -51857,8 +53084,7 @@ def run_stability_test(
         
         # Remove non-parameter items
         params_to_remove = {
-            'config', 'test_config', 'kwargs', 'start_time', 'test_start_time',
-            'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path'
+            'config', 'test_config', 'kwargs', 'start_time', 'test_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path'
         }
         
         cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
@@ -51872,8 +53098,8 @@ def run_stability_test(
         test_learning_rate = stability_config.setdefault('test_learning_rate', cleaned_params.get('test_learning_rate', 0.01))
         test_model_type = stability_config.setdefault('test_model_type', cleaned_params.get('test_model_type', 'SimpleAutoencoder'))
         test_encoding_dim = stability_config.setdefault('test_encoding_dim', cleaned_params.get('test_encoding_dim', 8))
-        test_normal_samples = stability_config.setdefault('test_normal_samples', cleaned_params.get('test_normal_samples', 1000))
-        test_attack_samples = stability_config.setdefault('test_attack_samples', cleaned_params.get('test_attack_samples', 200))
+        test_normal_samples = stability_config.setdefault('test_normal_samples', cleaned_params.get('test_normal_samples', 8000))
+        test_attack_samples = stability_config.setdefault('test_attack_samples', cleaned_params.get('test_attack_samples', 2000))
         test_features = stability_config.setdefault('test_features', cleaned_params.get('test_features', 20))
         
         # Test mode defaults
@@ -51891,7 +53117,6 @@ def run_stability_test(
         # Output defaults
         verbose = stability_config.setdefault('verbose', cleaned_params.get('verbose', True))
         save_test_results = stability_config.setdefault('save_test_results', cleaned_params.get('save_test_results', True))
-        #test_results_dir = stability_config.setdefault('test_results_dir', cleaned_params.get('test_results_dir', DEFAULT_MODEL_DIR / "stability_tests"))
         test_results_dir = stability_config.setdefault('test_results_dir', cleaned_params.get('results_dir', RESULTS_DIR / "stability_tests"))
         interactive = stability_config.setdefault('interactive', cleaned_params.get('interactive', not cleaned_params.get('non_interactive', False)))
         
@@ -51979,6 +53204,7 @@ def run_stability_test(
                     'machine': platform.machine(),
                     'node': platform.node(),
                     'system': platform.system(),
+                    'device': test_device if test_device != 'auto' else ('CUDA' if torch.cuda.is_available() else 'MPS' if (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()) else 'CPU'),
                     'timestamp': test_timestamp
                 }
                 
@@ -52093,6 +53319,7 @@ def run_stability_test(
                     if test_mixed_precision and device.type == 'cuda':
                         print(Fore.GREEN + Style.BRIGHT + f"   Device: " + Fore.YELLOW + Style.BRIGHT + f"{device}")
                         print(Fore.GREEN + Style.BRIGHT + f"     └─ Mixed precision: " + Fore.YELLOW + Style.BRIGHT + f"{hw_test_results['details'].get('mixed_precision', 'N/A')}")
+                    print("\n")
                 
             except Exception as e:
                 hw_test_results['status'] = 'FAILED'
@@ -52300,7 +53527,7 @@ def run_stability_test(
                 model_test_results['status'] = 'PASSED'
                 
                 if verbose:
-                    print(Fore.YELLOW + Style.BRIGHT + f"\nModel initialization test passed:")
+                    print(Fore.YELLOW + Style.BRIGHT + f"Model initialization test passed:")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{test_model_type} ({type(model).__name__})")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parameters: " + Fore.YELLOW + Style.BRIGHT + f"{total_params:,} total, {trainable_params:,} trainable")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Forward pass: " + Fore.YELLOW + Style.BRIGHT + f"{test_input.shape} → {test_output.shape}")
@@ -52339,7 +53566,6 @@ def run_stability_test(
                 
                 # Prepare training configuration
                 stability_training_config = {
-                    #'model_architecture': {
                     'model': {
                         'model_type': test_model_type,
                         'input_dim': test_features,
@@ -52349,7 +53575,6 @@ def run_stability_test(
                         'activation': 'leaky_relu',
                         'normalization': None if test_model_type == 'SimpleAutoencoder' else 'batch'
                     },
-                    #'training_config': {
                     'training': {
                         'batch_size': test_batch_size,
                         'epochs': test_epochs,
@@ -52363,7 +53588,6 @@ def run_stability_test(
                         'early_stopping': True,
                         'validation_split': 0.2
                     },
-                    #'data_config': {
                     'data': {
                         'normal_samples': test_normal_samples,
                         'attack_samples': test_attack_samples,
@@ -52371,14 +53595,12 @@ def run_stability_test(
                         'use_real_data': False,
                         'data_preprocessing': True
                     },
-                    #'system_config': {
                     'system': {
                         'model_dir': test_results_dir / "training_test",
                         'device': str(device),
                         'random_seed': 42,
                         'reproducible': True
                     },
-                    #'monitoring_config': {
                     'monitoring': {
                         'verbose': False,
                         'debug_mode': False,
@@ -52386,7 +53608,6 @@ def run_stability_test(
                         'save_checkpoints': False,
                         'progress_bar': False
                     },
-                    #'export_config': {
                     'export': {
                         'export_onnx': False,
                         'save_model': False,
@@ -52439,7 +53660,7 @@ def run_stability_test(
                     training_test_results['status'] = 'PASSED'
                     
                     if verbose:
-                        print(Fore.YELLOW + Style.BRIGHT + f"\nTraining stability test passed:")
+                        print(Fore.YELLOW + Style.BRIGHT + f"Training stability test passed:")
                         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{final_metrics.get('final_epoch', 0)}/{test_epochs}")
                         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best validation loss: " + Fore.YELLOW + Style.BRIGHT + f"{best_val_loss:.6f}")
                         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Training quality: " + Fore.YELLOW + Style.BRIGHT + f"{training_quality}")
@@ -52758,11 +53979,11 @@ def run_stability_test(
                 # Overall status
                 status_symbol = "✓" if overall_status == 'PASSED' else "⚠" if overall_status == 'PARTIAL' else "✗"
                 status_color = Fore.GREEN if overall_status == 'PASSED' else Fore.YELLOW if overall_status == 'PARTIAL' else Fore.RED
-                print(Fore.WHITE + Style.BRIGHT + f"Overall Status: " + status_color + Style.BRIGHT + f"{status_symbol} {overall_status} - {status_description}")
+                print(Fore.CYAN + Style.BRIGHT + f"Overall Status: " + status_color + Style.BRIGHT + f"{status_symbol} {overall_status} - {status_description}")
                 
                 # Summary
                 summary = test_results['summary']
-                print(Fore.YELLOW + Style.BRIGHT + f"\nTest Summary:")
+                print(Fore.YELLOW + Style.BRIGHT + f"Test Summary:")
                 print(Fore.CYAN + Style.BRIGHT + f"- Total Tests: " + Fore.GREEN + Style.BRIGHT + f"{summary['total_tests_run']}")
                 print(Fore.CYAN + Style.BRIGHT + f"- Passed: " + Fore.GREEN + Style.BRIGHT + f"{summary['tests_passed']}")
                 print(Fore.CYAN + Style.BRIGHT + f"- Failed: " + Fore.GREEN + Style.BRIGHT + f"{summary['tests_failed']}")
@@ -52806,8 +54027,6 @@ def run_stability_test(
                     for i, warning in enumerate(test_results['warnings'], 1):
                         print(Fore.WHITE + Style.BRIGHT + f"{i}. " + Fore.YELLOW + Style.BRIGHT + f"{warning}")
                 
-                print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
-                
                 # Final recommendation
                 if overall_status == 'PASSED':
                     final_msg = "System is stable and ready for production use!"
@@ -52819,8 +54038,7 @@ def run_stability_test(
                     final_msg = "System has stability issues that should be addressed before use."
                     final_color = Fore.RED
                 
-                print(final_color + Style.BRIGHT + final_msg)
-                print(Fore.CYAN + Style.BRIGHT + "-"*40)
+                print(final_color + Style.BRIGHT + f"\n{final_msg}")
             
             # Cleanup
             try:
@@ -52846,7 +54064,7 @@ def run_stability_test(
             
             if verbose:
                 print(Fore.RED + Style.BRIGHT + f"\nSTABILITY TEST ERROR: {e}")
-                print(Fore.YELLOW + Style.BRIGHT + "\nPlease check system configuration and dependencies.")
+                print(Fore.YELLOW + Style.BRIGHT + "Please check system configuration and dependencies.")
             
             # Save error results if possible
             if save_test_results:
@@ -53783,7 +55001,7 @@ def hyperparameter_search(
             print("Starting optimization...")
         
         # Run optimization with alive-progress bar
-        with alive_bar(n_trials, title='Running Trials\t\t', bar='smooth', spinner='dots', stats=True, elapsed=True, eta=True) as trial_bar:
+        with alive_bar(n_trials, title='Running Trials\t\t', bar='smooth', spinner='dots', stats=True, elapsed=True) as trial_bar:
             
             # Custom optimization loop to update progress bar
             def optimize_with_progress():
@@ -53817,7 +55035,6 @@ def hyperparameter_search(
             # Run the optimization
             if timeout_seconds > 0:
                 # Run with timeout
-                import threading
                 stop_event = threading.Event()
                 
                 def run_optimization():
@@ -54166,6 +55383,7 @@ def setup_hyperparameter_optimization(
     trial_batch_size: Optional[int] = None,
     
     # System Parameters
+    hardware_data: Optional[Dict[str, Any]] = None,
     device: Optional[str] = None,
     random_seed: Optional[int] = None,
     num_workers: Optional[int] = None,
@@ -54229,6 +55447,14 @@ def setup_hyperparameter_optimization(
         except Exception:
             config = {}
     
+    # Get hardware context for system-aware configuration if not provided
+    if hardware_data is None:
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+        except Exception as e:
+            logger.debug(f"Hardware detection failed: {e}")
+            hardware_data = {}
+    
     # Apply HPO-specific configuration
     if hpo_config:
         config.setdefault('hyperparameter_optimization', {}).update(hpo_config)
@@ -54272,8 +55498,7 @@ def setup_hyperparameter_optimization(
     
     # Remove non-parameter items
     params_to_remove = {
-        'config', 'hpo_config', 'kwargs', 'start_time', 'setup_start_time',
-        'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path', 'args'
+        'config', 'hpo_config', 'kwargs', 'start_time', 'setup_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path', 'args'
     }
     
     cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
@@ -54372,7 +55597,7 @@ def setup_hyperparameter_optimization(
     
     if optimization_focus == 'speed':
         # Speed focus: reduce trial epochs, increase pruning aggressiveness
-        trial_epochs = max(10, trial_epochs // 2)
+        trial_epochs = max(2, trial_epochs // 2)
         trial_patience = max(3, trial_patience // 2)
         if verbose:
             print(Fore.YELLOW + Style.BRIGHT + f"  Speed focus: Reduced trial epochs from {original_trial_epochs} to {trial_epochs}")
@@ -54517,7 +55742,7 @@ def setup_hyperparameter_optimization(
         # Memory optimization at start
         _optimize_memory_if_needed(
             condition=True,
-            hardware_data=None,
+            hardware_data=hardware_data,
             aggressive=False,
             silent=not verbose
         )
@@ -55299,6 +56524,7 @@ def setup_hyperparameter_optimization(
                         data = load_and_validate_data(
                             data_path=data_path,
                             artifacts_path=artifacts_path,
+                            silent=True,
                             config=final_config
                         )
                         X_data = data['X_train']
@@ -55325,6 +56551,7 @@ def setup_hyperparameter_optimization(
                         features=features,
                         validation_split=0.1,
                         random_state=cv_random_state,
+                        silent=True,
                         config=final_config
                     )
                     X_train_orig = data['X_train']
@@ -55355,6 +56582,7 @@ def setup_hyperparameter_optimization(
                             features=features,
                             validation_split=0.1,
                             random_state=cv_random_state,
+                            silent=True,
                             config=final_config
                         )
                         X_train_orig = data['X_train']
@@ -55550,6 +56778,7 @@ def setup_hyperparameter_optimization(
                         # Train model using the train_model function
                         result = train_model(
                             config=fold_config,
+                            silent=True,
                             X_train=X_fold_train,
                             X_val=X_fold_val,
                             X_test=X_fold_val,
@@ -55841,74 +57070,481 @@ def setup_hyperparameter_optimization(
 
         # Define optimization function
         def run_optimization():
-            """Run the optimization process with detailed progress tracking"""
-            try:
-                # Initialize optimization progress tracking
-                optimization_start_time = time.time()
-                completed_trials = 0
-                pruned_trials = 0
-                failed_trials = 0
-                
-                # Progress callback for optimization execution
-                def optimization_progress_callback(study, trial):
-                    nonlocal completed_trials, pruned_trials, failed_trials
-                    
-                    if trial.state == optuna.trial.TrialState.COMPLETE:
-                        completed_trials += 1
+            """Run the optimization process."""
+            
+            # Start timing
+            optimization_start_time = time.time()
+            start_datetime = datetime.now()
+            
+            # Initialize optimization tracking
+            optimization_stats = {
+                'start_time': start_datetime.isoformat(),
+                'study_name': study_name,
+                'n_trials_planned': n_trials,
+                'timeout_seconds': timeout_seconds,
+                'completed_trials': 0,
+                'pruned_trials': 0,
+                'failed_trials': 0,
+                'best_value_history': [],
+                'trial_durations': [],
+                'memory_usage': [],
+                'early_stopping_triggered': False,
+                'timeout_triggered': False,
+                'optimization_focus': optimization_focus,
+                'system_class': system_class
+            }
+            
+            # Callback system
+            enhanced_callbacks = callbacks.copy() if callbacks else []
+            
+            # Alive progress bar instance
+            progress_bar = None
+            
+            # Progress bar initialization
+            def initialize_progress_bar():
+                """Initialize the alive_progress bar"""
+                nonlocal progress_bar
+                if show_progress and verbose:
+                    try:
+                        # Calculate timeout minutes for display
+                        timeout_minutes = timeout_seconds / 60 if timeout_seconds > 0 else None
                         
+                        # Prepare bar title and stats
+                        bar_title = "Hyperparameter Optimization\t"
+                        bar_stats = f"Planned: {n_trials} trials"
+                        if timeout_minutes:
+                            bar_stats += f", Timeout: {timeout_minutes:.1f} min"
+                        if parallel_jobs != 1:
+                            bar_stats += f", Jobs: {parallel_jobs}"
+                        
+                        progress_bar = alive_bar(
+                            total=n_trials if n_trials > 0 else None,
+                            title=bar_title,
+                            bar='smooth',
+                            spinner='dots_waves2',
+                            stats=True,
+                            force_tty=True,
+                            monitor=True,
+                            stats_end=True,
+                            elapsed=True,
+                            receipt=False
+                        )
+                        progress_bar.__enter__()
+                        return True
+                    except ImportError:
+                        logger.warning("alive_progress not available, using basic progress tracking")
+                        return False
+                return False
+            
+            # Progress tracking
+            def enhanced_progress_callback(study, trial):
+                """Progress tracking with alive_progress integration"""
+                current_time = time.time()
+                elapsed_time = current_time - optimization_start_time
+                
+                # Update optimization stats
+                optimization_stats['completed_trials'] = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+                optimization_stats['pruned_trials'] = len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])
+                optimization_stats['failed_trials'] = len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL])
+                
+                # Track best value history
+                if study.trials and study.best_trial:
+                    optimization_stats['best_value_history'].append({
+                        'trial_number': study.best_trial.number,
+                        'value': study.best_value,
+                        'timestamp': current_time,
+                        'elapsed_seconds': elapsed_time
+                    })
+                
+                # Track trial duration
+                if trial.datetime_start and trial.datetime_complete:
+                    duration = (trial.datetime_complete - trial.datetime_start).total_seconds()
+                    optimization_stats['trial_durations'].append(duration)
+                
+                # Memory monitoring
+                try:
+                    process = psutil.Process()
+                    memory_mb = process.memory_info().rss / 1024 / 1024
+                    optimization_stats['memory_usage'].append({
+                        'trial_number': trial.number,
+                        'memory_mb': memory_mb,
+                        'timestamp': current_time
+                    })
+                except ImportError:
+                    pass
+                
+                # Update alive_progress bar
+                if progress_bar:
+                    trials_completed = optimization_stats['completed_trials']
+                    trials_total = n_trials
+                    
+                    # Calculate statistics
+                    total_trials = len(study.trials)
+                    current_time_elapsed = time.time() - optimization_start_time
+                    trials_per_minute = trials_completed / (current_time_elapsed / 60) if current_time_elapsed > 0 else 0
+                    success_rate = (trials_completed / total_trials * 100) if total_trials > 0 else 0
+                    
+                    # Calculate ETA
+                    avg_duration = np.mean(optimization_stats['trial_durations'][-5:]) if optimization_stats['trial_durations'] else 0
+                    eta_seconds = avg_duration * (trials_total - trials_completed) if avg_duration > 0 else 0
+                    
+                    # Prepare progress text
+                    status_text = []
+                    
+                    # Trial status
+                    if trial.state == optuna.trial.TrialState.COMPLETE:
+                        status_prefix = "[BEST] " if trial.value == study.best_value else ""
+                        status_text.append(f"{status_prefix}Trial {trial.number}")
+                        status_text.append(f"Value: {trial.value:.6f}")
                     elif trial.state == optuna.trial.TrialState.PRUNED:
-                        pruned_trials += 1
-                            
+                        status_text.append(f"Trial {trial.number} [PRUNED]")
                     elif trial.state == optuna.trial.TrialState.FAIL:
-                        failed_trials += 1
+                        status_text.append(f"Trial {trial.number} [FAILED]")
+                    
+                    # Best value and progress
+                    if study.best_value != float('inf'):
+                        status_text.append(f"Best: {study.best_value:.6f}")
+                    
+                    # Progress statistics
+                    progress_pct = (trials_completed / trials_total) * 100 if trials_total > 0 else 0
+                    status_text.append(f"Progress: {trials_completed}/{trials_total} ({progress_pct:.1f}%)")
+                    
+                    # Rate and success information
+                    status_text.append(f"Success: {success_rate:.1f}%")
+                    status_text.append(f"Rate: {trials_per_minute:.1f}/min")
+                    
+                    # ETA information
+                    if eta_seconds > 0:
+                        if eta_seconds > 3600:
+                            eta_str = f"{eta_seconds/3600:.1f}h"
+                        elif eta_seconds > 60:
+                            eta_str = f"{eta_seconds/60:.1f}m"
+                        else:
+                            eta_str = f"{eta_seconds:.0f}s"
+                        status_text.append(f"ETA: {eta_str}")
+                    
+                    # Memory usage
+                    if optimization_stats['memory_usage']:
+                        current_memory = optimization_stats['memory_usage'][-1]['memory_mb']
+                        status_text.append(f"Memory: {current_memory:.0f}MB")
+                    
+                    # Update progress bar text
+                    progress_bar.text = ' | '.join(status_text)
+                    
+                    # Only advance bar for completed trials (not pruned or failed)
+                    # if trial.state == optuna.trial.TrialState.COMPLETE:
+                    #     progress_bar()
                 
-                # Add progress callback to the callbacks list
-                enhanced_callbacks = callbacks + [optimization_progress_callback]
+                # Detailed logging for verbose mode without alive_progress
+                elif verbose and trial.state == optuna.trial.TrialState.COMPLETE:
+                    trials_completed = optimization_stats['completed_trials']
+                    trials_total = n_trials
+                    progress_pct = (trials_completed / trials_total) * 100 if trials_total > 0 else 0
+                    
+                    # Color coding based on trial value
+                    if trial.value == study.best_value:
+                        value_color = Fore.GREEN + Style.BRIGHT
+                    elif trial.value <= study.best_value * 1.1:  # Within 10% of best
+                        value_color = Fore.YELLOW + Style.BRIGHT
+                    else:
+                        value_color = Fore.WHITE + Style.BRIGHT
+                    
+                    title_color = Fore.CYAN + Style.BRIGHT
+                    
+                    print(f"{title_color}Trial {trial.number:3d} | Value: {value_color}{trial.value:.6f}{title_color} | Best: {study.best_value:.6f} | Progress: {trials_completed}/{trials_total} ({progress_pct:.1f}%){Style.RESET_ALL}")
+                    
+                    # Periodic status updates
+                    if trials_completed % 10 == 0 or trials_completed == trials_total:
+                        avg_duration = np.mean(optimization_stats['trial_durations'][-10:]) if optimization_stats['trial_durations'] else 0
+                        eta_seconds = avg_duration * (trials_total - trials_completed) if avg_duration > 0 else 0
+                        eta_str = f"{eta_seconds / 60:.1f} min" if eta_seconds > 60 else f"{eta_seconds:.0f} sec"
+                        
+                        print(f"{Fore.MAGENTA + Style.BRIGHT}Status: {trials_completed}/{trials_total} trials | Avg trial: {avg_duration:.1f}s | ETA: {eta_str}{Style.RESET_ALL}")
                 
-                # Run the optimization with progress tracking
+                elif verbose and trial.state == optuna.trial.TrialState.PRUNED:
+                    print(f"{Fore.YELLOW}Trial {trial.number:3d} pruned early | Best: {study.best_value:.6f}{Style.RESET_ALL}")
+                
+                elif verbose and trial.state == optuna.trial.TrialState.FAIL:
+                    error_msg = trial.user_attrs.get('error', 'Unknown error')
+                    print(f"{Fore.RED}Trial {trial.number:3d} failed: {error_msg[:50]}...{Style.RESET_ALL}")
+            
+            # Early stopping callback
+            def enhanced_early_stopping_callback(study, trial):
+                """Early stopping with adaptive patience"""
+                if len(study.trials) < early_stopping_min_trials:
+                    return
+                
+                # Adaptive patience based on optimization progress
+                current_progress = len(study.trials) / n_trials if n_trials > 0 else 0
+                adaptive_patience = max(
+                    early_stopping_patience // 2,
+                    min(early_stopping_patience * 2, int(early_stopping_patience * (1 + current_progress)))
+                )
+                
+                # Check for improvement in recent trials
+                recent_trials = study.trials[-adaptive_patience:]
+                recent_complete_trials = [t for t in recent_trials if t.state == optuna.trial.TrialState.COMPLETE]
+                
+                if len(recent_complete_trials) >= adaptive_patience // 2:
+                    recent_values = [t.value for t in recent_complete_trials]
+                    best_recent = min(recent_values) if direction == 'minimize' else max(recent_values)
+                    
+                    # Check if no improvement in recent trials
+                    if (direction == 'minimize' and best_recent >= study.best_value) or \
+                       (direction == 'maximize' and best_recent <= study.best_value):
+                        
+                        optimization_stats['early_stopping_triggered'] = True
+                        if verbose:
+                            stop_msg = f"Early stopping triggered after {len(study.trials)} trials (no improvement in {len(recent_complete_trials)} trials)"
+                            if progress_bar:
+                                progress_bar.text = stop_msg
+                            else:
+                                print(f"{Fore.YELLOW + Style.BRIGHT}{stop_msg}{Style.RESET_ALL}")
+                        study.stop()
+            
+            # Timeout monitoring callback
+            def timeout_monitor_callback(study, trial):
+                """Monitor timeout and provide warnings"""
+                if timeout_seconds > 0:
+                    elapsed = time.time() - optimization_start_time
+                    remaining = timeout_seconds - elapsed
+                    
+                    # Warn when 10% time remaining
+                    if remaining > 0 and remaining < timeout_seconds * 0.1:
+                        if verbose and int(remaining) % 30 == 0:  # Warn every 30 seconds
+                            warning_msg = f"Timeout warning: {remaining:.0f} seconds remaining"
+                            if progress_bar:
+                                progress_bar.text = warning_msg
+                            else:
+                                print(f"{Fore.YELLOW + Style.BRIGHT}{warning_msg}{Style.RESET_ALL}")
+                    
+                    # Stop when timeout reached
+                    if remaining <= 0:
+                        optimization_stats['timeout_triggered'] = True
+                        if verbose:
+                            timeout_msg = f"Timeout reached after {elapsed:.0f} seconds"
+                            if progress_bar:
+                                progress_bar.text = timeout_msg
+                            else:
+                                print(f"{Fore.YELLOW + Style.BRIGHT}{timeout_msg}{Style.RESET_ALL}")
+                        study.stop()
+            
+            # Resource optimization callback
+            def resource_optimization_callback(study, trial):
+                """Optimize resources during optimization"""
+                # Periodic memory cleanup
+                if trial.number % 5 == 0:
+                    _optimize_memory_if_needed(
+                        condition=True,
+                        hardware_data=hardware_data,
+                        aggressive=False,
+                        silent=not verbose
+                    )
+                
+                # Adaptive resource allocation based on system class
+                if system_class == "limited" and trial.number % 10 == 0:
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+            
+            # Add enhanced callbacks
+            enhanced_callbacks.extend([
+                enhanced_progress_callback,
+                enhanced_early_stopping_callback,
+                timeout_monitor_callback,
+                resource_optimization_callback
+            ])
+            
+            # Display optimization header
+            if verbose:
+                print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION STARTED")
+                print(Fore.CYAN + Style.BRIGHT + "-"*40)
+                print(Fore.GREEN + Style.BRIGHT + "Study: " + Fore.YELLOW + Style.BRIGHT + f"{study_name}")
+                print(Fore.GREEN + Style.BRIGHT + "Target: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials} trials" + (f" or {timeout_seconds}s" if timeout_seconds > 0 else ""))
+                print(Fore.GREEN + Style.BRIGHT + "Focus: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_focus.title()} | System: {system_class.upper()}")
+                print(Fore.GREEN + Style.BRIGHT + "Started: " + Fore.YELLOW + Style.BRIGHT + f"{start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                if show_progress:
+                    print(Fore.MAGENTA + Style.BRIGHT + "Progress: Using alive_progress for real-time monitoring")
+                
+                print(Fore.CYAN + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
+            
+            # Initialize progress bar
+            use_alive_progress = initialize_progress_bar()
+            
+            try:
+                # Pre-optimization memory optimization
+                _optimize_memory_if_needed(
+                    condition=True,
+                    hardware_data=hardware_data,
+                    aggressive=True,
+                    silent=not verbose
+                )
+                
+                # Run optimization
                 study.optimize(
                     objective,
                     n_trials=n_trials,
                     timeout=timeout_seconds if timeout_seconds > 0 else None,
                     callbacks=enhanced_callbacks,
                     gc_after_trial=True,
-                    show_progress_bar=True,
+                    show_progress_bar=False,
                     n_jobs=parallel_jobs
                 )
                 
+                # Close progress bar if it was used
+                if progress_bar:
+                    try:
+                        progress_bar.__exit__(None, None, None)
+                    except Exception:
+                        pass
+                
                 # Calculate optimization statistics
                 optimization_time = time.time() - optimization_start_time
+                completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+                pruned_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED])
+                failed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.FAIL])
                 total_trials = len(study.trials)
-                success_rate = (completed_trials / total_trials * 100) if total_trials > 0 else 0
+                success_rate = (completed_trials / total_trials) * 100 if total_trials > 0 else 0
+                trials_per_minute = completed_trials / (optimization_time / 60) if optimization_time > 0 else 0
                 
+                # Results compilation
                 optimization_results = {
                     'success': True,
                     'study': study,
+                    'study_name': study_name,
                     'n_trials_completed': completed_trials,
                     'n_trials_pruned': pruned_trials,
                     'n_trials_failed': failed_trials,
                     'n_trials_total': total_trials,
                     'success_rate': success_rate,
                     'optimization_time_seconds': optimization_time,
+                    'trials_per_minute': trials_per_minute,
+                    'efficiency_ratio': completed_trials / total_trials if total_trials > 0 else 0,
                     'best_value': study.best_value if study.trials else float('inf'),
                     'best_params': study.best_params if study.trials else {},
                     'best_trial': study.best_trial if study.trials else None,
-                    'trials_per_minute': completed_trials / (optimization_time / 60) if optimization_time > 0 else 0
+                    'average_trial_time_seconds': np.mean(optimization_stats['trial_durations']) if optimization_stats['trial_durations'] else 0,
+                    'early_stopping_triggered': optimization_stats['early_stopping_triggered'],
+                    'timeout_triggered': optimization_stats['timeout_triggered'],
+                    'completion_reason': 'completed' if completed_trials >= n_trials else 'timeout' if optimization_stats['timeout_triggered'] else 'early_stopping' if optimization_stats['early_stopping_triggered'] else 'interrupted',
+                    'optimization_stats': optimization_stats,
+                    'end_time': datetime.now().isoformat(),
+                    'configuration': {
+                        'optimization_focus': optimization_focus,
+                        'system_class': system_class,
+                        'n_trials_planned': n_trials,
+                        'timeout_seconds': timeout_seconds,
+                        'parallel_jobs': parallel_jobs,
+                        'used_alive_progress': use_alive_progress
+                    }
                 }
+                
+                # Display optimization summary
+                if verbose:
+                    if use_alive_progress:
+                        # Add some space after the progress bar
+                        print("\n")
+                    
+                    print(Fore.MAGENTA + Style.BRIGHT + "OPTIMIZATION COMPLETED")
+                    print(Fore.CYAN + Style.BRIGHT + "-"*40)
+                    
+                    # Results summary
+                    best_value = optimization_results['best_value']
+                    value_color = Fore.GREEN if best_value != float('inf') else Fore.RED
+                    value_display = f"{best_value:.6f}" if best_value != float('inf') else "N/A"
+                    
+                    print(Fore.YELLOW + Style.BRIGHT + "Results Summary:")
+                    print(Fore.GREEN + Style.BRIGHT + "  ├─ Best Value: " + value_color + Style.BRIGHT + f"{value_display}")
+                    print(Fore.GREEN + Style.BRIGHT + "  ├─ Trials Completed: " + Fore.GREEN + Style.BRIGHT + f"{completed_trials}/{n_trials}")
+                    print(Fore.GREEN + Style.BRIGHT + "  ├─ Success Rate: " + Fore.GREEN + Style.BRIGHT + f"{success_rate:.1f}%")
+                    print(Fore.GREEN + Style.BRIGHT + "  ├─ Optimization Time: " + Fore.GREEN + Style.BRIGHT + f"{optimization_time/60:.1f} minutes")
+                    print(Fore.GREEN + Style.BRIGHT + "  ├─ Avg Trial Time: " + Fore.GREEN + Style.BRIGHT + f"{optimization_results['average_trial_time_seconds']:.1f}s")
+                    print(Fore.GREEN + Style.BRIGHT + "  ├─ Trials per Minute: " + Fore.GREEN + Style.BRIGHT + f"{trials_per_minute:.1f}")
+                    print(Fore.GREEN + Style.BRIGHT + "  └─ Completion Reason: " + Fore.GREEN + Style.BRIGHT + f"{optimization_results['completion_reason'].replace('_', ' ').title()}")
+                    
+                    # Best parameters preview
+                    if study.best_params:
+                        print(Fore.YELLOW + Style.BRIGHT + "\nBest Parameters Preview:")
+                        param_count = 0
+                        for key, value in list(study.best_params.items())[:5]:  # Show first 5 params
+                            param_count += 1
+                            if param_count <= 5:
+                                print(Fore.GREEN + Style.BRIGHT + f"  ├─ {key}: " + Fore.GREEN + Style.BRIGHT + f"{value}")
+                        if len(study.best_params) > 5:
+                            print(Fore.GREEN + Style.BRIGHT + f"  └─ ... and {len(study.best_params) - 5} more parameters")
+                    
+                    print(Fore.CYAN + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
                 
                 return optimization_results
             
             except Exception as e:
-                logger.error(f"Optimization failed: {str(e)}")
+                # Close progress bar on error
+                if progress_bar:
+                    try:
+                        progress_bar.__exit__(None, None, None)
+                    except Exception:
+                        pass
                 
-                return {
+                # Calculate partial statistics
+                optimization_time = time.time() - optimization_start_time
+                completed_trials = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]) if 'study' in locals() else 0
+                total_trials = len(study.trials) if 'study' in locals() else 0
+                
+                error_results = {
                     'success': False,
                     'error': str(e),
-                    'study': study,
-                    'n_trials_completed': len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
-                    'n_trials_total': len(study.trials)
+                    'error_type': type(e).__name__,
+                    'study': study if 'study' in locals() else None,
+                    'study_name': study_name,
+                    'n_trials_completed': completed_trials,
+                    'n_trials_total': total_trials,
+                    'optimization_time_seconds': optimization_time,
+                    'best_value': study.best_value if 'study' in locals() and study.trials else float('inf'),
+                    'best_params': study.best_params if 'study' in locals() and study.trials else {},
+                    'best_trial': study.best_trial if 'study' in locals() and study.trials else None,
+                    'optimization_stats': optimization_stats,
+                    'end_time': datetime.now().isoformat(),
+                    'traceback': traceback.format_exc(),
+                    'used_alive_progress': use_alive_progress
                 }
-
+                
+                logger.error(f"Optimization failed: {str(e)}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                
+                if verbose:
+                    if use_alive_progress:
+                        print("\n")
+                    print(Fore.RED + Style.BRIGHT + f"\nOptimization failed after {optimization_time/60:.1f} minutes")
+                    print(Fore.RED + Style.BRIGHT + "Error: " + Fore.YELLOW + Style.BRIGHT + f"{str(e)}")
+                    if completed_trials > 0:
+                        print(Fore.YELLOW + Style.BRIGHT + f"Partial results available from {completed_trials} completed trials")
+                
+                return error_results
+            
+            finally:
+                # Ensure progress bar is closed
+                if progress_bar:
+                    try:
+                        progress_bar.__exit__(None, None, None)
+                    except Exception:
+                        pass
+                
+                # Final cleanup
+                try:
+                    _optimize_memory_if_needed(
+                        condition=True,
+                        hardware_data=hardware_data,
+                        aggressive=True,
+                        silent=not verbose
+                    )
+                    
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    gc.collect()
+                except Exception:
+                    pass
+        
         # Update results tracking
         setup_results['run_optimization'] = run_optimization
         setup_results['setup_stages_completed'] = 13
@@ -56213,7 +57849,7 @@ def setup_hyperparameter_optimization(
         # Final memory optimization
         _optimize_memory_if_needed(
             condition=True,
-            hardware_data=None,
+            hardware_data=hardware_data,
             aggressive=True,
             silent=not verbose
         )
@@ -56246,7 +57882,6 @@ def setup_hyperparameter_optimization(
         
         # Display setup completion message
         if verbose:
-            print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
             print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION SETUP COMPLETED")
             print(Fore.CYAN + Style.BRIGHT + "-"*40)
             
@@ -56257,17 +57892,18 @@ def setup_hyperparameter_optimization(
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Types: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(model_types)}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Trials: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimization Focus: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_focus.title()}")
-            print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}")
-            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parallel Jobs: " + Fore.YELLOW + Style.BRIGHT + f"{parallel_jobs}")
             
             # Show express search space usage
             if express_optimization_space:
                 param_count = len(express_optimization_space)
                 print(Fore.CYAN + Style.BRIGHT + f"  ├─ Express Search Space: " + Fore.GREEN + Style.BRIGHT + f"{param_count} parameters")
             
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Parallel Jobs: " + Fore.YELLOW + Style.BRIGHT + f"{parallel_jobs}")
+            
             if progress_data['warnings']:
                 warning_color = Fore.YELLOW if len(progress_data['warnings']) < 5 else Fore.RED
-                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Warnings Encountered: " + warning_color + Style.BRIGHT + f"{len(progress_data['warnings'])}")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Warnings Encountered: " + warning_color + Style.BRIGHT + f"{len(progress_data['warnings'])}")
                 for warning in progress_data['warnings'][:3]:
                     print(Fore.WHITE + Style.BRIGHT + f"    - {warning}")
                 if len(progress_data['warnings']) > 3:
@@ -56511,10 +58147,7 @@ def run_hyperparameter_optimization(
     params.update(kwargs)
     
     # Remove non-parameter items
-    params_to_remove = {
-        'config', 'hpo_config', 'kwargs', 'start_time', 'hpo_start_time',
-        'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path'
-    }
+    params_to_remove = {'config', 'hpo_config', 'kwargs', 'start_time', 'hpo_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'Path'}
     
     cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
     
@@ -56527,7 +58160,7 @@ def run_hyperparameter_optimization(
         express_config.update(express_context)
     
     # Apply optimization focus from express setup
-    optimization_focus = (hpo_section.get('optimization_focus') or cleaned_params.get('optimization_focus') or express_config.get('focus', 'balanced'))
+    optimization_focus = (hpo_section.get('optimization_focus') or cleaned_params.get('optimization_focus') or express_config.get('focus', 'speed'))
     hpo_section['optimization_focus'] = optimization_focus
     
     # Apply system class from express setup
@@ -56685,7 +58318,7 @@ def run_hyperparameter_optimization(
     
     if optimization_focus == 'speed':
         # Speed focus: reduce trial epochs for faster iterations
-        trial_epochs = max(10, trial_epochs // 2)
+        trial_epochs = max(2, trial_epochs // 2)
         if verbose:
             print(Fore.YELLOW + Style.BRIGHT + f"  Speed focus: Reduced trial epochs from {original_trial_epochs} to {trial_epochs}")
             
@@ -56696,7 +58329,7 @@ def run_hyperparameter_optimization(
             print(Fore.YELLOW + Style.BRIGHT + f"  Accuracy focus: Increased trial epochs from {original_trial_epochs} to {trial_epochs}")
     
     # Update the configuration with focus-adjusted values
-    hpo_section['trial_epochs'] = original_trial_epochs
+    hpo_section['trial_epochs'] = trial_epochs
 
     total_stages = 5  # Setup, Optimization, Analysis, Final Training, Finalization
     
@@ -56863,7 +58496,6 @@ def run_hyperparameter_optimization(
             save_study=save_study,
             study_dir=study_dir,
             generate_plots=generate_plots,
-            # Pass express context to setup function
             express_context=hpo_results['express_context'],
             optimization_focus=optimization_focus,
             system_class=system_class,
@@ -56956,7 +58588,7 @@ def run_hyperparameter_optimization(
         hpo_results['current_stage'] = "Analysis"
         progress_data['current_stage'] = "Analysis"
         
-        with alive_bar(1, title='Analysis\t\t\t', bar='smooth', spinner='dots') as analysis_bar:
+        with alive_bar(1, title='Results Analysis\t', bar='smooth', spinner='dots') as analysis_bar:
             analysis_bar.text = "Analyzing optimization results..."
         
             analysis = hpo_setup['analyze_results']()
@@ -56999,7 +58631,7 @@ def run_hyperparameter_optimization(
         hpo_results['current_stage'] = "Final Training"
         progress_data['current_stage'] = "Final Training"
         
-        with alive_bar(1, title='Final Training\t\t', bar='smooth', spinner='dots') as training_bar:
+        with alive_bar(1, title='Final Model Training\t', bar='smooth', spinner='dots') as training_bar:
             training_bar.text = "Checking final training configuration..."
         
             # Save study data
@@ -57012,7 +58644,7 @@ def run_hyperparameter_optimization(
             # Offer to train final model with best parameters
             final_training_results = None
             if train_best_model and n_trials_completed > 0 and hpo_results.get('best_config_for_training'):
-                if not interactive:
+                if interactive:
                     train_final = input(Fore.YELLOW + Style.BRIGHT + "\nTrain final model with best HPO parameters? (Y/n): " + Style.RESET_ALL).lower().strip()
                     train_final = train_final not in ('n', 'no')
                 else:
@@ -57028,17 +58660,15 @@ def run_hyperparameter_optimization(
                         # Apply express optimization focus to final training
                         if optimization_focus == 'speed':
                             # Speed focus: faster training with reduced epochs
-                            best_config.setdefault('training', {})['epochs'] = 80
-                            best_config.setdefault('training', {})['patience'] = 15
+                            best_config.setdefault('training', {})['epochs'] = 10
+                            best_config.setdefault('training', {})['patience'] = 5
                         elif optimization_focus == 'accuracy':
                             # Accuracy focus: more thorough training
                             best_config.setdefault('training', {})['epochs'] = 150
                             best_config.setdefault('training', {})['patience'] = 25
                         elif optimization_focus == 'efficiency':
                             # Efficiency focus: memory-optimized training
-                            best_config.setdefault('training', {})['batch_size'] = min(
-                                best_config.get('training', {}).get('batch_size', 64), 64
-                            )
+                            best_config.setdefault('training', {})['batch_size'] = min(best_config.get('training', {}).get('batch_size', 64), 64)
                         
                         # Update with full training parameters (not trial parameters)
                         training_config = best_config.setdefault('training', {})
@@ -57112,7 +58742,7 @@ def run_hyperparameter_optimization(
         hpo_results['current_stage'] = "Finalization"
         progress_data['current_stage'] = "Finalization"
         
-        with alive_bar(1, title='Finalization\t\t', bar='smooth', spinner='dots') as finalization_bar:
+        with alive_bar(1, title='Results Finalization\t', bar='smooth', spinner='dots') as finalization_bar:
             finalization_bar.text = "Finalizing HPO results and generating recommendations..."
         
             # Generate express-aware recommendations
@@ -57250,9 +58880,6 @@ def run_hyperparameter_optimization(
                     
                     update_global_config(current_config)
                     
-                    if verbose:
-                        print(Fore.GREEN + Style.BRIGHT + f"\nBest configuration saved to global config." + Style.RESET_ALL)
-                    
                 except Exception as e:
                     logger.warning(f"Failed to save best configuration: {e}")
                     recommendations.append("Failed to save best configuration - manually apply best parameters")
@@ -57297,7 +58924,7 @@ def run_hyperparameter_optimization(
         return hpo_results
     
     except (EOFError, KeyboardInterrupt):
-        print("\nHyperparameter optimization interrupted by user!")
+        print(Fore.RED + Style.BRIGHT + "\nHyperparameter optimization interrupted by user!")
         return {
             'success': False,
             'error': 'Interrupted by user',
@@ -57359,7 +58986,7 @@ def run_hyperparameter_optimization(
 
 def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
     """
-    Launch hyperparameter optimization with comprehensive configuration support and error handling.
+    Launch hyperparameter optimization with configuration support and error handling.
     
     Enhanced to work seamlessly with express HPO setup, providing consistent
     configuration handling, error reporting, and user experience.
@@ -57470,7 +59097,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         hpo_params['objective_metric'] = hpo_config.get('objective_metric', 'validation_loss')
         
         # Optimization focus strategy (balanced/accuracy/speed/efficiency)
-        hpo_params['optimization_focus'] = hpo_config.get('optimization_focus', 'balanced')
+        hpo_params['optimization_focus'] = hpo_config.get('optimization_focus', 'speed')
         
         # System-aware parallel processing settings
         hpo_params['parallel_trials'] = hpo_config.get('parallel_trials', min(2, cpu_cores // 2) if cpu_cores > 4 else 1)
@@ -62075,12 +63702,12 @@ def _interactive_hpo_express_setup(
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
             
             # Focus recommendation based on preset and system
-            focus_recommendation = '1'  # Balanced by default
-            print(Fore.YELLOW + Style.BRIGHT + "  ├─ Default recommendation: Balanced - general optimization (default/baseline/stability presets)")
+            focus_recommendation = '3'  # Balanced by default
+            print(Fore.YELLOW + Style.BRIGHT + "  ├─ Default recommendation: Speed - optimized training with limited resources (performance/debug/lightweight)")
             
             if preset_name.lower() in ['default', 'baseline', 'stability']:
-                focus_recommendation = '3'  # Speed for performance preset
-                print(Fore.YELLOW + Style.BRIGHT + "  └─ Preset recommendation: Balanced - for optimized training (performance preset)")
+                focus_recommendation = '1'  # Speed for performance preset
+                print(Fore.YELLOW + Style.BRIGHT + "  └─ Preset recommendation: Balanced - for optimized training (default/baseline/stability presets)")
             elif preset_name.lower() == 'advanced':
                 focus_recommendation = '2'  # Accuracy for advanced preset
                 print(Fore.YELLOW + Style.BRIGHT + "  └─ Preset recommendation: Accuracy - for high-performance system (advanced preset)")
@@ -62088,7 +63715,7 @@ def _interactive_hpo_express_setup(
                 focus_recommendation = '3'  # Speed for resource-constrained presets
                 print(Fore.YELLOW + Style.BRIGHT + " └─ Preset recommendation: Speed - optimized training with limited resources (performance/debug/lightweight)")
             elif system_class in ["limited", "standard"]:
-                focus_recommendation = '3'  # Speed for limited systems
+                focus_recommendation = '4'  # Speed for limited systems
                 print(Fore.YELLOW + Style.BRIGHT + " └─ System recommendation: Speed - for limited resources/standard systems")
             
             focus_configs = {
@@ -62146,7 +63773,7 @@ def _interactive_hpo_express_setup(
                 return None
                 
             focus_map = {'1': 'balanced', '2': 'accuracy', '3': 'speed', '4': 'efficiency'}
-            optimization_focus = focus_map.get(focus_choice, 'balanced')
+            optimization_focus = focus_map.get(focus_choice, 'speed')
             focus_config = focus_configs[focus_choice]
             
             print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{focus_config['name']} Focus")
