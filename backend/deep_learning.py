@@ -57592,7 +57592,7 @@ def setup_hyperparameter_optimization(
         progress_data['current_stage'] = "Saving Study"
         setup_results['current_stage'] = "Saving Study"
 
-        # ENHANCED CONFIGURATION VALIDATION AND SERIALIZATION
+        # Configuration validation and serialization
         def validate_serializable(obj, path="root", max_depth=10, current_depth=0):
             """
             Recursively validate object is JSON serializable with depth protection.
@@ -57660,7 +57660,7 @@ def setup_hyperparameter_optimization(
 
         def create_serializable_config(config_dict, max_depth=10, current_depth=0, progress_bar=None, total_items=None, current_item=[0]):
             """
-            Create a fully serializable version of configuration dictionary with progress tracking.
+            Create a fully serializable version of configuration dictionary.
             
             Args:
                 config_dict: Dictionary to serialize
@@ -57987,7 +57987,7 @@ def setup_hyperparameter_optimization(
 
         # Define optimization function
         def run_optimization():
-            """Run the optimization process with enhanced monitoring, resilience, and progress tracking"""
+            """Run the optimization process."""
             
             # Start timing
             optimization_start_time = time.time()
@@ -58011,7 +58011,7 @@ def setup_hyperparameter_optimization(
                 'system_class': system_class
             }
             
-            # Enhanced callback system
+            # Callback system
             enhanced_callbacks = callbacks.copy() if callbacks else []
             
             # Progress tracking callback
@@ -58065,9 +58065,7 @@ def setup_hyperparameter_optimization(
                     else:
                         value_color = Fore.WHITE + Style.BRIGHT
                     
-                    print(f"{Fore.CYAN}Trial {trial.number:3d} | {value_color}Value: {trial.value:.6f}{Style.RESET_ALL} | "
-                        f"{Fore.GREEN}Best: {study.best_value:.6f}{Style.RESET_ALL} | "
-                        f"{Fore.BLUE}Progress: {trials_completed}/{trials_total} ({progress_pct:.1f}%){Style.RESET_ALL}")
+                    print(f"{Fore.CYAN + Style.BRIGHT}Trial {trial.number:3d} | {value_color}Value: {trial.value:.6f}{Style.RESET_ALL} | {Fore.GREEN + Style.BRIGHT}Best: {study.best_value:.6f}{Style.RESET_ALL} | {Fore.BLUE + Style.BRIGHT}Progress: {trials_completed}/{trials_total} ({progress_pct:.1f}%){Style.RESET_ALL}")
                     
                     # Periodic status updates
                     if trials_completed % 10 == 0 or trials_completed == trials_total:
@@ -58075,15 +58073,14 @@ def setup_hyperparameter_optimization(
                         eta_seconds = avg_duration * (trials_total - trials_completed) if avg_duration > 0 else 0
                         eta_str = f"{eta_seconds / 60:.1f} min" if eta_seconds > 60 else f"{eta_seconds:.0f} sec"
                         
-                        print(f"{Fore.MAGENTA}Status: {trials_completed}/{trials_total} trials | "
-                            f"Avg trial: {avg_duration:.1f}s | ETA: {eta_str}{Style.RESET_ALL}")
+                        print(f"{Fore.MAGENTA + Style.BRIGHT}Status: {trials_completed}/{trials_total} trials | Avg trial: {avg_duration:.1f}s | ETA: {eta_str}{Style.RESET_ALL}")
                 
                 elif verbose and trial.state == optuna.trial.TrialState.PRUNED:
-                    print(f"{Fore.YELLOW}Trial {trial.number:3d} pruned early | Best: {study.best_value:.6f}{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW + Style.BRIGHT}Trial {trial.number:3d} pruned early | Best: {study.best_value:.6f}{Style.RESET_ALL}")
                 
                 elif verbose and trial.state == optuna.trial.TrialState.FAIL:
                     error_msg = trial.user_attrs.get('error', 'Unknown error')
-                    print(f"{Fore.RED}Trial {trial.number:3d} failed: {error_msg[:50]}...{Style.RESET_ALL}")
+                    print(f"{Fore.RED + Style.BRIGHT}Trial {trial.number:3d} failed: {error_msg[:50]}...{Style.RESET_ALL}")
             
             # Enhanced early stopping callback
             def enhanced_early_stopping_callback(study, trial):
@@ -58112,8 +58109,7 @@ def setup_hyperparameter_optimization(
                         
                         optimization_stats['early_stopping_triggered'] = True
                         if verbose:
-                            print(f"{Fore.YELLOW}Early stopping triggered after {len(study.trials)} trials "
-                                f"(no improvement in {len(recent_complete_trials)} trials){Style.RESET_ALL}")
+                            print(f"{Fore.YELLOW + Style.BRIGHT}Early stopping triggered after {len(study.trials)} trials (no improvement in {len(recent_complete_trials)} trials){Style.RESET_ALL}")
                         study.stop()
             
             # Timeout monitoring callback
@@ -58126,13 +58122,13 @@ def setup_hyperparameter_optimization(
                     # Warn when 10% time remaining
                     if remaining > 0 and remaining < timeout_seconds * 0.1:
                         if verbose and int(remaining) % 30 == 0:  # Warn every 30 seconds
-                            print(f"{Fore.YELLOW}Timeout warning: {remaining:.0f} seconds remaining{Style.RESET_ALL}")
+                            print(f"{Fore.YELLOW + Style.BRIGHT}Timeout warning: {remaining:.0f} seconds remaining{Style.RESET_ALL}")
                     
                     # Stop when timeout reached
                     if remaining <= 0:
                         optimization_stats['timeout_triggered'] = True
                         if verbose:
-                            print(f"{Fore.YELLOW}Timeout reached after {elapsed:.0f} seconds{Style.RESET_ALL}")
+                            print(f"{Fore.YELLOW + Style.BRIGHT}Timeout reached after {elapsed:.0f} seconds{Style.RESET_ALL}")
                         study.stop()
             
             # Resource optimization callback
@@ -58163,14 +58159,14 @@ def setup_hyperparameter_optimization(
             
             # Display optimization header
             if verbose:
-                print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
+                #print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
                 print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION STARTED")
                 print(Fore.CYAN + Style.BRIGHT + "-"*40)
-                print(Fore.YELLOW + Style.BRIGHT + f"Study: {study_name}")
-                print(Fore.GREEN + Style.BRIGHT + f"Target: {n_trials} trials" + (f" or {timeout_seconds}s" if timeout_seconds > 0 else ""))
-                print(Fore.BLUE + Style.BRIGHT + f"Focus: {optimization_focus.title()} | System: {system_class.upper()}")
-                print(Fore.CYAN + Style.BRIGHT + f"Started: {start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
-                print(Fore.CYAN + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
+                print(Fore.GREEN + Style.BRIGHT + "Study: " + Fore.YELLOW + Style.BRIGHT + f"{study_name}")
+                print(Fore.GREEN + Style.BRIGHT + "Target: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials} trials" + (f" or {timeout_seconds}s" if timeout_seconds > 0 else ""))
+                print(Fore.GREEN + Style.BRIGHT + "Focus: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_focus.title()} | System: {system_class.upper()}")
+                print(Fore.GREEN + Style.BRIGHT + "Started: " + Fore.YELLOW + Style.BRIGHT + f"{start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+                print(Fore.CYAN + Style.BRIGHT + "-"*40 + "\n" + Style.RESET_ALL)
             
             try:
                 # Pre-optimization memory optimization
@@ -58239,11 +58235,11 @@ def setup_hyperparameter_optimization(
                     
                     print(Fore.YELLOW + Style.BRIGHT + "Results Summary:")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Best Value: " + value_color + Style.BRIGHT + f"{value_display}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials Completed: " + Fore.WHITE + Style.BRIGHT + f"{completed_trials}/{n_trials}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Success Rate: " + Fore.WHITE + Style.BRIGHT + f"{success_rate:.1f}%")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimization Time: " + Fore.WHITE + Style.BRIGHT + f"{optimization_time/60:.1f} minutes")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Avg Trial Time: " + Fore.WHITE + Style.BRIGHT + f"{optimization_results['average_trial_time_seconds']:.1f}s")
-                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Completion Reason: " + Fore.WHITE + Style.BRIGHT + f"{optimization_results['completion_reason'].replace('_', ' ').title()}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Trials Completed: " + Fore.YELLOW + Style.BRIGHT + f"{completed_trials}/{n_trials}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Success Rate: " + Fore.YELLOW + Style.BRIGHT + f"{success_rate:.1f}%")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimization Time: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_time/60:.1f} minutes")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Avg Trial Time: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_results['average_trial_time_seconds']:.1f}s")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Completion Reason: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_results['completion_reason'].replace('_', ' ').title()}")
                     
                     # Best parameters preview
                     if study.best_params:
@@ -58252,7 +58248,7 @@ def setup_hyperparameter_optimization(
                         for key, value in list(study.best_params.items())[:5]:  # Show first 5 params
                             param_count += 1
                             if param_count <= 5:
-                                print(Fore.GREEN + Style.BRIGHT + f"  ├─ {key}: " + Fore.WHITE + Style.BRIGHT + f"{value}")
+                                print(Fore.GREEN + Style.BRIGHT + f"  ├─ {key}: " + Fore.YELLOW + Style.BRIGHT + f"{value}")
                         if len(study.best_params) > 5:
                             print(Fore.GREEN + Style.BRIGHT + f"  └─ ... and {len(study.best_params) - 5} more parameters")
                     
@@ -58286,10 +58282,10 @@ def setup_hyperparameter_optimization(
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 
                 if verbose:
-                    print(Fore.RED + Style.BRIGHT + f"\nOptimization failed after {optimization_time/60:.1f} minutes")
-                    print(Fore.RED + Style.BRIGHT + f"Error: {str(e)}")
+                    print(Fore.RED + Style.BRIGHT + "\nOptimization failed after " + Fore.YELLOW + Style.BRIGHT + f"{optimization_time/60:.1f} minutes")
+                    print(Fore.RED + Style.BRIGHT + "Error: " + Fore.YELLOW + Style.BRIGHT + f"{str(e)}")
                     if completed_trials > 0:
-                        print(Fore.YELLOW + Style.BRIGHT + f"Partial results available from {completed_trials} completed trials")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nPartial results available from " + Fore.GREEN + Style.BRIGHT + f"{completed_trials} completed trials")
                 
                 return error_results
             
@@ -59252,7 +59248,18 @@ def setup_hyperparameter_optimization(
     except KeyboardInterrupt:
         error_msg = "HPO setup cancelled by user."
         logger.warning(error_msg)
-        return None
+
+        # Update error results tracking
+        setup_results.update({
+            'success': False,
+            'error': error_msg,
+            'error_type': 'KeyboardInterrupt',
+            'end_time': datetime.now().isoformat(),
+            'total_time_seconds': time.time() - setup_start_time,
+            'progress_data': progress_data
+        })
+        
+        return setup_results
     
     except Exception as e:
         error_msg = f"HPO setup failed: {str(e)}"
@@ -60209,7 +60216,9 @@ def run_hyperparameter_optimization(
     
     except KeyboardInterrupt:
         print(Fore.RED + Style.BRIGHT + "\nHyperparameter optimization interrupted by user!")
-        return {
+
+        # Update error results tracking
+        hpo_results.update({
             'success': False,
             'error': 'Interrupted by user',
             'error_type': 'KeyboardInterrupt',
@@ -60220,7 +60229,12 @@ def run_hyperparameter_optimization(
             'configuration': hpo_section,
             'express_context': hpo_results.get('express_context', {}),
             'progress_data': progress_data
-        }
+        })
+
+        if not verbose:
+            _display_hpo_results(hpo_results)
+        
+        return hpo_results
     
     except Exception as e:
         error_msg = f"Hyperparameter optimization failed: {str(e)}"
@@ -63035,7 +63049,9 @@ def _run_quick_hpo_test(
             
     except KeyboardInterrupt:
         print(Fore.RED + Style.BRIGHT + "\nQuick HPO test interrupted by user!")
+        # Return to previous menu
         return None
+    
     except Exception as e:
         logger.error(f"Quick HPO test setup failed: {e}", exc_info=True)
         
@@ -64240,6 +64256,11 @@ def _handle_hpo_result(result: Optional[Dict[str, Any]], hpo_type: str) -> None:
                 print(Fore.RED + Style.BRIGHT + "⚠ Review recommendations for recovery steps")
             
             print(Fore.RED + Style.BRIGHT + "-"*40)
+    
+    except KeyboardInterrupt:
+        print(Fore.RED + Style.BRIGHT + "\nHPO result handling interrupted by user")
+        # Exit gracefully
+        return
     
     except Exception as e:
         # Error handling for result processing itself
@@ -70279,7 +70300,9 @@ def _interactive_hpo_continue_setup(
                 
     except KeyboardInterrupt:
         print(Fore.RED + Style.BRIGHT + "\nStudy continuation setup interrupted")
+        # Return to previous menu
         return None
+    
     except Exception as e:
         logger.error(f"Study continuation setup failed: {e}")
         print(Fore.RED + Style.BRIGHT + f"\nStudy continuation setup failed: {str(e)}")
@@ -71654,6 +71677,10 @@ def _display_hpo_results(results: Dict[str, Any]) -> None:
         print(Fore.GREEN + Style.BRIGHT + "  ├─ HPO results summary complete.")
         print(Fore.GREEN + Style.BRIGHT + "  └─ Check generated artifacts for detailed analysis and visualizations.")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
+
+    except KeyboardInterrupt:
+        print(Fore.RED + Style.BRIGHT + "\nHPO results display interrupted by user.")
+        return
         
     except Exception as e:
         logger.error(f"Error displaying HPO results: {e}", exc_info=True)
