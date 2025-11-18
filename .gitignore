@@ -84,6 +84,11 @@ logs/
 *.gz
 *.rar
 *.7z
+*.tgz
+*.bz2
+*.xz
+*.jar
+*.npz
 
 # Temporary files
 *.tmp

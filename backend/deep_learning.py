@@ -9862,10 +9862,7 @@ class ConfigSectionValidators:
         # Scheduler validation
         scheduler = training.get('scheduler')
         if scheduler is not None:
-            valid_schedulers = [
-                'StepLR', 'MultiStepLR', 'ExponentialLR', 'CosineAnnealingLR',
-                'ReduceLROnPlateau', 'CosineAnnealingWarmRestarts', 'OneCycleLR', 'CyclicLR'
-            ]
+            valid_schedulers = ['StepLR', 'MultiStepLR', 'ExponentialLR', 'CosineAnnealingLR', 'ReduceLROnPlateau', 'CosineAnnealingWarmRestarts', 'OneCycleLR', 'CyclicLR']
             if scheduler not in valid_schedulers:
                 errors.append(f"Invalid scheduler: {scheduler}, must be one of {valid_schedulers}")
         
@@ -9961,8 +9958,7 @@ class ParameterValidator:
     """Simplified parameter validation using extracted validation logic."""
     
     @staticmethod
-    def validate_and_update_with_feedback(section_name: str, result_config: Dict, 
-                                        update_config: Dict, changes_made: List[Dict]) -> bool:
+    def validate_and_update_with_feedback(section_name: str, result_config: Dict, update_config: Dict, changes_made: List[Dict]) -> bool:
         """
         Validate and update configuration section using extracted validation logic.
         
@@ -10037,8 +10033,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                     result_model = original[key].copy()
                     
                     # Use centralized validation for basic parameters
-                    basic_params = {k: v for k, v in value.items() 
-                                  if k not in ['hidden_dims', 'dropout_rates', 'num_models', 'diversity_factor']}
+                    basic_params = {k: v for k, v in value.items() if k not in ['hidden_dims', 'dropout_rates', 'num_models', 'diversity_factor']}
                     
                     validation_passed = ParameterValidator.validate_and_update_with_feedback(
                         'model', result_model, basic_params, changes_made
@@ -10075,8 +10070,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                         
                         changes_made.append({
                             'key': 'model.architecture_sync',
-                            'old_value': {'hidden': len(result_model.get('hidden_dims', [])), 
-                                         'dropout': len(result_model.get('dropout_rates', []))},
+                            'old_value': {'hidden': len(result_model.get('hidden_dims', [])), 'dropout': len(result_model.get('dropout_rates', []))},
                             'new_value': {'hidden': len(hidden_dims), 'dropout': len(dropout_rates)},
                             'timestamp': datetime.now().isoformat()
                         })
@@ -10109,8 +10103,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                     result_training = original[key].copy()
                     
                     # Use centralized validation for basic parameters
-                    basic_params = {k: v for k, v in value.items() 
-                                  if k not in ['scheduler_params', 'adam_betas', 'adam_eps']}
+                    basic_params = {k: v for k, v in value.items() if k not in ['scheduler_params', 'adam_betas', 'adam_eps']}
                     
                     validation_passed = ParameterValidator.validate_and_update_with_feedback(
                         'training', result_training, basic_params, changes_made
@@ -16995,12 +16988,12 @@ def save_config_interactive():
             logger.debug(f"Emergency cleanup failed: {cleanup_error}")
 
 def save_config(config: Dict, config_path: Optional[Union[Path, str]] = None, name: Optional[str] = None) -> Path:
-    """Save config with enhanced metadata, backup handling, validation, named configuration support,
+    """Save config with metadata, backup handling, validation, named configuration support,
     and intelligent memory management for optimal performance.
     
     This function can save configurations in multiple ways:
     1. To the default config file (when no parameters provided)
-    2. To a specific path (when config_path provided)  
+    2. To a specific path (when config_path provided)
     3. As a named configuration (when name provided)
     4. Both to default location and as named config (when both provided)
     
@@ -37367,7 +37360,7 @@ def load_and_validate_data(
     log_level: Optional[str] = None,
     progress_bar: Optional[bool] = None,
     silent: Optional[bool] = None,
-    save_statistics: Optional[bool] = None,
+    save_statistics: Optional[bool] = True,
     statistics_path: Optional[Union[str, Path]] = None,
     
     # Compatibility Parameters
@@ -37391,7 +37384,7 @@ def load_and_validate_data(
     # Start timing
     start_time = datetime.now()
     
-    # Initialize configuration with comprehensive defaults
+    # Initialize configuration with defaults
     if config is None:
         try:
             config = get_current_config() if 'get_current_config' in globals() else {}
@@ -37404,14 +37397,15 @@ def load_and_validate_data(
     # Merge with existing config
     final_config.update(config)
     
-    # Apply individual parameters with intelligent organization
+    # Apply individual parameters
     params = locals().copy()
     params.update(kwargs)
     
     # Remove non-parameter items
-    params_to_remove = {'config', 'kwargs', 'start_time', 'datetime', 'traceback', 'hashlib', 'train_test_split', 'StratifiedShuffleSplit',
-                       'StandardScaler', 'MinMaxScaler', 'RobustScaler', 'QuantileTransformer','SelectKBest', 'f_classif', 'VarianceThreshold',
-                       'SimpleImputer', 'KNNImputer', 'IsolationForest', 'stats', 'joblib', 'os', 'pd', 'np'}
+    params_to_remove = {
+        'config', 'kwargs', 'start_time', 'datetime', 'traceback', 'hashlib', 'train_test_split', 'StratifiedShuffleSplit', 'StandardScaler', 'MinMaxScaler', 'RobustScaler',
+        'QuantileTransformer','SelectKBest', 'f_classif', 'VarianceThreshold', 'SimpleImputer', 'KNNImputer', 'IsolationForest', 'stats', 'joblib', 'os', 'pd', 'np'
+    }
     
     cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
     
@@ -37462,7 +37456,7 @@ def load_and_validate_data(
             if param in cleaned_params:
                 section_config[param] = cleaned_params[param]
     
-    # Set up comprehensive defaults
+    # Set up defaults
     data_loading_config = final_config.setdefault('data_loading', {})
     data_validation_config = final_config.setdefault('data_validation', {})
     data_processing_config = final_config.setdefault('data_processing', {})
@@ -37483,7 +37477,7 @@ def load_and_validate_data(
         monitoring_config['verbose'] = False
         monitoring_config['progress_bar'] = False
     
-    # Set intelligent defaults
+    # Data Loading parameters
     use_real_data = data_loading_config.setdefault('use_real_data', True)
     data_format = data_loading_config.setdefault('data_format', 'csv')
     encoding = data_loading_config.setdefault('encoding', 'utf-8')
@@ -37521,10 +37515,11 @@ def load_and_validate_data(
     validate_data_integrity = security_config.setdefault('validate_data_integrity', True)
     check_data_corruption = security_config.setdefault('check_data_corruption', False)
     
-    # Monitoring parameters - respect silent mode
+    # Monitoring parameters
     verbose = monitoring_config.setdefault('verbose', False)
     progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     save_statistics = monitoring_config.setdefault('save_statistics', True)
+    statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
     
     # Advanced parameters
     data_quality_checks = advanced_config.setdefault('data_quality_checks', True)
@@ -37536,7 +37531,7 @@ def load_and_validate_data(
         logger.setLevel(logging.INFO)
     
     if not silent_mode:
-        logger.info("Starting comprehensive data loading and validation")
+        logger.info("Starting data loading and validation")
     
     # Initialize progress tracking
     progress_data = {
@@ -37549,7 +37544,7 @@ def load_and_validate_data(
         'validation_failed': 0
     }
     
-    # Initialize comprehensive statistics
+    # Initialize statistics
     loading_stats = {
         'start_time': start_time.isoformat(),
         'data_path': None,
@@ -37762,8 +37757,8 @@ def load_and_validate_data(
                 if not silent_mode:
                     logger.info("Generating synthetic data")
                 
-                normal_samples = synthetic_data_config.get('synthetic_normal_samples', 1000)
-                attack_samples = synthetic_data_config.get('synthetic_attack_samples', 200)
+                normal_samples = synthetic_data_config.get('synthetic_normal_samples', 8000)
+                attack_samples = synthetic_data_config.get('synthetic_attack_samples', 2000)
                 n_features = min_features
                 generation_method = synthetic_data_config.get('synthetic_generation_method', 'gaussian')
                 noise_level = synthetic_data_config.get('synthetic_noise_level', 0.1)
@@ -37830,7 +37825,7 @@ def load_and_validate_data(
                 main_bar.text = "Validating data structure and quality..."
             
             if not silent_mode:
-                logger.info("Performing comprehensive data validation")
+                logger.info("Performing data validation")
             
             if df is None or df.empty:
                 error_msg = "No data loaded or generated"
@@ -37921,7 +37916,7 @@ def load_and_validate_data(
                     main_bar.text = "Performing data quality checks..."
                 
                 if not silent_mode:
-                    logger.info("Performing comprehensive data quality checks")
+                    logger.info("Performing data quality checks")
                 
                 # Check for infinite values
                 inf_mask = np.isinf(X)
@@ -38436,12 +38431,12 @@ def load_and_validate_data(
             if not silent_mode:
                 main_bar()
         
-        # Log summary only if not in silent mode
+        # Log summary
         total_time = (datetime.now() - start_time).total_seconds()
         loading_stats['total_processing_time'] = total_time
         loading_stats['completion_status'] = 'success'
         
-        if not silent_mode:
+        if verbose:
             logger.info("-" * 40)
             logger.info("DATA LOADING SUMMARY")
             logger.info("-" * 40)
@@ -38749,7 +38744,7 @@ def generate_synthetic_data(
     
     # Directory Parameters
     data_dir: Optional[Union[str, Path]] = None,
-    dataset_dir: Optional[Union[str, Path]] = None,
+    datasets_dir: Optional[Union[str, Path]] = None,
     results_dir: Optional[Union[str, Path]] = None,
     reports_dir: Optional[Union[str, Path]] = None,
 
@@ -38826,48 +38821,37 @@ def generate_synthetic_data(
             'label_column', 'feature_names', 'feature_prefix', 'output_format', 'data_type'
         ],
         'generation_methods': [
-            'generation_method', 'generation_strategy', 'distribution_type', 'cluster_centers',
-            'cluster_variance', 'cluster_separation'
+            'generation_method', 'generation_strategy', 'distribution_type', 'cluster_centers', 'cluster_variance', 'cluster_separation'
         ],
         'normal_data': [
-            'normal_mean', 'normal_std', 'normal_distribution', 'normal_clusters',
-            'normal_cluster_variance', 'normal_bounds', 'normal_correlation'
+            'normal_mean', 'normal_std', 'normal_distribution', 'normal_clusters', 'normal_cluster_variance', 'normal_bounds', 'normal_correlation'
         ],
         'attack_data': [
-            'attack_mean', 'attack_std', 'attack_distribution', 'attack_clusters',
-            'attack_cluster_variance', 'attack_bounds', 'attack_correlation',
-            'attack_types', 'attack_proportions'
+            'attack_mean', 'attack_std', 'attack_distribution', 'attack_clusters', 'attack_cluster_variance', 'attack_bounds', 'attack_correlation', 'attack_types', 'attack_proportions'
         ],
         'anomaly_config': [
-            'anomaly_sparsity', 'anomaly_intensity', 'anomaly_patterns', 'anomaly_correlation',
-            'seasonal_anomalies', 'contextual_anomalies', 'point_anomalies', 'collective_anomalies'
+            'anomaly_sparsity', 'anomaly_intensity', 'anomaly_patterns', 'anomaly_correlation', 'seasonal_anomalies', 'contextual_anomalies', 'point_anomalies', 'collective_anomalies'
         ],
         'data_splitting': [
             'validation_split', 'test_split', 'stratified_split', 'shuffle'
         ],
         'noise_parameters': [
-            'noise_level', 'noise_type', 'gaussian_noise_std', 'uniform_noise_range',
-            'salt_pepper_ratio'
+            'noise_level', 'noise_type', 'gaussian_noise_std', 'uniform_noise_range', 'salt_pepper_ratio'
         ],
         'feature_engineering': [
-            'correlated_features', 'correlation_matrix', 'feature_dependencies',
-            'redundant_features', 'informative_features', 'feature_scaling'
+            'correlated_features', 'correlation_matrix', 'feature_dependencies', 'redundant_features', 'informative_features', 'feature_scaling'
         ],
         'temporal_parameters': [
-            'temporal_data', 'time_steps', 'temporal_pattern', 'trend_component',
-            'seasonal_component', 'temporal_noise'
+            'temporal_data', 'time_steps', 'temporal_pattern', 'trend_component', 'seasonal_component', 'temporal_noise'
         ],
         'quality_control': [
-            'outlier_contamination', 'class_balance_ratio', 'minimum_separation',
-            'overlap_factor', 'separability_score'
+            'outlier_contamination', 'class_balance_ratio', 'minimum_separation', 'overlap_factor', 'separability_score'
         ],
         'advanced_generation': [
-            'multimodal_data', 'mixture_components', 'mixture_weights',
-            'non_linear_relationships', 'polynomial_degree', 'interaction_features'
+            'multimodal_data', 'mixture_components', 'mixture_weights', 'non_linear_relationships', 'polynomial_degree', 'interaction_features'
         ],
         'statistical_properties': [
-            'skewness', 'kurtosis', 'heavy_tails', 'distribution_parameters',
-            'moment_constraints'
+            'skewness', 'kurtosis', 'heavy_tails', 'distribution_parameters', 'moment_constraints'
         ],
         'scalability': [
             'batch_generation', 'batch_size', 'memory_efficient', 'parallel_generation', 'n_jobs'
@@ -38899,6 +38883,9 @@ def generate_synthetic_data(
             if param in cleaned_params:
                 section_config[param] = cleaned_params[param]
     
+    # Detect active preset for logging
+    active_preset = final_config.get('metadata', {}).get('preset_used', final_config.get('presets', {}).get('current_preset', 'unknown'))
+    
     # Set up comprehensive defaults
     core_config = final_config.setdefault('core_generation', {})
     data_structure_config = final_config.setdefault('data_structure', {})
@@ -38913,6 +38900,7 @@ def generate_synthetic_data(
     advanced_config = final_config.setdefault('advanced_generation', {})
     monitoring_config = final_config.setdefault('monitoring', {})
     export_config = final_config.setdefault('export', {})
+    system_config = final_config.setdefault('system', {})
     
     # Handle silent mode - override verbose and progress_bar if silent is True
     silent_mode = monitoring_config.get('silent', False)
@@ -38981,14 +38969,427 @@ def generate_synthetic_data(
     progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     log_generation_stats = monitoring_config.setdefault('log_generation_stats', True)
     generation_report = monitoring_config.setdefault('generation_report', True)
-    
+
+    # Directory defaults
+    reports_dir = system_config.setdefault('reports_dir', Path(REPORTS_DIR / active_preset))
+    data_dir = system_config.setdefault('data_dir', Path(DATA_DIR / active_preset))
+    datasets_dir = system_config.setdefault('dataset_dir', Path(DATASETS_DIR / active_preset))
+    results_dir = system_config.setdefault('results_dir', Path(RESULTS_DIR / active_preset))
+
+    # Export defaults
+    #save_data = export_config.get('save_data', True)
+    file_format = export_config.setdefault('file_format', None)
+    compression = export_config.setdefault('compression', None)
+    metadata_file = export_config.setdefault('metadata_file', True)
+
+    # Check if save_data was explicitly provided
+    save_data_provided = ('save_data' in export_config or save_data is not None or 'export' in config and 'save_data' in config.get('export', {}))
+
+    if not save_data_provided:
+        # Check if we're in a non-interactive context
+        is_automated_context = (
+            'automated_mode' in system_config and system_config['automated_mode'] is True or
+            'silent' in monitoring_config and monitoring_config['silent'] is True or
+            'non_interactive' in system_config and system_config['non_interactive'] is True or
+            not sys.stdin.isatty()  # Not connected to a terminal
+        )
+        
+        if is_automated_context:
+            # Use defaults without prompting in automated contexts
+            save_data = True
+            file_format = 'csv'
+            compression = 'zip'
+            metadata_file = True
+            
+            # Update configuration
+            export_config['save_data'] = save_data
+            export_config['file_format'] = file_format
+            export_config['compression'] = compression
+            export_config['metadata_file'] = metadata_file
+            final_config['export'] = export_config
+            
+            if verbose:
+                logger.info("Using default export configuration (automated context)")
+                print(Fore.CYAN + Style.BRIGHT + f"\nUsing default export configuration (automated context):")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
+        else:
+            # Set to None to trigger interactive prompt
+            save_data = None
+    else:
+        save_data = export_config.get('save_data', True)
+
+    # Interactive Export Configuration
+    if save_data is None:
+        # Check interactive environment that supports user input
+        try:
+            # Test Jupyter notebook or interactive environment
+            if hasattr(__builtins__, '__IPYTHON__') or 'ipykernel' in str(__builtins__):
+                interactive_mode = True
+            else:
+                # Test tty for interactive input
+                interactive_mode = sys.stdin.isatty()
+        except:
+            interactive_mode = False
+        
+        if interactive_mode:
+            print(Fore.CYAN + Style.BRIGHT + "\nEXPORT CONFIGURATION")
+            print(Fore.YELLOW + Style.BRIGHT + "Current status:")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Save data: " + Fore.GREEN + Style.BRIGHT + f"{save_data}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ File format: " + Fore.GREEN + Style.BRIGHT + f"{file_format}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.GREEN + Style.BRIGHT + f"{compression}")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ Save metadata file: " + Fore.GREEN + Style.BRIGHT + f"{metadata_file}")
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Output directory: " + Fore.GREEN + Style.BRIGHT + f"{datasets_dir}")
+
+            # Supported file formats
+            supported_file_formats = {
+                'csv': 'Comma-separated values (universal compatibility)',
+                'parquet': 'Columnar storage (efficient for large datasets)',
+                'json': 'JSON format (human readable)',
+                'pickle': 'Python pickle (preserves data types)',
+                'npy': 'NumPy .npy format (fast loading)',
+                'npz': 'Compressed NumPy format (multiple arrays)',
+                'hdf5': 'HDF5 format (large datasets, efficient)',
+                'feather': 'Feather format (fast I/O)'
+            }
+
+            # Supported compression types
+            supported_compressions = {
+                None: 'No compression',
+                'gzip': 'GZIP compression (good balance)',
+                'zip': 'ZIP compression',
+                'bz2': 'BZIP2 compression (better ratio)',
+                'xz': 'XZ compression (high ratio)',
+                'zstd': 'Zstandard compression (fast)'
+            }
+
+            config_updated = False
+            
+            try:
+                # Save data confirmation
+                print(Fore.YELLOW + Style.BRIGHT + "\nSave data generation (default): " + Fore.GREEN + Style.BRIGHT + "True")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
+                save_data_confirm = input(Fore.YELLOW + Style.BRIGHT + f"\nDo you want to save generation data? (Y/n/c): " + Style.RESET_ALL).strip().upper()
+
+                if save_data_confirm in ('C', 'CANCEL'):
+                    print(Fore.RED + Style.BRIGHT + "\nExport configuration cancelled." + Style.RESET_ALL)
+                    # Set to default and persist immediately
+                    save_data = True
+                    file_format = file_format or 'csv'
+                    compression = compression or 'zip'
+                    
+                    # Update configuration
+                    export_config['save_data'] = save_data
+                    export_config['file_format'] = file_format
+                    export_config['compression'] = compression
+                    export_config['metadata_file'] = metadata_file
+                    final_config['export'] = export_config
+                    
+                    config_updated = False
+                    
+                elif save_data_confirm in ('N', 'NO'):
+                    save_data = False
+                    
+                    # Update configuration
+                    export_config['save_data'] = save_data
+                    export_config['file_format'] = None
+                    export_config['compression'] = None
+                    final_config['export'] = export_config
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nSave data generation disabled")
+                    print(Fore.GREEN + Style.BRIGHT + "  └─ Output from synthetic data generation will not be saved")
+                    config_updated = True
+                    
+                elif save_data_confirm in ('', 'Y', 'YES'):
+                    save_data = True
+                    
+                    # Update save_data
+                    export_config['save_data'] = save_data
+                    final_config['export']['save_data'] = save_data
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nSave data generation is enabled:")
+                    print(Fore.GREEN + Style.BRIGHT + "  └─ Output from synthetic data generation will be saved")
+                    config_updated = True
+                    
+                    # File format selection
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nFile format (default): " + Fore.GREEN + Style.BRIGHT + "csv")
+                    print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
+
+                    for i, (format_key, format_desc) in enumerate(supported_file_formats.items(), 1):
+                        current = Fore.GREEN + Style.BRIGHT + " (current)" if format_key == file_format else ""
+                        print(Fore.WHITE + Style.BRIGHT + f"  {i}. {format_key:8} - " + Fore.CYAN + Style.BRIGHT + f"{format_desc}{current}")
+
+                    while True:
+                        try:
+                            file_format_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect file format type (1-{len(supported_file_formats)}, or 0 to cancel): " + Style.RESET_ALL).strip()
+
+                            if file_format_choice == '0':
+                                print(Fore.RED + Style.BRIGHT + "\nFile format selection cancelled." + Style.RESET_ALL)
+                                print(Fore.GREEN + Style.BRIGHT + "\nUsing default: " + Fore.YELLOW + Style.BRIGHT + "csv" + Style.RESET_ALL)
+                                file_format = 'csv'
+                                # Update immediately
+                                export_config['file_format'] = file_format
+                                final_config['export']['file_format'] = file_format
+                                break
+                            elif not file_format_choice:
+                                file_format = 'csv'
+                                # Update immediately
+                                export_config['file_format'] = file_format
+                                final_config['export']['file_format'] = file_format
+                                print(Fore.GREEN + Style.BRIGHT + "\nUsing default file format: " + Fore.YELLOW + Style.BRIGHT + "csv" + Style.RESET_ALL)
+                                break
+                            elif file_format_choice.isdigit():
+                                choice_idx = int(file_format_choice) - 1
+                                if 0 <= choice_idx < len(supported_file_formats):
+                                    selected_format = list(supported_file_formats.keys())[choice_idx]
+                                    file_format = selected_format
+                                    # Update immediately
+                                    export_config['file_format'] = selected_format
+                                    final_config['export']['file_format'] = selected_format
+                                    print(Fore.GREEN + Style.BRIGHT + f"\nSelected format: " + Fore.YELLOW + Style.BRIGHT + f"{selected_format}" + Style.RESET_ALL)
+                                    break
+                                else:
+                                    print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(supported_file_formats)}" + Style.RESET_ALL)
+                            else:
+                                # Try to match by name
+                                if file_format_choice.lower() in supported_file_formats:
+                                    file_format = file_format_choice.lower()
+                                    # Update immediately
+                                    export_config['file_format'] = file_format
+                                    final_config['export']['file_format'] = file_format
+                                    print(Fore.GREEN + Style.BRIGHT + f"Selected format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}" + Style.RESET_ALL)
+                                    break
+                                else:
+                                    print(Fore.RED + Style.BRIGHT + f"\nUnknown format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format_choice}." + Style.RESET_ALL)
+                        except (EOFError, KeyboardInterrupt):
+                            print(Fore.GREEN + Style.BRIGHT + "\nUsing default file format: " + Fore.YELLOW + Style.BRIGHT + "csv" + Style.RESET_ALL)
+                            file_format = 'csv'
+                            # Update immediately
+                            export_config['file_format'] = file_format
+                            final_config['export']['file_format'] = file_format
+                            break
+
+                    # Compression selection
+                    compressible_formats = ['csv', 'parquet', 'json', 'pickle']
+                    if file_format in compressible_formats:
+                        print(Fore.YELLOW + Style.BRIGHT + f"\nCompression type (default): " + Fore.GREEN + Style.BRIGHT + "zip")
+                        print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
+
+                        for i, (comp_key, comp_desc) in enumerate(supported_compressions.items(), 1):
+                            current = Fore.GREEN + Style.BRIGHT + " (current)" if comp_key == compression else ""
+                            comp_display = comp_key if comp_key else 'None'
+                            print(Fore.WHITE + Style.BRIGHT + f"  {i}. {comp_display:6} - " + Fore.CYAN + Style.BRIGHT + f"{comp_desc}{current}")
+
+                        while True:
+                            try:
+                                compression_type_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect compression type (1-{len(supported_compressions)}, or 0 to cancel): " + Style.RESET_ALL).strip()
+
+                                if compression_type_choice == '0':
+                                    print(Fore.RED + Style.BRIGHT + "\nCompression selection cancelled." + Style.RESET_ALL)
+                                    print(Fore.GREEN + Style.BRIGHT + "\nUsing default: " + Fore.YELLOW + Style.BRIGHT + "zip" + Style.RESET_ALL)
+                                    compression = 'zip'
+                                    # Update immediately
+                                    export_config['compression'] = compression
+                                    final_config['export']['compression'] = compression
+                                    break
+                                elif not compression_type_choice:
+                                    compression = 'zip'
+                                    # Update immediately
+                                    export_config['compression'] = compression
+                                    final_config['export']['compression'] = compression
+                                    print(Fore.GREEN + Style.BRIGHT + "\nUsing default compression: " + Fore.YELLOW + Style.BRIGHT + "zip" + Style.RESET_ALL)
+                                    break
+                                elif compression_type_choice.isdigit():
+                                    choice_idx = int(compression_type_choice) - 1
+                                    if 0 <= choice_idx < len(supported_compressions):
+                                        selected_comp = list(supported_compressions.keys())[choice_idx]
+                                        compression = selected_comp
+                                        # Update immediately
+                                        export_config['compression'] = selected_comp
+                                        final_config['export']['compression'] = selected_comp
+                                        comp_display = selected_comp if selected_comp else 'None'
+                                        print(Fore.GREEN + Style.BRIGHT + f"\nSelected compression: " + Fore.YELLOW + Style.BRIGHT + f"{comp_display}" + Style.RESET_ALL)
+                                        break
+                                    else:
+                                        print(Fore.RED + Style.BRIGHT + f"\nPlease select 1-{len(supported_compressions)}" + Style.RESET_ALL)
+                                else:
+                                    # Try to match by name
+                                    if compression_type_choice.lower() in [str(c).lower() for c in supported_compressions.keys() if c is not None]:
+                                        for comp_key in supported_compressions:
+                                            if comp_key and str(comp_key).lower() == compression_type_choice.lower():
+                                                compression = comp_key
+                                                # Update immediately
+                                                export_config['compression'] = comp_key
+                                                final_config['export']['compression'] = comp_key
+                                                print(Fore.GREEN + Style.BRIGHT + f"\nSelected compression: " + Fore.YELLOW + Style.BRIGHT + f"{comp_key}" + Style.RESET_ALL)
+                                                break
+                                        break
+                                    elif compression_type_choice.lower() in ['none', 'no', 'false']:
+                                        compression = None
+                                        # Update immediately
+                                        export_config['compression'] = None
+                                        final_config['export']['compression'] = None
+                                        print(Fore.GREEN + Style.BRIGHT + "\nCompression disabled" + Style.RESET_ALL)
+                                        break
+                                    else:
+                                        print(Fore.RED + Style.BRIGHT + f"\nUnknown compression: " + Fore.YELLOW + Style.BRIGHT + f"{compression_type_choice}." + Style.RESET_ALL)
+                            except (EOFError, KeyboardInterrupt):
+                                print(Fore.GREEN + Style.BRIGHT + "\nUsing default compression: " + Fore.YELLOW + Style.BRIGHT + "zip" + Style.RESET_ALL)
+                                compression = 'zip'
+                                # Update immediately
+                                export_config['compression'] = compression
+                                final_config['export']['compression'] = compression
+                                break
+                    else:
+                        print(Fore.RED + Style.BRIGHT + f"\nCompression not available for: " + Fore.YELLOW + Style.BRIGHT + f"{file_format} format." + Style.RESET_ALL)
+                        compression = None
+                        # Update immediately
+                        export_config['compression'] = None
+                        final_config['export']['compression'] = None
+
+                    # Metadata file option
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nSave metadata file (default): " + Fore.GREEN + Style.BRIGHT + "True")
+                    print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
+                    
+                    metadata_choice = input(Fore.YELLOW + Style.BRIGHT + "\nDo you want to save metadata file? (Y/n): " + Style.RESET_ALL).strip().upper()
+
+                    if metadata_choice in ('N', 'NO'):
+                        metadata_file = False
+                    else:
+                        metadata_file = True
+                    
+                    # Update immediately
+                    export_config['metadata_file'] = metadata_file
+                    final_config['export']['metadata_file'] = metadata_file
+                    
+                    if metadata_file:
+                        print(Fore.GREEN + Style.BRIGHT + "\nMetadata file will be saved." + Style.RESET_ALL)
+                    else:
+                        print(Fore.GREEN + Style.BRIGHT + "\nMetadata file will not be saved." + Style.RESET_ALL)
+
+                    # Output directory option
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nOutput directory (current): " + Fore.GREEN + Style.BRIGHT + f"{datasets_dir}")
+                    print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use current directory")
+                    
+                    dir_choice = input(Fore.YELLOW + Style.BRIGHT + "\nChange output directory? (y/N): " + Style.RESET_ALL).strip().lower()
+
+                    if dir_choice in ['y', 'yes']:
+                        new_dir = input(Fore.YELLOW + Style.BRIGHT + "\nEnter new output directory: " + Style.RESET_ALL).strip()
+                        if new_dir:
+                            try:
+                                new_dir_path = Path(new_dir)
+                                new_dir_path.mkdir(parents=True, exist_ok=True)
+                                datasets_dir = new_dir_path
+                                # Update immediately
+                                system_config['dataset_dir'] = new_dir_path
+                                final_config['system']['dataset_dir'] = new_dir_path
+                                print(Fore.GREEN + Style.BRIGHT + f"\nOutput directory set to: " + Fore.YELLOW + Style.BRIGHT + f"{new_dir_path}" + Style.RESET_ALL)
+                            except Exception as e:
+                                print(Fore.RED + Style.BRIGHT + f"\nInvalid directory: " + Fore.YELLOW + Style.BRIGHT + f"{e}" + Style.RESET_ALL)
+                                print(Fore.GREEN + Style.BRIGHT + f"Using default: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_dir}" + Style.RESET_ALL)
+
+                if config_updated and verbose:
+                    print(Fore.CYAN + Style.BRIGHT + "\nFinal Export Configuration:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression if compression else 'None'}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Output directory: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_dir}" + Style.RESET_ALL)
+                
+                # Final consolidation - ensure all values are persisted
+                # This is done regardless of config_updated to ensure consistency
+                export_config['save_data'] = save_data
+                export_config['file_format'] = file_format
+                export_config['compression'] = compression
+                export_config['metadata_file'] = metadata_file
+                system_config['dataset_dir'] = datasets_dir
+                
+                # Update final_config
+                final_config['export'] = export_config
+                final_config['system']['dataset_dir'] = datasets_dir
+
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.GREEN + Style.BRIGHT + "\nUsing default configuration." + Style.RESET_ALL)
+                # Apply defaults
+                save_data = True
+                file_format = file_format or 'csv'
+                compression = compression or 'zip'
+                metadata_file = True
+                
+                # Update configuration
+                export_config['save_data'] = save_data
+                export_config['file_format'] = file_format
+                export_config['compression'] = compression
+                export_config['metadata_file'] = metadata_file
+                final_config['export'] = export_config
+            
+            # After collecting all interactive choices, mark this as configured
+            export_config['_interactive_config_completed'] = True
+            export_config['_config_timestamp'] = datetime.now().isoformat()
+
+        else:
+            # Non-interactive mode
+            if verbose:
+                logger.info("Non-interactive mode: Applying default export configuration")
+                print(Fore.GREEN + Style.BRIGHT + "\nApplying default export configuration automatically" + Style.RESET_ALL)
+            
+            # Apply defaults automatically
+            save_data = True
+            file_format = file_format or 'csv'
+            compression = compression or 'zip'
+            metadata_file = True
+
+            # Update configuration
+            export_config['save_data'] = save_data
+            export_config['file_format'] = file_format
+            export_config['compression'] = compression
+            export_config['metadata_file'] = metadata_file
+            final_config['export'] = export_config
+
+            if verbose:
+                logger.info("Using default export configuration (non-interactive)")
+                print(Fore.CYAN + Style.BRIGHT + f"\nExport configuration applied:")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
+
+    else:
+        # save_data was explicitly provided
+        save_data = export_config.get('save_data', True)
+        
+        # Set defaults if not already set
+        if file_format is None:
+            file_format = export_config.get('file_format', 'csv')
+        if compression is None:
+            compression = export_config.get('compression', 'zip')
+        if metadata_file is None:
+            metadata_file = export_config.get('metadata_file', True)
+
+        # Update configuration
+        export_config['save_data'] = save_data
+        export_config['file_format'] = file_format
+        export_config['compression'] = compression
+        export_config['metadata_file'] = metadata_file
+        final_config['export'] = export_config
+        
+        if verbose:
+            logger.info(f"Using provided configuration: save_data={save_data}, file_format={file_format}, compression={compression}")
+            print(Fore.CYAN + Style.BRIGHT + f"\nExport configuration applied:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
+
     # Set up logging level
     if verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
     if verbose:
-        logger.info("Starting comprehensive synthetic data generation")
+        logger.info("Starting synthetic data generation")
     
     # Initialize progress tracking
     progress_data = {
@@ -39202,7 +39603,7 @@ def generate_synthetic_data(
                     # High variance anomalies
                     X_attack_type = np.random.normal(
                         normal_mean, 
-                        normal_std * anomaly_factor * 2, 
+                        normal_std * anomaly_factor * 2,
                         (n_samples, features)
                     )
                     
@@ -39259,11 +39660,7 @@ def generate_synthetic_data(
                 else:
                     if verbose:
                         logger.warning(f"Unknown attack type '{attack_type}', using high_variance")
-                    X_attack_type = np.random.normal(
-                        normal_mean, 
-                        normal_std * anomaly_factor * 2, 
-                        (n_samples, features)
-                    )
+                    X_attack_type = np.random.normal(normal_mean, normal_std * anomaly_factor * 2, (n_samples, features))
                 
                 # Clip to valid range
                 X_attack_type = np.clip(X_attack_type, 0.0, 1.0)
@@ -39770,9 +40167,9 @@ def generate_synthetic_data(
                     'output_format': output_format,
                     'data_type': data_type,
                     'label_column': label_column,
-                    'save_to_disk': export_config.get('save_data', False),
+                    'save_to_disk': export_config.get('save_data', True),
                     'file_format': export_config.get('file_format', 'none'),
-                    'metadata_saved': export_config.get('metadata_file', False),
+                    'metadata_saved': export_config.get('metadata_file', True),
                     
                     # Progress tracking summary
                     'progress_data': {
@@ -39893,6 +40290,12 @@ def generate_synthetic_data(
                 'data_type': data_type,
                 'output_format': output_format,
                 
+                # Directory information
+                'reports_directory': str(reports_dir),
+                'data_directory': str(data_dir),
+                'datasets_directory': str(datasets_dir),
+                'results_directory': str(results_dir),
+                
                 # Progress tracking summary
                 'progress_summary': {
                     'stages_completed': len(generation_stats['stages_completed']),
@@ -39902,6 +40305,342 @@ def generate_synthetic_data(
                     'final_quality_score': progress_data['data_quality_score']
                 }
             }
+            
+            # Generation Report creation
+            if generation_report:
+                try:
+                    # Generate timestamp for unique filename
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+                    # Use consistent variable name and proper fallback chain
+                    reports_dir = (export_config.get('report_dir') or system_config.get('reports_dir') or REPORTS_DIR / active_preset)
+                    
+                    # Ensure reports_dir is a Path object
+                    reports_dir = Path(reports_dir)
+                    reports_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    # FIRST: Create serializable JSON report
+                    json_filename = f"synthetic_data_generation_report_{timestamp}.json"
+                    json_report_file = reports_dir / json_filename
+                    
+                    # Build report data structure
+                    report_data = {
+                        "report_metadata": {
+                            "generation_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                            "report_version": "1.0",
+                            "report_location": str(reports_dir),
+                            "timestamp": timestamp,
+                            "report_type": "synthetic_data_generation"
+                        },
+                        "export_configuration": {
+                            "save_data": save_data,
+                            "file_format": file_format if save_data else None,
+                            "compression": compression if save_data else None,
+                            "metadata_file": metadata_file if save_data else None,
+                            "output_directory": str(datasets_dir) if save_data else None
+                        },
+                        "configuration_summary": {
+                            "generation_method": metadata['generation_method'],
+                            "distribution_type": metadata['distribution_type'],
+                            "normal_samples": metadata['normal_samples'],
+                            "attack_samples": metadata['attack_samples'],
+                            "total_samples": metadata['total_samples'],
+                            "features": metadata['features'],
+                            "anomaly_factor": metadata['anomaly_factor'],
+                            "random_state": metadata['random_state']
+                        },
+                        "data_characteristics": {
+                            "normal_distribution": normal_distribution,
+                            "normal_mean": normal_mean,
+                            "normal_std": normal_std,
+                            "attack_types_count": len(metadata['attack_types']),
+                            "attack_type_details": metadata['attack_type_counts'],
+                            "noise_level": metadata['noise_level'],
+                            "noise_type": metadata['noise_type'],
+                            "feature_scaling": metadata['feature_scaling'],
+                            "correlated_features": metadata['correlated_features'],
+                            "data_bounds": metadata['data_bounds'],
+                            "label_column": metadata['label_column'],
+                            "data_type": metadata['data_type'],
+                            "output_format": metadata['output_format']
+                        },
+                        "data_splits": {
+                            "training_samples": metadata['train_samples'],
+                            "validation_samples": metadata['val_samples'],
+                            "test_samples": metadata['test_samples'],
+                            "validation_split": metadata['validation_split'],
+                            "test_split": metadata['test_split']
+                        },
+                        "quality_metrics": {
+                            "overall_quality_score": metadata['data_quality_score'],
+                            "class_balance_ratio": metadata['class_balance_ratio']
+                        },
+                        "performance_metrics": {
+                            "generation_time_seconds": metadata['generation_time_seconds'],
+                            "samples_per_second": metadata['total_samples'] / metadata['generation_time_seconds'] if metadata['generation_time_seconds'] > 0 else 0,
+                            "stages_completed": len(metadata['generation_stats']['stages_completed']),
+                            "total_stages": total_stages,
+                            "memory_estimate_mb": metadata['total_samples'] * metadata['features'] * 4 / (1024**2)
+                        },
+                        "directory_structure": {
+                            "reports_directory": metadata['reports_directory'],
+                            "data_directory": metadata['data_directory'],
+                            "datasets_directory": metadata['datasets_directory'],
+                            "results_directory": metadata['results_directory']
+                        },
+                        "progress_summary": metadata['progress_summary'],
+                        "feature_names": metadata['feature_names'],
+                        "warnings": metadata['generation_stats'].get('warnings_encountered', []),
+                        "recommendations": []
+                    }
+                    
+                    # Add validation results if available
+                    if metadata['validation_results']:
+                        report_data["validation_results"] = metadata['validation_results']
+                        # Merge quality metrics from validation
+                        if 'quality_metrics' in metadata['validation_results']:
+                            report_data["quality_metrics"].update(metadata['validation_results']['quality_metrics'])
+                    
+                    # Add detailed statistics if available
+                    if log_generation_stats and 'log_generation_stats' in metadata['generation_stats']:
+                        stats = metadata['generation_stats']['log_generation_stats']
+                        report_data["detailed_statistics"] = {
+                            "class_imbalance_ratio": stats['class_imbalance_ratio'],
+                            "normal_data_quality": stats['normal_data_quality'],
+                            "attack_data_quality": stats['attack_data_quality'],
+                            "separation_quality": stats['separation_quality'],
+                            "effective_noise_level": stats['effective_noise_level'],
+                            # Add detailed stats
+                            "informative_features": stats['informative_features'],
+                            "redundant_features": stats['redundant_features'],
+                            "cluster_centers": stats['cluster_centers'],
+                            "cluster_variance": stats['cluster_variance'],
+                            "anomaly_sparsity": stats['anomaly_sparsity'],
+                            "anomaly_intensity": stats['anomaly_intensity'],
+                            "samples_per_second": stats['samples_per_second'],
+                            "completion_percentage": stats['completion_percentage'],
+                            "memory_estimate_mb": stats['memory_estimate_mb']
+                        }
+                        
+                        # Add advanced configuration details
+                        report_data["advanced_configuration"] = {
+                            "multimodal_data": stats['multimodal_data'],
+                            "mixture_components": stats['mixture_components'],
+                            "non_linear_relationships": stats['non_linear_relationships'],
+                            "interaction_features": stats['interaction_features'],
+                            "temporal_data": stats['temporal_data'],
+                            "time_steps": stats['time_steps']
+                        }
+                        
+                        # Add resource usage
+                        report_data["resource_usage"] = {
+                            "memory_footprint": stats['estimated_memory_footprint'],
+                            "generation_duration_seconds": stats['generation_duration_seconds'],
+                            "generation_date": stats['generation_date'],
+                            "generation_time": stats['generation_time']
+                        }
+                    
+                    # Add export status if data was saved
+                    if save_data and 'saved_file' in metadata:
+                        report_data["data_export_status"] = {
+                            "status": "Successfully Saved",
+                            "file_path": str(metadata['saved_file']),
+                            "format": metadata['file_format'],
+                            "compression": metadata.get('compression', 'None'),
+                            "metadata_file_path": str(metadata.get('metadata_file_path')) if metadata_file and 'metadata_file_path' in metadata else None
+                        }
+                    
+                    # Add recommendations
+                    if quality_score >= 0.9:
+                        report_data["recommendations"].append("Data quality is excellent - suitable for production use")
+                    elif quality_score >= 0.7:
+                        report_data["recommendations"].append("Data quality is good - suitable for most applications")
+                    else:
+                        report_data["recommendations"].append("WARNING! Consider regenerating data with adjusted parameters")
+                    
+                    if len(attack_types) < 3:
+                        report_data["recommendations"].append("WARNING! Consider using more attack types for better diversity")
+                    
+                    if noise_level < 0.01:
+                        report_data["recommendations"].append("Adding noise might improve model robustness")
+                    
+                    if not save_data:
+                        report_data["recommendations"].append("Data was not saved. Set save_data=True to persist generated data")
+                    
+                    # Save JSON report
+                    with open(json_report_file, 'w') as f:
+                        json.dump(report_data, f, indent=2)
+                    
+                    if verbose:
+                        logger.info(f"JSON report saved to: {json_report_file}")
+                    
+                    # SECOND: Create text report file
+                    filename = f"synthetic_data_generation_report_{timestamp}.txt"
+                    report_file = reports_dir / filename
+                    
+                    if verbose:
+                        logger.info(f"Generating data generation report: {report_file}")
+                    
+                    with open(report_file, 'w') as f:
+                        f.write("="*80 + "\n")
+                        f.write("SYNTHETIC DATA GENERATION REPORT\n")
+                        f.write("="*80 + "\n\n")
+
+                        f.write(f"Generation Date: {report_data['report_metadata']['generation_date']}\n")
+                        f.write(f"Report Version: {report_data['report_metadata']['report_version']}\n")
+                        f.write(f"Report Location: {report_data['report_metadata']['report_location']}\n")
+                        f.write(f"JSON Report: {json_report_file.name}\n\n")
+
+                        # Export Configuration
+                        f.write("-"*80 + "\n")
+                        f.write("EXPORT CONFIGURATION\n")
+                        f.write("-"*80 + "\n")
+                        export_cfg = report_data['export_configuration']
+                        f.write(f"Save Data: {export_cfg['save_data']}\n")
+                        if export_cfg['save_data']:
+                            f.write(f"File Format: {export_cfg['file_format']}\n")
+                            f.write(f"Compression: {export_cfg['compression'] or 'None'}\n")
+                            f.write(f"Metadata File: {export_cfg['metadata_file']}\n")
+                            f.write(f"Output Directory: {export_cfg['output_directory']}\n")
+                        f.write("\n")
+
+                        # Configuration Summary
+                        f.write("-"*80 + "\n")
+                        f.write("CONFIGURATION SUMMARY\n")
+                        f.write("-"*80 + "\n")
+                        cfg_summary = report_data['configuration_summary']
+                        f.write(f"Generation Method: {cfg_summary['generation_method']}\n")
+                        f.write(f"Distribution Type: {cfg_summary['distribution_type']}\n")
+                        f.write(f"Normal Samples: {cfg_summary['normal_samples']:,}\n")
+                        f.write(f"Attack Samples: {cfg_summary['attack_samples']:,}\n")
+                        f.write(f"Total Samples: {cfg_summary['total_samples']:,}\n")
+                        f.write(f"Features: {cfg_summary['features']}\n")
+                        f.write(f"Anomaly Factor: {cfg_summary['anomaly_factor']}\n")
+                        f.write(f"Random State: {cfg_summary['random_state']}\n\n")
+
+                        # Data Characteristics
+                        f.write("-"*80 + "\n")
+                        f.write("DATA CHARACTERISTICS\n")
+                        f.write("-"*80 + "\n")
+                        data_char = report_data['data_characteristics']
+                        f.write(f"Normal Distribution: {data_char['normal_distribution']}\n")
+                        f.write(f"Normal Mean: {data_char['normal_mean']:.3f}\n")
+                        f.write(f"Normal Std: {data_char['normal_std']:.3f}\n")
+                        f.write(f"Attack Types: {data_char['attack_types_count']}\n")
+                        for attack_type, count in data_char['attack_type_details'].items():
+                            f.write(f"  - {attack_type}: {count:,} samples\n")
+                        f.write(f"Noise Level: {data_char['noise_level']}\n")
+                        f.write(f"Noise Type: {data_char['noise_type']}\n")
+                        f.write(f"Feature Scaling: {data_char['feature_scaling'] or 'None'}\n")
+                        f.write(f"Correlated Features: {data_char['correlated_features']}\n\n")
+                        
+                        # Data Splits
+                        f.write("-"*80 + "\n")
+                        f.write("DATA SPLITS\n")
+                        f.write("-"*80 + "\n")
+                        splits = report_data['data_splits']
+                        f.write(f"Training Samples: {splits['training_samples']:,}\n")
+                        f.write(f"Validation Samples: {splits['validation_samples']:,}\n")
+                        f.write(f"Test Samples: {splits['test_samples']:,}\n")
+                        f.write(f"Validation Split: {splits['validation_split']:.1%}\n")
+                        f.write(f"Test Split: {splits['test_split']:.1%}\n\n")
+
+                        # Quality Metrics
+                        f.write("-"*80 + "\n")
+                        f.write("QUALITY METRICS\n")
+                        f.write("-"*80 + "\n")
+                        quality = report_data['quality_metrics']
+                        f.write(f"Overall Quality Score: {quality['overall_quality_score']:.3f}\n")
+                        f.write(f"Class Balance Ratio: {quality['class_balance_ratio']:.3f}\n")
+                        # Add any additional quality metrics
+                        for key, value in quality.items():
+                            if key not in ['overall_quality_score', 'class_balance_ratio']:
+                                f.write(f"{key.replace('_', ' ').title()}: {value:.3f}\n")
+                        f.write("\n")
+                        
+                        # Performance Metrics
+                        f.write("-"*80 + "\n")
+                        f.write("PERFORMANCE METRICS\n")
+                        f.write("-"*80 + "\n")
+                        perf = report_data['performance_metrics']
+                        f.write(f"Generation Time: {perf['generation_time_seconds']:.2f} seconds\n")
+                        f.write(f"Samples per Second: {perf['samples_per_second']:.1f}\n")
+                        f.write(f"Stages Completed: {perf['stages_completed']}/{perf['total_stages']}\n")
+                        f.write(f"Memory Estimate: {perf['memory_estimate_mb']:.2f} MB\n\n")
+
+                        # Detailed Statistics
+                        if 'detailed_statistics' in report_data:
+                            stats = report_data['detailed_statistics']
+                            f.write("-"*80 + "\n")
+                            f.write("DETAILED STATISTICS\n")
+                            f.write("-"*80 + "\n")
+                            f.write(f"Class Imbalance Ratio: {stats['class_imbalance_ratio']:.3f}\n")
+                            f.write(f"Normal Data Quality: {stats['normal_data_quality']:.3f}\n")
+                            f.write(f"Attack Data Quality: {stats['attack_data_quality']:.3f}\n")
+                            f.write(f"Separation Quality: {stats['separation_quality']:.3f}\n")
+                            f.write(f"Effective Noise Level: {stats['effective_noise_level']:.3f}\n\n")
+                        
+                        # Directory Information
+                        f.write("-"*80 + "\n")
+                        f.write("DIRECTORY STRUCTURE\n")
+                        f.write("-"*80 + "\n")
+                        dirs = report_data['directory_structure']
+                        f.write(f"Reports Directory: {dirs['reports_directory']}\n")
+                        f.write(f"Data Directory: {dirs['data_directory']}\n")
+                        f.write(f"Datasets Directory: {dirs['datasets_directory']}\n")
+                        f.write(f"Results Directory: {dirs['results_directory']}\n\n")
+                        
+                        # Export Status
+                        if 'data_export_status' in report_data:
+                            export_status = report_data['data_export_status']
+                            f.write("-"*80 + "\n")
+                            f.write("DATA EXPORT STATUS\n")
+                            f.write("-"*80 + "\n")
+                            f.write(f"Status: {export_status['status']}\n")
+                            f.write(f"File Path: {export_status['file_path']}\n")
+                            f.write(f"Format: {export_status['format']}\n")
+                            f.write(f"Compression: {export_status['compression']}\n")
+                            if export_status['metadata_file_path']:
+                                f.write(f"Metadata Path: {export_status['metadata_file_path']}\n")
+                            f.write("\n")
+                        
+                        # Warnings
+                        if report_data['warnings']:
+                            f.write("-"*80 + "\n")
+                            f.write("WARNINGS\n")
+                            f.write("-"*80 + "\n")
+                            for warning in report_data['warnings']:
+                                f.write(f"{warning}\n")
+                            f.write("\n")
+                        
+                        # Recommendations
+                        f.write("-"*80 + "\n")
+                        f.write("RECOMMENDATIONS\n")
+                        f.write("-"*80 + "\n")
+                        for recommendation in report_data['recommendations']:
+                            f.write(f"{recommendation}\n")
+                        
+                        f.write("\n" + "="*80 + "\n")
+                        f.write("END OF REPORT\n")
+                        f.write("="*80 + "\n")
+                    
+                    # Update metadata with both report paths
+                    metadata['generation_report_path'] = str(report_file)
+                    metadata['generation_report_json_path'] = str(json_report_file)
+                    metadata['report_directory'] = str(reports_dir)
+                    
+                    if verbose:
+                        logger.info(f"Text report saved to: {report_file}")
+                        logger.info(f"JSON report saved to: {json_report_file}")
+                        print(Fore.GREEN + Style.BRIGHT + "\nGenerated data generation reports:")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ JSON Report: " + Fore.YELLOW + Style.BRIGHT + f"{json_report_file}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Text Report: " + Fore.YELLOW + Style.BRIGHT + f"{report_file}")
+                    
+                except Exception as report_error:
+                    warning_msg = f"Failed to generate report: {report_error}"
+                    generation_stats['warnings_encountered'].append(warning_msg)
+                    if verbose:
+                        logger.warning(warning_msg)
             
             if not silent_mode:
                 main_bar.text = "Finalization complete"
@@ -39968,59 +40707,278 @@ def generate_synthetic_data(
             
         else:
             raise ValueError(f"Unknown output format: {output_format}")
-        
+
         # Save data if requested
-        export_config = final_config.get('export', {})
-        if export_config.get('save_data', False):
-            output_path = export_config.get('output_path', 'synthetic_data.csv')
-            file_format = export_config.get('file_format', 'csv')
+        if save_data:
+            # Validate file format
+            supported_formats = ['csv', 'parquet', 'json', 'pickle', 'npy', 'npz', 'hdf5', 'h5', 'feather']
+            if file_format not in supported_formats:
+                warning_msg = f"Unsupported file format '{file_format}', defaulting to 'csv'"
+                generation_stats['warnings_encountered'].append(warning_msg)
+                if verbose:
+                    logger.warning(warning_msg)
+                file_format = 'csv'
             
+            # Determine output directory and filename with proper extension
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            # Map formats to file extensions
+            format_extensions = {
+                'csv': 'csv',
+                'parquet': 'parquet',
+                'json': 'json',
+                'pickle': 'pkl',
+                'npy': 'npy',
+                'npz': 'npz',
+                'hdf5': 'h5',
+                'h5': 'h5',
+                'feather': 'feather'
+            }
+            
+            file_extension = format_extensions.get(file_format, file_format)
+            filename = f"synthetic_data_{timestamp}.{file_extension}"
+            datasets_path = datasets_dir / filename
+            
+            # Ensure parent directory exists
+            datasets_path.parent.mkdir(parents=True, exist_ok=True)
+
             if verbose:
-                logger.info(f"Saving synthetic data to {output_path}")
+                logger.info(f"Saving synthetic data to {datasets_path}")
             
             try:
-                output_path = Path(output_path)
-                output_path.parent.mkdir(parents=True, exist_ok=True)
+                # Prepare combined dataframe for formats that need it
+                combined_X = np.vstack([X_train_normal, X_val_normal, X_test])
+                combined_y = np.hstack([y_train_normal, y_val_normal, y_test])
+                df_combined = pd.DataFrame(combined_X, columns=feature_names)
+                df_combined[label_column] = combined_y
+                split_info = ['train'] * len(X_train_normal) + ['val'] * len(X_val_normal) + ['test'] * len(X_test)
+                df_combined['split'] = split_info
                 
                 if file_format == 'csv':
                     # Save as CSV
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as CSV..."
-                    combined_X = np.vstack([X_train_normal, X_val_normal, X_test])
-                    combined_y = np.hstack([y_train_normal, y_val_normal, y_test])
                     
-                    df_combined = pd.DataFrame(combined_X, columns=feature_names)
-                    df_combined[label_column] = combined_y
-                    df_combined.to_csv(output_path, index=False)
+                    # CSV compression mapping
+                    csv_compression_map = {
+                        'gzip': 'gzip',
+                        'zip': 'zip',
+                        'bz2': 'bz2',
+                        'xz': 'xz',
+                        'zstd': 'zstd',
+                        None: None
+                    }
                     
+                    compression_type = csv_compression_map.get(compression, None)
+                    
+                    if compression_type:
+                        df_combined.to_csv(datasets_path, index=False, compression=compression_type)
+                    else:
+                        df_combined.to_csv(datasets_path, index=False)
+                    
+                    metadata['saved_file'] = str(datasets_path)
+                    metadata['file_format'] = 'csv'
+                    metadata['compression'] = compression_type or 'none'
+                
+                elif file_format == 'parquet':
+                    # Save as Parquet
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving as Parquet..."
+                    
+                    try:
+                        # Parquet compression mapping
+                        parquet_compression_map = {
+                            'gzip': 'gzip',
+                            'bz2': 'brotli',
+                            'xz': 'gzip',
+                            'zstd': 'zstd',
+                            None: None
+                        }
+                        
+                        compression_type = parquet_compression_map.get(compression, 'snappy')
+                        
+                        df_combined.to_parquet(datasets_path, compression=compression_type, index=False)
+                        
+                        metadata['saved_file'] = str(datasets_path)
+                        metadata['file_format'] = 'parquet'
+                        metadata['compression'] = compression_type or 'snappy'
+                        
+                    except ImportError:
+                        warning_msg = "pyarrow/fastparquet not available, falling back to CSV format"
+                        generation_stats['warnings_encountered'].append(warning_msg)
+                        if verbose:
+                            logger.warning(warning_msg)
+                        # Fallback to CSV
+                        datasets_path = datasets_path.with_suffix('.csv')
+                        df_combined.to_csv(datasets_path, index=False)
+                        metadata['saved_file'] = str(datasets_path)
+                        metadata['file_format'] = 'csv'
+                        metadata['compression'] = 'none'
+                
+                elif file_format == 'json':
+                    # Save as JSON
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving as JSON..."
+                    
+                    # JSON compression mapping
+                    json_compression_map = {
+                        'gzip': 'gzip',
+                        'bz2': 'bz2',
+                        'xz': 'xz',
+                        'zip': 'zip',
+                        None: 'infer'
+                    }
+                    
+                    compression_type = json_compression_map.get(compression, 'infer')
+                    
+                    df_combined.to_json(datasets_path, orient='records', compression=compression_type, indent=2)
+                    
+                    metadata['saved_file'] = str(datasets_path)
+                    metadata['file_format'] = 'json'
+                    metadata['compression'] = compression or 'none'
+                
                 elif file_format == 'pickle':
                     # Save as pickle
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as pickle..."
-                    with open(output_path, 'wb') as f:
-                        pickle.dump(result, f)
-                        
-                elif file_format == 'numpy':
+                    
+                    # Pickle doesn't support built-in compression, save the result dict
+                    with open(datasets_path, 'wb') as f:
+                        pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+                    
+                    metadata['saved_file'] = str(datasets_path)
+                    metadata['file_format'] = 'pickle'
+                    metadata['compression'] = 'none'  # Pickle doesn't have built-in compression
+                
+                elif file_format in ['npy', 'npz']:
                     # Save as numpy arrays
                     if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as numpy arrays..."
-                    np.savez(
-                        output_path,
-                        X_train=X_train_normal,
-                        X_val=X_val_normal,
-                        X_test=X_test,
-                        y_train=y_train_normal,
-                        y_val=y_val_normal,
-                        y_test=y_test,
-                        feature_names=feature_names,
-                        metadata=metadata
-                    )
+                        main_bar.text = "Saving as NumPy arrays..."
+                    
+                    save_args = {
+                        'X_train': X_train_normal,
+                        'X_val': X_val_normal,
+                        'X_test': X_test,
+                        'y_train': y_train_normal,
+                        'y_val': y_val_normal,
+                        'y_test': y_test,
+                        'feature_names': np.array(feature_names)
+                    }
+                    
+                    if file_format == 'npz' or compression:
+                        # Use compressed format
+                        datasets_path = datasets_path.with_suffix('.npz')
+                        np.savez_compressed(datasets_path, **save_args)
+                        metadata['compression'] = 'npz_compressed'
+                    else:
+                        # Uncompressed npy format (save as npz for multiple arrays)
+                        datasets_path = datasets_path.with_suffix('.npz')
+                        np.savez(datasets_path, **save_args)
+                        metadata['compression'] = 'npz_uncompressed'
+                    
+                    metadata['saved_file'] = str(datasets_path)
+                    metadata['file_format'] = 'numpy'
+                
+                elif file_format in ['hdf5', 'h5']:
+                    # Save as HDF5 format
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving as HDF5..."
+                    
+                    try:
+                        import h5py
+                        with h5py.File(datasets_path, 'w') as f:
+                            # Create datasets with gzip compression
+                            f.create_dataset('X_train', data=X_train_normal, compression='gzip')
+                            f.create_dataset('X_val', data=X_val_normal, compression='gzip')
+                            f.create_dataset('X_test', data=X_test, compression='gzip')
+                            f.create_dataset('y_train', data=y_train_normal)
+                            f.create_dataset('y_val', data=y_val_normal)
+                            f.create_dataset('y_test', data=y_test)
+                            
+                            # Store feature names
+                            f.create_dataset('feature_names', data=np.array(feature_names, dtype='S'))
+                            
+                            # Store metadata as attributes
+                            for key, value in metadata.items():
+                                if isinstance(value, (str, int, float, bool)):
+                                    try:
+                                        f.attrs[key] = value
+                                    except Exception:
+                                        pass  # Skip non-serializable attributes
+                        
+                        metadata['saved_file'] = str(datasets_path)
+                        metadata['file_format'] = 'hdf5'
+                        metadata['compression'] = 'gzip'
+                        
+                    except ImportError:
+                        warning_msg = "h5py not available, falling back to numpy format"
+                        generation_stats['warnings_encountered'].append(warning_msg)
+                        if verbose:
+                            logger.warning(warning_msg)
+                        # Fallback to numpy
+                        datasets_path = datasets_path.with_suffix('.npz')
+                        np.savez_compressed(datasets_path, **{
+                            'X_train': X_train_normal,
+                            'X_val': X_val_normal,
+                            'X_test': X_test,
+                            'y_train': y_train_normal,
+                            'y_val': y_val_normal,
+                            'y_test': y_test,
+                            'feature_names': np.array(feature_names)
+                        })
+                        metadata['saved_file'] = str(datasets_path)
+                        metadata['file_format'] = 'numpy'
+                        metadata['compression'] = 'npz_compressed'
+                
+                elif file_format == 'feather':
+                    # Save as Feather format
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = "Saving as Feather..."
+                    
+                    try:
+                        # Feather compression mapping
+                        feather_compression_map = {
+                            'gzip': 'zstd',
+                            'zip': 'zstd',
+                            'bz2': 'zstd',
+                            'xz': 'zstd',
+                            'zstd': 'zstd',
+                            None: 'uncompressed'
+                        }
+                        
+                        compression_type = feather_compression_map.get(compression, 'uncompressed')
+                        
+                        df_combined.to_feather(datasets_path, compression=compression_type)
+                        
+                        metadata['saved_file'] = str(datasets_path)
+                        metadata['file_format'] = 'feather'
+                        metadata['compression'] = compression_type
+                        
+                    except (ImportError, AttributeError):
+                        warning_msg = "pyarrow not available for Feather format, falling back to CSV"
+                        generation_stats['warnings_encountered'].append(warning_msg)
+                        if verbose:
+                            logger.warning(warning_msg)
+                        # Fallback to CSV
+                        datasets_path = datasets_path.with_suffix('.csv')
+                        df_combined.to_csv(datasets_path, index=False)
+                        metadata['saved_file'] = str(datasets_path)
+                        metadata['file_format'] = 'csv'
+                        metadata['compression'] = 'none'
+                
+                if verbose:
+                    logger.info(f"Successfully saved data to: {datasets_path}")
+                    print(Fore.GREEN + Style.BRIGHT + "\nSuccessfully generated dataset:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Dataset Location: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_path}")
                 
                 # Save metadata if requested
-                if export_config.get('metadata_file', False):
-                    metadata_path = output_path.with_suffix('.json')
+                if metadata_file:
+                    metadata_filename = datasets_path.stem + '_metadata.json'
+                    metadata_path = datasets_dir / metadata_filename
+                    
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving metadata..."
+                    
                     with open(metadata_path, 'w') as f:
                         # Make metadata JSON serializable
                         serializable_metadata = {}
@@ -40034,12 +40992,18 @@ def generate_synthetic_data(
                         
                         json.dump(serializable_metadata, f, indent=2)
                     
+                    metadata['metadata_file_path'] = str(metadata_path)
+                    
                     if verbose:
                         logger.info(f"Saved metadata to {metadata_path}")
+                        print(Fore.GREEN + Style.BRIGHT + "\nSuccessfully saved metadata:")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Metadata Location: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_path}")
                 
             except Exception as e:
+                error_msg = f"Failed to save data: {e}"
+                generation_stats['warnings_encountered'].append(error_msg)
                 if verbose:
-                    logger.error(f"Failed to save data: {e}")
+                    logger.error(error_msg)
         
         # Log summary
         if verbose:
@@ -40122,6 +41086,7 @@ def generate_synthetic_data(
         
         return result
         
+    # Handle exceptions
     except Exception as e:
         # Update generation stats with error information
         generation_stats['completion_status'] = 'failed'
@@ -40141,6 +41106,226 @@ def generate_synthetic_data(
             logger.error(f"Generation parameters: normal={normal_samples}, attack={attack_samples}, features={features}")
             logger.error(f"Configuration used: {final_config}")
             logger.error(f"Stages completed: {generation_stats['stages_completed']}")
+        
+        # Save error information
+        error_info = {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "timestamp": start_time.isoformat() if 'start_time' in locals() else datetime.now().isoformat(),
+            "generation_interrupted": True,
+            "generation_id": f"error_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "generation_method": locals().get('generation_method', 'unknown'),
+            "configuration": locals().get('final_config', config or {}),
+            "generation_stats": generation_stats,
+            "system_info": {
+                "python_version": platform.python_version(),
+                "numpy_version": np.__version__,
+                "pandas_version": pd.__version__,
+                "platform": platform.platform(),
+                "active_preset": locals().get('active_preset', 'unknown')
+            },
+            "traceback": traceback.format_exc(),
+            "partial_results": {}
+        }
+        
+        # Add partial generation results if available
+        if 'X_train_normal' in locals() and locals()['X_train_normal'] is not None:
+            try:
+                error_info["partial_results"] = {
+                    "stages_completed": generation_stats.get('stages_completed', []),
+                    "samples_generated": locals().get('progress_data', {}).get('samples_generated', 0),
+                    "features_created": locals().get('progress_data', {}).get('features_created', 0),
+                    "attack_types_processed": locals().get('progress_data', {}).get('attack_types_processed', 0),
+                    "data_quality_score": locals().get('progress_data', {}).get('data_quality_score', 0.0),
+                    "normal_data_available": locals().get('X_normal') is not None,
+                    "attack_data_available": len(locals().get('X_attack_parts', [])) > 0,
+                    "train_samples": len(locals().get('X_train_normal', [])),
+                    "val_samples": len(locals().get('X_val_normal', [])),
+                    "test_samples": len(locals().get('X_test', []))
+                }
+                logger.info(f"Partial generation completed: {len(generation_stats.get('stages_completed', []))} stages")
+            except Exception as partial_error:
+                error_info["partial_results"]["extraction_error"] = str(partial_error)
+        
+        # Add generation parameters information
+        error_info["generation_parameters"] = {
+            "normal_samples": locals().get('normal_samples', 0),
+            "attack_samples": locals().get('attack_samples', 0),
+            "features": locals().get('features', 0),
+            "anomaly_factor": locals().get('anomaly_factor', 0.0),
+            "random_state": locals().get('random_state', None),
+            "generation_method": locals().get('generation_method', 'unknown'),
+            "distribution_type": locals().get('distribution_type', 'unknown'),
+            "attack_types": locals().get('attack_types', [])
+        }
+        
+        # Add data information if partially available
+        if 'feature_names' in locals() and locals()['feature_names']:
+            try:
+                error_info["data_info"] = {
+                    "feature_names_count": len(locals()['feature_names']),
+                    "feature_prefix": locals().get('feature_prefix', 'unknown'),
+                    "output_format": locals().get('output_format', 'unknown'),
+                    "data_type": locals().get('data_type', 'unknown')
+                }
+            except Exception:
+                error_info["data_info"] = {"error": "Could not extract data info"}
+        
+        # Save error information to file
+        try:
+            # Use appropriate directory based on what's available
+            if 'datasets_dir' in locals() and locals()['datasets_dir']:
+                error_dir = Path(locals()['datasets_dir'])
+            elif 'results_dir' in locals() and locals()['results_dir']:
+                error_dir = Path(locals()['results_dir'])
+            else:
+                error_dir = Path(DATASETS_DIR / locals().get('active_preset', 'default'))
+            
+            error_dir.mkdir(parents=True, exist_ok=True)
+            error_path = error_dir / f"generation_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            
+            # Create serializable error info
+            serializable_error_info = {}
+            for key, value in error_info.items():
+                if key == 'configuration':
+                    # Skip complex configuration in error info to avoid circular references
+                    serializable_error_info[key] = 'configuration_available_in_separate_file'
+                elif key == 'generation_stats':
+                    # Handle generation_stats with special care
+                    serializable_stats = {}
+                    for stats_key, stats_value in value.items():
+                        if stats_key == 'config_applied':
+                            serializable_stats[stats_key] = 'config_not_included_in_error_file'
+                        elif isinstance(stats_value, (str, int, float, bool, type(None))):
+                            serializable_stats[stats_key] = stats_value
+                        elif isinstance(stats_value, (list, tuple)):
+                            serializable_stats[stats_key] = [
+                                item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                                for item in stats_value
+                            ]
+                        elif isinstance(stats_value, dict):
+                            serializable_stats[stats_key] = {
+                                str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                                for k, v in stats_value.items()
+                            }
+                        else:
+                            serializable_stats[stats_key] = str(stats_value)
+                    serializable_error_info[key] = serializable_stats
+                elif isinstance(value, (str, int, float, bool, type(None))):
+                    serializable_error_info[key] = value
+                elif isinstance(value, (list, tuple)):
+                    serializable_error_info[key] = [
+                        item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                        for item in value
+                    ]
+                elif isinstance(value, dict):
+                    serializable_error_info[key] = {
+                        str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                        for k, v in value.items()
+                    }
+                else:
+                    serializable_error_info[key] = str(value)
+            
+            with open(error_path, "w") as f:
+                json.dump(serializable_error_info, f, indent=2)
+            
+            logger.error(f"Error information saved to: {error_path}")
+            error_info["error_log_path"] = str(error_path)
+            
+        except Exception as save_error:
+            logger.error(f"Failed to save error information: {save_error}")
+            error_info["save_error"] = str(save_error)
+        
+        # Save partial results if any data was generated
+        if error_info.get("partial_results") and error_info["partial_results"].get("stages_completed"):
+            try:
+                partial_results_data = {
+                    "success": False,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "partial_generation": True,
+                    "timestamp": error_info["timestamp"],
+                    "generation_id": error_info["generation_id"],
+                    "stages_completed": error_info["partial_results"]["stages_completed"],
+                    "samples_generated": error_info["partial_results"]["samples_generated"],
+                    "system_info": error_info["system_info"],
+                    "error_log_path": error_info.get("error_log_path"),
+                    "generation_parameters": error_info["generation_parameters"]
+                }
+                
+                # Add partial data arrays if available
+                partial_data = {}
+                if 'X_train_normal' in locals() and locals()['X_train_normal'] is not None:
+                    try:
+                        partial_data['X_train'] = locals()['X_train_normal']
+                        partial_data['y_train'] = locals().get('y_train_normal', np.array([]))
+                    except Exception:
+                        pass
+                
+                if 'X_val_normal' in locals() and locals()['X_val_normal'] is not None:
+                    try:
+                        partial_data['X_val'] = locals()['X_val_normal']
+                        partial_data['y_val'] = locals().get('y_val_normal', np.array([]))
+                    except Exception:
+                        pass
+                
+                if 'X_test' in locals() and locals()['X_test'] is not None:
+                    try:
+                        partial_data['X_test'] = locals()['X_test']
+                        partial_data['y_test'] = locals().get('y_test', np.array([]))
+                    except Exception:
+                        pass
+                
+                if 'feature_names' in locals() and locals()['feature_names']:
+                    try:
+                        partial_data['feature_names'] = locals()['feature_names']
+                    except Exception:
+                        pass
+                
+                # Save partial data if any exists
+                if partial_data:
+                    if 'datasets_dir' in locals() and locals()['datasets_dir']:
+                        partial_dir = Path(locals()['datasets_dir'])
+                    else:
+                        partial_dir = Path(DATASETS_DIR / locals().get('active_preset', 'default'))
+                    
+                    partial_dir.mkdir(parents=True, exist_ok=True)
+                    partial_path = partial_dir / f"partial_generation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.npz"
+                    
+                    # Save as compressed numpy archive
+                    np.savez_compressed(partial_path, **partial_data)
+                    partial_results_data['partial_data_path'] = str(partial_path)
+                    logger.info(f"Partial data saved: {partial_path}")
+                
+                # Save partial results metadata
+                partial_results_path = error_dir / f"partial_generation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                
+                # Create serializable partial results
+                serializable_partial = {}
+                for key, value in partial_results_data.items():
+                    if isinstance(value, (str, int, float, bool, type(None))):
+                        serializable_partial[key] = value
+                    elif isinstance(value, (list, tuple)):
+                        serializable_partial[key] = [
+                            item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                            for item in value
+                        ]
+                    elif isinstance(value, dict):
+                        serializable_partial[key] = {
+                            str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                            for k, v in value.items()
+                        }
+                    else:
+                        serializable_partial[key] = str(value)
+                
+                with open(partial_results_path, "w") as f:
+                    json.dump(serializable_partial, f, indent=2)
+                
+                logger.info(f"Partial results metadata saved: {partial_results_path}")
+                
+            except Exception as partial_save_error:
+                logger.warning(f"Failed to save partial results: {partial_save_error}")
         
         raise RuntimeError(error_msg)
 
@@ -40819,14 +42004,13 @@ def create_dataloaders(
     # Merge with existing config
     final_config.update(config)
     
-    # Apply individual parameters with intelligent organization
+    # Apply individual parameters
     params = locals().copy()
     params.update(kwargs)
     
     # Remove non-parameter items
     params_to_remove = {
-        'config', 'dataloader_config', 'preset', 'kwargs', 'start_time', 'datetime',
-        'traceback', 'psutil', 'gc', 'partial', 'WeightedRandomSampler', 'DistributedSampler',
+        'config', 'dataloader_config', 'preset', 'kwargs', 'start_time', 'datetime', 'traceback', 'psutil', 'gc', 'partial', 'WeightedRandomSampler', 'DistributedSampler',
         'default_collate', 'TensorDataset', 'DataLoader', 'torch'
     }
     
@@ -40916,7 +42100,7 @@ def create_dataloaders(
         monitoring_config['verbose'] = False
         monitoring_config['progress_bar'] = False
     
-    # Apply intelligent defaults with system awareness
+    # Apply defaults with system awareness
     batch_size = core_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
     shuffle = core_config.setdefault('shuffle', True)
     num_workers = core_config.setdefault('num_workers', NUM_WORKERS)
@@ -40953,7 +42137,7 @@ def create_dataloaders(
     handle_nan_values = validation_config.setdefault('handle_nan_values', 'error')
     handle_inf_values = validation_config.setdefault('handle_inf_values', 'error')
     
-    # Monitoring defaults - respect silent mode
+    # Monitoring defaults
     verbose = monitoring_config.setdefault('verbose', False)
     progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     debug_mode = monitoring_config.setdefault('debug_mode', False)
@@ -40971,7 +42155,7 @@ def create_dataloaders(
         logger.setLevel(logging.INFO)
     
     if verbose:
-        logger.info("Starting comprehensive DataLoader creation")
+        logger.info("Starting DataLoader creation")
     
     # Initialize progress tracking
     progress_data = {
@@ -41061,7 +42245,7 @@ def create_dataloaders(
             # Data validation if requested
             if validate_data:
                 if verbose:
-                    logger.info("Performing comprehensive data validation")
+                    logger.info("Performing data validation")
                 
                 def validate_array(arr, name):
                     if arr is None:
@@ -42616,9 +43800,9 @@ def train_epoch(
         graceful_degradation = error_config.setdefault('graceful_degradation', True)
         
         # Set up logging level
-        # if verbose:
-        #     original_level = logger.level
-        #     logger.setLevel(getattr(logging, log_level.upper()))
+        if verbose:
+            original_level = logger.level
+            logger.setLevel(getattr(logging, log_level.upper()))
         
         logger.info(f"Starting training epoch {epoch if epoch is not None else 'N/A'}")
         
@@ -43274,8 +44458,8 @@ def train_epoch(
     
     finally:
         # Restore original logging level
-        # if verbose and original_level is not None:
-        #     logger.setLevel(original_level)
+        if verbose and original_level is not None:
+            logger.setLevel(original_level)
         
         # Cleanup
         try:
@@ -45937,6 +47121,269 @@ def train_model(
         except Exception as e:
             logger.warning(f"Failed to apply preset '{preset}': {e}")
     
+    # Preset parameter extraction when config sections are missing or incomplete
+    def extract_from_active_preset(config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract missing parameters from the active preset configuration.
+        
+        This function identifies the active preset and fills in any missing configuration parameters from the
+        preset definition, leveraging the existing parameter structuring infrastructure to avoid redundancy.
+
+        Args:
+            config: Current configuration dictionary (potentially incomplete)
+            
+        Returns:
+            Configuration with preset parameters filled in
+        """
+        try:
+            # Step 1: Identify the active preset
+            active_preset_name = None
+            
+            # Check metadata for preset information
+            metadata = config.get('metadata', {})
+            if 'preset_used' in metadata:
+                active_preset_name = metadata['preset_used']
+            
+            # Check presets section
+            if not active_preset_name:
+                presets_section = config.get('presets', {})
+                if 'current_preset' in presets_section:
+                    active_preset_name = presets_section['current_preset']
+            
+            # Check if preset was passed as parameter to train_model
+            if not active_preset_name and 'preset' in globals():
+                active_preset_name = globals().get('preset')
+            
+            # Fallback to default preset if none specified
+            if not active_preset_name:
+                active_preset_name = 'default'
+                logger.info("No active preset detected, using default preset")
+            
+            # Step 2: Validate preset availability
+            if active_preset_name not in PRESET_CONFIGS:
+                logger.warning(f"Active preset '{active_preset_name}' not found in PRESET_CONFIGS")
+                
+                # Try to find a close match
+                available_presets = list(PRESET_CONFIGS.keys())
+                if available_presets:
+                    # Use default if available, otherwise first available preset
+                    fallback_preset = 'default' if 'default' in available_presets else available_presets[0]
+                    logger.info(f"Falling back to '{fallback_preset}' preset")
+                    active_preset_name = fallback_preset
+                else:
+                    logger.error("No preset configurations available")
+                    return config
+            
+            # Step 3: Get the full preset configuration
+            preset_config = PRESET_CONFIGS[active_preset_name].copy()
+            
+            logger.debug(f"Extracting parameters from '{active_preset_name}' preset")
+            
+            # Step 4: Create a mapping of parameter names to their section locations
+            # This helps us track where parameters are defined across different configurations
+            # Build parameter location map for current config
+            current_param_locations = {}
+            for section_name, section_data in config.items():
+                if isinstance(section_data, dict):
+                    for param_name in section_data.keys():
+                        current_param_locations[param_name] = section_name
+            
+            # Build parameter location map for preset config
+            preset_param_locations = {}
+            for section_name, section_data in preset_config.items():
+                if isinstance(section_data, dict):
+                    for param_name in section_data.keys():
+                        preset_param_locations[param_name] = section_name
+            
+            # Step 5: Identify missing parameters by name, regardless of section
+            missing_params = {}
+            missing_param_sources = {}  # Track which section they come from in preset
+            
+            for section_name, section_data in preset_config.items():
+                if isinstance(section_data, dict):
+                    for param_name, param_value in section_data.items():
+                        # Parameter is missing if it's not found anywhere in current config
+                        if param_name not in current_param_locations:
+                            missing_params[param_name] = param_value
+                            missing_param_sources[param_name] = section_name
+            
+            # Step 6: Use existing structuring function to organize missing parameters
+            # This will put them in the "standard" sections based on the central mapping
+            if missing_params:
+                structured_missing_params = _structure_kwargs_into_config_sections(missing_params)
+                
+                # Step 7: Merge structured missing parameters into current config
+                extraction_stats = {
+                    'total_filled': len(missing_params),
+                    'sections_processed': len(structured_missing_params),
+                    'parameters_per_section': {},
+                    'parameter_source_mapping': {}  # Track original vs final locations
+                }
+                
+                for target_section, section_params in structured_missing_params.items():
+                    # Ensure section exists in target config
+                    if target_section not in config:
+                        config[target_section] = {}
+                        logger.debug(f"Created missing section '{target_section}' in config")
+                    
+                    # Add missing parameters to the section
+                    filled_params = []
+                    for param_name, param_value in section_params.items():
+                        if param_name not in config[target_section]:
+                            config[target_section][param_name] = param_value
+                            filled_params.append(param_name)
+                            
+                            # Track where this parameter came from originally vs where it ended up
+                            original_section = missing_param_sources.get(param_name, 'unknown')
+                            extraction_stats['parameter_source_mapping'][param_name] = {
+                                'original_section': original_section,
+                                'target_section': target_section,
+                                'relocated': original_section != target_section
+                            }
+                    
+                    if filled_params:
+                        extraction_stats['parameters_per_section'][target_section] = filled_params
+                        logger.debug(f"Filled {len(filled_params)} parameters in '{target_section}' from preset: {filled_params[:5]}...")
+                
+                # Step 8: Handle special sections that might contain parameters not covered by standard mapping
+                # These are sections that don't follow the standard parameter-to-section mapping
+                special_sections = ['export', 'advanced_training', 'error_handling', 'experimental']
+                
+                for special_section in special_sections:
+                    if special_section in preset_config:
+                        special_section_data = preset_config[special_section]
+                        
+                        # Ensure the special section exists in current config
+                        if special_section not in config:
+                            config[special_section] = {}
+                            logger.debug(f"Created special section '{special_section}' in config")
+                        
+                        # Add any parameters from the preset's special section that are still missing
+                        filled_special_params = []
+                        for param_name, param_value in special_section_data.items():
+                            # Check if this parameter is already present anywhere in current config
+                            if param_name not in current_param_locations:
+                                # Parameter is missing, add it to the special section
+                                if param_name not in config[special_section]:
+                                    config[special_section][param_name] = param_value
+                                    filled_special_params.append(param_name)
+                                    extraction_stats['total_filled'] += 1
+                                    
+                                    # Track this parameter's source
+                                    extraction_stats['parameter_source_mapping'][param_name] = {
+                                        'original_section': special_section,
+                                        'target_section': special_section,
+                                        'relocated': False
+                                    }
+                        
+                        if filled_special_params:
+                            if special_section not in extraction_stats['parameters_per_section']:
+                                extraction_stats['parameters_per_section'][special_section] = []
+                            extraction_stats['parameters_per_section'][special_section].extend(filled_special_params)
+                            logger.debug(f"Filled {len(filled_special_params)} parameters in special section '{special_section}'")
+                
+                # Step 9: Handle parameters that might have been "misplaced" in the preset
+                # Some parameters in the preset might be in non-standard sections but should
+                # be moved to their standard sections in the current config
+                standard_section_params = set()
+                for section_list in _structure_kwargs_into_config_sections.__code__.co_consts:
+                    if isinstance(section_list, dict):
+                        for section_name, param_list in section_list.items():
+                            standard_section_params.update(param_list)
+                
+                # Look for parameters in the preset that are in non-standard sections
+                # but should be in standard sections according to the central mapping
+                for section_name, section_data in preset_config.items():
+                    if isinstance(section_data, dict) and section_name not in ['export', 'advanced_training', 'error_handling', 'experimental']:
+                        for param_name, param_value in section_data.items():
+                            # If this parameter is defined in a non-standard section but exists in standard mapping,
+                            # and it's still missing from current config, ensure it goes to the right place
+                            if (param_name in standard_section_params and 
+                                param_name not in current_param_locations and
+                                param_name not in missing_params):  # It wasn't picked up in step 5
+                                
+                                # Use the structuring function to determine the correct section
+                                test_structure = _structure_kwargs_into_config_sections({param_name: param_value})
+                                for correct_section, section_params in test_structure.items():
+                                    if param_name in section_params:
+                                        # Ensure the correct section exists
+                                        if correct_section not in config:
+                                            config[correct_section] = {}
+                                        
+                                        # Add the parameter to the correct section
+                                        if param_name not in config[correct_section]:
+                                            config[correct_section][param_name] = param_value
+                                            extraction_stats['total_filled'] += 1
+                                            
+                                            # Update tracking
+                                            if correct_section not in extraction_stats['parameters_per_section']:
+                                                extraction_stats['parameters_per_section'][correct_section] = []
+                                            extraction_stats['parameters_per_section'][correct_section].append(param_name)
+                                            
+                                            extraction_stats['parameter_source_mapping'][param_name] = {
+                                                'original_section': section_name,
+                                                'target_section': correct_section,
+                                                'relocated': True,
+                                                'relocation_reason': 'non_standard_section_placement'
+                                            }
+                                            
+                                            logger.debug(f"Relocated parameter '{param_name}' from '{section_name}' to '{correct_section}'")
+            
+            else:
+                extraction_stats = {
+                    'total_filled': 0,
+                    'sections_processed': 0,
+                    'parameters_per_section': {},
+                    'parameter_source_mapping': {}
+                }
+            
+            # Step 10: Update metadata to reflect preset extraction
+            if 'metadata' not in config:
+                config['metadata'] = {}
+            
+            config['metadata']['preset_extraction'] = {
+                'active_preset': active_preset_name,
+                'extraction_performed': True,
+                'extraction_time': datetime.now().isoformat(),
+                'parameters_filled': extraction_stats['total_filled'],
+                'sections_processed': extraction_stats['sections_processed'],
+                'detailed_stats': extraction_stats['parameters_per_section'],
+                'parameter_source_mapping': extraction_stats['parameter_source_mapping'],
+                'method': 'parameter_restructuring',
+                'relocated_parameters_count': sum(1 for mapping in extraction_stats['parameter_source_mapping'].values() if mapping.get('relocated', False))
+            }
+            
+            # Log extraction summary
+            if extraction_stats['total_filled'] > 0:
+                logger.info(f"Extracted {extraction_stats['total_filled']} parameters from '{active_preset_name}' preset across {extraction_stats['sections_processed']} sections")
+                
+                # Log relocation details if any parameters were moved between sections
+                relocated_count = config['metadata']['preset_extraction']['relocated_parameters_count']
+                if relocated_count > 0:
+                    logger.info(f"Relocated {relocated_count} parameters to standard sections")
+                
+                # Log section-by-section details in debug mode
+                if logger.isEnabledFor(logging.DEBUG):
+                    for section, params in extraction_stats['parameters_per_section'].items():
+                        logger.debug(f"  - {section}: {len(params)} parameters")
+                    
+                    # Log relocation details in debug mode
+                    for param_name, mapping in extraction_stats['parameter_source_mapping'].items():
+                        if mapping.get('relocated', False):
+                            logger.debug(f"    ↳ '{param_name}' relocated from '{mapping['original_section']}' to '{mapping['target_section']}'")
+            else:
+                logger.debug(f"No missing parameters needed extraction from '{active_preset_name}' preset")
+            
+            return config
+            
+        except Exception as e:
+            logger.error(f"Error during preset parameter extraction: {e}")
+            logger.debug(traceback.format_exc())
+            return config
+    
+    # Apply preset parameter extraction
+    config = extract_from_active_preset(config)
+
     # Handle legacy args parameter for backward compatibility
     if args is not None:
         # Extract parameters from args object
@@ -45954,8 +47401,8 @@ def train_model(
     # Collect all non-None parameters for processing
     local_params = locals().copy()
     params_to_remove = {
-        'config', 'training_config', 'preset', 'args', 'kwargs', 'start_time', 'training_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings',
-        'defaultdict', 'deque', 'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast', 'SummaryWriter', 'Path', 'np', 'torch'
+        'config', 'training_config', 'preset', 'args', 'kwargs', 'start_time', 'training_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict',
+        'deque', 'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast', 'SummaryWriter', 'Path', 'np', 'torch', 'extract_from_active_preset'
     }
     
     individual_params = {k: v for k, v in local_params.items() if k not in params_to_remove and v is not None}
@@ -45969,6 +47416,9 @@ def train_model(
         structured_params = _structure_kwargs_into_config_sections(individual_params)
         config = deep_update(config, structured_params)
         logger.debug(f"Processed {len(individual_params)} individual parameters using centralized helper")
+    
+    # Detect active preset
+    active_preset = config.get('metadata', {}).get('preset_used', config.get('metadata', {}).get('preset_extraction', {}).get('active_preset', config.get('presets', {}).get('current_preset', 'unknown')))
     
     # Extract final configuration values
     model_config = config.get('model', {})
@@ -46025,6 +47475,8 @@ def train_model(
     attack_samples = data_config.setdefault('attack_samples', ATTACK_SAMPLES)
     features = data_config.setdefault('features', FEATURES)
     use_real_data = data_config.setdefault('use_real_data', False)
+    data_path = data_config.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")
+    artifacts_path = data_config.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")
     data_preprocessing = data_config.setdefault('preprocessing', {}).get('enabled', True)
     
     # Security defaults
@@ -46032,26 +47484,33 @@ def train_model(
     threshold_method = security_config.setdefault('threshold_method', 'percentile')
     enable_security_metrics = security_config.setdefault('enable_security_metrics', SECURITY_METRICS)
     
-    # System defaults
+    # Extract default directories
     config_dir = Path(system_config.setdefault('config_dir', CONFIG_DIR))
     if config_dir is None:
         config_dir = Path(__file__).resolve().parent / "config"
     
     model_dir = Path(system_config.setdefault('model_dir', DEFAULT_MODEL_DIR))
     log_dir = Path(system_config.setdefault('log_dir', LOG_DIR))
-    tensorboard_dir = Path(monitoring_config.setdefault('tensorboard_dir', TB_DIR)) or Path(system_config.setdefault('tensorboard_dir', TB_DIR))
-    checkpoint_dir = Path(system_config.setdefault('checkpoint_dir', CHECKPOINTS_DIR))
-    data_dir = Path(system_config.setdefault('data_dir', DATA_DIR))
-    results_dir = Path(system_config.setdefault('results_dir', RESULTS_DIR))
+
+    # Extract additional preset-specific directories
+    tensorboard_dir = Path(monitoring_config.get('tensorboard_dir', TB_DIR) or system_config.get('tensorboard_dir', TB_DIR / active_preset))
+    checkpoint_dir = Path(system_config.setdefault('checkpoint_dir', CHECKPOINTS_DIR / active_preset))
+    data_dir = Path(system_config.setdefault('data_dir', DATA_DIR / active_preset))
+    results_dir = Path(system_config.setdefault('results_dir', RESULTS_DIR / active_preset))
+    reports_dir = Path(system_config.get('reports_dir', REPORTS_DIR / active_preset))
+    metrics_dir = Path(system_config.get('metrics_dir', METRICS_DIR / active_preset))
+    datasets_dir = Path(system_config.get('datasets_dir', DATASETS_DIR / active_preset))
+    artifacts_dir = Path(system_config.get('artifacts_dir', ARTIFACTS_DIR / active_preset))
+    figures_dir = Path(system_config.get('figures_dir', FIGURES_DIR / active_preset))
+    info_dir = Path(system_config.get('info_dir', INFO_DIR / active_preset))
+    
+    # System defaults
     device = system_config.setdefault('device', 'auto')
     random_seed = system_config.setdefault('random_seed', RANDOM_STATE)
     reproducible = system_config.setdefault('reproducible', True)
 
-    # Handle silent mode - override progress_bar if silent is True
+    # Handle silent mode
     silent_mode = monitoring_config.get('silent', False)
-    # if silent_mode:
-    #     # Force silent mode behavior
-    #     monitoring_config['progress_bar'] = False
     
     # Monitoring defaults
     verbose = monitoring_config.setdefault('verbose', True)
@@ -46061,7 +47520,6 @@ def train_model(
     checkpoint_frequency = monitoring_config.setdefault('checkpoint_frequency', 10)
     log_frequency = monitoring_config.setdefault('log_frequency', 1)
     progress_bar = monitoring_config.setdefault('progress_bar', True)
-    #progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     
     # Export defaults
     export_onnx = export_config.setdefault('export_onnx', False)
@@ -46134,31 +47592,217 @@ def train_model(
             training_stats['gpu_name'] = torch.cuda.get_device_name() if torch.cuda.is_available() else None
         
         # Create directories
-        model_dir.mkdir(parents=True, exist_ok=True)
-        log_dir.mkdir(parents=True, exist_ok=True)
-        tensorboard_dir.mkdir(parents=True, exist_ok=True)
-        config_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        results_dir.mkdir(parents=True, exist_ok=True)
+        directories_to_create = [
+            model_dir, log_dir, tensorboard_dir, config_dir, checkpoint_dir, results_dir, data_dir,
+            reports_dir, metrics_dir, datasets_dir, artifacts_dir, figures_dir, info_dir
+        ]
+
+        for directory in directories_to_create:
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Ensured directory exists: {directory}")
+            except PermissionError as e:
+                logger.error(f"Permission denied creating directory {directory}: {e}")
+                if not graceful_degradation:
+                    raise
+            except Exception as e:
+                logger.warning(f"Failed to create directory {directory}: {e}")
+                if not graceful_degradation:
+                    raise
         
-        # Setup experiment tracking
+        # Setup experiment tracking with sequential run numbers
         timestamp = start_time.strftime("%Y%m%d_%H%M%S")
-        run_id = f"train_{model_type}_{timestamp}"
-        experiment_dir = tensorboard_dir / run_id
+        
+        # Get next sequential run number for this tensorboard directory
+        def get_next_run_number(tracking_dir: Path) -> int:
+            """Get the next sequential run number for the tracking directory.
+            
+            Args:
+                tracking_dir (Path): Directory where run tracking is stored (typically tensorboard_dir).
+                
+            Returns:
+                int: Next run number.
+            """
+            run_tracker_file = tracking_dir / ".run_tracker"
+            
+            # Create tracker file if it doesn't exist
+            if not run_tracker_file.exists():
+                with open(run_tracker_file, 'w') as f:
+                    json.dump({'last_run': 0, 'runs': {}}, f)
+                return 1
+            
+            try:
+                with open(run_tracker_file, 'r') as f:
+                    tracker = json.load(f)
+                next_run = tracker.get('last_run', 0) + 1
+                
+                # Update tracker
+                tracker['last_run'] = next_run
+                tracker['runs'][str(next_run)] = {
+                    'timestamp': timestamp,
+                    'started': start_time.isoformat()
+                }
+                
+                with open(run_tracker_file, 'w') as f:
+                    json.dump(tracker, f, indent=2)
+                
+                return next_run
+            except Exception as e:
+                logger.warning(f"Failed to read run tracker, using timestamp-based ID: {e}")
+                # Fallback to simple counter based on existing directories
+                existing_runs = len([d for d in tracking_dir.iterdir() if d.is_dir() and d.name.startswith('run_')])
+                return existing_runs + 1
+        
+        # Create abbreviated identifiers
+        model_code_map = {
+            'SimpleAutoencoder': 'SA',
+            'EnhancedAutoencoder': 'EA',
+            'AutoencoderEnsemble': 'AE'
+        }
+        model_code = model_code_map.get(model_type, model_type[:2].upper())
+        
+        preset_code_map = {
+            'default': 'def',
+            'stability': 'stb',
+            'performance': 'prf',
+            'baseline': 'bsl',
+            'debug': 'dbg',
+            'lightweight': 'lgt',
+            'advanced': 'adv'
+        }
+        preset_code = preset_code_map.get(active_preset, active_preset[:3].lower())
+        
+        # Generate sequential run ID with timestamp "run_001_20231115_143022"
+        run_number = get_next_run_number(tensorboard_dir)
+        #run_id = f"run_{run_number:03d}_{timestamp}"
+        run_id = f"run_{run_number:03d}"
+        
+        # Generate full tracking ID with all details for metadata only
+        process_id = os.getpid()
+        unique_hash = hashlib.md5(
+            f"{timestamp}_{model_type}_{active_preset}_{process_id}".encode()
+        ).hexdigest()[:4]
+        
+        # Full ID stored only in metadata, not used for file/directory names
+        run_id_full = f"{model_code}_{preset_code}_{timestamp}_{unique_hash}"
+        
+        # Create numbered experiment directory
+        experiment_dir = tensorboard_dir / f"run_{run_number:03d}"
         experiment_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create run-specific subdirectories for all outputs
+        run_model_dir = model_dir / run_id
+        run_checkpoint_dir = checkpoint_dir / run_id
+        run_results_dir = results_dir / run_id
+        run_artifacts_dir = artifacts_dir / run_id
+        run_metrics_dir = metrics_dir / run_id
+        run_figures_dir = figures_dir / run_id
+        run_data_dir = data_dir / run_id
+        #run_config_dir = config_dir / run_id
+
+        # Create all run-specific directories
+        #run_directories = [run_model_dir, run_checkpoint_dir, run_results_dir, run_artifacts_dir, run_metrics_dir, run_figures_dir, run_data_dir, run_config_dir]
+        run_directories = [run_model_dir, run_checkpoint_dir, run_results_dir, run_artifacts_dir, run_metrics_dir, run_figures_dir, run_data_dir]
+
+        for directory in run_directories:
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                logger.debug(f"Created run-specific directory: {directory}")
+            except Exception as e:
+                logger.warning(f"Failed to create run-specific directory {directory}: {e}")
+                if not graceful_degradation:
+                    raise
         
         # Initialize TensorBoard writer
         writer = None
         if tensorboard_logging:
             try:
-                writer = SummaryWriter(log_dir=experiment_dir)
+                writer = SummaryWriter(log_dir=str(experiment_dir))
                 logger.info(f"TensorBoard logging enabled: {experiment_dir}")
+                logger.debug(f"Run ID: {run_id}")
             except ImportError:
                 logger.warning("TensorBoard not available, logging disabled")
                 tensorboard_logging = False
+            except Exception as e:
+                logger.warning(f"Failed to initialize TensorBoard writer: {e}")
+                tensorboard_logging = False
         
+        # Store run metadata in training_stats
         training_stats['run_id'] = run_id
+        training_stats['run_id_full'] = run_id_full
+        training_stats['run_number'] = run_number
         training_stats['experiment_dir'] = str(experiment_dir)
+        training_stats['unique_hash'] = unique_hash
+        training_stats['process_id'] = process_id
+        training_stats['active_preset'] = active_preset
+        training_stats['model_type'] = model_type
+        training_stats['timestamp_formatted'] = timestamp
+        training_stats['model_code'] = model_code
+        training_stats['preset_code'] = preset_code
+        
+        # Create run metadata file
+        run_metadata_path = experiment_dir / "run_info.json"
+        try:
+            run_metadata = {
+                'run_id': run_id,
+                'run_id_full': run_id_full,
+                'run_number': run_number,
+                'unique_hash': unique_hash,
+                'model_type': model_type,
+                'model_code': model_code,
+                'preset': active_preset,
+                'preset_code': preset_code,
+                'timestamp': timestamp,
+                'start_time': start_time.isoformat(),
+                'process_id': process_id,
+                'directories': {
+                    'experiment': str(experiment_dir),
+                    'model': str(run_model_dir),
+                    'checkpoints': str(run_checkpoint_dir),
+                    'results': str(run_results_dir),
+                    'artifacts': str(run_artifacts_dir),
+                    'metrics': str(run_metrics_dir),
+                    'figures': str(run_figures_dir),
+                    'data': str(run_data_dir)
+                },
+                'system': {
+                    'hostname': platform.node(),
+                    'platform': platform.platform(),
+                    'python_version': platform.python_version(),
+                    'pytorch_version': torch.__version__
+                },
+                'naming_scheme': {
+                    'simple_format': 'run_NNN',
+                    'full_format': '<model_code>_<preset_code>_<timestamp>_<hash>',
+                    'example_simple': 'run_001',
+                    'example_full': 'EA_prf_20231115_143022_a3f2',
+                    'model_codes': model_code_map,
+                    'preset_codes': preset_code_map
+                }
+            }
+            
+            with open(run_metadata_path, 'w') as f:
+                json.dump(run_metadata, f, indent=2)
+            
+            logger.debug(f"Run metadata saved: {run_metadata_path}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to save run metadata: {e}")
+        
+        # Log run information
+        logger.info("-" * 40)
+        logger.info("EXPERIMENT TRACKING INITIALIZED")
+        logger.info("-" * 40)
+        logger.info(f"Tracking Configuration:")
+        logger.info(f"  Run ID: {run_id} (#{run_number})")
+        logger.info(f"  Full Tracking ID: {run_id_full}")
+        logger.info(f"  Model: {model_type} ({model_code})")
+        logger.info(f"  Preset: {active_preset} ({preset_code})")
+        logger.info(f"  Timestamp: {timestamp}")
+        logger.info(f"  Process ID: {process_id}")
+        logger.info(f"  Unique Hash: {unique_hash}")
+        logger.info(f"  Experiment Directory: {experiment_dir}")
+        logger.info("-" * 40)
         
         logger.info("-"*40)
         logger.info("TRAINING CONFIGURATION")
@@ -46207,8 +47851,8 @@ def train_model(
             try:
                 logger.info("Loading real data...")
                 data = load_and_validate_data(
-                    data_path=data_config.get('data_path'),
-                    artifacts_path=data_config.get('artifacts_path'),
+                    data_path=data_path,
+                    artifacts_path=artifacts_path,
                     silent=silent_mode,
                     config=config,
                     **{k: v for k, v in data_config.items() if k not in ['data_path', 'artifacts_path']}
@@ -46249,15 +47893,34 @@ def train_model(
                     'attack_samples': attack_samples,
                     'features': input_dim,
                     'validation_split': validation_split,
-                    'random_state': random_seed,
-                    'config': config
+                    'random_state': random_seed
+                    #'config': config
                 }
                 
                 # Add synthetic-specific config
                 if data_config.get('synthetic_generation'):
                     synthetic_params.update(data_config['synthetic_generation'])
                 
-                data = generate_synthetic_data(silent=silent_mode, **synthetic_params)
+                # Ensure config has export section with all necessary values
+                if 'export' not in config:
+                    config['export'] = {}
+                
+                # Set defaults if not already configured
+                config['export'].setdefault('save_data', True)
+                config['export'].setdefault('file_format', 'csv')
+                config['export'].setdefault('compression', 'zip')
+                config['export'].setdefault('metadata_file', True)
+                
+                # Mark as non-interactive context
+                if 'system' not in config:
+                    config['system'] = {}
+                config['system']['automated_mode'] = True
+                
+                data = generate_synthetic_data(
+                    silent=silent_mode,
+                    config=config,
+                    **synthetic_params
+                )
                 data_metadata = data.get("metadata", {})
                 logger.info(f"Generated synthetic data: {len(data['X_train'])} train, {len(data['X_val'])} val, {len(data['X_test'])} test samples")
                 
@@ -46624,7 +48287,8 @@ def train_model(
                     
                     # Save best model
                     if save_model:
-                        best_model_path = model_dir / "best_model.pth"
+                        # Use run-specific directory
+                        best_model_path = run_model_dir / "best_model.pth"
                         torch.save({
                             'epoch': epoch,
                             'model_state_dict': model.state_dict(),
@@ -46648,7 +48312,8 @@ def train_model(
                 
                 # Periodic checkpointing
                 if save_checkpoints and epoch % checkpoint_frequency == 0 and epoch > 0:
-                    checkpoint_path = checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pth"
+                    # Use run-specific directory
+                    checkpoint_path = run_checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pth"
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': model.state_dict(),
@@ -46691,10 +48356,10 @@ def train_model(
         logger.info(f"Training completed in {total_training_time/60:.1f} minutes ({final_epoch} epochs)")
         
         # Load best model for evaluation
-        if save_model and (model_dir / "best_model.pth").exists():
+        if save_model and (run_model_dir / "best_model.pth").exists():
             logger.info("Loading best model for final evaluation...")
             try:
-                checkpoint = torch.load(model_dir / "best_model.pth", map_location=device, weights_only=False)
+                checkpoint = torch.load(run_model_dir / "best_model.pth", map_location=device, weights_only=False)
                 model.load_state_dict(checkpoint['model_state_dict'])
                 logger.info(f"Loaded best model from epoch {checkpoint['epoch']+1}")
             except Exception as e:
@@ -46803,7 +48468,8 @@ def train_model(
         # Save final model using the model's own save method if available
         if save_model:
             try:
-                final_model_path = model_dir / "autoencoder_model.pth"
+                # Use run-specific directory
+                final_model_path = run_model_dir / "autoencoder_model.pth"
                 
                 # Use model's save method if it has one
                 if hasattr(model, 'save_model'):
@@ -46820,7 +48486,8 @@ def train_model(
         
         # Save threshold data
         try:
-            threshold_path = model_dir / "anomaly_threshold.pkl"
+            # Use run-specific directory
+            threshold_path = run_artifacts_dir / "anomaly_threshold.pkl"
             threshold_data = {
                 'threshold': threshold,
                 'metadata': threshold_metadata,
@@ -46845,7 +48512,8 @@ def train_model(
                     model=model,
                     input_dim=input_dim,
                     device=device,
-                    model_dir=model_dir,
+                    #model_dir=model_dir,
+                    model_dir=run_model_dir,  # Use run-specific directory
                     opset_version=export_config_section.get('opset_version', 14),
                     config={
                         'system': {
@@ -46903,7 +48571,8 @@ def train_model(
         # Save training metadata
         if save_training_history:
             try:
-                history_path = model_dir / "training_history.pkl"
+                # Use run-specific directory
+                history_path = run_metrics_dir / "training_history.pkl"
                 joblib.dump(training_history, history_path)
                 saved_artifacts['history_path'] = str(history_path)
                 logger.info(f"Training history saved: {history_path}")
@@ -46912,6 +48581,7 @@ def train_model(
         
         # Save configuration used
         try:
+            #save_dir = run_config_dir if run_config_dir is not None else run_model_dir
             save_dir = config_dir if config_dir is not None else model_dir
             if isinstance(save_dir, str):
                 save_dir = Path(save_dir)
@@ -46991,7 +48661,8 @@ def train_model(
         
         # Save final results summary
         try:
-            results_path = results_dir / "training_results.json"
+            # Use run-specific directory
+            results_path = run_results_dir / "training_results.json"
             
             # Create a serializable copy of final_results to avoid circular references
             serializable_results = {}
@@ -47168,7 +48839,7 @@ def train_model(
         
         # Save error information to file
         try:
-            error_dir = Path(locals().get('results_dir', RESULTS_DIR))
+            error_dir = run_results_dir
             error_dir.mkdir(parents=True, exist_ok=True)
             error_path = error_dir / f"training_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             
@@ -47275,7 +48946,8 @@ def train_model(
                     # Save partial model if it exists
                     if 'model' in locals() and locals().get('model_dir'):
                         try:
-                            partial_model_path = Path(locals()['model_dir']) / "partial_model_error_recovery.pth"
+                            # Use run-specific directory
+                            partial_model_path = run_model_dir / "partial_model_error_recovery.pth"
                             
                             # Use model's save method if available (from centralized config classes)
                             if hasattr(locals()['model'], 'save_model'):
@@ -47299,7 +48971,7 @@ def train_model(
                 # Save partial results
                 try:
                     if locals().get('results_dir'):
-                        partial_results_path = Path(locals()['results_dir']) / "partial_training_results.json"
+                        partial_results_path = run_results_dir / "partial_training_results.json"
                         
                         # Create serializable partial results
                         serializable_partial = {}
@@ -48865,7 +50537,7 @@ def _interactive_custom_setup(
         # Encoding dimension with model-specific defaults
         default_encoding = {
             'SimpleAutoencoder': 16,
-            'EnhancedAutoencoder': 32, 
+            'EnhancedAutoencoder': 32,
             'AutoencoderEnsemble': 24
         }
         encoding_dim = input(Fore.YELLOW + Style.BRIGHT + f"Encoding dimension " + Fore.WHITE + Style.BRIGHT + f"({default_encoding[model_type]}): " + Style.RESET_ALL).strip()
@@ -58825,7 +60497,7 @@ def setup_hyperparameter_optimization(
                         for plot_name in ['optimization_history', 'param_importances', 'parallel_coordinate', 'slice_plot']:
                             if plot_name in plots and not plot_name.endswith('_error'):
                                 size = plot_sizes.get(plot_name, 0)
-                                prefix = "  └─" if i == len(plots) else "  ├─"
+                                prefix = "  └─" if plot_name == list(plots.keys()) else "  ├─"
                                 print(Fore.GREEN + Style.BRIGHT + f"{prefix} {plot_name.replace('_', ' ').title()}: {size:.1f} KB")
                 
                 return plots
@@ -59136,7 +60808,7 @@ def setup_hyperparameter_optimization(
                             if key.endswith('_path'):
                                 file_name = Path(path).name
                                 file_size = Path(path).stat().st_size / 1024
-                                prefix = "  └─" if i == len(saved_files) else "  ├─"
+                                prefix = "  └─" if key == list(saved_files.keys()) else "  ├─"
                                 print(Fore.GREEN + Style.BRIGHT + f"{prefix} {file_name}: {file_size:.1f} KB")
                 
                 logger.info(f"Study data saved to: {study_dir}")
