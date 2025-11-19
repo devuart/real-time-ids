@@ -37377,6 +37377,12 @@ def load_and_validate_data(
     # Experimental Parameters
     experimental_features: Optional[bool] = None,
     advanced_preprocessing: Optional[bool] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
     
     **kwargs
 ) -> Dict[str, Union[np.ndarray, Dict[str, Any]]]:
@@ -37446,6 +37452,9 @@ def load_and_validate_data(
         ],
         'advanced': [
             'data_quality_checks', 'statistical_validation', 'distribution_checks', 'cross_validation_ready', 'experimental_features', 'advanced_preprocessing'
+        ],
+        'run_tracking': [
+            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
         ]
     }
     
@@ -37469,6 +37478,7 @@ def load_and_validate_data(
     monitoring_config = final_config.setdefault('monitoring', {})
     compatibility_config = final_config.setdefault('compatibility', {})
     advanced_config = final_config.setdefault('advanced', {})
+    run_tracking_config = final_config.setdefault('run_tracking', {})
     
     # Handle silent mode - override verbose and progress_bar if silent is True
     silent_mode = monitoring_config.get('silent', False)
@@ -37519,11 +37529,30 @@ def load_and_validate_data(
     verbose = monitoring_config.setdefault('verbose', False)
     progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     save_statistics = monitoring_config.setdefault('save_statistics', True)
-    statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
+    statistics_path = monitoring_config.get('statistics_path', None)
     
     # Advanced parameters
     data_quality_checks = advanced_config.setdefault('data_quality_checks', True)
     statistical_validation = advanced_config.setdefault('statistical_validation', False)
+
+    # Extract run tracking parameters
+    run_id = run_tracking_config.get('run_id', run_id)
+    run_number = run_tracking_config.get('run_number', run_number)
+    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+
+    if statistics_path is None and save_statistics:
+        if use_run_tracking and run_id is not None:
+            if 'metrics' in run_specific_dirs:
+                statistics_path = run_specific_dirs['metrics'] / f"data_loading_statistics.json"
+            else:
+                statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
+        else:
+            statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
+    
+    # Convert to Path object if necessary
+    if statistics_path is not None:
+        statistics_path = Path(statistics_path)
     
     # Set up logging level based on silent mode
     if not silent_mode and verbose:
@@ -37563,6 +37592,7 @@ def load_and_validate_data(
         
         # Use progress bar only if not in silent mode and progress_bar is True
         if not silent_mode and progress_bar:
+            print(Fore.GREEN + Style.BRIGHT + "\nStarting data loading and validation..." + Style.RESET_ALL)
             bar_context = alive_bar(total_stages, title='Data Loading & Validation\t', unit='stages')
         else:
             # Create a dummy context manager that does nothing
@@ -37593,7 +37623,8 @@ def load_and_validate_data(
                     # Use default path
                     data_path = DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"
                 else:
-                    data_path = Path(data_path) / "preprocessed_dataset.csv"
+                    #data_path = Path(data_path) / "preprocessed_dataset.csv"
+                    data_path = Path(data_path)
             else:
                 data_path = Path(data_path)
             
@@ -38368,7 +38399,18 @@ def load_and_validate_data(
                         "scaler": type(scaler).__name__ if scaler else None,
                         "feature_selector": type(feature_selector).__name__ if feature_selector else None,
                         "steps_applied": loading_stats.get('steps_applied', [])
-                    }
+                    },
+
+                    # Run tracking information
+                    "run_tracking": {
+                        "run_id": run_id,
+                        "run_number": run_number,
+                        "use_run_tracking": use_run_tracking,
+                        "run_specific_directories": {
+                            k: str(v) for k, v in run_specific_dirs.items()
+                        } if run_specific_dirs else None,
+                        "data_loaded_from_run": run_id if use_run_tracking else None
+                    } if use_run_tracking else None,
                 },
                 
                 # Include preprocessing components for future use
@@ -38406,10 +38448,11 @@ def load_and_validate_data(
                     data_dict[key] = data_dict[key].astype(np.float32)
             
             # Save statistics if requested
-            if save_statistics:
-                stats_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
+            if save_statistics and statistics_path:
+                if not silent_mode:
+                    logger.info(f"Saving loading statistics to {statistics_path}")
                 try:
-                    with open(stats_path, 'w') as f:
+                    with open(statistics_path, 'w') as f:
                         # Make loading_stats JSON serializable
                         serializable_stats = {}
                         for key, value in loading_stats.items():
@@ -38420,7 +38463,7 @@ def load_and_validate_data(
                         
                         json.dump(serializable_stats, f, indent=2)
                     if not silent_mode:
-                        logger.info(f"Saved loading statistics to {stats_path}")
+                        logger.info(f"Saved loading statistics to {statistics_path}")
                 except Exception as e:
                     if not silent_mode:
                         logger.warning(f"Failed to save statistics: {e}")
@@ -38776,6 +38819,12 @@ def generate_synthetic_data(
     # Direct Configuration Override
     config: Optional[Dict[str, Any]] = None,
     synthetic_config: Optional[Dict[str, Any]] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
     
     **kwargs
 ) -> Dict[str, Union[np.ndarray, pd.DataFrame, Dict[str, Any]]]:
@@ -38873,6 +38922,9 @@ def generate_synthetic_data(
         ],
         'experimental': [
             'experimental_methods', 'gan_based_generation', 'autoencoder_generation'
+        ],
+        'run_tracking': [
+            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
         ]
     }
     
@@ -38901,6 +38953,7 @@ def generate_synthetic_data(
     monitoring_config = final_config.setdefault('monitoring', {})
     export_config = final_config.setdefault('export', {})
     system_config = final_config.setdefault('system', {})
+    run_tracking_config = final_config.setdefault('run_tracking', {})
     
     # Handle silent mode - override verbose and progress_bar if silent is True
     silent_mode = monitoring_config.get('silent', False)
@@ -38970,11 +39023,26 @@ def generate_synthetic_data(
     log_generation_stats = monitoring_config.setdefault('log_generation_stats', True)
     generation_report = monitoring_config.setdefault('generation_report', True)
 
-    # Directory defaults
-    reports_dir = system_config.setdefault('reports_dir', Path(REPORTS_DIR / active_preset))
-    data_dir = system_config.setdefault('data_dir', Path(DATA_DIR / active_preset))
-    datasets_dir = system_config.setdefault('dataset_dir', Path(DATASETS_DIR / active_preset))
-    results_dir = system_config.setdefault('results_dir', Path(RESULTS_DIR / active_preset))
+    # Extract run tracking parameters
+    run_id = run_tracking_config.get('run_id', run_id)
+    run_number = run_tracking_config.get('run_number', run_number)
+    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+
+    # Determine output directories with run-specific support
+    if use_run_tracking and run_id and run_specific_dirs:
+        # Use run-specific directories for outputs
+        datasets_dir = run_specific_dirs.get('datasets', datasets_dir)
+        reports_dir = run_specific_dirs.get('reports', reports_dir)
+        results_dir = run_specific_dirs.get('results', results_dir)
+        data_dir = run_specific_dirs.get('data', data_dir)
+        logger.debug(f"Using run-specific directories for synthetic data generation (run_id: {run_id})")
+    else:
+        # Directory defaults
+        reports_dir = system_config.setdefault('reports_dir', Path(REPORTS_DIR / active_preset))
+        data_dir = system_config.setdefault('data_dir', Path(DATA_DIR / active_preset))
+        datasets_dir = system_config.setdefault('dataset_dir', Path(DATASETS_DIR / active_preset))
+        results_dir = system_config.setdefault('results_dir', Path(RESULTS_DIR / active_preset))
 
     # Export defaults
     #save_data = export_config.get('save_data', True)
@@ -39008,13 +39076,12 @@ def generate_synthetic_data(
             export_config['metadata_file'] = metadata_file
             final_config['export'] = export_config
             
-            if verbose:
-                logger.info("Using default export configuration (automated context)")
-                print(Fore.CYAN + Style.BRIGHT + f"\nUsing default export configuration (automated context):")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
-                print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
+            logger.info("Using default export configuration (automated context)")
+            print(Fore.CYAN + Style.BRIGHT + f"\nUsing default export configuration (automated context):")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
         else:
             # Set to None to trigger interactive prompt
             save_data = None
@@ -39437,6 +39504,7 @@ def generate_synthetic_data(
         
         # Use progress bar only if not in silent mode and progress_bar is True
         if not silent_mode and progress_bar:
+            print(Fore.GREEN + Style.BRIGHT + "\nStarting synthetic data generation..." + Style.RESET_ALL)
             bar_context = alive_bar(total_stages, title='Synthetic Data Generation\t', unit='stages')
         else:
             # Create a dummy context manager that does nothing
@@ -40239,6 +40307,32 @@ def generate_synthetic_data(
                 
                 # Store in generation stats
                 generation_stats['log_generation_stats'] = stats
+
+                # Save JSON report
+                if log_generation_stats and stats and use_run_tracking and run_id:
+                    # Save generation stats to run-specific metrics directory
+                    if 'metrics' in run_specific_dirs:
+                        json_stats = run_specific_dirs['metrics'] / f"generation_stats_{run_id}.json"
+                        # Ensure Path object
+                        if json_stats:
+                            stats_path = Path(json_stats)
+                            stats_path.parent.mkdir(parents=True, exist_ok=True)
+                        try:
+                            # Prepare statistics for JSON serialization
+                            serial_stats = {}
+                            for key, value in stats.items():
+                                if isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                                    serial_stats[key] = value
+                                elif isinstance(value, Path):
+                                    serial_stats[key] = str(value)
+                                else:
+                                    serial_stats[key] = str(value)
+
+                            with open(stats_path, 'w') as f:
+                                json.dump(serial_stats, f, indent=2)
+                            logger.info(f"Generation statistics saved: {stats_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to save generation statistics: {e}")
             
             # Prepare metadata
             total_time = (datetime.now() - start_time).total_seconds()
@@ -40303,7 +40397,19 @@ def generate_synthetic_data(
                     'features_created': progress_data['features_created'],
                     'attack_types_processed': progress_data['attack_types_processed'],
                     'final_quality_score': progress_data['data_quality_score']
-                }
+                },
+
+                # Run tracking information
+                "run_tracking": {
+                    "run_id": run_id,
+                    "run_number": run_number,
+                    "use_run_tracking": use_run_tracking,
+                    "run_specific_directories": {
+                        k: str(v) for k, v in run_specific_dirs.items()
+                    } if run_specific_dirs else None,
+                    "data_generated_for_run": run_id if use_run_tracking else None,
+                    "is_run_specific_output": use_run_tracking and run_id is not None
+                } if use_run_tracking else None,
             }
             
             # Generation Report creation
@@ -40312,16 +40418,21 @@ def generate_synthetic_data(
                     # Generate timestamp for unique filename
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-                    # Use consistent variable name and proper fallback chain
-                    reports_dir = (export_config.get('report_dir') or system_config.get('reports_dir') or REPORTS_DIR / active_preset)
-                    
-                    # Ensure reports_dir is a Path object
-                    reports_dir = Path(reports_dir)
-                    reports_dir.mkdir(parents=True, exist_ok=True)
+                    # Include run_id in report filenames
+                    if use_run_tracking and run_id:
+                        json_filename = f"synthetic_data_generation_report_{run_id}_{timestamp}.json"
+                        txt_filename = f"synthetic_data_generation_report_{run_id}_{timestamp}.txt"
+                    else:
+                        json_filename = f"synthetic_data_generation_report_{timestamp}.json"
+                        txt_filename = f"synthetic_data_generation_report_{timestamp}.txt"
                     
                     # FIRST: Create serializable JSON report
-                    json_filename = f"synthetic_data_generation_report_{timestamp}.json"
-                    json_report_file = reports_dir / json_filename
+                    json_report_path = reports_dir / json_filename
+
+                    # Ensure Path object
+                    if json_report_path:
+                        json_report_file = Path(json_report_path)
+                        json_report_file.parent.mkdir(parents=True, exist_ok=True)
                     
                     # Build report data structure
                     report_data = {
@@ -40475,8 +40586,12 @@ def generate_synthetic_data(
                         logger.info(f"JSON report saved to: {json_report_file}")
                     
                     # SECOND: Create text report file
-                    filename = f"synthetic_data_generation_report_{timestamp}.txt"
-                    report_file = reports_dir / filename
+                    txt_report_path = reports_dir / txt_filename
+
+                    # Ensure Path object
+                    if txt_report_path:
+                        report_file = Path(txt_report_path)
+                        report_file.parent.mkdir(parents=True, exist_ok=True)
                     
                     if verbose:
                         logger.info(f"Generating data generation report: {report_file}")
@@ -40736,11 +40851,19 @@ def generate_synthetic_data(
             }
             
             file_extension = format_extensions.get(file_format, file_format)
-            filename = f"synthetic_data_{timestamp}.{file_extension}"
-            datasets_path = datasets_dir / filename
+
+            # Include run_id in filename if run tracking is enabled
+            if use_run_tracking and run_id:
+                filename = f"synthetic_data_{run_id}_{timestamp}.{file_extension}"
+            else:
+                filename = f"synthetic_data_{timestamp}.{file_extension}"
+            
+            datasets_file = datasets_dir / filename
             
             # Ensure parent directory exists
-            datasets_path.parent.mkdir(parents=True, exist_ok=True)
+            if datasets_file:
+                datasets_path = Path(datasets_file)
+                datasets_path.parent.mkdir(parents=True, exist_ok=True)
 
             if verbose:
                 logger.info(f"Saving synthetic data to {datasets_path}")
@@ -40973,8 +41096,18 @@ def generate_synthetic_data(
                 
                 # Save metadata if requested
                 if metadata_file:
-                    metadata_filename = datasets_path.stem + '_metadata.json'
-                    metadata_path = datasets_dir / metadata_filename
+                    # Include run_id in metadata filename
+                    if use_run_tracking and run_id:
+                        metadata_filename = f"synthetic_data_{run_id}_{timestamp}_metadata.json"
+                    else:
+                        metadata_filename = datasets_path.stem + '_metadata.json'
+
+                    json_metadata_file = datasets_dir / metadata_filename
+
+                    # Ensure Path object
+                    if json_metadata_file:
+                        metadata_path = Path(json_metadata_file)
+                        metadata_path.parent.mkdir(parents=True, exist_ok=True)
                     
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving metadata..."
@@ -41808,2677 +41941,7 @@ def create_enhanced_collate_fn(config=None, dtype=torch.float32, error_handling=
         error_handling=error_handling
     )
 
-def create_dataloaders(
-    # Core Data Parameters
-    data: Optional[Dict[str, np.ndarray]] = None,
-    X_train: Optional[np.ndarray] = None,
-    X_val: Optional[np.ndarray] = None,
-    X_test: Optional[np.ndarray] = None,
-    y_train: Optional[np.ndarray] = None,
-    y_val: Optional[np.ndarray] = None,
-    y_test: Optional[np.ndarray] = None,
-    
-    # Core DataLoader Parameters
-    batch_size: Optional[int] = None,
-    shuffle: Optional[bool] = None,
-    num_workers: Optional[int] = None,
-    pin_memory: Optional[bool] = None,
-    drop_last: Optional[bool] = None,
-    timeout: Optional[float] = None,
-    worker_init_fn: Optional[Callable] = None,
-    multiprocessing_context: Optional[str] = None,
-    generator: Optional[torch.Generator] = None,
-    prefetch_factor: Optional[int] = None,
-    persistent_workers: Optional[bool] = None,
-    
-    # Batch Size Configuration
-    train_batch_size: Optional[int] = None,
-    val_batch_size: Optional[int] = None,
-    test_batch_size: Optional[int] = None,
-    eval_batch_size: Optional[int] = None,
-    dynamic_batch_sizing: Optional[bool] = None,
-    adaptive_batch_size: Optional[bool] = None,
-    max_batch_size: Optional[int] = None,
-    min_batch_size: Optional[int] = None,
-    
-    # Shuffling and Sampling
-    train_shuffle: Optional[bool] = None,
-    val_shuffle: Optional[bool] = None,
-    test_shuffle: Optional[bool] = None,
-    sampler: Optional[torch.utils.data.Sampler] = None,
-    batch_sampler: Optional[torch.utils.data.BatchSampler] = None,
-    shuffle_seed: Optional[int] = None,
-    stratified_sampling: Optional[bool] = None,
-    weighted_sampling: Optional[bool] = None,
-    sample_weights: Optional[np.ndarray] = None,
-    
-    # Performance Optimization
-    optimization_level: Optional[str] = None,
-    memory_efficient: Optional[bool] = None,
-    cpu_count: Optional[int] = None,
-    max_workers: Optional[int] = None,
-    worker_memory_limit: Optional[int] = None,
-    dataloader_optimization: Optional[bool] = None,
-    fast_dev_run: Optional[bool] = None,
-    benchmark_mode: Optional[bool] = None,
-    
-    # Data Processing and Augmentation
-    data_transforms: Optional[List[Callable]] = None,
-    train_transforms: Optional[List[Callable]] = None,
-    val_transforms: Optional[List[Callable]] = None,
-    test_transforms: Optional[List[Callable]] = None,
-    augmentation_pipeline: Optional[List[Callable]] = None,
-    normalize_data: Optional[bool] = None,
-    standardize_data: Optional[bool] = None,
-    
-    # Data Type and Format Parameters
-    dtype: Optional[torch.dtype] = None,
-    device: Optional[str] = None,
-    tensor_format: Optional[str] = None,
-    data_format: Optional[str] = None,
-    squeeze_dims: Optional[bool] = None,
-    unsqueeze_dims: Optional[List[int]] = None,
-    transpose_dims: Optional[List[int]] = None,
-    
-    # Memory Management
-    memory_management: Optional[str] = None,
-    shared_memory: Optional[bool] = None,
-    mmap_mode: Optional[str] = None,
-    cache_datasets: Optional[bool] = None,
-    preload_data: Optional[bool] = None,
-    lazy_loading: Optional[bool] = None,
-    memory_mapping: Optional[bool] = None,
-    gc_collection: Optional[bool] = None,
-    
-    # Validation and Quality Control
-    validate_data: Optional[bool] = None,
-    check_data_integrity: Optional[bool] = None,
-    handle_nan_values: Optional[str] = None,
-    handle_inf_values: Optional[str] = None,
-    data_consistency_checks: Optional[bool] = None,
-    shape_validation: Optional[bool] = None,
-    dtype_validation: Optional[bool] = None,
-    
-    # Distributed and Parallel Processing
-    distributed: Optional[bool] = None,
-    world_size: Optional[int] = None,
-    rank: Optional[int] = None,
-    local_rank: Optional[int] = None,
-    distributed_sampler: Optional[bool] = None,
-    ddp_backend: Optional[str] = None,
-    sync_batchnorm: Optional[bool] = None,
-    
-    # Advanced Features
-    collate_fn: Optional[Callable] = None,
-    custom_collate: Optional[Callable] = None,
-    variable_length_sequences: Optional[bool] = None,
-    padding_strategy: Optional[str] = None,
-    sequence_length: Optional[int] = None,
-    max_sequence_length: Optional[int] = None,
-    
-    # Monitoring and Debugging
-    profile_dataloaders: Optional[bool] = None,
-    benchmark_dataloaders: Optional[bool] = None,
-    dataloader_stats: Optional[bool] = None,
-    timing_analysis: Optional[bool] = None,
-    memory_profiling: Optional[bool] = None,
-    bottleneck_detection: Optional[bool] = None,
-    verbose: Optional[bool] = None,
-    progress_bar: Optional[bool] = None,
-    silent: Optional[bool] = None,
-    debug_mode: Optional[bool] = None,
-    
-    # Error Handling and Resilience
-    error_handling: Optional[str] = None,
-    retry_failed_batches: Optional[bool] = None,
-    max_retries: Optional[int] = None,
-    fallback_batch_size: Optional[int] = None,
-    graceful_degradation: Optional[bool] = None,
-    fault_tolerance: Optional[bool] = None,
-    
-    # Cross-validation Support
-    cross_validation: Optional[bool] = None,
-    cv_folds: Optional[int] = None,
-    cv_strategy: Optional[str] = None,
-    fold_dataloaders: Optional[bool] = None,
-    stratified_cv: Optional[bool] = None,
-    
-    # Experimental and Advanced Options
-    experimental_features: Optional[bool] = None,
-    mixed_precision_loading: Optional[bool] = None,
-    gradient_checkpointing: Optional[bool] = None,
-    dataloader_sharding: Optional[bool] = None,
-    pipeline_parallelism: Optional[bool] = None,
-    
-    # System Integration
-    system_optimization: Optional[bool] = None,
-    numa_awareness: Optional[bool] = None,
-    cpu_affinity: Optional[List[int]] = None,
-    gpu_affinity: Optional[List[int]] = None,
-    io_optimization: Optional[bool] = None,
-    
-    # Compatibility and Legacy Support
-    pytorch_version_check: Optional[bool] = None,
-    legacy_compatibility: Optional[bool] = None,
-    backwards_compatibility: Optional[bool] = None,
-    version_specific_optimizations: Optional[bool] = None,
-    
-    # Configuration and Metadata
-    config: Optional[Dict[str, Any]] = None,
-    dataloader_config: Optional[Dict[str, Any]] = None,
-    preset: Optional[str] = None,
-    
-    **kwargs
-) -> Union[Tuple[DataLoader, DataLoader, DataLoader], Dict[str, DataLoader], DataLoader]:
-    # Start timing
-    start_time = datetime.now()
-    
-    # Initialize configuration with defaults
-    if config is None:
-        try:
-            config = get_current_config() if 'get_current_config' in globals() else {}
-        except Exception:
-            config = {}
-    
-    # Apply dataloader-specific configuration
-    if dataloader_config:
-        config.setdefault('dataloader', {}).update(dataloader_config)
-    
-    # Load preset configuration if specified
-    if preset and preset in globals().get('PRESET_CONFIGS', {}):
-        try:
-            preset_config = globals()['PRESET_CONFIGS'][preset].copy()
-            # Merge preset config, giving precedence to existing config
-            for key, value in preset_config.items():
-                if key not in config:
-                    config[key] = value
-            if not silent_mode:
-                logger.info(f"Applied preset configuration: {preset}")
-        except Exception as e:
-            if not silent_mode:
-                logger.warning(f"Failed to apply preset '{preset}': {e}")
-    
-    # Apply all parameters to configuration
-    final_config = {}
-    
-    # Merge with existing config
-    final_config.update(config)
-    
-    # Apply individual parameters
-    params = locals().copy()
-    params.update(kwargs)
-    
-    # Remove non-parameter items
-    params_to_remove = {
-        'config', 'dataloader_config', 'preset', 'kwargs', 'start_time', 'datetime', 'traceback', 'psutil', 'gc', 'partial', 'WeightedRandomSampler', 'DistributedSampler',
-        'default_collate', 'TensorDataset', 'DataLoader', 'torch'
-    }
-    
-    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
-    
-    # Organize parameters into logical sections
-    param_sections = {
-        'core': [
-            'batch_size', 'shuffle', 'num_workers', 'pin_memory', 'drop_last', 'timeout', 'worker_init_fn', 'multiprocessing_context', 'generator',
-            'prefetch_factor', 'persistent_workers'
-        ],
-        'batch_configuration': [
-            'train_batch_size', 'val_batch_size', 'test_batch_size', 'eval_batch_size', 'dynamic_batch_sizing', 'adaptive_batch_size', 'max_batch_size', 'min_batch_size'
-        ],
-        'sampling': [
-            'train_shuffle', 'val_shuffle', 'test_shuffle', 'sampler', 'batch_sampler', 'shuffle_seed', 'stratified_sampling', 'weighted_sampling', 'sample_weights'
-        ],
-        'performance': [
-            'optimization_level', 'memory_efficient', 'cpu_count', 'max_workers', 'worker_memory_limit', 'dataloader_optimization', 'fast_dev_run', 'benchmark_mode'
-        ],
-        'data_processing': [
-            'data_transforms', 'train_transforms', 'val_transforms', 'test_transforms', 'augmentation_pipeline', 'normalize_data', 'standardize_data'
-        ],
-        'data_format': [
-            'dtype', 'device', 'tensor_format', 'data_format', 'squeeze_dims', 'unsqueeze_dims', 'transpose_dims'
-        ],
-        'memory_management': [
-            'memory_management', 'shared_memory', 'mmap_mode', 'cache_datasets', 'preload_data', 'lazy_loading', 'memory_mapping', 'gc_collection'
-        ],
-        'validation': [
-            'validate_data', 'check_data_integrity', 'handle_nan_values', 'handle_inf_values', 'data_consistency_checks', 'shape_validation', 'dtype_validation'
-        ],
-        'distributed': [
-            'distributed', 'world_size', 'rank', 'local_rank', 'distributed_sampler', 'ddp_backend', 'sync_batchnorm'
-        ],
-        'advanced_features': [
-            'collate_fn', 'custom_collate', 'variable_length_sequences', 'padding_strategy', 'sequence_length', 'max_sequence_length'
-        ],
-        'monitoring': [
-            'profile_dataloaders', 'benchmark_dataloaders', 'dataloader_stats', 'timing_analysis', 'memory_profiling', 'bottleneck_detection', 'verbose',
-            'progress_bar', 'silent', 'debug_mode'
-        ],
-        'error_handling': [
-            'error_handling', 'retry_failed_batches', 'max_retries', 'fallback_batch_size', 'graceful_degradation', 'fault_tolerance'
-        ],
-        'cross_validation': [
-            'cross_validation', 'cv_folds', 'cv_strategy', 'fold_dataloaders', 'stratified_cv'
-        ],
-        'experimental': [
-            'experimental_features', 'mixed_precision_loading', 'gradient_checkpointing', 'dataloader_sharding', 'pipeline_parallelism'
-        ],
-        'system_integration': [
-            'system_optimization', 'numa_awareness', 'cpu_affinity', 'gpu_affinity', 'io_optimization'
-        ],
-        'compatibility': [
-            'pytorch_version_check', 'legacy_compatibility', 'backwards_compatibility', 'version_specific_optimizations'
-        ]
-    }
-    
-    # Apply parameters to appropriate sections
-    for section, param_list in param_sections.items():
-        section_config = final_config.setdefault(section, {})
-        for param in param_list:
-            if param in cleaned_params:
-                section_config[param] = cleaned_params[param]
-    
-    # Set up defaults
-    core_config = final_config.setdefault('core', {})
-    batch_config = final_config.setdefault('batch_configuration', {})
-    sampling_config = final_config.setdefault('sampling', {})
-    performance_config = final_config.setdefault('performance', {})
-    data_processing_config = final_config.setdefault('data_processing', {})
-    data_format_config = final_config.setdefault('data_format', {})
-    memory_config = final_config.setdefault('memory_management', {})
-    validation_config = final_config.setdefault('validation', {})
-    distributed_config = final_config.setdefault('distributed', {})
-    advanced_config = final_config.setdefault('advanced_features', {})
-    monitoring_config = final_config.setdefault('monitoring', {})
-    error_config = final_config.setdefault('error_handling', {})
-    cv_config = final_config.setdefault('cross_validation', {})
-    experimental_config = final_config.setdefault('experimental', {})
-    
-    # Handle silent mode - override verbose and progress_bar if silent is True
-    silent_mode = monitoring_config.get('silent', False)
-    if silent_mode:
-        # Force silent mode behavior
-        monitoring_config['verbose'] = False
-        monitoring_config['progress_bar'] = False
-    
-    # Apply defaults with system awareness
-    batch_size = core_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
-    shuffle = core_config.setdefault('shuffle', True)
-    num_workers = core_config.setdefault('num_workers', NUM_WORKERS)
-    pin_memory = core_config.setdefault('pin_memory', torch.cuda.is_available())
-    drop_last = core_config.setdefault('drop_last', False)
-    timeout = core_config.setdefault('timeout', 0)
-    
-    if num_workers > 0:
-        prefetch_factor = core_config.setdefault('prefetch_factor', 2)
-        persistent_workers = core_config.setdefault('persistent_workers', True)
-    else:
-        prefetch_factor = None
-        persistent_workers = False
-    
-    # Performance defaults
-    optimization_level = performance_config.setdefault('optimization_level', 'standard')
-    memory_efficient = performance_config.setdefault('memory_efficient', True)
-    dataloader_optimization = performance_config.setdefault('dataloader_optimization', True)
-    fast_dev_run = performance_config.setdefault('fast_dev_run', False)
-    benchmark_mode = performance_config.setdefault('benchmark_mode', False)
-    
-    # System optimization defaults
-    system_cpu_count = os.cpu_count() or 1
-    max_workers = performance_config.setdefault('max_workers', system_cpu_count)
-    cpu_count = performance_config.setdefault('cpu_count', system_cpu_count)
-    
-    # Data format defaults
-    dtype = data_format_config.setdefault('dtype', torch.float32)
-    device = data_format_config.setdefault('device', 'auto')
-    
-    # Validation defaults
-    validate_data = validation_config.setdefault('validate_data', True)
-    check_data_integrity = validation_config.setdefault('check_data_integrity', True)
-    handle_nan_values = validation_config.setdefault('handle_nan_values', 'error')
-    handle_inf_values = validation_config.setdefault('handle_inf_values', 'error')
-    
-    # Monitoring defaults
-    verbose = monitoring_config.setdefault('verbose', False)
-    progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
-    debug_mode = monitoring_config.setdefault('debug_mode', False)
-    profile_dataloaders = monitoring_config.setdefault('profile_dataloaders', True)
-    dataloader_stats = monitoring_config.setdefault('dataloader_stats', True)
-    
-    # Error handling defaults
-    error_handling = error_config.setdefault('error_handling', 'strict')
-    graceful_degradation = error_config.setdefault('graceful_degradation', True)
-    max_retries = error_config.setdefault('max_retries', 3)
-    
-    # Set up logging level
-    if verbose:
-        original_level = logger.level
-        logger.setLevel(logging.INFO)
-    
-    if verbose:
-        logger.info("Starting DataLoader creation")
-    
-    # Initialize progress tracking
-    progress_data = {
-        'current_stage': 'Starting...',
-        'current_substage': None,
-        'dataloaders_created': 0,
-        'datasets_processed': 0,
-        'transforms_applied': 0,
-        'samplers_configured': 0,
-        'performance_score': 0.0,
-        'fallback_attempts': 0
-    }
-    
-    # Initialize creation statistics
-    creation_stats = {
-        'start_time': start_time.isoformat(),
-        'config_applied': final_config,
-        'system_info': {
-            'cpu_count': system_cpu_count,
-            'available_memory_gb': psutil.virtual_memory().available / (1024**3),
-            'cuda_available': torch.cuda.is_available(),
-            'pytorch_version': torch.__version__
-        },
-        'stages_completed': [],
-        'warnings_encountered': [],
-        'performance_metrics': {}
-    }
-    
-    try:
-        # Calculate total stages for progress tracking
-        total_stages = 12  # Configuration, Data Validation, System Optimization, Transforms, Datasets, Samplers, Collate, Training DL, Validation DL, Test DL, CV DL, Finalization
-        
-        # Use progress bar only if not in silent mode and progress_bar is True
-        if not silent_mode and progress_bar:
-            bar_context = alive_bar(total_stages, title='DataLoader Creation\t\t', unit='stages')
-        else:
-            # Create a dummy context manager that does nothing
-            class DummyBar:
-                def __enter__(self):
-                    return self
-                def __exit__(self, *args):
-                    pass
-                def __call__(self):
-                    pass
-                def __setattr__(self, name, value):
-                    pass
-            bar_context = DummyBar()
-        
-        with bar_context as main_bar:
-            
-            # STAGE 1: Configuration and Setup
-            progress_data['current_stage'] = "Configuration"
-            if not silent_mode:
-                main_bar.text = "Setting up configuration and parameters..."
-            
-            # Determine device configuration
-            if device == 'auto':
-                device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            
-            if not silent_mode:
-                main_bar.text = "Configuration complete"
-            creation_stats['stages_completed'].append('configuration')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 2: Data Validation
-            progress_data['current_stage'] = "Data Validation"
-            if not silent_mode:
-                main_bar.text = "Validating and preparing input data..."
-            
-            # Extract data from various input formats
-            datasets = {}
-            
-            if data is not None:
-                # Primary method: data dictionary
-                X_train = data.get('X_train', X_train)
-                X_val = data.get('X_val', X_val)
-                X_test = data.get('X_test', X_test)
-                y_train = data.get('y_train', y_train)
-                y_val = data.get('y_val', y_val)
-                y_test = data.get('y_test', y_test)
-            
-            # Validate required data
-            if X_train is None:
-                raise ValueError("Training data (X_train) is required")
-            
-            # Data validation if requested
-            if validate_data:
-                if verbose:
-                    logger.info("Performing data validation")
-                
-                def validate_array(arr, name):
-                    if arr is None:
-                        return None
-                    
-                    if not isinstance(arr, np.ndarray):
-                        try:
-                            arr = np.array(arr)
-                        except Exception as e:
-                            raise TypeError(f"{name} could not be converted to numpy array: {e}")
-                    
-                    if arr.size == 0:
-                        if verbose:
-                            logger.warning(f"{name} is empty")
-                        return arr
-                    
-                    # Check for invalid values
-                    if handle_nan_values != 'ignore':
-                        nan_count = np.isnan(arr).sum()
-                        if nan_count > 0:
-                            if handle_nan_values == 'error':
-                                raise ValueError(f"{name} contains {nan_count} NaN values")
-                            elif handle_nan_values == 'remove':
-                                valid_mask = ~np.isnan(arr).any(axis=1)
-                                arr = arr[valid_mask]
-                                if verbose:
-                                    logger.warning(f"Removed {(~valid_mask).sum()} samples with NaN values from {name}")
-                            elif handle_nan_values == 'replace':
-                                arr = np.nan_to_num(arr, nan=0.0)
-                                if verbose:
-                                    logger.warning(f"Replaced {nan_count} NaN values with 0.0 in {name}")
-                    
-                    if handle_inf_values != 'ignore':
-                        inf_count = np.isinf(arr).sum()
-                        if inf_count > 0:
-                            if handle_inf_values == 'error':
-                                raise ValueError(f"{name} contains {inf_count} infinite values")
-                            elif handle_inf_values == 'replace':
-                                arr = np.nan_to_num(arr, posinf=1e6, neginf=-1e6)
-                                if verbose:
-                                    logger.warning(f"Replaced {inf_count} infinite values in {name}")
-                    
-                    return arr
-                
-                # Validate all arrays
-                X_train = validate_array(X_train, 'X_train')
-                X_val = validate_array(X_val, 'X_val') if X_val is not None else None
-                X_test = validate_array(X_test, 'X_test') if X_test is not None else None
-                y_train = validate_array(y_train, 'y_train') if y_train is not None else None
-                y_val = validate_array(y_val, 'y_val') if y_val is not None else None
-                y_test = validate_array(y_test, 'y_test') if y_test is not None else None
-                
-                # Shape consistency validation
-                if validation_config.get('shape_validation', True):
-                    n_features = X_train.shape[1] if len(X_train.shape) > 1 else 1
-                    
-                    for name, arr in [('X_val', X_val), ('X_test', X_test)]:
-                        if arr is not None and len(arr.shape) > 1:
-                            if arr.shape[1] != n_features:
-                                raise ValueError(f"Feature dimension mismatch: X_train has {n_features} features, {name} has {arr.shape[1]}")
-                    
-                    # Label consistency
-                    if y_train is not None and len(y_train) != len(X_train):
-                        raise ValueError(f"Training data size mismatch: X_train has {len(X_train)} samples, y_train has {len(y_train)}")
-            
-            creation_stats['data_validation_passed'] = True
-            creation_stats['data_shapes'] = {
-                'X_train': X_train.shape,
-                'X_val': X_val.shape if X_val is not None else None,
-                'X_test': X_test.shape if X_test is not None else None
-            }
-            
-            progress_data['datasets_processed'] = 1 + (1 if X_val is not None else 0) + (1 if X_test is not None else 0)
-            if not silent_mode:
-                main_bar.text = f"Data validation complete ({progress_data['datasets_processed']} datasets)"
-            creation_stats['stages_completed'].append('data_validation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 3: System Optimization
-            progress_data['current_stage'] = "System Optimization"
-            if not silent_mode:
-                main_bar.text = "Optimizing system parameters..."
-            
-            # Optimize system parameters based on available resources
-            if system_optimization:
-                if verbose:
-                    logger.info("Applying system optimizations")
-                
-                # Memory-based optimization
-                available_memory_gb = psutil.virtual_memory().available / (1024**3)
-                # Less than 4GB
-                if available_memory_gb < 4:
-                    num_workers = min(num_workers, 2)
-                    batch_size = min(batch_size, 32)
-                    if num_workers > 0:
-                        prefetch_factor = 1
-                    else:
-                        prefetch_factor = None
-                    if verbose:
-                        logger.info("Applied memory-constrained optimizations")
-                # More than 16GB
-                elif available_memory_gb > 16:
-                    num_workers = min(num_workers, max_workers)
-                    prefetch_factor = min(prefetch_factor, 4)
-                    if verbose:
-                        logger.info("Applied high-memory optimizations")
-                
-                # CPU-based optimization
-                if system_cpu_count <= 2:
-                    num_workers = min(num_workers, 1)
-                    persistent_workers = False
-                elif system_cpu_count >= 8:
-                    num_workers = min(num_workers, system_cpu_count - 1)
-                    persistent_workers = True
-            
-            # Apply batch size configurations
-            train_batch_size = batch_config.get('train_batch_size', batch_size)
-            val_batch_size = batch_config.get('val_batch_size', batch_config.get('eval_batch_size', min(batch_size * 2, 1024)))
-            test_batch_size = batch_config.get('test_batch_size', batch_config.get('eval_batch_size', min(batch_size * 2, 1024)))
-            
-            # Adaptive batch sizing based on data size and memory
-            if batch_config.get('adaptive_batch_size', False):
-                if verbose:
-                    logger.info("Applying adaptive batch sizing")
-                
-                def calculate_optimal_batch_size(data_size, base_batch_size, memory_factor=1.0):
-                    # Calculate based on data size and available memory
-                    if data_size < 1000:
-                        return min(base_batch_size, data_size // 4) if data_size > 4 else 1
-                    elif data_size > 100000:
-                        return min(base_batch_size * 2, batch_config.get('max_batch_size', 2048))
-                    else:
-                        return int(base_batch_size * memory_factor)
-                
-                memory_factor = min(2.0, available_memory_gb / 8.0) if 'available_memory_gb' in locals() else 1.0
-                
-                train_batch_size = calculate_optimal_batch_size(len(X_train), train_batch_size, memory_factor)
-                if X_val is not None:
-                    val_batch_size = calculate_optimal_batch_size(len(X_val), val_batch_size, memory_factor)
-                if X_test is not None:
-                    test_batch_size = calculate_optimal_batch_size(len(X_test), test_batch_size, memory_factor)
-            
-            # Apply batch size limits
-            min_batch_size = batch_config.get('min_batch_size', 1)
-            max_batch_size = batch_config.get('max_batch_size', 4096)
-            
-            train_batch_size = max(min_batch_size, min(train_batch_size, max_batch_size))
-            val_batch_size = max(min_batch_size, min(val_batch_size, max_batch_size))
-            test_batch_size = max(min_batch_size, min(test_batch_size, max_batch_size))
-            
-            # Shuffle configuration
-            train_shuffle = sampling_config.get('train_shuffle', shuffle)
-            val_shuffle = sampling_config.get('val_shuffle', False)
-            test_shuffle = sampling_config.get('test_shuffle', False)
-            
-            if not silent_mode:
-                main_bar.text = "System optimization complete"
-            creation_stats['stages_completed'].append('system_optimization')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 4: Transform Pipeline Setup
-            progress_data['current_stage'] = "Transform Setup"
-            if not silent_mode:
-                main_bar.text = "Setting up data transforms..."
-            
-            # Setup multiprocessing context
-            mp_context = core_config.get('multiprocessing_context')
-            if mp_context and num_workers > 0:
-                try:
-                    import multiprocessing as mp
-                    if mp_context in ['spawn', 'fork', 'forkserver']:
-                        mp_ctx = mp.get_context(mp_context)
-                        if verbose:
-                            logger.info(f"Using multiprocessing context: {mp_context}")
-                    else:
-                        mp_ctx = None
-                        if verbose:
-                            logger.warning(f"Invalid multiprocessing context: {mp_context}")
-                except Exception as e:
-                    if verbose:
-                        logger.warning(f"Failed to set multiprocessing context: {e}")
-                    mp_ctx = None
-            else:
-                mp_ctx = None
-            
-            # Create data transforms pipeline
-            def create_transform_pipeline(transforms_list):
-                if not transforms_list:
-                    return None
-                
-                def apply_transforms(tensor):
-                    for transform in transforms_list:
-                        tensor = transform(tensor)
-                    return tensor
-                return apply_transforms
-            
-            # Data processing transforms
-            train_transform = create_transform_pipeline(data_processing_config.get('train_transforms'))
-            val_transform = create_transform_pipeline(data_processing_config.get('val_transforms'))
-            test_transform = create_transform_pipeline(data_processing_config.get('test_transforms'))
-            
-            # Generic transforms applied to all data
-            if data_processing_config.get('data_transforms'):
-                generic_transform = create_transform_pipeline(data_processing_config['data_transforms'])
-            elif data_processing_config.get('normalize_data', False):
-                # Simple normalization transform
-                def normalize_transform(tensor):
-                    return (tensor - tensor.mean()) / (tensor.std() + 1e-8)
-                generic_transform = normalize_transform
-            elif data_processing_config.get('standardize_data', False):
-                # Standardization transform
-                def standardize_transform(tensor):
-                    return (tensor - tensor.min()) / (tensor.max() - tensor.min() + 1e-8)
-                generic_transform = standardize_transform
-            else:
-                generic_transform = None
-            
-            progress_data['transforms_applied'] = sum(1 for t in [train_transform, val_transform, test_transform, generic_transform] if t is not None)
-            if not silent_mode:
-                main_bar.text = f"Transform setup complete ({progress_data['transforms_applied']} transforms)"
-            creation_stats['stages_completed'].append('transform_setup')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 5: Dataset Creation
-            progress_data['current_stage'] = "Dataset Creation"
-            if not silent_mode:
-                main_bar.text = "Creating tensor datasets..."
-            
-            # Create tensor datasets
-            def create_enhanced_dataset(X, y=None, transform=None):
-                # Convert to tensors
-                X_tensor = torch.tensor(X, dtype=dtype)
-                
-                if y is not None:
-                    y_tensor = torch.tensor(y, dtype=torch.long if y.dtype in [np.int32, np.int64] else dtype)
-                    dataset = TensorDataset(X_tensor, y_tensor)
-                else:
-                    dataset = TensorDataset(X_tensor)
-                
-                # Apply transforms if specified
-                if transform or generic_transform:
-                    original_dataset = dataset
-                    
-                    def transformed_getitem(idx):
-                        item = original_dataset[idx]
-                        if generic_transform:
-                            if isinstance(item, tuple):
-                                item = (generic_transform(item[0]), *item[1:])
-                            else:
-                                item = generic_transform(item)
-                        if transform:
-                            if isinstance(item, tuple):
-                                item = (transform(item[0]), *item[1:])
-                            else:
-                                item = transform(item)
-                        return item
-                    
-                    # Create a custom dataset class that applies transforms
-                    class TransformedDataset(torch.utils.data.Dataset):
-                        def __init__(self, base_dataset, transform_fn):
-                            self.base_dataset = base_dataset
-                            self.transform_fn = transform_fn
-                        
-                        def __len__(self):
-                            return len(self.base_dataset)
-                        
-                        def __getitem__(self, idx):
-                            return self.transform_fn(idx)
-                    
-                    dataset = TransformedDataset(original_dataset, transformed_getitem)
-                
-                return dataset
-            
-            # Create datasets
-            if verbose:
-                logger.info("Creating tensor datasets")
-            
-            train_dataset = create_enhanced_dataset(X_train, y_train, train_transform)
-            val_dataset = create_enhanced_dataset(X_val, y_val, val_transform) if X_val is not None else None
-            test_dataset = create_enhanced_dataset(X_test, y_test, test_transform) if X_test is not None else None
-            
-            if not silent_mode:
-                main_bar.text = "Dataset creation complete"
-            creation_stats['stages_completed'].append('dataset_creation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 6: Sampler Configuration
-            progress_data['current_stage'] = "Sampler Configuration"
-            if not silent_mode:
-                main_bar.text = "Configuring data samplers..."
-            
-            # Setup samplers
-            train_sampler = None
-            val_sampler = None
-            test_sampler = None
-            
-            # Distributed sampling
-            if distributed_config.get('distributed', False) and distributed_config.get('distributed_sampler', True):
-                world_size = distributed_config.get('world_size', 1)
-                rank = distributed_config.get('rank', 0)
-                
-                if verbose:
-                    logger.info(f"Setting up distributed samplers: world_size={world_size}, rank={rank}")
-                
-                train_sampler = DistributedSampler(
-                    train_dataset,
-                    num_replicas=world_size,
-                    rank=rank,
-                    shuffle=train_shuffle,
-                    seed=sampling_config.get('shuffle_seed', 0)
-                )
-                
-                if val_dataset:
-                    val_sampler = DistributedSampler(
-                        val_dataset,
-                        num_replicas=world_size,
-                        rank=rank,
-                        shuffle=val_shuffle,
-                        seed=sampling_config.get('shuffle_seed', 0)
-                    )
-                
-                if test_dataset:
-                    test_sampler = DistributedSampler(
-                        test_dataset,
-                        num_replicas=world_size,
-                        rank=rank,
-                        shuffle=test_shuffle,
-                        seed=sampling_config.get('shuffle_seed', 0)
-                    )
-                
-                # Override shuffle when using distributed sampler
-                train_shuffle = False
-                val_shuffle = False
-                test_shuffle = False
-            
-            # Weighted sampling for training data
-            elif sampling_config.get('weighted_sampling', False) and y_train is not None:
-                if verbose:
-                    logger.info("Setting up weighted sampling")
-                
-                if sampling_config.get('sample_weights') is not None:
-                    sample_weights = sampling_config['sample_weights']
-                else:
-                    # Calculate class weights
-                    class_counts = np.bincount(y_train)
-                    class_weights = 1.0 / class_counts
-                    sample_weights = class_weights[y_train]
-                
-                train_sampler = WeightedRandomSampler(
-                    weights=sample_weights,
-                    num_samples=len(sample_weights),
-                    replacement=True
-                )
-                train_shuffle = False  # Don't shuffle when using custom sampler
-            
-            # Stratified sampling
-            elif sampling_config.get('stratified_sampling', False) and y_train is not None:
-                if verbose:
-                    logger.info("Setting up stratified sampling")
-                
-                # Create stratified sampler (simplified implementation)
-                class_indices = defaultdict(list)
-                for idx, label in enumerate(y_train):
-                    class_indices[label].append(idx)
-                
-                # Balance classes by sampling
-                min_class_size = min(len(indices) for indices in class_indices.values())
-                balanced_indices = []
-                
-                for indices in class_indices.values():
-                    sampled_indices = np.random.choice(indices, size=min_class_size, replace=False)
-                    balanced_indices.extend(sampled_indices)
-                
-                # Custom sampler that uses balanced indices
-                class StratifiedSampler(torch.utils.data.Sampler):
-                    def __init__(self, indices):
-                        self.indices = indices
-                    
-                    def __iter__(self):
-                        return iter(np.random.permutation(self.indices))
-                    
-                    def __len__(self):
-                        return len(self.indices)
-                
-                train_sampler = StratifiedSampler(balanced_indices)
-                train_shuffle = False
-            
-            # Custom samplers from configuration
-            if sampling_config.get('sampler') is not None:
-                train_sampler = sampling_config['sampler']
-                train_shuffle = False
-            
-            if sampling_config.get('batch_sampler') is not None:
-                batch_sampler = sampling_config['batch_sampler']
-                train_sampler = None
-                train_shuffle = False
-            else:
-                batch_sampler = None
-            
-            # Setup generator for reproducibility
-            generator = core_config.get('generator')
-            if generator is None and sampling_config.get('shuffle_seed') is not None:
-                generator = torch.Generator()
-                generator.manual_seed(sampling_config['shuffle_seed'])
-            
-            progress_data['samplers_configured'] = sum(1 for s in [train_sampler, val_sampler, test_sampler] if s is not None)
-            if not silent_mode:
-                main_bar.text = f"Sampler configuration complete ({progress_data['samplers_configured']} samplers)"
-            creation_stats['stages_completed'].append('sampler_configuration')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 7: Collate Function Setup
-            progress_data['current_stage'] = "Collate Function"
-            if not silent_mode:
-                main_bar.text = "Setting up collate functions..."
-            
-            # Custom collate function
-            enhanced_collate_fn = None
-            
-            # Only create enhanced collate if we have specific requirements or configurations
-            needs_enhanced_collate = (
-                advanced_config.get('variable_length_sequences', False) or 
-                advanced_config.get('custom_collate') or
-                data_format_config.get('squeeze_dims', False) or
-                data_format_config.get('unsqueeze_dims') or
-                dtype != torch.float32 or
-                advanced_config.get('collate_fn') != default_collate
-            )
-            
-            if needs_enhanced_collate:
-                if verbose:
-                    logger.debug("Creating enhanced collate function with custom processing")
-                
-                # Create the enhanced collate function with current configuration
-                enhanced_collate_fn = EnhancedCollateFn(
-                    config=final_config,
-                    dtype=dtype,
-                    error_handling=error_handling
-                )
-                
-                # Test if the collate function is picklable when using multiprocessing
-                if num_workers > 0:
-                    try:
-                        pickle.dumps(enhanced_collate_fn)
-                        if verbose:
-                            logger.debug("Enhanced collate function is picklable and ready for multiprocessing")
-                    except Exception as pickle_error:
-                        if verbose:
-                            logger.warning(f"Enhanced collate function pickling test failed: {pickle_error}")
-                            logger.info("Falling back to default collate function to avoid multiprocessing issues")
-                        enhanced_collate_fn = None
-                
-            else:
-                if verbose:
-                    logger.debug("Using default PyTorch collate function (no custom processing needed)")
-                # Use default collate
-                enhanced_collate_fn = None
-            
-            # Additional fallback for problematic scenarios
-            if enhanced_collate_fn is None and needs_enhanced_collate:
-                if verbose:
-                    logger.warning("Enhanced collate features requested but not available - some functionality may be limited")
-            
-            # Worker initialization function
-            worker_init_fn = None
-            
-            if num_workers > 0:
-                # Check if we need custom worker initialization
-                needs_custom_worker_init = (
-                    sampling_config.get('shuffle_seed') is not None or
-                    performance_config.get('cpu_affinity') or
-                    memory_config.get('worker_memory_limit') or
-                    core_config.get('worker_init_fn')
-                )
-                
-                if needs_custom_worker_init:
-                    # Create picklable worker initializer
-                    worker_init_fn = WorkerInitializer(config=final_config)
-                    
-                    # Test if the worker initializer is picklable
-                    try:
-                        pickle.dumps(worker_init_fn)
-                        if verbose:
-                            logger.debug("Worker initializer is picklable and ready for multiprocessing")
-                    except Exception as pickle_error:
-                        if verbose:
-                            logger.warning(f"Worker initializer pickling test failed: {pickle_error}")
-                            logger.info("Disabling custom worker initialization to avoid multiprocessing issues")
-                        worker_init_fn = None
-                else:
-                    if verbose:
-                        logger.debug("No custom worker initialization needed")
-                    worker_init_fn = None
-            else:
-                worker_init_fn = None
-            
-            if not silent_mode:
-                main_bar.text = "Collate function setup complete"
-            creation_stats['stages_completed'].append('collate_setup')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 8: Training DataLoader Creation
-            progress_data['current_stage'] = "Training DataLoader"
-            if not silent_mode:
-                main_bar.text = "Creating training DataLoader..."
-            
-            # Common DataLoader parameters
-            common_params = {
-                'pin_memory': pin_memory,
-                'timeout': timeout,
-                'generator': generator
-            }
-            
-            # Only add prefetch_factor if num_workers > 0
-            if num_workers > 0:
-                common_params['prefetch_factor'] = prefetch_factor
-            
-            # Add multiprocessing context if available
-            if mp_ctx and num_workers > 0:
-                common_params['multiprocessing_context'] = mp_ctx
-            
-            # Add collate function and worker configuration
-            if num_workers > 0:
-                common_params.update({
-                    'num_workers': num_workers,
-                    'worker_init_fn': worker_init_fn,  # This is now picklable
-                    'persistent_workers': persistent_workers,
-                    'collate_fn': enhanced_collate_fn
-                })
-            else:
-                common_params.update({
-                    'num_workers': 0,
-                    'worker_init_fn': None,
-                    'persistent_workers': False,
-                    'collate_fn': enhanced_collate_fn
-                })
-            
-            # Create training DataLoader with error handling
-            if verbose:
-                logger.info(f"Creating training DataLoader: batch_size={train_batch_size}, num_workers={num_workers}")
-            
-            train_loader_params = common_params.copy()
-            train_loader_params.update({
-                'batch_size': train_batch_size,
-                'shuffle': train_shuffle,
-                'drop_last': drop_last,
-                'sampler': train_sampler,
-                'batch_sampler': batch_sampler
-            })
-            
-            # Multiple fallback attempts for training DataLoader
-            train_loader = None
-            fallback_attempts = 0
-            
-            for attempt in range(max_retries):
-                try:
-                    train_loader = DataLoader(train_dataset, **train_loader_params)
-                    if verbose:
-                        logger.debug(f"Training DataLoader created successfully on attempt {attempt + 1}")
-                    break
-                    
-                except Exception as e:
-                    fallback_attempts += 1
-                    error_str = str(e).lower()
-                    
-                    # Handle prefetch_factor error specifically
-                    if "prefetch_factor" in error_str and train_loader_params.get('num_workers', 0) == 0:
-                        if verbose:
-                            logger.warning(f"Attempt {attempt + 1}: Removing prefetch_factor for single-threaded mode")
-                        if 'prefetch_factor' in train_loader_params:
-                            del train_loader_params['prefetch_factor']
-                    
-                    elif "pickle" in error_str or "worker_init" in error_str:
-                        if verbose:
-                            logger.warning(f"Attempt {attempt + 1}: Worker initialization pickling error detected: {e}")
-                        # Progressive fallback strategy
-                        if attempt == 0:
-                            # First attempt: Remove custom worker_init_fn and reduce workers
-                            if verbose:
-                                logger.info("Fallback 1: Removing custom worker initialization and reducing workers")
-                            train_loader_params['worker_init_fn'] = None
-                            train_loader_params['num_workers'] = min(2, num_workers)
-                            train_loader_params['persistent_workers'] = False
-                            # Remove prefetch_factor if switching to single-threaded
-                            if train_loader_params['num_workers'] == 0 and 'prefetch_factor' in train_loader_params:
-                                del train_loader_params['prefetch_factor']
-                        elif attempt == 1:
-                            # Second attempt: Single-threaded
-                            if verbose:
-                                logger.info("Fallback 2: Switching to single-threaded DataLoader")
-                            train_loader_params.update({
-                                'num_workers': 0,
-                                'worker_init_fn': None,
-                                'persistent_workers': False,
-                                'pin_memory': False,
-                                'collate_fn': None
-                            })
-                            # Remove prefetch_factor for single-threaded
-                            if 'prefetch_factor' in train_loader_params:
-                                del train_loader_params['prefetch_factor']
-                            if 'multiprocessing_context' in train_loader_params:
-                                del train_loader_params['multiprocessing_context']
-                        else:
-                            # Final attempt: Minimal configuration
-                            if verbose:
-                                logger.info("Fallback 3: Using minimal DataLoader configuration")
-                            train_loader_params = {
-                                'batch_size': error_config.get('fallback_batch_size', 32),
-                                'shuffle': train_shuffle,
-                                'num_workers': 0,
-                                'pin_memory': False,
-                                'drop_last': False
-                            }
-                    
-                    elif "memory" in error_str or "out of memory" in error_str:
-                        if verbose:
-                            logger.warning(f"Memory error detected: {e}")
-                        # Reduce batch size and workers
-                        current_batch_size = train_loader_params.get('batch_size', batch_size)
-                        new_batch_size = max(1, current_batch_size // 2)
-                        train_loader_params['batch_size'] = new_batch_size
-                        train_loader_params['num_workers'] = max(0, train_loader_params.get('num_workers', 0) - 1)
-                        # Remove prefetch_factor if switching to single-threaded
-                        if train_loader_params['num_workers'] == 0 and 'prefetch_factor' in train_loader_params:
-                            del train_loader_params['prefetch_factor']
-                        if verbose:
-                            logger.info(f"Reduced batch size to {new_batch_size} and workers to {train_loader_params['num_workers']}")
-                    
-                    else:
-                        if verbose:
-                            logger.warning(f"Attempt {attempt + 1}: Unexpected error: {e}")
-                        if attempt == max_retries - 1:
-                            if graceful_degradation:
-                                if verbose:
-                                    logger.warning("Using absolute minimal DataLoader configuration")
-                                train_loader_params = {
-                                    'batch_size': 1,
-                                    'shuffle': False,
-                                    'num_workers': 0
-                                }
-                            else:
-                                raise RuntimeError(f"Failed to create training DataLoader after {max_retries} attempts: {e}")
-            
-            if train_loader is None:
-                raise RuntimeError("Failed to create training DataLoader with all fallback attempts")
-            
-            progress_data['dataloaders_created'] += 1
-            progress_data['fallback_attempts'] = fallback_attempts
-            if not silent_mode:
-                main_bar.text = f"Training DataLoader created (attempts: {fallback_attempts + 1})"
-            creation_stats['stages_completed'].append('training_dataloader')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 9: Validation DataLoader Creation
-            progress_data['current_stage'] = "Validation DataLoader"
-            if not silent_mode:
-                main_bar.text = "Creating validation DataLoader..."
-            
-            # Create validation DataLoader
-            val_loader = None
-            if val_dataset is not None:
-                if verbose:
-                    logger.info(f"Creating validation DataLoader: batch_size={val_batch_size}")
-                val_loader_params = common_params.copy()
-                val_loader_params.update({
-                    'batch_size': val_batch_size,
-                    'shuffle': val_shuffle,
-                    'drop_last': False,
-                    'sampler': val_sampler
-                })
-                
-                for attempt in range(max_retries):
-                    try:
-                        val_loader = DataLoader(val_dataset, **val_loader_params)
-                        break
-                    except Exception as e:
-                        error_str = str(e).lower()
-                        
-                        if "prefetch_factor" in error_str and val_loader_params.get('num_workers', 0) == 0:
-                            if 'prefetch_factor' in val_loader_params:
-                                del val_loader_params['prefetch_factor']
-                        elif attempt == max_retries - 1:
-                            if graceful_degradation:
-                                val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0)
-                            else:
-                                raise RuntimeError(f"Failed to create validation DataLoader: {e}")
-                
-                progress_data['dataloaders_created'] += 1
-            
-            if not silent_mode:
-                main_bar.text = f"Validation DataLoader {'created' if val_loader else 'skipped'}"
-            creation_stats['stages_completed'].append('validation_dataloader')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 10: Test DataLoader Creation
-            progress_data['current_stage'] = "Test DataLoader"
-            if not silent_mode:
-                main_bar.text = "Creating test DataLoader..."
-            
-            # Create test DataLoader
-            test_loader = None
-            if test_dataset is not None:
-                if verbose:
-                    logger.info(f"Creating test DataLoader: batch_size={test_batch_size}")
-                test_loader_params = common_params.copy()
-                test_loader_params.update({
-                    'batch_size': test_batch_size,
-                    'shuffle': test_shuffle,
-                    'drop_last': False,
-                    'sampler': test_sampler
-                })
-                
-                for attempt in range(max_retries):
-                    try:
-                        test_loader = DataLoader(test_dataset, **test_loader_params)
-                        break
-                    except Exception as e:
-                        error_str = str(e).lower()
-                        
-                        if "prefetch_factor" in error_str and test_loader_params.get('num_workers', 0) == 0:
-                            if 'prefetch_factor' in test_loader_params:
-                                del test_loader_params['prefetch_factor']
-                        elif attempt == max_retries - 1:
-                            if graceful_degradation:
-                                test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=0)
-                            else:
-                                raise RuntimeError(f"Failed to create test DataLoader: {e}")
-                
-                progress_data['dataloaders_created'] += 1
-            
-            if not silent_mode:
-                main_bar.text = f"Test DataLoader {'created' if test_loader else 'skipped'}"
-            creation_stats['stages_completed'].append('test_dataloader')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 11: Cross-validation DataLoaders
-            progress_data['current_stage'] = "Cross-validation"
-            if not silent_mode:
-                main_bar.text = "Creating cross-validation DataLoaders..."
-            
-            # Cross-validation DataLoaders
-            cv_loaders = None
-            if cv_config.get('cross_validation', False):
-                if verbose:
-                    logger.info("Creating cross-validation DataLoaders")
-                
-                cv_folds = cv_config.get('cv_folds', 5)
-                cv_strategy = cv_config.get('cv_strategy', 'kfold')
-                stratified_cv = cv_config.get('stratified_cv', False)
-                
-                try:
-                    if stratified_cv and y_train is not None:
-                        cv_splitter = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=sampling_config.get('shuffle_seed', 42))
-                        splits = list(cv_splitter.split(X_train, y_train))
-                    else:
-                        cv_splitter = KFold(n_splits=cv_folds, shuffle=True, random_state=sampling_config.get('shuffle_seed', 42))
-                        splits = list(cv_splitter.split(X_train))
-                    
-                    cv_loaders = []
-                    
-                    # Create progress bar for CV folds only if not in silent mode and progress_bar is True
-                    if not silent_mode and progress_bar:
-                        cv_bar_context = alive_bar(cv_folds, title='CV Folds\t\t\t', unit='folds')
-                    else:
-                        cv_bar_context = DummyBar()
-                    
-                    with cv_bar_context as cv_bar:
-                        for fold_idx, (train_idx, val_idx) in enumerate(splits):
-                            if not silent_mode:
-                                cv_bar.text = f"Creating fold {fold_idx + 1}/{cv_folds}"
-                            
-                            fold_train_X = X_train[train_idx]
-                            fold_val_X = X_train[val_idx]
-                            fold_train_y = y_train[train_idx] if y_train is not None else None
-                            fold_val_y = y_train[val_idx] if y_train is not None else None
-                            
-                            fold_train_dataset = create_enhanced_dataset(fold_train_X, fold_train_y, train_transform)
-                            fold_val_dataset = create_enhanced_dataset(fold_val_X, fold_val_y, val_transform)
-                            
-                            fold_train_loader = DataLoader(
-                                fold_train_dataset,
-                                batch_size=train_batch_size,
-                                shuffle=train_shuffle,
-                                # Reduce workers for CV
-                                num_workers=max(1, num_workers // 2),
-                                pin_memory=pin_memory,
-                                collate_fn=enhanced_collate_fn
-                            )
-                            
-                            fold_val_loader = DataLoader(
-                                fold_val_dataset,
-                                batch_size=val_batch_size,
-                                shuffle=False,
-                                num_workers=max(1, num_workers // 2),
-                                pin_memory=pin_memory,
-                                collate_fn=enhanced_collate_fn
-                            )
-                            
-                            cv_loaders.append({
-                                'fold': fold_idx,
-                                'train': fold_train_loader,
-                                'val': fold_val_loader
-                            })
-                            
-                            if not silent_mode:
-                                cv_bar()
-                    
-                    if verbose:
-                        logger.info(f"Created {cv_folds} cross-validation fold DataLoaders")
-                    
-                except Exception as e:
-                    if verbose:
-                        logger.error(f"Failed to create cross-validation DataLoaders: {e}")
-                    cv_loaders = None
-            
-            if not silent_mode:
-                main_bar.text = f"Cross-validation {'completed' if cv_loaders else 'skipped'}"
-            creation_stats['stages_completed'].append('cross_validation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 12: Finalization and Performance Analysis
-            progress_data['current_stage'] = "Finalization"
-            if not silent_mode:
-                main_bar.text = "Finalizing DataLoader creation..."
-            
-            # Performance profiling and benchmarking
-            if profile_dataloaders or benchmark_dataloaders:
-                if verbose:
-                    logger.info("Performing DataLoader performance analysis")
-                
-                def benchmark_dataloader(dataloader, name, num_batches=10):
-                    if dataloader is None:
-                        return None
-                    times = []
-                    
-                    dataloader_iter = iter(dataloader)
-                    for i in range(min(num_batches, len(dataloader))):
-                        start_time = time.time()
-                        try:
-                            batch = next(dataloader_iter)
-                            end_time = time.time()
-                            times.append(end_time - start_time)
-                        except StopIteration:
-                            break
-                        except Exception as e:
-                            if verbose:
-                                logger.warning(f"Benchmark error for {name} batch {i}: {e}")
-                            continue
-                    
-                    if times:
-                        return {
-                            'name': name,
-                            'avg_batch_time': np.mean(times),
-                            'std_batch_time': np.std(times),
-                            'min_batch_time': np.min(times),
-                            'max_batch_time': np.max(times),
-                            'total_time': np.sum(times),
-                            'batches_tested': len(times)
-                        }
-                    return None
-                
-                benchmark_results = {}
-                if benchmark_dataloaders:
-                    benchmark_results['train'] = benchmark_dataloader(train_loader, 'train', 5)
-                    benchmark_results['val'] = benchmark_dataloader(val_loader, 'val', 3)
-                    benchmark_results['test'] = benchmark_dataloader(test_loader, 'test', 3)
-                    
-                    creation_stats['benchmark_results'] = benchmark_results
-                    
-                    for name, result in benchmark_results.items():
-                        if result:
-                            if verbose:
-                                logger.info(f"{name.title()} DataLoader: {result['avg_batch_time']:.4f}s avg batch time")
-            
-            # Collect DataLoader statistics
-            if dataloader_stats:
-                stats = {
-                    'train': {
-                        'dataset_size': len(train_dataset),
-                        'batch_size': train_batch_size,
-                        'num_batches': len(train_loader),
-                        'shuffle': train_shuffle,
-                        'sampler': type(train_sampler).__name__ if train_sampler else None,
-                        'drop_last': drop_last
-                    },
-                    'val': {
-                        'dataset_size': len(val_dataset) if val_dataset else 0,
-                        'batch_size': val_batch_size,
-                        'num_batches': len(val_loader) if val_loader else 0,
-                        'shuffle': val_shuffle,
-                        'sampler': type(val_sampler).__name__ if val_sampler else None
-                    } if val_dataset else None,
-                    'test': {
-                        'dataset_size': len(test_dataset) if test_dataset else 0,
-                        'batch_size': test_batch_size,
-                        'num_batches': len(test_loader) if test_loader else 0,
-                        'shuffle': test_shuffle,
-                        'sampler': type(test_sampler).__name__ if test_sampler else None
-                    } if test_dataset else None,
-                    'common': {
-                        'num_workers': num_workers,
-                        'pin_memory': pin_memory,
-                        'persistent_workers': persistent_workers,
-                        'prefetch_factor': prefetch_factor,
-                        'timeout': timeout,
-                        'dtype': str(dtype),
-                        'device': device
-                    }
-                }
-                
-                creation_stats['dataloader_stats'] = stats
-            
-            # Garbage collection if requested
-            if memory_config.get('gc_collection', False):
-                gc.collect()
-                if verbose:
-                    logger.debug("Performed garbage collection")
-            
-            # Calculate performance score
-            performance_metrics = []
-            
-            # Worker efficiency
-            worker_score = min(1.0, num_workers / max(1, system_cpu_count))
-            performance_metrics.append(('worker_efficiency', worker_score))
-            
-            # Batch size adequacy
-            batch_score = min(1.0, train_batch_size / max(32, train_batch_size))
-            performance_metrics.append(('batch_adequacy', batch_score))
-            
-            # Memory optimization
-            memory_score = 0.8 if pin_memory else 0.5
-            performance_metrics.append(('memory_optimization', memory_score))
-            
-            # Overall performance score
-            performance_score = sum(score for _, score in performance_metrics) / len(performance_metrics)
-            progress_data['performance_score'] = performance_score
-            creation_stats['performance_score'] = performance_score
-            
-            if not silent_mode:
-                main_bar.text = f"Finalization complete (Performance: {performance_score:.3f})"
-            creation_stats['stages_completed'].append('finalization')
-            if not silent_mode:
-                main_bar()
-        
-        # Prepare return value based on configuration
-        total_time = (datetime.now() - start_time).total_seconds()
-        creation_stats['total_processing_time'] = total_time
-        creation_stats['completion_status'] = 'success'
-        
-        # Create metadata
-        metadata = {
-            'creation_time_seconds': total_time,
-            'dataloaders_created': {
-                'train': True,
-                'val': val_loader is not None,
-                'test': test_loader is not None,
-                'cv_folds': len(cv_loaders) if cv_loaders else 0
-            },
-            'configuration_applied': final_config,
-            'creation_stats': creation_stats,
-            'system_info': creation_stats['system_info'],
-            'optimization_level': optimization_level,
-            'performance_optimizations_applied': dataloader_optimization,
-            'error_handling_mode': error_handling,
-            'progress_summary': {
-                'stages_completed': len(creation_stats['stages_completed']),
-                'dataloaders_created': progress_data['dataloaders_created'],
-                'datasets_processed': progress_data['datasets_processed'],
-                'transforms_applied': progress_data['transforms_applied'],
-                'samplers_configured': progress_data['samplers_configured'],
-                'fallback_attempts': progress_data['fallback_attempts'],
-                'final_performance_score': progress_data['performance_score']
-            }
-        }
-        
-        # Determine return format
-        return_format = final_config.get('output', {}).get('format', 'tuple')
-        
-        if return_format == 'dict':
-            result = {
-                'train': train_loader,
-                'val': val_loader,
-                'test': test_loader,
-                'metadata': metadata
-            }
-            
-            if cv_loaders:
-                result['cv_folds'] = cv_loaders
-                
-            return result
-        
-        elif return_format == 'single':
-            # Return only training loader for specific use cases
-            return train_loader
-        
-        else:
-            # Default tuple format
-            result = (train_loader, val_loader, test_loader)
-            
-            # Add metadata as attribute to train_loader for access
-            train_loader.dataloader_metadata = metadata
-            
-            if cv_loaders:
-                train_loader.cv_folds = cv_loaders
-            
-            return result
-        
-    except Exception as e:
-        # Update creation stats with error information
-        creation_stats['completion_status'] = 'failed'
-        creation_stats['error_message'] = str(e)
-        creation_stats['error_traceback'] = traceback.format_exc()
-        
-        # Restore original logging level on error
-        if verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        error_msg = f"DataLoader creation failed: {str(e)}"
-        if verbose:
-            logger.error(error_msg)
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            
-            # Provide helpful error context
-            logger.error(f"Configuration used: {final_config}")
-            logger.error(f"Stages completed: {creation_stats['stages_completed']}")
-        
-        # Attempt graceful fallback if enabled
-        if graceful_degradation and data is not None and X_train is not None:
-            if verbose:
-                logger.warning("Attempting graceful fallback to basic DataLoaders")
-            
-            try:
-                # Create minimal DataLoaders
-                train_data = TensorDataset(torch.tensor(X_train, dtype=torch.float32))
-                val_data = TensorDataset(torch.tensor(X_val, dtype=torch.float32)) if X_val is not None else None
-                test_data = TensorDataset(torch.tensor(X_test, dtype=torch.float32)) if X_test is not None else None
-                
-                fallback_batch_size = error_config.get('fallback_batch_size', 32)
-                
-                train_loader = DataLoader(train_data, batch_size=fallback_batch_size, shuffle=True, num_workers=0)
-                val_loader = DataLoader(val_data, batch_size=fallback_batch_size, shuffle=False, num_workers=0) if val_data else None
-                test_loader = DataLoader(test_data, batch_size=fallback_batch_size, shuffle=False, num_workers=0) if test_data else None
-                
-                if verbose:
-                    logger.warning("Created fallback DataLoaders with minimal configuration")
-                
-                # Restore original logging level
-                if verbose and 'original_level' in locals():
-                    logger.setLevel(original_level)
-                
-                return (train_loader, val_loader, test_loader)
-                
-            except Exception as fallback_error:
-                if verbose:
-                    logger.error(f"Fallback DataLoader creation also failed: {fallback_error}")
-                raise RuntimeError(f"Both primary and fallback DataLoader creation failed: {error_msg}")
-        
-        raise RuntimeError(error_msg)
-    
-    finally:
-        # Restore original logging level
-        if verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        # Final cleanup and summary logging
-        if final_config.get('monitoring', {}).get('log_creation_summary', True):
-            total_time = (datetime.now() - start_time).total_seconds()
-            logger.info("-" * 40)
-            logger.info("DATALOADER CREATION SUMMARY")
-            logger.info("-" * 40)
-            logger.info(f"Creation time: {total_time:.2f} seconds")
-            logger.info(f"Training DataLoader: batch_size={train_batch_size}, num_batches={len(train_loader) if 'train_loader' in locals() else 'N/A'}")
-            logger.info(f"Validation DataLoader: {'Created' if val_loader else 'Not created'}")
-            logger.info(f"Test DataLoader: {'Created' if test_loader else 'Not created'}")
-            logger.info(f"Workers: {num_workers}, Pin memory: {pin_memory}")
-            logger.info(f"Optimization level: {optimization_level}")
-            logger.info(f"Performance score: {progress_data.get('performance_score', 0):.3f}")
-            logger.info(f"Fallback attempts: {progress_data.get('fallback_attempts', 0)}")
-            if 'cv_loaders' in locals() and cv_loaders:
-                logger.info(f"Cross-validation folds: {len(cv_loaders)}")
-            logger.info("-" * 40)
 
-def train_epoch(
-    # Core Training Parameters
-    model: Optional[nn.Module] = None,
-    loader: Optional[DataLoader] = None,
-    criterion: Optional[nn.Module] = None,
-    optimizer: Optional[optim.Optimizer] = None,
-    device: Optional[torch.device] = None,
-    epoch: Optional[int] = None,
-    
-    # Training Configuration Parameters
-    learning_rate: Optional[float] = None,
-    batch_size: Optional[int] = None,
-    gradient_clip: Optional[float] = None,
-    gradient_accumulation_steps: Optional[int] = None,
-    max_grad_norm: Optional[float] = None,
-    gradient_clipping_mode: Optional[str] = None,
-    gradient_scaling: Optional[bool] = None,
-    
-    # Mixed Precision Parameters
-    mixed_precision: Optional[bool] = None,
-    amp_enabled: Optional[bool] = None,
-    scaler: Optional[GradScaler] = None,
-    loss_scaling: Optional[str] = None,
-    dynamic_loss_scaling: Optional[bool] = None,
-    init_scale: Optional[float] = None,
-    growth_factor: Optional[float] = None,
-    backoff_factor: Optional[float] = None,
-    growth_interval: Optional[int] = None,
-    
-    # Scheduler Parameters
-    scheduler: Optional[Any] = None,
-    scheduler_step_on_epoch: Optional[bool] = None,
-    scheduler_step_on_batch: Optional[bool] = None,
-    scheduler_step_after_epoch: Optional[bool] = None,
-    scheduler_metric: Optional[str] = None,
-    warmup_steps: Optional[int] = None,
-    warmup_scheduler: Optional[Any] = None,
-    
-    # Loss Function Parameters
-    loss_function: Optional[str] = None,
-    loss_weights: Optional[Dict[str, float]] = None,
-    multi_task_learning: Optional[bool] = None,
-    auxiliary_loss_weight: Optional[float] = None,
-    regularization_loss_weight: Optional[float] = None,
-    reconstruction_loss_weight: Optional[float] = None,
-    
-    # Monitoring and Metrics Parameters
-    track_metrics: Optional[bool] = None,
-    metrics_to_track: Optional[List[str]] = None,
-    calculate_detailed_metrics: Optional[bool] = None,
-    metrics_frequency: Optional[int] = None,
-    log_frequency: Optional[int] = None,
-    progress_bar: Optional[bool] = None,
-    progress_bar_desc: Optional[str] = None,
-    
-    # Performance and Optimization Parameters
-    performance_mode: Optional[str] = None,
-    benchmark_mode: Optional[bool] = None,
-    cudnn_benchmark: Optional[bool] = None,
-    cudnn_deterministic: Optional[bool] = None,
-    channels_last: Optional[bool] = None,
-    compile_model: Optional[bool] = None,
-    torch_compile_mode: Optional[str] = None,
-    
-    # Memory Management Parameters
-    memory_efficient: Optional[bool] = None,
-    memory_optimization: Optional[str] = None,
-    gradient_checkpointing: Optional[bool] = None,
-    empty_cache_frequency: Optional[int] = None,
-    gc_collection_frequency: Optional[int] = None,
-    pin_memory: Optional[bool] = None,
-    non_blocking_transfer: Optional[bool] = None,
-    
-    # Data Processing Parameters
-    data_preprocessing: Optional[bool] = None,
-    input_transforms: Optional[List[Callable]] = None,
-    target_transforms: Optional[List[Callable]] = None,
-    augmentation_during_training: Optional[bool] = None,
-    mixup_alpha: Optional[float] = None,
-    cutmix_alpha: Optional[float] = None,
-    
-    # Validation and Quality Control Parameters
-    validate_inputs: Optional[bool] = None,
-    check_finite: Optional[bool] = None,
-    detect_anomaly: Optional[bool] = None,
-    handle_nan_loss: Optional[str] = None,
-    loss_spike_detection: Optional[bool] = None,
-    loss_spike_threshold: Optional[float] = None,
-    gradient_explosion_detection: Optional[bool] = None,
-    
-    # Distributed Training Parameters
-    distributed: Optional[bool] = None,
-    world_size: Optional[int] = None,
-    rank: Optional[int] = None,
-    local_rank: Optional[int] = None,
-    ddp_backend: Optional[str] = None,
-    find_unused_parameters: Optional[bool] = None,
-    broadcast_buffers: Optional[bool] = None,
-    gradient_as_bucket_view: Optional[bool] = None,
-    
-    # Checkpointing and Saving Parameters
-    save_checkpoint: Optional[bool] = None,
-    checkpoint_frequency: Optional[int] = None,
-    checkpoint_path: Optional[str] = None,
-    save_best_model: Optional[bool] = None,
-    best_metric: Optional[str] = None,
-    model_state_dict: Optional[bool] = None,
-    save_optimizer_state: Optional[bool] = None,
-    save_scheduler_state: Optional[bool] = None,
-    
-    # Early Stopping Parameters
-    early_stopping: Optional[bool] = None,
-    early_stopping_patience: Optional[int] = None,
-    early_stopping_delta: Optional[float] = None,
-    early_stopping_metric: Optional[str] = None,
-    early_stopping_mode: Optional[str] = None,
-    restore_best_weights: Optional[bool] = None,
-    
-    # Debugging and Profiling Parameters
-    debug_mode: Optional[bool] = None,
-    verbose: Optional[bool] = None,
-    log_level: Optional[str] = None,
-    profile_training: Optional[bool] = None,
-    profile_memory: Optional[bool] = None,
-    profile_compute: Optional[bool] = None,
-    timing_analysis: Optional[bool] = None,
-    bottleneck_detection: Optional[bool] = None,
-    
-    # Advanced Training Techniques Parameters
-    teacher_forcing_ratio: Optional[float] = None,
-    curriculum_learning: Optional[bool] = None,
-    curriculum_schedule: Optional[str] = None,
-    progressive_training: Optional[bool] = None,
-    adaptive_training: Optional[bool] = None,
-    self_supervised_pretext: Optional[bool] = None,
-    
-    # Regularization Parameters
-    dropout_rate: Optional[float] = None,
-    weight_decay: Optional[float] = None,
-    l1_regularization: Optional[float] = None,
-    l2_regularization: Optional[float] = None,
-    spectral_normalization: Optional[bool] = None,
-    batch_norm_momentum: Optional[float] = None,
-    layer_norm_eps: Optional[float] = None,
-    
-    # Loss Smoothing and Stability Parameters
-    label_smoothing: Optional[float] = None,
-    focal_loss_alpha: Optional[float] = None,
-    focal_loss_gamma: Optional[float] = None,
-    loss_smoothing: Optional[str] = None,
-    stable_loss_computation: Optional[bool] = None,
-    
-    # Batch Processing Parameters
-    batch_processing_mode: Optional[str] = None,
-    variable_batch_size: Optional[bool] = None,
-    dynamic_batching: Optional[bool] = None,
-    batch_size_adaptation: Optional[str] = None,
-    max_tokens_per_batch: Optional[int] = None,
-    
-    # Hardware Optimization Parameters
-    use_gpu: Optional[bool] = None,
-    multi_gpu: Optional[bool] = None,
-    gpu_ids: Optional[List[int]] = None,
-    device_placement: Optional[str] = None,
-    tensor_parallel: Optional[bool] = None,
-    data_parallel: Optional[bool] = None,
-    pipeline_parallel: Optional[bool] = None,
-    
-    # Random State and Reproducibility Parameters
-    random_seed: Optional[int] = None,
-    deterministic: Optional[bool] = None,
-    reproducible: Optional[bool] = None,
-    seed_workers: Optional[bool] = None,
-    
-    # Custom Callback Parameters
-    callbacks: Optional[List[Callable]] = None,
-    custom_training_step: Optional[Callable] = None,
-    custom_loss_computation: Optional[Callable] = None,
-    custom_metric_computation: Optional[Callable] = None,
-    pre_batch_callback: Optional[Callable] = None,
-    post_batch_callback: Optional[Callable] = None,
-    
-    # Export and Logging Parameters
-    export_metrics: Optional[bool] = None,
-    export_path: Optional[str] = None,
-    tensorboard_logging: Optional[bool] = None,
-    wandb_logging: Optional[bool] = None,
-    mlflow_logging: Optional[bool] = None,
-    log_images: Optional[bool] = None,
-    log_gradients: Optional[bool] = None,
-    log_weights: Optional[bool] = None,
-    
-    # Compatibility Parameters
-    pytorch_version_check: Optional[bool] = None,
-    legacy_mode: Optional[bool] = None,
-    backward_compatibility: Optional[bool] = None,
-    version_specific_optimizations: Optional[bool] = None,
-    
-    # Error Handling Parameters
-    error_handling: Optional[str] = None,
-    continue_on_error: Optional[bool] = None,
-    max_retries: Optional[int] = None,
-    fallback_mode: Optional[bool] = None,
-    graceful_degradation: Optional[bool] = None,
-    
-    # Experimental Parameters
-    experimental_features: Optional[bool] = None,
-    experimental_optimizations: Optional[bool] = None,
-    beta_features: Optional[bool] = None,
-    
-    # Direct Configuration Override
-    config: Optional[Dict[str, Any]] = None,
-    training_config: Optional[Dict[str, Any]] = None,
-    
-    **kwargs
-) -> Tuple[float, Dict[str, Any]]:
-    
-    # Initialize default return values FIRST
-    default_loss = float('inf')
-    default_metrics = {
-        'loss': default_loss,
-        'epoch': epoch if epoch is not None else 0,
-        'num_batches': 0,
-        'num_samples': 0,
-        'training_completed': False,
-        'error': None
-    }
-    
-    # Start timing
-    start_time = datetime.now()
-    epoch_start_time = time.time()
-    
-    # Initialize variables that will be used in finally block
-    num_batches = 0
-    num_samples = 0
-    total_loss = 0.0
-    batch_idx = -1
-    pbar = None
-    profiler = None
-    original_level = None
-    
-    try:
-        # Initialize configuration
-        if config is None:
-            try:
-                config = get_current_config() if 'get_current_config' in globals() else {}
-            except Exception:
-                config = {}
-        
-        # Apply training-specific configuration
-        if training_config:
-            config.setdefault('training', {}).update(training_config)
-        
-        # Apply all parameters to configuration
-        final_config = {}
-        
-        # Merge with existing config
-        final_config.update(config)
-        
-        # Apply individual parameters with intelligent organization
-        params = locals().copy()
-        params.update(kwargs)
-        
-        # Remove non-parameter items
-        params_to_remove = {
-            'config', 'training_config', 'kwargs', 'start_time', 'epoch_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
-            'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast'
-        }
-        
-        cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
-        
-        # Organize parameters into logical sections
-        param_sections = {
-            'core_training': [
-                'learning_rate', 'batch_size', 'gradient_clip', 'gradient_accumulation_steps', 'max_grad_norm', 'gradient_clipping_mode', 'gradient_scaling'
-            ],
-            'mixed_precision': [
-                'mixed_precision', 'amp_enabled', 'scaler', 'loss_scaling', 'dynamic_loss_scaling', 'init_scale', 'growth_factor', 'backoff_factor', 'growth_interval'
-            ],
-            'scheduler': [
-                'scheduler_step_on_epoch', 'scheduler_step_on_batch', 'scheduler_step_after_epoch', 'scheduler_metric', 'warmup_steps', 'warmup_scheduler'
-            ],
-            'loss_function': [
-                'loss_function', 'loss_weights', 'multi_task_learning', 'auxiliary_loss_weight', 'regularization_loss_weight', 'reconstruction_loss_weight'
-            ],
-            'monitoring': [
-                'track_metrics', 'metrics_to_track', 'calculate_detailed_metrics', 'metrics_frequency', 'log_frequency', 'progress_bar', 'progress_bar_desc'
-            ],
-            'performance': [
-                'performance_mode', 'benchmark_mode', 'cudnn_benchmark', 'cudnn_deterministic', 'channels_last', 'compile_model', 'torch_compile_mode'
-            ],
-            'memory_management': [
-                'memory_efficient', 'memory_optimization', 'gradient_checkpointing', 'empty_cache_frequency', 'gc_collection_frequency', 'pin_memory', 'non_blocking_transfer'
-            ],
-            'data_processing': [
-                'data_preprocessing', 'input_transforms', 'target_transforms', 'augmentation_during_training', 'mixup_alpha', 'cutmix_alpha'
-            ],
-            'validation': [
-                'validate_inputs', 'check_finite', 'detect_anomaly', 'handle_nan_loss', 'loss_spike_detection', 'loss_spike_threshold', 'gradient_explosion_detection'
-            ],
-            'distributed': [
-                'distributed', 'world_size', 'rank', 'local_rank', 'ddp_backend', 'find_unused_parameters', 'broadcast_buffers', 'gradient_as_bucket_view'
-            ],
-            'checkpointing': [
-                'save_checkpoint', 'checkpoint_frequency', 'checkpoint_path', 'save_best_model', 'best_metric', 'model_state_dict', 'save_optimizer_state', 'save_scheduler_state'
-            ],
-            'early_stopping': [
-                'early_stopping', 'early_stopping_patience', 'early_stopping_delta', 'early_stopping_metric', 'early_stopping_mode', 'restore_best_weights'
-            ],
-            'debugging': [
-                'debug_mode', 'verbose', 'log_level', 'profile_training', 'profile_memory', 'profile_compute', 'timing_analysis', 'bottleneck_detection'
-            ],
-            'advanced_training': [
-                'teacher_forcing_ratio', 'curriculum_learning', 'curriculum_schedule', 'progressive_training', 'adaptive_training', 'self_supervised_pretext'
-            ],
-            'regularization': [
-                'dropout_rate', 'weight_decay', 'l1_regularization', 'l2_regularization', 'spectral_normalization', 'batch_norm_momentum', 'layer_norm_eps'
-            ],
-            'loss_stability': [
-                'label_smoothing', 'focal_loss_alpha', 'focal_loss_gamma', 'loss_smoothing', 'stable_loss_computation'
-            ],
-            'batch_processing': [
-                'batch_processing_mode', 'variable_batch_size', 'dynamic_batching', 'batch_size_adaptation', 'max_tokens_per_batch'
-            ],
-            'hardware_optimization': [
-                'use_gpu', 'multi_gpu', 'gpu_ids', 'device_placement', 'tensor_parallel', 'data_parallel', 'pipeline_parallel'
-            ],
-            'reproducibility': [
-                'random_seed', 'deterministic', 'reproducible', 'seed_workers'
-            ],
-            'callbacks': [
-                'callbacks', 'custom_training_step', 'custom_loss_computation', 'custom_metric_computation', 'pre_batch_callback', 'post_batch_callback'
-            ],
-            'export_logging': [
-                'export_metrics', 'export_path', 'tensorboard_logging', 'wandb_logging', 'mlflow_logging', 'log_images', 'log_gradients', 'log_weights'
-            ],
-            'compatibility': [
-                'pytorch_version_check', 'legacy_mode', 'backward_compatibility', 'version_specific_optimizations'
-            ],
-            'error_handling': [
-                'error_handling', 'continue_on_error', 'max_retries', 'fallback_mode', 'graceful_degradation'
-            ],
-            'experimental': [
-                'experimental_features', 'experimental_optimizations', 'beta_features'
-            ]
-        }
-        
-        # Apply parameters to appropriate sections
-        for section, param_list in param_sections.items():
-            section_config = final_config.setdefault(section, {})
-            for param in param_list:
-                if param in cleaned_params:
-                    section_config[param] = cleaned_params[param]
-        
-        # Set up defaults
-        core_config = final_config.setdefault('core_training', {})
-        mixed_precision_config = final_config.setdefault('mixed_precision', {})
-        scheduler_config = final_config.setdefault('scheduler', {})
-        loss_config = final_config.setdefault('loss_function', {})
-        monitoring_config = final_config.setdefault('monitoring', {})
-        performance_config = final_config.setdefault('performance', {})
-        memory_config = final_config.setdefault('memory_management', {})
-        data_processing_config = final_config.setdefault('data_processing', {})
-        validation_config = final_config.setdefault('validation', {})
-        distributed_config = final_config.setdefault('distributed', {})
-        checkpoint_config = final_config.setdefault('checkpointing', {})
-        early_stopping_config = final_config.setdefault('early_stopping', {})
-        debug_config = final_config.setdefault('debugging', {})
-        advanced_config = final_config.setdefault('advanced_training', {})
-        regularization_config = final_config.setdefault('regularization', {})
-        loss_stability_config = final_config.setdefault('loss_stability', {})
-        batch_config = final_config.setdefault('batch_processing', {})
-        hardware_config = final_config.setdefault('hardware_optimization', {})
-        reproducibility_config = final_config.setdefault('reproducibility', {})
-        callback_config = final_config.setdefault('callbacks', {})
-        export_config = final_config.setdefault('export_logging', {})
-        compatibility_config = final_config.setdefault('compatibility', {})
-        error_config = final_config.setdefault('error_handling', {})
-        experimental_config = final_config.setdefault('experimental', {})
-        
-        # Apply intelligent defaults with system awareness
-        learning_rate = core_config.setdefault('learning_rate', LEARNING_RATE)
-        batch_size = core_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
-        gradient_clip = core_config.setdefault('gradient_clip', GRADIENT_CLIP)
-        gradient_accumulation_steps = core_config.setdefault('gradient_accumulation_steps', GRADIENT_ACCUMULATION_STEPS)
-        max_grad_norm = core_config.setdefault('max_grad_norm', gradient_clip)
-        gradient_clipping_mode = core_config.setdefault('gradient_clipping_mode', 'norm')
-        gradient_scaling = core_config.setdefault('gradient_scaling', True)
-        
-        # Mixed precision defaults
-        mixed_precision = mixed_precision_config.setdefault('mixed_precision', MIXED_PRECISION and torch.cuda.is_available())
-        amp_enabled = mixed_precision_config.setdefault('amp_enabled', mixed_precision)
-        dynamic_loss_scaling = mixed_precision_config.setdefault('dynamic_loss_scaling', True)
-        init_scale = mixed_precision_config.setdefault('init_scale', 65536.0)
-        growth_factor = mixed_precision_config.setdefault('growth_factor', 2.0)
-        backoff_factor = mixed_precision_config.setdefault('backoff_factor', 0.5)
-        growth_interval = mixed_precision_config.setdefault('growth_interval', 2000)
-        
-        # Scheduler defaults
-        scheduler_step_on_epoch = scheduler_config.setdefault('scheduler_step_on_epoch', True)
-        scheduler_step_on_batch = scheduler_config.setdefault('scheduler_step_on_batch', False)
-        scheduler_step_after_epoch = scheduler_config.setdefault('scheduler_step_after_epoch', False)
-        scheduler_metric = scheduler_config.setdefault('scheduler_metric', 'loss')
-        
-        # Monitoring defaults
-        track_metrics = monitoring_config.setdefault('track_metrics', True)
-        metrics_to_track = monitoring_config.setdefault('metrics_to_track', ['loss', 'learning_rate', 'gradient_norm', 'batch_time'])
-        calculate_detailed_metrics = monitoring_config.setdefault('calculate_detailed_metrics', False)
-        metrics_frequency = monitoring_config.setdefault('metrics_frequency', 10)
-        log_frequency = monitoring_config.setdefault('log_frequency', 10)
-        progress_bar = monitoring_config.setdefault('progress_bar', True)
-        progress_bar_desc = monitoring_config.setdefault('progress_bar_desc', f"Epoch {epoch if epoch is not None else 'N/A'}")
-        
-        # Performance defaults
-        performance_mode = performance_config.setdefault('performance_mode', 'standard')
-        benchmark_mode = performance_config.setdefault('benchmark_mode', False)
-        cudnn_benchmark = performance_config.setdefault('cudnn_benchmark', torch.cuda.is_available())
-        cudnn_deterministic = performance_config.setdefault('cudnn_deterministic', False)
-        compile_model = performance_config.setdefault('compile_model', False)
-        torch_compile_mode = performance_config.setdefault('torch_compile_mode', 'default')
-        
-        # Memory management defaults
-        memory_efficient = memory_config.setdefault('memory_efficient', True)
-        memory_optimization = memory_config.setdefault('memory_optimization', 'balanced')
-        gradient_checkpointing = memory_config.setdefault('gradient_checkpointing', False)
-        empty_cache_frequency = memory_config.setdefault('empty_cache_frequency', 10)
-        gc_collection_frequency = memory_config.setdefault('gc_collection_frequency', 100)
-        non_blocking_transfer = memory_config.setdefault('non_blocking_transfer', True)
-        
-        # Data processing defaults
-        data_preprocessing = data_processing_config.setdefault('data_preprocessing', False)
-        augmentation_during_training = data_processing_config.setdefault('augmentation_during_training', False)
-        
-        # Validation defaults
-        validate_inputs = validation_config.setdefault('validate_inputs', True)
-        check_finite = validation_config.setdefault('check_finite', True)
-        detect_anomaly = validation_config.setdefault('detect_anomaly', debug_config.get('debug_mode', False))
-        handle_nan_loss = validation_config.setdefault('handle_nan_loss', 'error')
-        loss_spike_detection = validation_config.setdefault('loss_spike_detection', True)
-        loss_spike_threshold = validation_config.setdefault('loss_spike_threshold', 10.0)
-        gradient_explosion_detection = validation_config.setdefault('gradient_explosion_detection', True)
-        
-        # Distributed defaults
-        distributed = distributed_config.setdefault('distributed', False)
-        find_unused_parameters = distributed_config.setdefault('find_unused_parameters', False)
-        broadcast_buffers = distributed_config.setdefault('broadcast_buffers', True)
-        gradient_as_bucket_view = distributed_config.setdefault('gradient_as_bucket_view', False)
-        
-        # Debug defaults
-        debug_mode = debug_config.setdefault('debug_mode', False)
-        verbose = debug_config.setdefault('verbose', False)
-        log_level = debug_config.setdefault('log_level', 'INFO' if verbose else 'WARNING')
-        profile_training = debug_config.setdefault('profile_training', False)
-        timing_analysis = debug_config.setdefault('timing_analysis', False)
-        
-        # Error handling defaults
-        error_handling = error_config.setdefault('error_handling', 'strict')
-        continue_on_error = error_config.setdefault('continue_on_error', False)
-        max_retries = error_config.setdefault('max_retries', 3)
-        graceful_degradation = error_config.setdefault('graceful_degradation', True)
-        
-        # Set up logging level
-        if verbose:
-            original_level = logger.level
-            logger.setLevel(getattr(logging, log_level.upper()))
-        
-        logger.info(f"Starting training epoch {epoch if epoch is not None else 'N/A'}")
-        
-        # Parameter validation
-        if model is None:
-            raise ValueError("Model is required for training")
-        if loader is None:
-            raise ValueError("DataLoader is required for training")
-        if criterion is None:
-            raise ValueError("Loss criterion is required for training")
-        if optimizer is None:
-            raise ValueError("Optimizer is required for training")
-        
-        # Device configuration
-        if device is None:
-            device = next(model.parameters()).device if hasattr(model, 'parameters') else torch.device('cpu')
-        
-        # Set up reproducibility
-        if reproducibility_config.get('deterministic', False):
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
-            if reproducibility_config.get('random_seed'):
-                torch.manual_seed(reproducibility_config['random_seed'])
-                if torch.cuda.is_available():
-                    torch.cuda.manual_seed_all(reproducibility_config['random_seed'])
-        elif benchmark_mode or cudnn_benchmark:
-            torch.backends.cudnn.benchmark = True
-            torch.backends.cudnn.deterministic = False
-        
-        # Initialize training statistics
-        training_stats = {
-            'start_time': start_time.isoformat(),
-            'epoch': epoch,
-            'config_applied': final_config,
-            'device': str(device),
-            'mixed_precision_enabled': mixed_precision,
-            'gradient_accumulation_steps': gradient_accumulation_steps,
-            'total_batches': len(loader),
-            'batch_size': batch_size
-        }
-        
-        # Set up mixed precision scaler
-        if mixed_precision and scaler is None:
-            scaler = GradScaler(
-                enabled=amp_enabled,
-                init_scale=init_scale,
-                growth_factor=growth_factor,
-                backoff_factor=backoff_factor,
-                growth_interval=growth_interval
-            )
-        
-        # Model compilation if requested
-        if compile_model and hasattr(torch, 'compile'):
-            try:
-                logger.info(f"Compiling model with mode: {torch_compile_mode}")
-                model = torch.compile(model, mode=torch_compile_mode)
-                training_stats['model_compiled'] = True
-            except Exception as e:
-                logger.warning(f"Model compilation failed: {e}")
-                training_stats['model_compiled'] = False
-        
-        # Set model to training mode
-        model.train()
-        
-        # Memory optimization setup
-        if memory_efficient:
-            if gradient_checkpointing and hasattr(model, 'gradient_checkpointing_enable'):
-                try:
-                    model.gradient_checkpointing_enable()
-                    logger.debug("Enabled gradient checkpointing")
-                except Exception as e:
-                    logger.warning(f"Failed to enable gradient checkpointing: {e}")
-        
-        # Initialize metrics tracking
-        metrics_tracker = {
-            'losses': [],
-            'batch_times': [],
-            'learning_rates': [],
-            'gradient_norms': [],
-            'memory_usage': [],
-            'detailed_metrics': defaultdict(list) if calculate_detailed_metrics else None
-        }
-        
-        # Initialize loss tracking for spike detection
-        if loss_spike_detection:
-            recent_losses = deque(maxlen=10)
-        
-        # Set up alive-progress bar
-        if progress_bar:
-            try:
-                pbar = alive_bar(
-                    total=len(loader),
-                    title=f'Training {progress_bar_desc}\t',
-                    unit='batches',
-                    bar='smooth',
-                    spinner='dots',
-                    stats=False,
-                    monitor=True,
-                    elapsed=True,
-                    stats_end=False
-                )
-                pbar.__enter__()  # Manually enter the context since we're not using 'with' statement
-            except ImportError:
-                logger.warning("alive-progress not available, progress bar disabled")
-                pbar = None
-            except Exception as e:
-                logger.warning(f"Failed to initialize alive-progress bar: {e}")
-                pbar = None
-        else:
-            pbar = None
-        
-        # Initialize profiling if requested
-        if profile_training:
-            try:
-                profiler = torch.profiler.profile(
-                    activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-                    schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
-                    on_trace_ready=torch.profiler.tensorboard_trace_handler(
-                        export_config.get('export_path', './profiler_logs')
-                    ),
-                    record_shapes=True,
-                    profile_memory=memory_config.get('profile_memory', True),
-                    with_stack=True
-                )
-                profiler.start()
-                training_stats['profiling_enabled'] = True
-            except Exception as e:
-                logger.warning(f"Failed to initialize profiler: {e}")
-                profiler = None
-                training_stats['profiling_enabled'] = False
-        else:
-            profiler = None
-        
-        # Anomaly detection setup
-        anomaly_context = torch.autograd.detect_anomaly() if detect_anomaly else nullcontext()
-        
-        # Initialize training variables
-        total_loss = 0.0
-        num_batches = 0
-        num_samples = 0
-        accumulated_steps = 0
-        best_loss = float('inf')
-        
-        # Initialize batch processing variables
-        batch_start_time = None
-        data_loading_time = 0
-        forward_time = 0
-        backward_time = 0
-        optimizer_time = 0
-        
-        # Custom callbacks setup
-        callbacks = callback_config.get('callbacks', [])
-        custom_training_step = callback_config.get('custom_training_step')
-        pre_batch_callback = callback_config.get('pre_batch_callback')
-        post_batch_callback = callback_config.get('post_batch_callback')
-        
-        logger.info(f"Starting epoch with {len(loader)} batches")
-        
-        # Main training loop
-        with anomaly_context:
-            # Zero gradients before starting
-            optimizer.zero_grad()
-            
-            for batch_idx, batch in enumerate(loader):
-                batch_start_time = time.time()
-                
-                try:
-                    # Pre-batch callback
-                    if pre_batch_callback:
-                        pre_batch_callback(batch_idx, batch, model, optimizer)
-                    
-                    # Data loading timing
-                    data_load_end_time = time.time()
-                    if batch_idx > 0:  # Skip first batch for timing accuracy
-                        data_loading_time += (data_load_end_time - batch_start_time)
-                    
-                    # Move data to device with timing
-                    if isinstance(batch, (list, tuple)):
-                        inputs = batch[0].to(device, non_blocking=non_blocking_transfer)
-                        targets = batch[1].to(device, non_blocking=non_blocking_transfer) if len(batch) > 1 else inputs
-                    else:
-                        inputs = batch.to(device, non_blocking=non_blocking_transfer)
-                        targets = inputs
-                    
-                    # Input validation
-                    if validate_inputs:
-                        if check_finite:
-                            if not torch.isfinite(inputs).all():
-                                if handle_nan_loss == 'error':
-                                    raise ValueError(f"Non-finite input values detected in batch {batch_idx}")
-                                elif handle_nan_loss == 'skip':
-                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite inputs")
-                                    continue
-                                elif handle_nan_loss == 'clip':
-                                    inputs = torch.nan_to_num(inputs, nan=0.0, posinf=1e6, neginf=-1e6)
-                    
-                    # Apply input transforms if specified
-                    if data_processing_config.get('input_transforms'):
-                        for transform in data_processing_config['input_transforms']:
-                            inputs = transform(inputs)
-                    
-                    # Apply data augmentation during training
-                    if augmentation_during_training:
-                        # Mixup augmentation
-                        if data_processing_config.get('mixup_alpha', 0) > 0:
-                            mixup_alpha = data_processing_config['mixup_alpha']
-                            lam = np.random.beta(mixup_alpha, mixup_alpha)
-                            batch_size_current = inputs.size(0)
-                            index = torch.randperm(batch_size_current).to(device)
-                            inputs = lam * inputs + (1 - lam) * inputs[index]
-                            if isinstance(targets, torch.Tensor) and targets.numel() > 0:
-                                targets = lam * targets + (1 - lam) * targets[index]
-                    
-                    current_batch_size = inputs.size(0)
-                    num_samples += current_batch_size
-                    
-                    # Forward pass with mixed precision and timing
-                    forward_start_time = time.time()
-                    
-                    if custom_training_step:
-                        # Custom training step
-                        loss = custom_training_step(model, inputs, targets, criterion, optimizer, scaler, batch_idx)
-                    else:
-                        autocast_context = get_autocast_context(device, mixed_precision, True)
-                        
-                        with autocast_context:
-                            outputs = model(inputs)
-                            
-                            # CRITICAL: Ensure targets match outputs for autoencoder
-                            if targets.shape != outputs.shape:
-                                if hasattr(model, '__class__') and 'autoencoder' in model.__class__.__name__.lower():
-                                    targets = inputs  # For autoencoder, target should be input
-                                    logger.debug("Set targets = inputs for autoencoder training")
-                                else:
-                                    # Try to reshape
-                                    if outputs.numel() == targets.numel():
-                                        targets = targets.view_as(outputs)
-                                        logger.debug(f"Reshaped targets to match outputs: {outputs.shape}")
-                                    else:
-                                        # Try to match dimensions intelligently
-                                        batch_size = outputs.size(0)
-                                        if len(outputs.shape) == 2:  # [batch_size, features]
-                                            output_features = outputs.size(1)
-                                            if targets.size(1) != output_features:
-                                                if targets.size(1) > output_features:
-                                                    # Truncate targets
-                                                    targets = targets[:, :output_features]
-                                                else:
-                                                    # Pad targets
-                                                    padding_size = output_features - targets.size(1)
-                                                    padding = torch.zeros(batch_size, padding_size, device=device, dtype=targets.dtype)
-                                                    targets = torch.cat([targets, padding], dim=1)
-                                                logger.debug(f"Adjusted targets shape to {targets.shape}")
-                                        else:
-                                            # For complex shapes, use inputs as targets
-                                            targets = inputs
-                                            logger.warning(f"Using inputs as targets for complex shape mismatch")
-                            
-                            # Custom loss computation with error handling
-                            if callback_config.get('custom_loss_computation'):
-                                try:
-                                    loss = callback_config['custom_loss_computation'](outputs, targets, criterion)
-                                except Exception as loss_e:
-                                    logger.error(f"Custom loss computation failed: {loss_e}")
-                                    if handle_nan_loss == 'skip':
-                                        logger.warning(f"Skipping batch {batch_idx} due to custom loss error")
-                                        continue
-                                    else:
-                                        raise
-                            else:
-                                try:
-                                    loss = criterion(outputs, targets)
-                                except Exception as loss_e:
-                                    logger.error(f"Standard loss computation failed: {loss_e}")
-                                    logger.error(f"Shapes - outputs: {outputs.shape}, targets: {targets.shape}")
-                                    
-                                    # Emergency shape fix
-                                    try:
-                                        if 'autoencoder' in str(type(model)).lower():
-                                            targets = inputs
-                                            logger.info("Emergency fix: Set targets = inputs for autoencoder")
-                                        else:
-                                            # Force reshape
-                                            if outputs.dim() == 2 and targets.dim() == 2:
-                                                min_features = min(outputs.size(1), targets.size(1))
-                                                outputs_fixed = outputs[:, :min_features]
-                                                targets_fixed = targets[:, :min_features]
-                                                loss = criterion(outputs_fixed, targets_fixed)
-                                                logger.info(f"Emergency fix: Used {min_features} features for loss")
-                                            else:
-                                                targets = targets.view_as(outputs)
-                                                loss = criterion(outputs, targets)
-                                                logger.info("Emergency fix: Forced target reshape")
-                                        
-                                        if 'targets_fixed' not in locals():
-                                            loss = criterion(outputs, targets)
-                                        
-                                    except Exception as final_e:
-                                        logger.error(f"Final loss computation attempt failed: {final_e}")
-                                        if handle_nan_loss == 'skip':
-                                            logger.warning(f"Skipping batch {batch_idx} due to unresolvable shape mismatch")
-                                            continue
-                                        elif handle_nan_loss == 'error':
-                                            raise RuntimeError(f"Unresolvable shape mismatch in batch {batch_idx}") from loss_e
-                                        else:
-                                            # Create a dummy loss to continue training
-                                            loss = torch.tensor(0.0, device=device, requires_grad=True)
-                                            logger.warning(f"Using dummy loss for batch {batch_idx}")
-                            
-                            # Scale loss for gradient accumulation
-                            loss = loss / gradient_accumulation_steps
-                    
-                    forward_end_time = time.time()
-                    forward_time += (forward_end_time - forward_start_time)
-                    
-                    # Loss validation
-                    if check_finite:
-                        if not torch.isfinite(loss):
-                            if handle_nan_loss == 'error':
-                                raise ValueError(f"Non-finite loss detected in batch {batch_idx}: {loss.item()}")
-                            elif handle_nan_loss == 'skip':
-                                logger.warning(f"Skipping batch {batch_idx} due to non-finite loss: {loss.item()}")
-                                continue
-                            elif handle_nan_loss == 'clip':
-                                loss = torch.nan_to_num(loss, nan=0.0, posinf=1e6, neginf=-1e6)
-                    
-                    # Loss spike detection
-                    if loss_spike_detection and len(recent_losses) > 0:
-                        current_loss = loss.item() * gradient_accumulation_steps
-                        avg_recent_loss = sum(recent_losses) / len(recent_losses)
-                        if current_loss > avg_recent_loss * loss_spike_threshold:
-                            logger.warning(f"Loss spike detected: current={current_loss:.4f}, avg_recent={avg_recent_loss:.4f}")
-                            if handle_nan_loss == 'skip':
-                                continue
-                        recent_losses.append(current_loss)
-                    elif loss_spike_detection:
-                        recent_losses.append(loss.item() * gradient_accumulation_steps)
-                    
-                    # Backward pass with timing
-                    backward_start_time = time.time()
-                    
-                    if mixed_precision and scaler is not None:
-                        scaler.scale(loss).backward()
-                    else:
-                        loss.backward()
-                    
-                    backward_end_time = time.time()
-                    backward_time += (backward_end_time - backward_start_time)
-                    
-                    accumulated_steps += 1
-                    
-                    # Optimizer step with gradient accumulation
-                    if accumulated_steps % gradient_accumulation_steps == 0:
-                        optimizer_start_time = time.time()
-                        
-                        # Gradient clipping
-                        if gradient_clip > 0 or max_grad_norm > 0:
-                            if mixed_precision and scaler is not None:
-                                scaler.unscale_(optimizer)
-                            
-                            if gradient_clipping_mode == 'norm':
-                                grad_norm = torch.nn.utils.clip_grad_norm_(
-                                    model.parameters(), 
-                                    max_grad_norm or gradient_clip
-                                )
-                            elif gradient_clipping_mode == 'value':
-                                grad_norm = torch.nn.utils.clip_grad_value_(
-                                    model.parameters(), 
-                                    gradient_clip
-                                )
-                                # Calculate norm for tracking
-                                grad_norm = torch.sqrt(sum(param.grad.data.norm()**2 for param in model.parameters() if param.grad is not None))
-                            else:
-                                grad_norm = torch.sqrt(sum(param.grad.data.norm()**2 for param in model.parameters() if param.grad is not None))
-                        else:
-                            grad_norm = torch.sqrt(sum(param.grad.data.norm()**2 for param in model.parameters() if param.grad is not None))
-                        
-                        # Gradient explosion detection
-                        if gradient_explosion_detection and grad_norm > 100.0:
-                            logger.warning(f"Large gradient norm detected: {grad_norm:.4f}")
-                        
-                        # Optimizer step
-                        if mixed_precision and scaler is not None:
-                            scaler.step(optimizer)
-                            scaler.update()
-                        else:
-                            optimizer.step()
-                        
-                        # Scheduler step on batch if configured
-                        if scheduler and scheduler_step_on_batch:
-                            if hasattr(scheduler, 'step'):
-                                try:
-                                    if 'ReduceLROnPlateau' in str(type(scheduler)):
-                                        # Don't step ReduceLROnPlateau on batch
-                                        pass
-                                    else:
-                                        scheduler.step()
-                                except Exception as e:
-                                    logger.warning(f"Scheduler step failed: {e}")
-                        
-                        optimizer.zero_grad()
-                        
-                        optimizer_end_time = time.time()
-                        optimizer_time += (optimizer_end_time - optimizer_start_time)
-                        
-                        # Store gradient norm for tracking
-                        if track_metrics and 'gradient_norm' in metrics_to_track:
-                            metrics_tracker['gradient_norms'].append(grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm)
-                    
-                    # Update running loss
-                    total_loss += loss.item() * gradient_accumulation_steps
-                    num_batches += 1
-                    
-                    # Store metrics
-                    if track_metrics:
-                        if 'loss' in metrics_to_track:
-                            metrics_tracker['losses'].append(loss.item() * gradient_accumulation_steps)
-                        
-                        if 'learning_rate' in metrics_to_track:
-                            current_lr = optimizer.param_groups[0]['lr']
-                            metrics_tracker['learning_rates'].append(current_lr)
-                        
-                        if 'batch_time' in metrics_to_track and batch_start_time:
-                            batch_time = time.time() - batch_start_time
-                            metrics_tracker['batch_times'].append(batch_time)
-                        
-                        # Memory usage tracking
-                        if 'memory_usage' in metrics_to_track and torch.cuda.is_available():
-                            memory_allocated = torch.cuda.memory_allocated(device) / 1024**2  # MB
-                            metrics_tracker['memory_usage'].append(memory_allocated)
-                    
-                    # Memory management
-                    if memory_efficient:
-                        if batch_idx % empty_cache_frequency == 0 and torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                        
-                        if batch_idx % gc_collection_frequency == 0:
-                            gc.collect()
-                    
-                    # Logging
-                    if batch_idx % log_frequency == 0 and batch_idx > 0:
-                        avg_loss = total_loss / num_batches
-                        current_lr = optimizer.param_groups[0]['lr']
-                        
-                        if timing_analysis:
-                            logger.info(
-                                f"Batch {batch_idx}/{len(loader)} | "
-                                f"Loss: {avg_loss:.6f} | "
-                                f"LR: {current_lr:.2e} | "
-                                f"Forward: {forward_time/batch_idx:.3f}s | "
-                                f"Backward: {backward_time/batch_idx:.3f}s | "
-                                f"Optimizer: {optimizer_time/(accumulated_steps//gradient_accumulation_steps):.3f}s"
-                            )
-                        else:
-                            logger.info(
-                                f"Batch {batch_idx}/{len(loader)} | "
-                                f"Loss: {avg_loss:.6f} | "
-                                f"LR: {current_lr:.2e}"
-                            )
-                    
-                    # Update alive-progress bar
-                    if pbar:
-                        current_loss_display = loss.item() * gradient_accumulation_steps
-                        avg_loss_display = total_loss / num_batches
-                        current_lr_display = optimizer.param_groups[0]['lr']
-                        
-                        # Format the text for the progress bar
-                        progress_text = (f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}")
-                        #progress_text = f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}"
-                        
-                        # Update the progress bar text
-                        pbar.text(progress_text)
-                        
-                        # Update the progress
-                        pbar()
-                    
-                    # Post-batch callback
-                    if post_batch_callback:
-                        post_batch_callback(batch_idx, batch, model, optimizer, loss)
-                    
-                    # Profiler step
-                    if profiler:
-                        profiler.step()
-                    
-                    # Execute callbacks
-                    for callback in callbacks:
-                        try:
-                            callback(
-                                batch_idx=batch_idx,
-                                loss=loss.item() * gradient_accumulation_steps,
-                                model=model,
-                                optimizer=optimizer,
-                                metrics=metrics_tracker
-                            )
-                        except Exception as e:
-                            logger.warning(f"Callback execution failed: {e}")
-                    
-                except Exception as batch_error:
-                    logger.error(f"Error in batch {batch_idx}: {batch_error}")
-                    if continue_on_error:
-                        if error_handling == 'skip':
-                            continue
-                        elif error_handling == 'retry':
-                            retry_count = 0
-                            while retry_count < max_retries:
-                                try:
-                                    logger.info(f"Retrying batch {batch_idx}, attempt {retry_count + 1}")
-                                    optimizer.zero_grad()
-                                    break
-                                except Exception as retry_e:
-                                    retry_count += 1
-                                    logger.warning(f"Retry {retry_count} failed: {retry_e}")
-                            
-                            if retry_count >= max_retries:
-                                logger.error(f"Max retries exceeded for batch {batch_idx}")
-                                if graceful_degradation:
-                                    continue
-                                else:
-                                    raise
-                        else:
-                            # Add dummy values to continue
-                            total_loss += 1.0
-                            num_batches += 1
-                            continue
-                    else:
-                        # Return partial results
-                        avg_loss = total_loss / max(num_batches, 1)
-                        partial_metrics = default_metrics.copy()
-                        partial_metrics.update({
-                            'loss': avg_loss,
-                            'num_batches': num_batches,
-                            'num_samples': num_samples,
-                            'error': f"Batch {batch_idx} failed: {str(batch_error)}",
-                            'partial_completion': True
-                        })
-                        return avg_loss, partial_metrics
-        
-        # Handle remaining gradients after main loop
-        if accumulated_steps % gradient_accumulation_steps != 0:
-            if mixed_precision and scaler is not None:
-                if gradient_clip > 0:
-                    scaler.unscale_(optimizer)
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip)
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                if gradient_clip > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip)
-                optimizer.step()
-        
-        # Scheduler step after epoch
-        if scheduler and (scheduler_step_on_epoch or scheduler_step_after_epoch):
-            try:
-                if 'ReduceLROnPlateau' in str(type(scheduler)):
-                    avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
-                    scheduler.step(avg_loss)
-                else:
-                    scheduler.step()
-                logger.debug("Scheduler step completed")
-            except Exception as e:
-                logger.warning(f"Scheduler step failed: {e}")
-        
-        # Calculate final metrics
-        epoch_end_time = time.time()
-        total_epoch_time = epoch_end_time - epoch_start_time
-        avg_loss = total_loss / num_batches if num_batches > 0 else default_loss
-        
-        # Metrics dictionary
-        metrics = {
-            'loss': avg_loss,
-            'epoch': epoch if epoch is not None else 0,
-            'num_batches': num_batches,
-            'num_samples': num_samples,
-            'total_epoch_time': total_epoch_time,
-            'avg_batch_time': total_epoch_time / num_batches if num_batches > 0 else 0,
-            'learning_rate': optimizer.param_groups[0]['lr'],
-            'final_learning_rate': optimizer.param_groups[0]['lr'],
-            'gradient_accumulation_steps': gradient_accumulation_steps,
-            'effective_batch_size': batch_size * gradient_accumulation_steps,
-            'mixed_precision_enabled': mixed_precision,
-            'scaler_scale': scaler.get_scale() if scaler else None,
-            'memory_allocated_mb': torch.cuda.memory_allocated(device) / 1024**2 if torch.cuda.is_available() else 0,
-            'memory_reserved_mb': torch.cuda.memory_reserved(device) / 1024**2 if torch.cuda.is_available() else 0,
-            'samples_per_second': num_samples / total_epoch_time if total_epoch_time > 0 else 0,
-            'batches_per_second': num_batches / total_epoch_time if total_epoch_time > 0 else 0,
-            'timing': {
-                'forward_time': forward_time,
-                'backward_time': backward_time,
-                'optimizer_time': optimizer_time,
-                'data_loading_time': data_loading_time,
-                'avg_forward_time': forward_time / num_batches if num_batches > 0 else 0,
-                'avg_backward_time': backward_time / num_batches if num_batches > 0 else 0,
-                'avg_optimizer_time': optimizer_time / max(accumulated_steps // gradient_accumulation_steps, 1) if accumulated_steps > 0 else 0,
-                'avg_data_loading_time': data_loading_time / num_batches if num_batches > 0 else 0
-            },
-            'config_applied': final_config,
-            'device': str(device),
-            'distributed_training': distributed,
-            'training_stable': not any(loss > 1000 for loss in metrics_tracker['losses'][-10:]) if metrics_tracker['losses'] else True,
-            'loss_spikes_detected': len([l for l in metrics_tracker['losses'] if l > avg_loss * loss_spike_threshold]) if loss_spike_detection else 0,
-            'training_completed': True
-        }
-        
-        # Add tracked metrics
-        if track_metrics:
-            if metrics_tracker['losses']:
-                metrics['loss_std'] = float(np.std(metrics_tracker['losses']))
-                metrics['min_loss'] = float(np.min(metrics_tracker['losses']))
-                metrics['max_loss'] = float(np.max(metrics_tracker['losses']))
-            
-            if metrics_tracker['gradient_norms']:
-                metrics['avg_gradient_norm'] = float(np.mean(metrics_tracker['gradient_norms']))
-                metrics['max_gradient_norm'] = float(np.max(metrics_tracker['gradient_norms']))
-                metrics['gradient_norm_std'] = float(np.std(metrics_tracker['gradient_norms']))
-            
-            if metrics_tracker['batch_times']:
-                metrics['avg_batch_time'] = float(np.mean(metrics_tracker['batch_times']))
-                metrics['batch_time_std'] = float(np.std(metrics_tracker['batch_times']))
-            
-            if metrics_tracker['memory_usage']:
-                metrics['avg_memory_usage_mb'] = float(np.mean(metrics_tracker['memory_usage']))
-                metrics['max_memory_usage_mb'] = float(np.max(metrics_tracker['memory_usage']))
-        
-        logger.info(f"Training epoch completed: loss={avg_loss:.6f}, batches={num_batches}")
-        return avg_loss, metrics
-        
-    except Exception as e:
-        logger.error(f"Training epoch failed: {e}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        
-        # Calculate what we can from available data
-        try:
-            final_loss = total_loss / max(num_batches, 1) if num_batches > 0 else default_loss
-        except:
-            final_loss = default_loss
-        
-        error_metrics = default_metrics.copy()
-        error_metrics.update({
-            'loss': final_loss,
-            'num_batches': num_batches,
-            'num_samples': num_samples,
-            'error': str(e),
-            'error_type': type(e).__name__,
-            'training_failed': True
-        })
-        
-        if graceful_degradation:
-            logger.warning(f"Returning error results: {error_metrics}")
-            return final_loss, error_metrics
-        else:
-            # Still return something to avoid unpacking errors
-            return default_loss, error_metrics
-    
-    finally:
-        # Restore original logging level
-        if verbose and original_level is not None:
-            logger.setLevel(original_level)
-        
-        # Cleanup
-        try:
-            if pbar:
-                # Close progress bars
-                if hasattr(pbar, '__exit__'):
-                    pbar.__exit__(None, None, None)
-                else:
-                    # Fallback for different alive_bar versions
-                    pbar.close()
-            
-            if profiler:
-                profiler.stop()
-            
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
-        except:
-            pass
 
 def validate(
     # Core Validation Parameters
@@ -46823,6 +44286,4572 @@ def calculate_threshold(
         except:
             pass
 
+def create_dataloaders(
+    # Core Data Parameters
+    data: Optional[Dict[str, np.ndarray]] = None,
+    X_train: Optional[np.ndarray] = None,
+    X_val: Optional[np.ndarray] = None,
+    X_test: Optional[np.ndarray] = None,
+    y_train: Optional[np.ndarray] = None,
+    y_val: Optional[np.ndarray] = None,
+    y_test: Optional[np.ndarray] = None,
+    
+    # Core DataLoader Parameters
+    batch_size: Optional[int] = None,
+    shuffle: Optional[bool] = None,
+    num_workers: Optional[int] = None,
+    pin_memory: Optional[bool] = None,
+    drop_last: Optional[bool] = None,
+    timeout: Optional[float] = None,
+    worker_init_fn: Optional[Callable] = None,
+    multiprocessing_context: Optional[str] = None,
+    generator: Optional[torch.Generator] = None,
+    prefetch_factor: Optional[int] = None,
+    persistent_workers: Optional[bool] = None,
+    
+    # Batch Size Configuration
+    train_batch_size: Optional[int] = None,
+    val_batch_size: Optional[int] = None,
+    test_batch_size: Optional[int] = None,
+    eval_batch_size: Optional[int] = None,
+    dynamic_batch_sizing: Optional[bool] = None,
+    adaptive_batch_size: Optional[bool] = None,
+    max_batch_size: Optional[int] = None,
+    min_batch_size: Optional[int] = None,
+    
+    # Shuffling and Sampling
+    train_shuffle: Optional[bool] = None,
+    val_shuffle: Optional[bool] = None,
+    test_shuffle: Optional[bool] = None,
+    sampler: Optional[torch.utils.data.Sampler] = None,
+    batch_sampler: Optional[torch.utils.data.BatchSampler] = None,
+    shuffle_seed: Optional[int] = None,
+    stratified_sampling: Optional[bool] = None,
+    weighted_sampling: Optional[bool] = None,
+    sample_weights: Optional[np.ndarray] = None,
+    
+    # Performance Optimization
+    optimization_level: Optional[str] = None,
+    memory_efficient: Optional[bool] = None,
+    cpu_count: Optional[int] = None,
+    max_workers: Optional[int] = None,
+    worker_memory_limit: Optional[int] = None,
+    dataloader_optimization: Optional[bool] = None,
+    fast_dev_run: Optional[bool] = None,
+    benchmark_mode: Optional[bool] = None,
+    
+    # Data Processing and Augmentation
+    data_transforms: Optional[List[Callable]] = None,
+    train_transforms: Optional[List[Callable]] = None,
+    val_transforms: Optional[List[Callable]] = None,
+    test_transforms: Optional[List[Callable]] = None,
+    augmentation_pipeline: Optional[List[Callable]] = None,
+    normalize_data: Optional[bool] = None,
+    standardize_data: Optional[bool] = None,
+    
+    # Data Type and Format Parameters
+    dtype: Optional[torch.dtype] = None,
+    device: Optional[str] = None,
+    tensor_format: Optional[str] = None,
+    data_format: Optional[str] = None,
+    squeeze_dims: Optional[bool] = None,
+    unsqueeze_dims: Optional[List[int]] = None,
+    transpose_dims: Optional[List[int]] = None,
+    
+    # Memory Management
+    memory_management: Optional[str] = None,
+    shared_memory: Optional[bool] = None,
+    mmap_mode: Optional[str] = None,
+    cache_datasets: Optional[bool] = None,
+    preload_data: Optional[bool] = None,
+    lazy_loading: Optional[bool] = None,
+    memory_mapping: Optional[bool] = None,
+    gc_collection: Optional[bool] = None,
+    
+    # Validation and Quality Control
+    validate_data: Optional[bool] = None,
+    check_data_integrity: Optional[bool] = None,
+    handle_nan_values: Optional[str] = None,
+    handle_inf_values: Optional[str] = None,
+    data_consistency_checks: Optional[bool] = None,
+    shape_validation: Optional[bool] = None,
+    dtype_validation: Optional[bool] = None,
+    
+    # Distributed and Parallel Processing
+    distributed: Optional[bool] = None,
+    world_size: Optional[int] = None,
+    rank: Optional[int] = None,
+    local_rank: Optional[int] = None,
+    distributed_sampler: Optional[bool] = None,
+    ddp_backend: Optional[str] = None,
+    sync_batchnorm: Optional[bool] = None,
+    
+    # Advanced Features
+    collate_fn: Optional[Callable] = None,
+    custom_collate: Optional[Callable] = None,
+    variable_length_sequences: Optional[bool] = None,
+    padding_strategy: Optional[str] = None,
+    sequence_length: Optional[int] = None,
+    max_sequence_length: Optional[int] = None,
+    
+    # Monitoring and Debugging
+    profile_dataloaders: Optional[bool] = None,
+    benchmark_dataloaders: Optional[bool] = None,
+    dataloader_stats: Optional[bool] = None,
+    timing_analysis: Optional[bool] = None,
+    memory_profiling: Optional[bool] = None,
+    bottleneck_detection: Optional[bool] = None,
+    verbose: Optional[bool] = None,
+    progress_bar: Optional[bool] = None,
+    silent: Optional[bool] = None,
+    debug_mode: Optional[bool] = None,
+    save_statistics: Optional[bool] = True,
+    statistics_path: Optional[Union[str, Path]] = None,
+    
+    # Error Handling and Resilience
+    error_handling: Optional[str] = None,
+    retry_failed_batches: Optional[bool] = None,
+    max_retries: Optional[int] = None,
+    fallback_batch_size: Optional[int] = None,
+    graceful_degradation: Optional[bool] = None,
+    fault_tolerance: Optional[bool] = None,
+    
+    # Cross-validation Support
+    cross_validation: Optional[bool] = None,
+    cv_folds: Optional[int] = None,
+    cv_strategy: Optional[str] = None,
+    fold_dataloaders: Optional[bool] = None,
+    stratified_cv: Optional[bool] = None,
+    
+    # Experimental and Advanced Options
+    experimental_features: Optional[bool] = None,
+    mixed_precision_loading: Optional[bool] = None,
+    gradient_checkpointing: Optional[bool] = None,
+    dataloader_sharding: Optional[bool] = None,
+    pipeline_parallelism: Optional[bool] = None,
+    
+    # System Integration
+    system_optimization: Optional[bool] = None,
+    numa_awareness: Optional[bool] = None,
+    cpu_affinity: Optional[List[int]] = None,
+    gpu_affinity: Optional[List[int]] = None,
+    io_optimization: Optional[bool] = None,
+    
+    # Compatibility and Legacy Support
+    pytorch_version_check: Optional[bool] = None,
+    legacy_compatibility: Optional[bool] = None,
+    backwards_compatibility: Optional[bool] = None,
+    version_specific_optimizations: Optional[bool] = None,
+    
+    # Configuration and Metadata
+    config: Optional[Dict[str, Any]] = None,
+    dataloader_config: Optional[Dict[str, Any]] = None,
+    preset: Optional[str] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
+    
+    **kwargs
+) -> Union[Tuple[DataLoader, DataLoader, DataLoader], Dict[str, DataLoader], DataLoader]:
+    # Start timing
+    start_time = datetime.now()
+    
+    # Initialize configuration with defaults
+    if config is None:
+        try:
+            config = get_current_config() if 'get_current_config' in globals() else {}
+        except Exception:
+            config = {}
+    
+    # Apply dataloader-specific configuration
+    if dataloader_config:
+        config.setdefault('dataloader', {}).update(dataloader_config)
+    
+    # Load preset configuration if specified
+    if preset and preset in globals().get('PRESET_CONFIGS', {}):
+        try:
+            preset_config = globals()['PRESET_CONFIGS'][preset].copy()
+            # Merge preset config, giving precedence to existing config
+            for key, value in preset_config.items():
+                if key not in config:
+                    config[key] = value
+            if not silent_mode:
+                logger.info(f"Applied preset configuration: {preset}")
+        except Exception as e:
+            if not silent_mode:
+                logger.warning(f"Failed to apply preset '{preset}': {e}")
+    
+    # Apply all parameters to configuration
+    final_config = {}
+    
+    # Merge with existing config
+    final_config.update(config)
+    
+    # Apply individual parameters
+    params = locals().copy()
+    params.update(kwargs)
+    
+    # Remove non-parameter items
+    params_to_remove = {
+        'config', 'dataloader_config', 'preset', 'kwargs', 'start_time', 'datetime', 'traceback', 'psutil', 'gc', 'partial', 'WeightedRandomSampler', 'DistributedSampler',
+        'default_collate', 'TensorDataset', 'DataLoader', 'torch'
+    }
+    
+    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
+    
+    # Organize parameters into logical sections
+    param_sections = {
+        'core': [
+            'batch_size', 'shuffle', 'num_workers', 'pin_memory', 'drop_last', 'timeout', 'worker_init_fn', 'multiprocessing_context', 'generator',
+            'prefetch_factor', 'persistent_workers'
+        ],
+        'batch_configuration': [
+            'train_batch_size', 'val_batch_size', 'test_batch_size', 'eval_batch_size', 'dynamic_batch_sizing', 'adaptive_batch_size', 'max_batch_size', 'min_batch_size'
+        ],
+        'sampling': [
+            'train_shuffle', 'val_shuffle', 'test_shuffle', 'sampler', 'batch_sampler', 'shuffle_seed', 'stratified_sampling', 'weighted_sampling', 'sample_weights'
+        ],
+        'performance': [
+            'optimization_level', 'memory_efficient', 'cpu_count', 'max_workers', 'worker_memory_limit', 'dataloader_optimization', 'fast_dev_run', 'benchmark_mode'
+        ],
+        'data_processing': [
+            'data_transforms', 'train_transforms', 'val_transforms', 'test_transforms', 'augmentation_pipeline', 'normalize_data', 'standardize_data'
+        ],
+        'data_format': [
+            'dtype', 'device', 'tensor_format', 'data_format', 'squeeze_dims', 'unsqueeze_dims', 'transpose_dims'
+        ],
+        'memory_management': [
+            'memory_management', 'shared_memory', 'mmap_mode', 'cache_datasets', 'preload_data', 'lazy_loading', 'memory_mapping', 'gc_collection'
+        ],
+        'validation': [
+            'validate_data', 'check_data_integrity', 'handle_nan_values', 'handle_inf_values', 'data_consistency_checks', 'shape_validation', 'dtype_validation'
+        ],
+        'distributed': [
+            'distributed', 'world_size', 'rank', 'local_rank', 'distributed_sampler', 'ddp_backend', 'sync_batchnorm'
+        ],
+        'advanced_features': [
+            'collate_fn', 'custom_collate', 'variable_length_sequences', 'padding_strategy', 'sequence_length', 'max_sequence_length'
+        ],
+        'monitoring': [
+            'profile_dataloaders', 'benchmark_dataloaders', 'dataloader_stats', 'timing_analysis', 'memory_profiling', 'bottleneck_detection', 'verbose',
+            'progress_bar', 'silent', 'debug_mode', 'save_statistics', 'statistics_path'
+        ],
+        'error_handling': [
+            'error_handling', 'retry_failed_batches', 'max_retries', 'fallback_batch_size', 'graceful_degradation', 'fault_tolerance'
+        ],
+        'cross_validation': [
+            'cross_validation', 'cv_folds', 'cv_strategy', 'fold_dataloaders', 'stratified_cv'
+        ],
+        'experimental': [
+            'experimental_features', 'mixed_precision_loading', 'gradient_checkpointing', 'dataloader_sharding', 'pipeline_parallelism'
+        ],
+        'system_integration': [
+            'system_optimization', 'numa_awareness', 'cpu_affinity', 'gpu_affinity', 'io_optimization'
+        ],
+        'compatibility': [
+            'pytorch_version_check', 'legacy_compatibility', 'backwards_compatibility', 'version_specific_optimizations'
+        ],
+        'run_tracking': [
+            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
+        ]
+    }
+    
+    # Apply parameters to appropriate sections
+    for section, param_list in param_sections.items():
+        section_config = final_config.setdefault(section, {})
+        for param in param_list:
+            if param in cleaned_params:
+                section_config[param] = cleaned_params[param]
+    
+    # Set up defaults
+    core_config = final_config.setdefault('core', {})
+    batch_config = final_config.setdefault('batch_configuration', {})
+    sampling_config = final_config.setdefault('sampling', {})
+    performance_config = final_config.setdefault('performance', {})
+    data_processing_config = final_config.setdefault('data_processing', {})
+    data_format_config = final_config.setdefault('data_format', {})
+    memory_config = final_config.setdefault('memory_management', {})
+    validation_config = final_config.setdefault('validation', {})
+    distributed_config = final_config.setdefault('distributed', {})
+    advanced_config = final_config.setdefault('advanced_features', {})
+    monitoring_config = final_config.setdefault('monitoring', {})
+    error_config = final_config.setdefault('error_handling', {})
+    cv_config = final_config.setdefault('cross_validation', {})
+    experimental_config = final_config.setdefault('experimental', {})
+    run_tracking_config = final_config.setdefault('run_tracking', {})
+    
+    # Handle silent mode - override verbose and progress_bar if silent is True
+    silent_mode = monitoring_config.get('silent', False)
+    if silent_mode:
+        # Force silent mode behavior
+        monitoring_config['verbose'] = False
+        monitoring_config['progress_bar'] = False
+    
+    # Apply defaults with system awareness
+    batch_size = core_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
+    shuffle = core_config.setdefault('shuffle', True)
+    num_workers = core_config.setdefault('num_workers', NUM_WORKERS)
+    pin_memory = core_config.setdefault('pin_memory', torch.cuda.is_available())
+    drop_last = core_config.setdefault('drop_last', False)
+    timeout = core_config.setdefault('timeout', 0)
+    
+    if num_workers > 0:
+        prefetch_factor = core_config.setdefault('prefetch_factor', 2)
+        persistent_workers = core_config.setdefault('persistent_workers', True)
+    else:
+        prefetch_factor = None
+        persistent_workers = False
+    
+    # Performance defaults
+    optimization_level = performance_config.setdefault('optimization_level', 'standard')
+    memory_efficient = performance_config.setdefault('memory_efficient', True)
+    dataloader_optimization = performance_config.setdefault('dataloader_optimization', True)
+    fast_dev_run = performance_config.setdefault('fast_dev_run', False)
+    benchmark_mode = performance_config.setdefault('benchmark_mode', False)
+    
+    # System optimization defaults
+    system_cpu_count = os.cpu_count() or 1
+    max_workers = performance_config.setdefault('max_workers', system_cpu_count)
+    cpu_count = performance_config.setdefault('cpu_count', system_cpu_count)
+    
+    # Data format defaults
+    dtype = data_format_config.setdefault('dtype', torch.float32)
+    device = data_format_config.setdefault('device', 'auto')
+    
+    # Validation defaults
+    validate_data = validation_config.setdefault('validate_data', True)
+    check_data_integrity = validation_config.setdefault('check_data_integrity', True)
+    handle_nan_values = validation_config.setdefault('handle_nan_values', 'error')
+    handle_inf_values = validation_config.setdefault('handle_inf_values', 'error')
+    
+    # Monitoring defaults
+    verbose = monitoring_config.setdefault('verbose', False)
+    progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
+    debug_mode = monitoring_config.setdefault('debug_mode', False)
+    profile_dataloaders = monitoring_config.setdefault('profile_dataloaders', True)
+    dataloader_stats = monitoring_config.setdefault('dataloader_stats', True)
+    save_statistics = monitoring_config.setdefault('save_statistics', True)
+    statistics_path = monitoring_config.get('statistics_path', None)
+    
+    # Error handling defaults
+    error_handling = error_config.setdefault('error_handling', 'strict')
+    graceful_degradation = error_config.setdefault('graceful_degradation', True)
+    max_retries = error_config.setdefault('max_retries', 3)
+
+    # Extract run tracking parameters
+    run_id = run_tracking_config.get('run_id', run_id)
+    run_number = run_tracking_config.get('run_number', run_number)
+    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+
+    # Determine statistics save path with run tracking support
+    if save_statistics and statistics_path is None:
+        if use_run_tracking and run_id is not None:
+            # Use run-specific metrics directory if available
+            if 'metrics' in run_specific_dirs:
+                statistics_path = run_specific_dirs['metrics'] / f"dataloader_statistics_{run_id}.json"
+            else:
+                # Fallback to default location with run_id suffix
+                statistics_path = Path.cwd() / f"dataloader_statistics_{run_id}.json"
+        else:
+            # Default behavior for standalone usage
+            statistics_path = Path.cwd() / "dataloader_statistics.json"
+    
+    # Set up logging level
+    if verbose:
+        original_level = logger.level
+        logger.setLevel(logging.INFO)
+    
+    if verbose:
+        logger.info("Starting DataLoader creation")
+    
+    # Initialize progress tracking
+    progress_data = {
+        'current_stage': 'Starting...',
+        'current_substage': None,
+        'dataloaders_created': 0,
+        'datasets_processed': 0,
+        'transforms_applied': 0,
+        'samplers_configured': 0,
+        'performance_score': 0.0,
+        'fallback_attempts': 0
+    }
+    
+    # Initialize creation statistics
+    creation_stats = {
+        'start_time': start_time.isoformat(),
+        'config_applied': final_config,
+        'system_info': {
+            'cpu_count': system_cpu_count,
+            'available_memory_gb': psutil.virtual_memory().available / (1024**3),
+            'cuda_available': torch.cuda.is_available(),
+            'pytorch_version': torch.__version__
+        },
+        'stages_completed': [],
+        'warnings_encountered': [],
+        'performance_metrics': {}
+    }
+    
+    try:
+        # Calculate total stages for progress tracking
+        total_stages = 12  # Configuration, Data Validation, System Optimization, Transforms, Datasets, Samplers, Collate, Training DL, Validation DL, Test DL, CV DL, Finalization
+        
+        # Use progress bar only if not in silent mode and progress_bar is True
+        if not silent_mode and progress_bar:
+            print(Fore.GREEN + Style.BRIGHT + "\nStarting dataloader creation..." + Style.RESET_ALL)
+            bar_context = alive_bar(total_stages, title='DataLoader Creation\t\t', unit='stages')
+        else:
+            # Create a dummy context manager that does nothing
+            class DummyBar:
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    pass
+                def __call__(self):
+                    pass
+                def __setattr__(self, name, value):
+                    pass
+            bar_context = DummyBar()
+        
+        with bar_context as main_bar:
+            
+            # STAGE 1: Configuration and Setup
+            progress_data['current_stage'] = "Configuration"
+            if not silent_mode:
+                main_bar.text = "Setting up configuration and parameters..."
+            
+            # Determine device configuration
+            if device == 'auto':
+                device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            
+            if not silent_mode:
+                main_bar.text = "Configuration complete"
+            creation_stats['stages_completed'].append('configuration')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 2: Data Validation
+            progress_data['current_stage'] = "Data Validation"
+            if not silent_mode:
+                main_bar.text = "Validating and preparing input data..."
+            
+            # Extract data from various input formats
+            datasets = {}
+            
+            if data is not None:
+                # Primary method: data dictionary
+                X_train = data.get('X_train', X_train)
+                X_val = data.get('X_val', X_val)
+                X_test = data.get('X_test', X_test)
+                y_train = data.get('y_train', y_train)
+                y_val = data.get('y_val', y_val)
+                y_test = data.get('y_test', y_test)
+            
+            # Validate required data
+            if X_train is None:
+                raise ValueError("Training data (X_train) is required")
+            
+            # Data validation if requested
+            if validate_data:
+                if verbose:
+                    logger.info("Performing data validation")
+                
+                def validate_array(arr, name):
+                    if arr is None:
+                        return None
+                    
+                    if not isinstance(arr, np.ndarray):
+                        try:
+                            arr = np.array(arr)
+                        except Exception as e:
+                            raise TypeError(f"{name} could not be converted to numpy array: {e}")
+                    
+                    if arr.size == 0:
+                        if verbose:
+                            logger.warning(f"{name} is empty")
+                        return arr
+                    
+                    # Check for invalid values
+                    if handle_nan_values != 'ignore':
+                        nan_count = np.isnan(arr).sum()
+                        if nan_count > 0:
+                            if handle_nan_values == 'error':
+                                raise ValueError(f"{name} contains {nan_count} NaN values")
+                            elif handle_nan_values == 'remove':
+                                valid_mask = ~np.isnan(arr).any(axis=1)
+                                arr = arr[valid_mask]
+                                if verbose:
+                                    logger.warning(f"Removed {(~valid_mask).sum()} samples with NaN values from {name}")
+                            elif handle_nan_values == 'replace':
+                                arr = np.nan_to_num(arr, nan=0.0)
+                                if verbose:
+                                    logger.warning(f"Replaced {nan_count} NaN values with 0.0 in {name}")
+                    
+                    if handle_inf_values != 'ignore':
+                        inf_count = np.isinf(arr).sum()
+                        if inf_count > 0:
+                            if handle_inf_values == 'error':
+                                raise ValueError(f"{name} contains {inf_count} infinite values")
+                            elif handle_inf_values == 'replace':
+                                arr = np.nan_to_num(arr, posinf=1e6, neginf=-1e6)
+                                if verbose:
+                                    logger.warning(f"Replaced {inf_count} infinite values in {name}")
+                    
+                    return arr
+                
+                # Validate all arrays
+                X_train = validate_array(X_train, 'X_train')
+                X_val = validate_array(X_val, 'X_val') if X_val is not None else None
+                X_test = validate_array(X_test, 'X_test') if X_test is not None else None
+                y_train = validate_array(y_train, 'y_train') if y_train is not None else None
+                y_val = validate_array(y_val, 'y_val') if y_val is not None else None
+                y_test = validate_array(y_test, 'y_test') if y_test is not None else None
+                
+                # Shape consistency validation
+                if validation_config.get('shape_validation', True):
+                    n_features = X_train.shape[1] if len(X_train.shape) > 1 else 1
+                    
+                    for name, arr in [('X_val', X_val), ('X_test', X_test)]:
+                        if arr is not None and len(arr.shape) > 1:
+                            if arr.shape[1] != n_features:
+                                raise ValueError(f"Feature dimension mismatch: X_train has {n_features} features, {name} has {arr.shape[1]}")
+                    
+                    # Label consistency
+                    if y_train is not None and len(y_train) != len(X_train):
+                        raise ValueError(f"Training data size mismatch: X_train has {len(X_train)} samples, y_train has {len(y_train)}")
+            
+            creation_stats['data_validation_passed'] = True
+            creation_stats['data_shapes'] = {
+                'X_train': X_train.shape,
+                'X_val': X_val.shape if X_val is not None else None,
+                'X_test': X_test.shape if X_test is not None else None
+            }
+            
+            progress_data['datasets_processed'] = 1 + (1 if X_val is not None else 0) + (1 if X_test is not None else 0)
+            if not silent_mode:
+                main_bar.text = f"Data validation complete ({progress_data['datasets_processed']} datasets)"
+            creation_stats['stages_completed'].append('data_validation')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 3: System Optimization
+            progress_data['current_stage'] = "System Optimization"
+            if not silent_mode:
+                main_bar.text = "Optimizing system parameters..."
+            
+            # Optimize system parameters based on available resources
+            if system_optimization:
+                if verbose:
+                    logger.info("Applying system optimizations")
+                
+                # Memory-based optimization
+                available_memory_gb = psutil.virtual_memory().available / (1024**3)
+                # Less than 4GB
+                if available_memory_gb < 4:
+                    num_workers = min(num_workers, 2)
+                    batch_size = min(batch_size, 32)
+                    if num_workers > 0:
+                        prefetch_factor = 1
+                    else:
+                        prefetch_factor = None
+                    if verbose:
+                        logger.info("Applied memory-constrained optimizations")
+                # More than 16GB
+                elif available_memory_gb > 16:
+                    num_workers = min(num_workers, max_workers)
+                    prefetch_factor = min(prefetch_factor, 4)
+                    if verbose:
+                        logger.info("Applied high-memory optimizations")
+                
+                # CPU-based optimization
+                if system_cpu_count <= 2:
+                    num_workers = min(num_workers, 1)
+                    persistent_workers = False
+                elif system_cpu_count >= 8:
+                    num_workers = min(num_workers, system_cpu_count - 1)
+                    persistent_workers = True
+            
+            # Apply batch size configurations
+            train_batch_size = batch_config.get('train_batch_size', batch_size)
+            val_batch_size = batch_config.get('val_batch_size', batch_config.get('eval_batch_size', min(batch_size * 2, 1024)))
+            test_batch_size = batch_config.get('test_batch_size', batch_config.get('eval_batch_size', min(batch_size * 2, 1024)))
+            
+            # Adaptive batch sizing based on data size and memory
+            if batch_config.get('adaptive_batch_size', False):
+                if verbose:
+                    logger.info("Applying adaptive batch sizing")
+                
+                def calculate_optimal_batch_size(data_size, base_batch_size, memory_factor=1.0):
+                    # Calculate based on data size and available memory
+                    if data_size < 1000:
+                        return min(base_batch_size, data_size // 4) if data_size > 4 else 1
+                    elif data_size > 100000:
+                        return min(base_batch_size * 2, batch_config.get('max_batch_size', 2048))
+                    else:
+                        return int(base_batch_size * memory_factor)
+                
+                memory_factor = min(2.0, available_memory_gb / 8.0) if 'available_memory_gb' in locals() else 1.0
+                
+                train_batch_size = calculate_optimal_batch_size(len(X_train), train_batch_size, memory_factor)
+                if X_val is not None:
+                    val_batch_size = calculate_optimal_batch_size(len(X_val), val_batch_size, memory_factor)
+                if X_test is not None:
+                    test_batch_size = calculate_optimal_batch_size(len(X_test), test_batch_size, memory_factor)
+            
+            # Apply batch size limits
+            min_batch_size = batch_config.get('min_batch_size', 1)
+            max_batch_size = batch_config.get('max_batch_size', 4096)
+            
+            train_batch_size = max(min_batch_size, min(train_batch_size, max_batch_size))
+            val_batch_size = max(min_batch_size, min(val_batch_size, max_batch_size))
+            test_batch_size = max(min_batch_size, min(test_batch_size, max_batch_size))
+            
+            # Shuffle configuration
+            train_shuffle = sampling_config.get('train_shuffle', shuffle)
+            val_shuffle = sampling_config.get('val_shuffle', False)
+            test_shuffle = sampling_config.get('test_shuffle', False)
+            
+            if not silent_mode:
+                main_bar.text = "System optimization complete"
+            creation_stats['stages_completed'].append('system_optimization')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 4: Transform Pipeline Setup
+            progress_data['current_stage'] = "Transform Setup"
+            if not silent_mode:
+                main_bar.text = "Setting up data transforms..."
+            
+            # Setup multiprocessing context
+            mp_context = core_config.get('multiprocessing_context')
+            if mp_context and num_workers > 0:
+                try:
+                    import multiprocessing as mp
+                    if mp_context in ['spawn', 'fork', 'forkserver']:
+                        mp_ctx = mp.get_context(mp_context)
+                        if verbose:
+                            logger.info(f"Using multiprocessing context: {mp_context}")
+                    else:
+                        mp_ctx = None
+                        if verbose:
+                            logger.warning(f"Invalid multiprocessing context: {mp_context}")
+                except Exception as e:
+                    if verbose:
+                        logger.warning(f"Failed to set multiprocessing context: {e}")
+                    mp_ctx = None
+            else:
+                mp_ctx = None
+            
+            # Create data transforms pipeline
+            def create_transform_pipeline(transforms_list):
+                if not transforms_list:
+                    return None
+                
+                def apply_transforms(tensor):
+                    for transform in transforms_list:
+                        tensor = transform(tensor)
+                    return tensor
+                return apply_transforms
+            
+            # Data processing transforms
+            train_transform = create_transform_pipeline(data_processing_config.get('train_transforms'))
+            val_transform = create_transform_pipeline(data_processing_config.get('val_transforms'))
+            test_transform = create_transform_pipeline(data_processing_config.get('test_transforms'))
+            
+            # Generic transforms applied to all data
+            if data_processing_config.get('data_transforms'):
+                generic_transform = create_transform_pipeline(data_processing_config['data_transforms'])
+            elif data_processing_config.get('normalize_data', False):
+                # Simple normalization transform
+                def normalize_transform(tensor):
+                    return (tensor - tensor.mean()) / (tensor.std() + 1e-8)
+                generic_transform = normalize_transform
+            elif data_processing_config.get('standardize_data', False):
+                # Standardization transform
+                def standardize_transform(tensor):
+                    return (tensor - tensor.min()) / (tensor.max() - tensor.min() + 1e-8)
+                generic_transform = standardize_transform
+            else:
+                generic_transform = None
+            
+            progress_data['transforms_applied'] = sum(1 for t in [train_transform, val_transform, test_transform, generic_transform] if t is not None)
+            if not silent_mode:
+                main_bar.text = f"Transform setup complete ({progress_data['transforms_applied']} transforms)"
+            creation_stats['stages_completed'].append('transform_setup')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 5: Dataset Creation
+            progress_data['current_stage'] = "Dataset Creation"
+            if not silent_mode:
+                main_bar.text = "Creating tensor datasets..."
+            
+            # Create tensor datasets
+            def create_enhanced_dataset(X, y=None, transform=None):
+                # Convert to tensors
+                X_tensor = torch.tensor(X, dtype=dtype)
+                
+                if y is not None:
+                    y_tensor = torch.tensor(y, dtype=torch.long if y.dtype in [np.int32, np.int64] else dtype)
+                    dataset = TensorDataset(X_tensor, y_tensor)
+                else:
+                    dataset = TensorDataset(X_tensor)
+                
+                # Apply transforms if specified
+                if transform or generic_transform:
+                    original_dataset = dataset
+                    
+                    def transformed_getitem(idx):
+                        item = original_dataset[idx]
+                        if generic_transform:
+                            if isinstance(item, tuple):
+                                item = (generic_transform(item[0]), *item[1:])
+                            else:
+                                item = generic_transform(item)
+                        if transform:
+                            if isinstance(item, tuple):
+                                item = (transform(item[0]), *item[1:])
+                            else:
+                                item = transform(item)
+                        return item
+                    
+                    # Create a custom dataset class that applies transforms
+                    class TransformedDataset(torch.utils.data.Dataset):
+                        def __init__(self, base_dataset, transform_fn):
+                            self.base_dataset = base_dataset
+                            self.transform_fn = transform_fn
+                        
+                        def __len__(self):
+                            return len(self.base_dataset)
+                        
+                        def __getitem__(self, idx):
+                            return self.transform_fn(idx)
+                    
+                    dataset = TransformedDataset(original_dataset, transformed_getitem)
+                
+                return dataset
+            
+            # Create datasets
+            if verbose:
+                logger.info("Creating tensor datasets")
+            
+            train_dataset = create_enhanced_dataset(X_train, y_train, train_transform)
+            val_dataset = create_enhanced_dataset(X_val, y_val, val_transform) if X_val is not None else None
+            test_dataset = create_enhanced_dataset(X_test, y_test, test_transform) if X_test is not None else None
+            
+            if not silent_mode:
+                main_bar.text = "Dataset creation complete"
+            creation_stats['stages_completed'].append('dataset_creation')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 6: Sampler Configuration
+            progress_data['current_stage'] = "Sampler Configuration"
+            if not silent_mode:
+                main_bar.text = "Configuring data samplers..."
+            
+            # Setup samplers
+            train_sampler = None
+            val_sampler = None
+            test_sampler = None
+            
+            # Distributed sampling
+            if distributed_config.get('distributed', False) and distributed_config.get('distributed_sampler', True):
+                world_size = distributed_config.get('world_size', 1)
+                rank = distributed_config.get('rank', 0)
+                
+                if verbose:
+                    logger.info(f"Setting up distributed samplers: world_size={world_size}, rank={rank}")
+                
+                train_sampler = DistributedSampler(
+                    train_dataset,
+                    num_replicas=world_size,
+                    rank=rank,
+                    shuffle=train_shuffle,
+                    seed=sampling_config.get('shuffle_seed', 0)
+                )
+                
+                if val_dataset:
+                    val_sampler = DistributedSampler(
+                        val_dataset,
+                        num_replicas=world_size,
+                        rank=rank,
+                        shuffle=val_shuffle,
+                        seed=sampling_config.get('shuffle_seed', 0)
+                    )
+                
+                if test_dataset:
+                    test_sampler = DistributedSampler(
+                        test_dataset,
+                        num_replicas=world_size,
+                        rank=rank,
+                        shuffle=test_shuffle,
+                        seed=sampling_config.get('shuffle_seed', 0)
+                    )
+                
+                # Override shuffle when using distributed sampler
+                train_shuffle = False
+                val_shuffle = False
+                test_shuffle = False
+            
+            # Weighted sampling for training data
+            elif sampling_config.get('weighted_sampling', False) and y_train is not None:
+                if verbose:
+                    logger.info("Setting up weighted sampling")
+                
+                if sampling_config.get('sample_weights') is not None:
+                    sample_weights = sampling_config['sample_weights']
+                else:
+                    # Calculate class weights
+                    class_counts = np.bincount(y_train)
+                    class_weights = 1.0 / class_counts
+                    sample_weights = class_weights[y_train]
+                
+                train_sampler = WeightedRandomSampler(
+                    weights=sample_weights,
+                    num_samples=len(sample_weights),
+                    replacement=True
+                )
+                train_shuffle = False  # Don't shuffle when using custom sampler
+            
+            # Stratified sampling
+            elif sampling_config.get('stratified_sampling', False) and y_train is not None:
+                if verbose:
+                    logger.info("Setting up stratified sampling")
+                
+                # Create stratified sampler (simplified implementation)
+                class_indices = defaultdict(list)
+                for idx, label in enumerate(y_train):
+                    class_indices[label].append(idx)
+                
+                # Balance classes by sampling
+                min_class_size = min(len(indices) for indices in class_indices.values())
+                balanced_indices = []
+                
+                for indices in class_indices.values():
+                    sampled_indices = np.random.choice(indices, size=min_class_size, replace=False)
+                    balanced_indices.extend(sampled_indices)
+                
+                # Custom sampler that uses balanced indices
+                class StratifiedSampler(torch.utils.data.Sampler):
+                    def __init__(self, indices):
+                        self.indices = indices
+                    
+                    def __iter__(self):
+                        return iter(np.random.permutation(self.indices))
+                    
+                    def __len__(self):
+                        return len(self.indices)
+                
+                train_sampler = StratifiedSampler(balanced_indices)
+                train_shuffle = False
+            
+            # Custom samplers from configuration
+            if sampling_config.get('sampler') is not None:
+                train_sampler = sampling_config['sampler']
+                train_shuffle = False
+            
+            if sampling_config.get('batch_sampler') is not None:
+                batch_sampler = sampling_config['batch_sampler']
+                train_sampler = None
+                train_shuffle = False
+            else:
+                batch_sampler = None
+            
+            # Setup generator for reproducibility
+            generator = core_config.get('generator')
+            if generator is None and sampling_config.get('shuffle_seed') is not None:
+                generator = torch.Generator()
+                generator.manual_seed(sampling_config['shuffle_seed'])
+            
+            progress_data['samplers_configured'] = sum(1 for s in [train_sampler, val_sampler, test_sampler] if s is not None)
+            if not silent_mode:
+                main_bar.text = f"Sampler configuration complete ({progress_data['samplers_configured']} samplers)"
+            creation_stats['stages_completed'].append('sampler_configuration')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 7: Collate Function Setup
+            progress_data['current_stage'] = "Collate Function"
+            if not silent_mode:
+                main_bar.text = "Setting up collate functions..."
+            
+            # Custom collate function
+            enhanced_collate_fn = None
+            
+            # Only create enhanced collate if we have specific requirements or configurations
+            needs_enhanced_collate = (
+                advanced_config.get('variable_length_sequences', False) or 
+                advanced_config.get('custom_collate') or
+                data_format_config.get('squeeze_dims', False) or
+                data_format_config.get('unsqueeze_dims') or
+                dtype != torch.float32 or
+                advanced_config.get('collate_fn') != default_collate
+            )
+            
+            if needs_enhanced_collate:
+                if verbose:
+                    logger.debug("Creating enhanced collate function with custom processing")
+                
+                # Create the enhanced collate function with current configuration
+                enhanced_collate_fn = EnhancedCollateFn(
+                    config=final_config,
+                    dtype=dtype,
+                    error_handling=error_handling
+                )
+                
+                # Test if the collate function is picklable when using multiprocessing
+                if num_workers > 0:
+                    try:
+                        pickle.dumps(enhanced_collate_fn)
+                        if verbose:
+                            logger.debug("Enhanced collate function is picklable and ready for multiprocessing")
+                    except Exception as pickle_error:
+                        if verbose:
+                            logger.warning(f"Enhanced collate function pickling test failed: {pickle_error}")
+                            logger.info("Falling back to default collate function to avoid multiprocessing issues")
+                        enhanced_collate_fn = None
+                
+            else:
+                if verbose:
+                    logger.debug("Using default PyTorch collate function (no custom processing needed)")
+                # Use default collate
+                enhanced_collate_fn = None
+            
+            # Additional fallback for problematic scenarios
+            if enhanced_collate_fn is None and needs_enhanced_collate:
+                if verbose:
+                    logger.warning("Enhanced collate features requested but not available - some functionality may be limited")
+            
+            # Worker initialization function
+            worker_init_fn = None
+            
+            if num_workers > 0:
+                # Check if we need custom worker initialization
+                needs_custom_worker_init = (
+                    sampling_config.get('shuffle_seed') is not None or
+                    performance_config.get('cpu_affinity') or
+                    memory_config.get('worker_memory_limit') or
+                    core_config.get('worker_init_fn')
+                )
+                
+                if needs_custom_worker_init:
+                    # Create picklable worker initializer
+                    worker_init_fn = WorkerInitializer(config=final_config)
+                    
+                    # Test if the worker initializer is picklable
+                    try:
+                        pickle.dumps(worker_init_fn)
+                        if verbose:
+                            logger.debug("Worker initializer is picklable and ready for multiprocessing")
+                    except Exception as pickle_error:
+                        if verbose:
+                            logger.warning(f"Worker initializer pickling test failed: {pickle_error}")
+                            logger.info("Disabling custom worker initialization to avoid multiprocessing issues")
+                        worker_init_fn = None
+                else:
+                    if verbose:
+                        logger.debug("No custom worker initialization needed")
+                    worker_init_fn = None
+            else:
+                worker_init_fn = None
+            
+            if not silent_mode:
+                main_bar.text = "Collate function setup complete"
+            creation_stats['stages_completed'].append('collate_setup')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 8: Training DataLoader Creation
+            progress_data['current_stage'] = "Training DataLoader"
+            if not silent_mode:
+                main_bar.text = "Creating training DataLoader..."
+            
+            # Common DataLoader parameters
+            common_params = {
+                'pin_memory': pin_memory,
+                'timeout': timeout,
+                'generator': generator
+            }
+            
+            # Only add prefetch_factor if num_workers > 0
+            if num_workers > 0:
+                common_params['prefetch_factor'] = prefetch_factor
+            
+            # Add multiprocessing context if available
+            if mp_ctx and num_workers > 0:
+                common_params['multiprocessing_context'] = mp_ctx
+            
+            # Add collate function and worker configuration
+            if num_workers > 0:
+                common_params.update({
+                    'num_workers': num_workers,
+                    'worker_init_fn': worker_init_fn,  # This is now picklable
+                    'persistent_workers': persistent_workers,
+                    'collate_fn': enhanced_collate_fn
+                })
+            else:
+                common_params.update({
+                    'num_workers': 0,
+                    'worker_init_fn': None,
+                    'persistent_workers': False,
+                    'collate_fn': enhanced_collate_fn
+                })
+            
+            # Create training DataLoader with error handling
+            if verbose:
+                logger.info(f"Creating training DataLoader: batch_size={train_batch_size}, num_workers={num_workers}")
+            
+            train_loader_params = common_params.copy()
+            train_loader_params.update({
+                'batch_size': train_batch_size,
+                'shuffle': train_shuffle,
+                'drop_last': drop_last,
+                'sampler': train_sampler,
+                'batch_sampler': batch_sampler
+            })
+            
+            # Multiple fallback attempts for training DataLoader
+            train_loader = None
+            fallback_attempts = 0
+            
+            for attempt in range(max_retries):
+                try:
+                    train_loader = DataLoader(train_dataset, **train_loader_params)
+                    if verbose:
+                        logger.debug(f"Training DataLoader created successfully on attempt {attempt + 1}")
+                    break
+                    
+                except Exception as e:
+                    fallback_attempts += 1
+                    error_str = str(e).lower()
+                    
+                    # Handle prefetch_factor error specifically
+                    if "prefetch_factor" in error_str and train_loader_params.get('num_workers', 0) == 0:
+                        if verbose:
+                            logger.warning(f"Attempt {attempt + 1}: Removing prefetch_factor for single-threaded mode")
+                        if 'prefetch_factor' in train_loader_params:
+                            del train_loader_params['prefetch_factor']
+                    
+                    elif "pickle" in error_str or "worker_init" in error_str:
+                        if verbose:
+                            logger.warning(f"Attempt {attempt + 1}: Worker initialization pickling error detected: {e}")
+                        # Progressive fallback strategy
+                        if attempt == 0:
+                            # First attempt: Remove custom worker_init_fn and reduce workers
+                            if verbose:
+                                logger.info("Fallback 1: Removing custom worker initialization and reducing workers")
+                            train_loader_params['worker_init_fn'] = None
+                            train_loader_params['num_workers'] = min(2, num_workers)
+                            train_loader_params['persistent_workers'] = False
+                            # Remove prefetch_factor if switching to single-threaded
+                            if train_loader_params['num_workers'] == 0 and 'prefetch_factor' in train_loader_params:
+                                del train_loader_params['prefetch_factor']
+                        elif attempt == 1:
+                            # Second attempt: Single-threaded
+                            if verbose:
+                                logger.info("Fallback 2: Switching to single-threaded DataLoader")
+                            train_loader_params.update({
+                                'num_workers': 0,
+                                'worker_init_fn': None,
+                                'persistent_workers': False,
+                                'pin_memory': False,
+                                'collate_fn': None
+                            })
+                            # Remove prefetch_factor for single-threaded
+                            if 'prefetch_factor' in train_loader_params:
+                                del train_loader_params['prefetch_factor']
+                            if 'multiprocessing_context' in train_loader_params:
+                                del train_loader_params['multiprocessing_context']
+                        else:
+                            # Final attempt: Minimal configuration
+                            if verbose:
+                                logger.info("Fallback 3: Using minimal DataLoader configuration")
+                            train_loader_params = {
+                                'batch_size': error_config.get('fallback_batch_size', 32),
+                                'shuffle': train_shuffle,
+                                'num_workers': 0,
+                                'pin_memory': False,
+                                'drop_last': False
+                            }
+                    
+                    elif "memory" in error_str or "out of memory" in error_str:
+                        if verbose:
+                            logger.warning(f"Memory error detected: {e}")
+                        # Reduce batch size and workers
+                        current_batch_size = train_loader_params.get('batch_size', batch_size)
+                        new_batch_size = max(1, current_batch_size // 2)
+                        train_loader_params['batch_size'] = new_batch_size
+                        train_loader_params['num_workers'] = max(0, train_loader_params.get('num_workers', 0) - 1)
+                        # Remove prefetch_factor if switching to single-threaded
+                        if train_loader_params['num_workers'] == 0 and 'prefetch_factor' in train_loader_params:
+                            del train_loader_params['prefetch_factor']
+                        if verbose:
+                            logger.info(f"Reduced batch size to {new_batch_size} and workers to {train_loader_params['num_workers']}")
+                    
+                    else:
+                        if verbose:
+                            logger.warning(f"Attempt {attempt + 1}: Unexpected error: {e}")
+                        if attempt == max_retries - 1:
+                            if graceful_degradation:
+                                if verbose:
+                                    logger.warning("Using absolute minimal DataLoader configuration")
+                                train_loader_params = {
+                                    'batch_size': 1,
+                                    'shuffle': False,
+                                    'num_workers': 0
+                                }
+                            else:
+                                raise RuntimeError(f"Failed to create training DataLoader after {max_retries} attempts: {e}")
+            
+            if train_loader is None:
+                raise RuntimeError("Failed to create training DataLoader with all fallback attempts")
+            
+            progress_data['dataloaders_created'] += 1
+            progress_data['fallback_attempts'] = fallback_attempts
+            if not silent_mode:
+                main_bar.text = f"Training DataLoader created (attempts: {fallback_attempts + 1})"
+            creation_stats['stages_completed'].append('training_dataloader')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 9: Validation DataLoader Creation
+            progress_data['current_stage'] = "Validation DataLoader"
+            if not silent_mode:
+                main_bar.text = "Creating validation DataLoader..."
+            
+            # Create validation DataLoader
+            val_loader = None
+            if val_dataset is not None:
+                if verbose:
+                    logger.info(f"Creating validation DataLoader: batch_size={val_batch_size}")
+                val_loader_params = common_params.copy()
+                val_loader_params.update({
+                    'batch_size': val_batch_size,
+                    'shuffle': val_shuffle,
+                    'drop_last': False,
+                    'sampler': val_sampler
+                })
+                
+                for attempt in range(max_retries):
+                    try:
+                        val_loader = DataLoader(val_dataset, **val_loader_params)
+                        break
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        
+                        if "prefetch_factor" in error_str and val_loader_params.get('num_workers', 0) == 0:
+                            if 'prefetch_factor' in val_loader_params:
+                                del val_loader_params['prefetch_factor']
+                        elif attempt == max_retries - 1:
+                            if graceful_degradation:
+                                val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=0)
+                            else:
+                                raise RuntimeError(f"Failed to create validation DataLoader: {e}")
+                
+                progress_data['dataloaders_created'] += 1
+            
+            if not silent_mode:
+                main_bar.text = f"Validation DataLoader {'created' if val_loader else 'skipped'}"
+            creation_stats['stages_completed'].append('validation_dataloader')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 10: Test DataLoader Creation
+            progress_data['current_stage'] = "Test DataLoader"
+            if not silent_mode:
+                main_bar.text = "Creating test DataLoader..."
+            
+            # Create test DataLoader
+            test_loader = None
+            if test_dataset is not None:
+                if verbose:
+                    logger.info(f"Creating test DataLoader: batch_size={test_batch_size}")
+                test_loader_params = common_params.copy()
+                test_loader_params.update({
+                    'batch_size': test_batch_size,
+                    'shuffle': test_shuffle,
+                    'drop_last': False,
+                    'sampler': test_sampler
+                })
+                
+                for attempt in range(max_retries):
+                    try:
+                        test_loader = DataLoader(test_dataset, **test_loader_params)
+                        break
+                    except Exception as e:
+                        error_str = str(e).lower()
+                        
+                        if "prefetch_factor" in error_str and test_loader_params.get('num_workers', 0) == 0:
+                            if 'prefetch_factor' in test_loader_params:
+                                del test_loader_params['prefetch_factor']
+                        elif attempt == max_retries - 1:
+                            if graceful_degradation:
+                                test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False, num_workers=0)
+                            else:
+                                raise RuntimeError(f"Failed to create test DataLoader: {e}")
+                
+                progress_data['dataloaders_created'] += 1
+            
+            if not silent_mode:
+                main_bar.text = f"Test DataLoader {'created' if test_loader else 'skipped'}"
+            creation_stats['stages_completed'].append('test_dataloader')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 11: Cross-validation DataLoaders
+            progress_data['current_stage'] = "Cross-validation"
+            if not silent_mode:
+                main_bar.text = "Creating cross-validation DataLoaders..."
+            
+            # Cross-validation DataLoaders
+            cv_loaders = None
+            if cv_config.get('cross_validation', False):
+                if verbose:
+                    logger.info("Creating cross-validation DataLoaders")
+                
+                cv_folds = cv_config.get('cv_folds', 5)
+                cv_strategy = cv_config.get('cv_strategy', 'kfold')
+                stratified_cv = cv_config.get('stratified_cv', False)
+                
+                try:
+                    if stratified_cv and y_train is not None:
+                        cv_splitter = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=sampling_config.get('shuffle_seed', 42))
+                        splits = list(cv_splitter.split(X_train, y_train))
+                    else:
+                        cv_splitter = KFold(n_splits=cv_folds, shuffle=True, random_state=sampling_config.get('shuffle_seed', 42))
+                        splits = list(cv_splitter.split(X_train))
+                    
+                    cv_loaders = []
+                    
+                    # Create progress bar for CV folds only if not in silent mode and progress_bar is True
+                    if not silent_mode and progress_bar:
+                        cv_bar_context = alive_bar(cv_folds, title='CV Folds\t\t\t', unit='folds')
+                    else:
+                        cv_bar_context = DummyBar()
+                    
+                    with cv_bar_context as cv_bar:
+                        for fold_idx, (train_idx, val_idx) in enumerate(splits):
+                            if not silent_mode:
+                                cv_bar.text = f"Creating fold {fold_idx + 1}/{cv_folds}"
+                            
+                            fold_train_X = X_train[train_idx]
+                            fold_val_X = X_train[val_idx]
+                            fold_train_y = y_train[train_idx] if y_train is not None else None
+                            fold_val_y = y_train[val_idx] if y_train is not None else None
+                            
+                            fold_train_dataset = create_enhanced_dataset(fold_train_X, fold_train_y, train_transform)
+                            fold_val_dataset = create_enhanced_dataset(fold_val_X, fold_val_y, val_transform)
+                            
+                            fold_train_loader = DataLoader(
+                                fold_train_dataset,
+                                batch_size=train_batch_size,
+                                shuffle=train_shuffle,
+                                # Reduce workers for CV
+                                num_workers=max(1, num_workers // 2),
+                                pin_memory=pin_memory,
+                                collate_fn=enhanced_collate_fn
+                            )
+                            
+                            fold_val_loader = DataLoader(
+                                fold_val_dataset,
+                                batch_size=val_batch_size,
+                                shuffle=False,
+                                num_workers=max(1, num_workers // 2),
+                                pin_memory=pin_memory,
+                                collate_fn=enhanced_collate_fn
+                            )
+                            
+                            cv_loaders.append({
+                                'fold': fold_idx,
+                                'train': fold_train_loader,
+                                'val': fold_val_loader
+                            })
+                            
+                            if not silent_mode:
+                                cv_bar()
+                    
+                    if verbose:
+                        logger.info(f"Created {cv_folds} cross-validation fold DataLoaders")
+                    
+                except Exception as e:
+                    if verbose:
+                        logger.error(f"Failed to create cross-validation DataLoaders: {e}")
+                    cv_loaders = None
+            
+            if not silent_mode:
+                main_bar.text = f"Cross-validation {'completed' if cv_loaders else 'skipped'}"
+            creation_stats['stages_completed'].append('cross_validation')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 12: Finalization and Performance Analysis
+            progress_data['current_stage'] = "Finalization"
+            if not silent_mode:
+                main_bar.text = "Finalizing DataLoader creation..."
+            
+            # Performance profiling and benchmarking
+            if profile_dataloaders or benchmark_dataloaders:
+                if verbose:
+                    logger.info("Performing DataLoader performance analysis")
+                
+                def benchmark_dataloader(dataloader, name, num_batches=10):
+                    if dataloader is None:
+                        return None
+                    times = []
+                    
+                    dataloader_iter = iter(dataloader)
+                    for i in range(min(num_batches, len(dataloader))):
+                        start_time = time.time()
+                        try:
+                            batch = next(dataloader_iter)
+                            end_time = time.time()
+                            times.append(end_time - start_time)
+                        except StopIteration:
+                            break
+                        except Exception as e:
+                            if verbose:
+                                logger.warning(f"Benchmark error for {name} batch {i}: {e}")
+                            continue
+                    
+                    if times:
+                        return {
+                            'name': name,
+                            'avg_batch_time': np.mean(times),
+                            'std_batch_time': np.std(times),
+                            'min_batch_time': np.min(times),
+                            'max_batch_time': np.max(times),
+                            'total_time': np.sum(times),
+                            'batches_tested': len(times)
+                        }
+                    return None
+                
+                benchmark_results = {}
+                if benchmark_dataloaders:
+                    benchmark_results['train'] = benchmark_dataloader(train_loader, 'train', 5)
+                    benchmark_results['val'] = benchmark_dataloader(val_loader, 'val', 3)
+                    benchmark_results['test'] = benchmark_dataloader(test_loader, 'test', 3)
+                    
+                    creation_stats['benchmark_results'] = benchmark_results
+                    
+                    for name, result in benchmark_results.items():
+                        if result:
+                            if verbose:
+                                logger.info(f"{name.title()} DataLoader: {result['avg_batch_time']:.4f}s avg batch time")
+            
+            # Collect DataLoader statistics
+            if dataloader_stats:
+                stats = {
+                    'train': {
+                        'dataset_size': len(train_dataset),
+                        'batch_size': train_batch_size,
+                        'num_batches': len(train_loader),
+                        'shuffle': train_shuffle,
+                        'sampler': type(train_sampler).__name__ if train_sampler else None,
+                        'drop_last': drop_last
+                    },
+                    'val': {
+                        'dataset_size': len(val_dataset) if val_dataset else 0,
+                        'batch_size': val_batch_size,
+                        'num_batches': len(val_loader) if val_loader else 0,
+                        'shuffle': val_shuffle,
+                        'sampler': type(val_sampler).__name__ if val_sampler else None
+                    } if val_dataset else None,
+                    'test': {
+                        'dataset_size': len(test_dataset) if test_dataset else 0,
+                        'batch_size': test_batch_size,
+                        'num_batches': len(test_loader) if test_loader else 0,
+                        'shuffle': test_shuffle,
+                        'sampler': type(test_sampler).__name__ if test_sampler else None
+                    } if test_dataset else None,
+                    'common': {
+                        'num_workers': num_workers,
+                        'pin_memory': pin_memory,
+                        'persistent_workers': persistent_workers,
+                        'prefetch_factor': prefetch_factor,
+                        'timeout': timeout,
+                        'dtype': str(dtype),
+                        'device': device
+                    },
+                    # Run tracking information
+                    'run_tracking': {
+                        'run_id': run_id,
+                        'run_number': run_number,
+                        'use_run_tracking': use_run_tracking,
+                        'run_specific_directories': {
+                            k: str(v) for k, v in run_specific_dirs.items()
+                        } if run_specific_dirs else None,
+                        'dataloaders_created_for_run': run_id if use_run_tracking else None
+                    } if use_run_tracking else None
+                }
+                
+                creation_stats['dataloader_stats'] = stats
+            
+            # Garbage collection if requested
+            if memory_config.get('gc_collection', False):
+                gc.collect()
+                if verbose:
+                    logger.debug("Performed garbage collection")
+            
+            # Calculate performance score
+            performance_metrics = []
+            
+            # Worker efficiency
+            worker_score = min(1.0, num_workers / max(1, system_cpu_count))
+            performance_metrics.append(('worker_efficiency', worker_score))
+            
+            # Batch size adequacy
+            batch_score = min(1.0, train_batch_size / max(32, train_batch_size))
+            performance_metrics.append(('batch_adequacy', batch_score))
+            
+            # Memory optimization
+            memory_score = 0.8 if pin_memory else 0.5
+            performance_metrics.append(('memory_optimization', memory_score))
+            
+            # Overall performance score
+            performance_score = sum(score for _, score in performance_metrics) / len(performance_metrics)
+            progress_data['performance_score'] = performance_score
+            creation_stats['performance_score'] = performance_score
+
+            # Save statistics if requested
+            if save_statistics and statistics_path:
+                if verbose:
+                    logger.info(f"Saving dataloader statistics to {statistics_path}")
+                
+                try:
+                    # Ensure parent directory exists
+                    statistics_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Prepare statistics for JSON serialization
+                    serializable_stats = {}
+                    for key, value in creation_stats.items():
+                        if isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                            serializable_stats[key] = value
+                        elif isinstance(value, Path):
+                            serializable_stats[key] = str(value)
+                        else:
+                            serializable_stats[key] = str(value)
+                    
+                    with open(statistics_path, 'w') as f:
+                        json.dump(serializable_stats, f, indent=2)
+                    
+                    if verbose:
+                        logger.info(f"Saved dataloader statistics to {statistics_path}")
+                    
+                except Exception as e:
+                    if verbose:
+                        logger.warning(f"Failed to save statistics: {e}")
+            
+            if not silent_mode:
+                main_bar.text = f"Finalization complete (Performance: {performance_score:.3f})"
+            creation_stats['stages_completed'].append('finalization')
+            if not silent_mode:
+                main_bar()
+        
+        # Prepare return value based on configuration
+        total_time = (datetime.now() - start_time).total_seconds()
+        creation_stats['total_processing_time'] = total_time
+        creation_stats['completion_status'] = 'success'
+        
+        # Create metadata
+        metadata = {
+            'creation_time_seconds': total_time,
+            'dataloaders_created': {
+                'train': True,
+                'val': val_loader is not None,
+                'test': test_loader is not None,
+                'cv_folds': len(cv_loaders) if cv_loaders else 0
+            },
+            'configuration_applied': final_config,
+            'creation_stats': creation_stats,
+            'system_info': creation_stats['system_info'],
+            'optimization_level': optimization_level,
+            'performance_optimizations_applied': dataloader_optimization,
+            'error_handling_mode': error_handling,
+            'progress_summary': {
+                'stages_completed': len(creation_stats['stages_completed']),
+                'dataloaders_created': progress_data['dataloaders_created'],
+                'datasets_processed': progress_data['datasets_processed'],
+                'transforms_applied': progress_data['transforms_applied'],
+                'samplers_configured': progress_data['samplers_configured'],
+                'fallback_attempts': progress_data['fallback_attempts'],
+                'final_performance_score': progress_data['performance_score']
+            },
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_directories': {
+                    k: str(v) for k, v in run_specific_dirs.items()
+                } if run_specific_dirs else None,
+                'dataloaders_created_for_run': run_id if use_run_tracking else None,
+                'is_run_specific_output': use_run_tracking and run_id is not None
+            } if use_run_tracking else None
+        }
+        
+        # Determine return format
+        return_format = final_config.get('output', {}).get('format', 'tuple')
+        
+        if return_format == 'dict':
+            result = {
+                'train': train_loader,
+                'val': val_loader,
+                'test': test_loader,
+                'metadata': metadata
+            }
+            
+            if cv_loaders:
+                result['cv_folds'] = cv_loaders
+                
+            return result
+        
+        elif return_format == 'single':
+            # Return only training loader for specific use cases
+            return train_loader
+        
+        else:
+            # Default tuple format
+            result = (train_loader, val_loader, test_loader)
+            
+            # Add metadata as attribute to train_loader for access
+            train_loader.dataloader_metadata = metadata
+            
+            if cv_loaders:
+                train_loader.cv_folds = cv_loaders
+            
+            return result
+        
+    except Exception as e:
+        # Update creation stats with error information
+        creation_stats['completion_status'] = 'failed'
+        creation_stats['error_message'] = str(e)
+        creation_stats['error_traceback'] = traceback.format_exc()
+        
+        # Restore original logging level on error
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        error_msg = f"DataLoader creation failed: {str(e)}"
+        if verbose:
+            logger.error(error_msg)
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Provide helpful error context
+            logger.error(f"Configuration used: {final_config}")
+            logger.error(f"Stages completed: {creation_stats['stages_completed']}")
+        
+        # Attempt graceful fallback if enabled
+        if graceful_degradation and data is not None and X_train is not None:
+            if verbose:
+                logger.warning("Attempting graceful fallback to basic DataLoaders")
+            
+            try:
+                # Create minimal DataLoaders
+                train_data = TensorDataset(torch.tensor(X_train, dtype=torch.float32))
+                val_data = TensorDataset(torch.tensor(X_val, dtype=torch.float32)) if X_val is not None else None
+                test_data = TensorDataset(torch.tensor(X_test, dtype=torch.float32)) if X_test is not None else None
+                
+                fallback_batch_size = error_config.get('fallback_batch_size', 32)
+                
+                train_loader = DataLoader(train_data, batch_size=fallback_batch_size, shuffle=True, num_workers=0)
+                val_loader = DataLoader(val_data, batch_size=fallback_batch_size, shuffle=False, num_workers=0) if val_data else None
+                test_loader = DataLoader(test_data, batch_size=fallback_batch_size, shuffle=False, num_workers=0) if test_data else None
+                
+                if verbose:
+                    logger.warning("Created fallback DataLoaders with minimal configuration")
+                
+                # Restore original logging level
+                if verbose and 'original_level' in locals():
+                    logger.setLevel(original_level)
+                
+                return (train_loader, val_loader, test_loader)
+                
+            except Exception as fallback_error:
+                if verbose:
+                    logger.error(f"Fallback DataLoader creation also failed: {fallback_error}")
+                raise RuntimeError(f"Both primary and fallback DataLoader creation failed: {error_msg}")
+        
+        raise RuntimeError(error_msg)
+    
+    finally:
+        # Restore original logging level
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        # Final cleanup and summary logging
+        if final_config.get('monitoring', {}).get('log_creation_summary', True):
+            total_time = (datetime.now() - start_time).total_seconds()
+            logger.info("-" * 40)
+            logger.info("DATALOADER CREATION SUMMARY")
+            logger.info("-" * 40)
+            logger.info(f"Creation time: {total_time:.2f} seconds")
+            logger.info(f"Training DataLoader: batch_size={train_batch_size}, num_batches={len(train_loader) if 'train_loader' in locals() else 'N/A'}")
+            logger.info(f"Validation DataLoader: {'Created' if val_loader else 'Not created'}")
+            logger.info(f"Test DataLoader: {'Created' if test_loader else 'Not created'}")
+            logger.info(f"Workers: {num_workers}, Pin memory: {pin_memory}")
+            logger.info(f"Optimization level: {optimization_level}")
+            logger.info(f"Performance score: {progress_data.get('performance_score', 0):.3f}")
+            logger.info(f"Fallback attempts: {progress_data.get('fallback_attempts', 0)}")
+            if 'cv_loaders' in locals() and cv_loaders:
+                logger.info(f"Cross-validation folds: {len(cv_loaders)}")
+            logger.info("-" * 40)
+
+
+def _adapt_batch_size(
+    batch_processing_state: Dict[str, Any],
+    adaptation_strategy: str,
+    metrics: Dict[str, Any],
+    device: torch.device,
+    logger: logging.Logger
+) -> int:
+    """
+    Adapt batch size based on the specified strategy.
+    
+    Args:
+        batch_processing_state: Current batch processing state
+        adaptation_strategy: Strategy to use ('aggressive', 'conservative', 'balanced')
+        metrics: Current training metrics
+        device: Device being used
+        logger: Logger instance
+        
+    Returns:
+        New batch size
+    """
+    current_batch_size = batch_processing_state['current_batch_size']
+    min_batch_size = batch_processing_state['min_batch_size']
+    max_batch_size = batch_processing_state['max_batch_size']
+    
+    # Get adaptation parameters
+    if adaptation_strategy == 'aggressive':
+        increase_factor = 1.5
+        decrease_factor = 0.5
+        memory_threshold_high = 0.9
+        memory_threshold_low = 0.5
+    elif adaptation_strategy == 'conservative':
+        increase_factor = 1.1
+        decrease_factor = 0.9
+        memory_threshold_high = 0.8
+        memory_threshold_low = 0.6
+    else:  # balanced
+        increase_factor = 1.25
+        decrease_factor = 0.75
+        memory_threshold_high = 0.85
+        memory_threshold_low = 0.55
+    
+    # Memory-based adaptation
+    if device.type == 'cuda':
+        try:
+            memory_allocated = torch.cuda.memory_allocated(device) / torch.cuda.max_memory_allocated(device)
+            
+            if memory_allocated > memory_threshold_high:
+                new_batch_size = max(min_batch_size, int(current_batch_size * decrease_factor))
+                reason = f"high_memory_{memory_allocated:.1%}"
+            elif memory_allocated < memory_threshold_low and batch_processing_state['success_count'] > 5:
+                new_batch_size = min(max_batch_size, int(current_batch_size * increase_factor))
+                reason = f"low_memory_{memory_allocated:.1%}"
+            else:
+                new_batch_size = current_batch_size
+                reason = "no_change"
+            
+            if new_batch_size != current_batch_size:
+                logger.info(
+                    f"Batch size adaptation ({adaptation_strategy}): "
+                    f"{current_batch_size} → {new_batch_size} (reason: {reason})"
+                )
+                batch_processing_state['adaptation_history'].append({
+                    'old_size': current_batch_size,
+                    'new_size': new_batch_size,
+                    'strategy': adaptation_strategy,
+                    'reason': reason,
+                    'memory_usage': memory_allocated
+                })
+            
+            return new_batch_size
+            
+        except Exception as e:
+            logger.warning(f"Memory-based adaptation failed: {e}")
+            return current_batch_size
+    
+    return current_batch_size
+
+def _create_variable_batch_iterator(
+    loader: DataLoader,
+    batch_processing_state: Dict[str, Any],
+    device: torch.device,
+    non_blocking_transfer: bool = True
+):
+    """
+    Create an iterator that yields variable-sized batches.
+    
+    Args:
+        loader: Original DataLoader
+        batch_processing_state: Batch processing state dictionary
+        device: Target device
+        non_blocking_transfer: Whether to use non-blocking transfers
+        
+    Yields:
+        (batch_idx, batch) tuples with potentially variable batch sizes
+    """
+    batch_idx = 0
+    batch_buffer = []
+    current_batch_size = batch_processing_state['current_batch_size']
+    
+    for batch in loader:
+        # Add to buffer
+        batch_buffer.append(batch)
+        
+        # Check if we have enough for a batch
+        total_samples = sum(b[0].size(0) if isinstance(b, (list, tuple)) else b.size(0) for b in batch_buffer)
+        
+        if total_samples >= current_batch_size:
+            # Combine batches
+            if isinstance(batch_buffer[0], (list, tuple)):
+                # Tuple of tensors
+                combined_batch = tuple(
+                    torch.cat([b[i] for b in batch_buffer], dim=0)
+                    for i in range(len(batch_buffer[0]))
+                )
+            else:
+                # Single tensor
+                combined_batch = torch.cat(batch_buffer, dim=0)
+            
+            # Trim to exact batch size
+            if isinstance(combined_batch, (list, tuple)):
+                trimmed_batch = tuple(
+                    t[:current_batch_size] for t in combined_batch
+                )
+                # Save remainder
+                remainder = tuple(
+                    t[current_batch_size:] for t in combined_batch
+                )
+            else:
+                trimmed_batch = combined_batch[:current_batch_size]
+                remainder = combined_batch[current_batch_size:]
+            
+            # Yield the batch
+            yield batch_idx, trimmed_batch
+            batch_idx += 1
+            
+            # Reset buffer with remainder
+            if isinstance(remainder, (list, tuple)):
+                if remainder[0].size(0) > 0:
+                    batch_buffer = [remainder]
+                else:
+                    batch_buffer = []
+            else:
+                if remainder.size(0) > 0:
+                    batch_buffer = [remainder]
+                else:
+                    batch_buffer = []
+            
+            # Update current batch size from state (may have changed)
+            current_batch_size = batch_processing_state['current_batch_size']
+    
+    # Yield any remaining samples
+    if batch_buffer:
+        if isinstance(batch_buffer[0], (list, tuple)):
+            final_batch = tuple(
+                torch.cat([b[i] for b in batch_buffer], dim=0)
+                for i in range(len(batch_buffer[0]))
+            )
+        else:
+            final_batch = torch.cat(batch_buffer, dim=0)
+        
+        yield batch_idx, final_batch
+
+def train_epoch(
+    # Core Training Parameters
+    model: Optional[nn.Module] = None,
+    loader: Optional[DataLoader] = None,
+    criterion: Optional[nn.Module] = None,
+    optimizer: Optional[optim.Optimizer] = None,
+    device: Optional[torch.device] = None,
+    epoch: Optional[int] = None,
+    
+    # Training Configuration Parameters
+    learning_rate: Optional[float] = None,
+    batch_size: Optional[int] = None,
+    gradient_clip: Optional[float] = None,
+    gradient_accumulation_steps: Optional[int] = None,
+    max_grad_norm: Optional[float] = None,
+    gradient_clipping_mode: Optional[str] = None,
+    gradient_scaling: Optional[bool] = None,
+    
+    # Mixed Precision Parameters
+    mixed_precision: Optional[bool] = None,
+    amp_enabled: Optional[bool] = None,
+    scaler: Optional[GradScaler] = None,
+    loss_scaling: Optional[str] = None,
+    dynamic_loss_scaling: Optional[bool] = None,
+    init_scale: Optional[float] = None,
+    growth_factor: Optional[float] = None,
+    backoff_factor: Optional[float] = None,
+    growth_interval: Optional[int] = None,
+    
+    # Scheduler Parameters
+    scheduler: Optional[Any] = None,
+    scheduler_step_on_epoch: Optional[bool] = None,
+    scheduler_step_on_batch: Optional[bool] = None,
+    scheduler_step_after_epoch: Optional[bool] = None,
+    scheduler_metric: Optional[str] = None,
+    warmup_steps: Optional[int] = None,
+    warmup_scheduler: Optional[Any] = None,
+    
+    # Loss Function Parameters
+    loss_function: Optional[str] = None,
+    loss_weights: Optional[Dict[str, float]] = None,
+    multi_task_learning: Optional[bool] = None,
+    auxiliary_loss_weight: Optional[float] = None,
+    regularization_loss_weight: Optional[float] = None,
+    reconstruction_loss_weight: Optional[float] = None,
+    
+    # Monitoring and Metrics Parameters
+    track_metrics: Optional[bool] = None,
+    metrics_to_track: Optional[List[str]] = None,
+    calculate_detailed_metrics: Optional[bool] = None,
+    metrics_frequency: Optional[int] = None,
+    log_frequency: Optional[int] = None,
+    progress_bar: Optional[bool] = None,
+    progress_bar_desc: Optional[str] = None,
+    
+    # Performance and Optimization Parameters
+    performance_mode: Optional[str] = None,
+    benchmark_mode: Optional[bool] = None,
+    cudnn_benchmark: Optional[bool] = None,
+    cudnn_deterministic: Optional[bool] = None,
+    channels_last: Optional[bool] = None,
+    compile_model: Optional[bool] = None,
+    torch_compile_mode: Optional[str] = None,
+    
+    # Memory Management Parameters
+    memory_efficient: Optional[bool] = None,
+    memory_optimization: Optional[str] = None,
+    gradient_checkpointing: Optional[bool] = None,
+    empty_cache_frequency: Optional[int] = None,
+    gc_collection_frequency: Optional[int] = None,
+    pin_memory: Optional[bool] = None,
+    non_blocking_transfer: Optional[bool] = None,
+    
+    # Data Processing Parameters
+    data_preprocessing: Optional[bool] = None,
+    input_transforms: Optional[List[Callable]] = None,
+    target_transforms: Optional[List[Callable]] = None,
+    augmentation_during_training: Optional[bool] = None,
+    mixup_alpha: Optional[float] = None,
+    cutmix_alpha: Optional[float] = None,
+    
+    # Validation and Quality Control Parameters
+    validate_inputs: Optional[bool] = None,
+    check_finite: Optional[bool] = None,
+    detect_anomaly: Optional[bool] = None,
+    handle_nan_loss: Optional[str] = None,
+    loss_spike_detection: Optional[bool] = None,
+    loss_spike_threshold: Optional[float] = None,
+    gradient_explosion_detection: Optional[bool] = None,
+    
+    # Distributed Training Parameters
+    distributed: Optional[bool] = None,
+    world_size: Optional[int] = None,
+    rank: Optional[int] = None,
+    local_rank: Optional[int] = None,
+    ddp_backend: Optional[str] = None,
+    find_unused_parameters: Optional[bool] = None,
+    broadcast_buffers: Optional[bool] = None,
+    gradient_as_bucket_view: Optional[bool] = None,
+    
+    # Checkpointing and Saving Parameters
+    save_checkpoint: Optional[bool] = None,
+    checkpoint_frequency: Optional[int] = None,
+    checkpoint_path: Optional[str] = None,
+    save_best_model: Optional[bool] = None,
+    best_metric: Optional[str] = None,
+    model_state_dict: Optional[bool] = None,
+    save_optimizer_state: Optional[bool] = None,
+    save_scheduler_state: Optional[bool] = None,
+    
+    # Early Stopping Parameters
+    early_stopping: Optional[bool] = None,
+    early_stopping_patience: Optional[int] = None,
+    early_stopping_delta: Optional[float] = None,
+    early_stopping_metric: Optional[str] = None,
+    early_stopping_mode: Optional[str] = None,
+    restore_best_weights: Optional[bool] = None,
+    
+    # Debugging and Profiling Parameters
+    debug_mode: Optional[bool] = None,
+    verbose: Optional[bool] = None,
+    log_level: Optional[str] = None,
+    profile_training: Optional[bool] = None,
+    profile_memory: Optional[bool] = None,
+    profile_compute: Optional[bool] = None,
+    timing_analysis: Optional[bool] = None,
+    bottleneck_detection: Optional[bool] = None,
+    
+    # Advanced Training Techniques Parameters
+    teacher_forcing_ratio: Optional[float] = None,
+    curriculum_learning: Optional[bool] = None,
+    curriculum_schedule: Optional[str] = None,
+    progressive_training: Optional[bool] = None,
+    adaptive_training: Optional[bool] = None,
+    self_supervised_pretext: Optional[bool] = None,
+    
+    # Regularization Parameters
+    dropout_rate: Optional[float] = None,
+    weight_decay: Optional[float] = None,
+    l1_regularization: Optional[float] = None,
+    l2_regularization: Optional[float] = None,
+    spectral_normalization: Optional[bool] = None,
+    batch_norm_momentum: Optional[float] = None,
+    layer_norm_eps: Optional[float] = None,
+    
+    # Loss Smoothing and Stability Parameters
+    label_smoothing: Optional[float] = None,
+    focal_loss_alpha: Optional[float] = None,
+    focal_loss_gamma: Optional[float] = None,
+    loss_smoothing: Optional[str] = None,
+    stable_loss_computation: Optional[bool] = None,
+    
+    # Batch Processing Parameters
+    batch_processing_mode: Optional[str] = None,
+    variable_batch_size: Optional[bool] = None,
+    dynamic_batching: Optional[bool] = None,
+    batch_size_adaptation: Optional[str] = None,
+    max_tokens_per_batch: Optional[int] = None,
+    
+    # Hardware Optimization Parameters
+    use_gpu: Optional[bool] = None,
+    multi_gpu: Optional[bool] = None,
+    gpu_ids: Optional[List[int]] = None,
+    device_placement: Optional[str] = None,
+    tensor_parallel: Optional[bool] = None,
+    data_parallel: Optional[bool] = None,
+    pipeline_parallel: Optional[bool] = None,
+    
+    # Random State and Reproducibility Parameters
+    random_seed: Optional[int] = None,
+    deterministic: Optional[bool] = None,
+    reproducible: Optional[bool] = None,
+    seed_workers: Optional[bool] = None,
+    
+    # Custom Callback Parameters
+    callbacks: Optional[List[Callable]] = None,
+    custom_training_step: Optional[Callable] = None,
+    custom_loss_computation: Optional[Callable] = None,
+    custom_metric_computation: Optional[Callable] = None,
+    pre_batch_callback: Optional[Callable] = None,
+    post_batch_callback: Optional[Callable] = None,
+    
+    # Export and Logging Parameters
+    export_metrics: Optional[bool] = None,
+    export_path: Optional[str] = None,
+    tensorboard_logging: Optional[bool] = None,
+    wandb_logging: Optional[bool] = None,
+    mlflow_logging: Optional[bool] = None,
+    log_images: Optional[bool] = None,
+    log_gradients: Optional[bool] = None,
+    log_weights: Optional[bool] = None,
+    
+    # Compatibility Parameters
+    pytorch_version_check: Optional[bool] = None,
+    legacy_mode: Optional[bool] = None,
+    backward_compatibility: Optional[bool] = None,
+    version_specific_optimizations: Optional[bool] = None,
+    
+    # Error Handling Parameters
+    error_handling: Optional[str] = None,
+    continue_on_error: Optional[bool] = None,
+    max_retries: Optional[int] = None,
+    fallback_mode: Optional[bool] = None,
+    graceful_degradation: Optional[bool] = None,
+    
+    # Experimental Parameters
+    experimental_features: Optional[bool] = None,
+    experimental_optimizations: Optional[bool] = None,
+    beta_features: Optional[bool] = None,
+    
+    # Direct Configuration Override
+    config: Optional[Dict[str, Any]] = None,
+    training_config: Optional[Dict[str, Any]] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
+    
+    **kwargs
+) -> Tuple[float, Dict[str, Any]]:
+    
+    # Initialize default return values FIRST
+    default_loss = float('inf')
+    default_metrics = {
+        'loss': default_loss,
+        'epoch': epoch if epoch is not None else 0,
+        'num_batches': 0,
+        'num_samples': 0,
+        'training_completed': False,
+        'error': None
+    }
+    
+    # Start timing
+    start_time = datetime.now()
+    epoch_start_time = time.time()
+    
+    # Initialize variables that will be used in finally block
+    num_batches = 0
+    num_samples = 0
+    total_loss = 0.0
+    batch_idx = -1
+    pbar = None
+    profiler = None
+    original_level = None
+    
+    try:
+        # Initialize configuration
+        if config is None:
+            try:
+                config = get_current_config() if 'get_current_config' in globals() else {}
+            except Exception:
+                config = {}
+        
+        # Apply training-specific configuration
+        if training_config:
+            config.setdefault('training', {}).update(training_config)
+        
+        # Apply all parameters to configuration
+        final_config = {}
+        
+        # Merge with existing config
+        final_config.update(config)
+        
+        # Apply individual parameters with intelligent organization
+        params = locals().copy()
+        params.update(kwargs)
+        
+        # Remove non-parameter items
+        params_to_remove = {
+            'config', 'training_config', 'kwargs', 'start_time', 'epoch_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
+            'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast'
+        }
+        
+        cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
+        
+        # Organize parameters into logical sections
+        param_sections = {
+            'core_training': [
+                'learning_rate', 'batch_size', 'gradient_clip', 'gradient_accumulation_steps', 'max_grad_norm', 'gradient_clipping_mode', 'gradient_scaling'
+            ],
+            'mixed_precision': [
+                'mixed_precision', 'amp_enabled', 'scaler', 'loss_scaling', 'dynamic_loss_scaling', 'init_scale', 'growth_factor', 'backoff_factor', 'growth_interval'
+            ],
+            'scheduler': [
+                'scheduler_step_on_epoch', 'scheduler_step_on_batch', 'scheduler_step_after_epoch', 'scheduler_metric', 'warmup_steps', 'warmup_scheduler'
+            ],
+            'loss_function': [
+                'loss_function', 'loss_weights', 'multi_task_learning', 'auxiliary_loss_weight', 'regularization_loss_weight', 'reconstruction_loss_weight'
+            ],
+            'monitoring': [
+                'track_metrics', 'metrics_to_track', 'calculate_detailed_metrics', 'metrics_frequency', 'log_frequency', 'progress_bar', 'progress_bar_desc'
+            ],
+            'performance': [
+                'performance_mode', 'benchmark_mode', 'cudnn_benchmark', 'cudnn_deterministic', 'channels_last', 'compile_model', 'torch_compile_mode'
+            ],
+            'memory_management': [
+                'memory_efficient', 'memory_optimization', 'gradient_checkpointing', 'empty_cache_frequency', 'gc_collection_frequency', 'pin_memory', 'non_blocking_transfer'
+            ],
+            'data_processing': [
+                'data_preprocessing', 'input_transforms', 'target_transforms', 'augmentation_during_training', 'mixup_alpha', 'cutmix_alpha'
+            ],
+            'validation': [
+                'validate_inputs', 'check_finite', 'detect_anomaly', 'handle_nan_loss', 'loss_spike_detection', 'loss_spike_threshold', 'gradient_explosion_detection'
+            ],
+            'distributed': [
+                'distributed', 'world_size', 'rank', 'local_rank', 'ddp_backend', 'find_unused_parameters', 'broadcast_buffers', 'gradient_as_bucket_view'
+            ],
+            'checkpointing': [
+                'save_checkpoint', 'checkpoint_frequency', 'checkpoint_path', 'save_best_model', 'best_metric', 'model_state_dict', 'save_optimizer_state', 'save_scheduler_state'
+            ],
+            'early_stopping': [
+                'early_stopping', 'early_stopping_patience', 'early_stopping_delta', 'early_stopping_metric', 'early_stopping_mode', 'restore_best_weights'
+            ],
+            'debugging': [
+                'debug_mode', 'verbose', 'log_level', 'profile_training', 'profile_memory', 'profile_compute', 'timing_analysis', 'bottleneck_detection'
+            ],
+            'advanced_training': [
+                'teacher_forcing_ratio', 'curriculum_learning', 'curriculum_schedule', 'progressive_training', 'adaptive_training', 'self_supervised_pretext'
+            ],
+            'regularization': [
+                'dropout_rate', 'weight_decay', 'l1_regularization', 'l2_regularization', 'spectral_normalization', 'batch_norm_momentum', 'layer_norm_eps'
+            ],
+            'loss_stability': [
+                'label_smoothing', 'focal_loss_alpha', 'focal_loss_gamma', 'loss_smoothing', 'stable_loss_computation'
+            ],
+            'batch_processing': [
+                'batch_processing_mode', 'variable_batch_size', 'dynamic_batching', 'batch_size_adaptation', 'max_tokens_per_batch'
+            ],
+            'hardware_optimization': [
+                'use_gpu', 'multi_gpu', 'gpu_ids', 'device_placement', 'tensor_parallel', 'data_parallel', 'pipeline_parallel'
+            ],
+            'reproducibility': [
+                'random_seed', 'deterministic', 'reproducible', 'seed_workers'
+            ],
+            'callbacks': [
+                'callbacks', 'custom_training_step', 'custom_loss_computation', 'custom_metric_computation', 'pre_batch_callback', 'post_batch_callback'
+            ],
+            'export_logging': [
+                'export_metrics', 'export_path', 'tensorboard_logging', 'wandb_logging', 'mlflow_logging', 'log_images', 'log_gradients', 'log_weights'
+            ],
+            'compatibility': [
+                'pytorch_version_check', 'legacy_mode', 'backward_compatibility', 'version_specific_optimizations'
+            ],
+            'error_handling': [
+                'error_handling', 'continue_on_error', 'max_retries', 'fallback_mode', 'graceful_degradation'
+            ],
+            'experimental': [
+                'experimental_features', 'experimental_optimizations', 'beta_features'
+            ],
+            'run_tracking': [
+                'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
+            ]
+        }
+        
+        # Apply parameters to appropriate sections
+        for section, param_list in param_sections.items():
+            section_config = final_config.setdefault(section, {})
+            for param in param_list:
+                if param in cleaned_params:
+                    section_config[param] = cleaned_params[param]
+        
+        # Set up defaults
+        core_config = final_config.setdefault('core_training', {})
+        mixed_precision_config = final_config.setdefault('mixed_precision', {})
+        scheduler_config = final_config.setdefault('scheduler', {})
+        loss_config = final_config.setdefault('loss_function', {})
+        monitoring_config = final_config.setdefault('monitoring', {})
+        performance_config = final_config.setdefault('performance', {})
+        memory_config = final_config.setdefault('memory_management', {})
+        data_processing_config = final_config.setdefault('data_processing', {})
+        validation_config = final_config.setdefault('validation', {})
+        distributed_config = final_config.setdefault('distributed', {})
+        checkpoint_config = final_config.setdefault('checkpointing', {})
+        early_stopping_config = final_config.setdefault('early_stopping', {})
+        debug_config = final_config.setdefault('debugging', {})
+        advanced_config = final_config.setdefault('advanced_training', {})
+        regularization_config = final_config.setdefault('regularization', {})
+        loss_stability_config = final_config.setdefault('loss_stability', {})
+        batch_config = final_config.setdefault('batch_processing', {})
+        hardware_config = final_config.setdefault('hardware_optimization', {})
+        reproducibility_config = final_config.setdefault('reproducibility', {})
+        callback_config = final_config.setdefault('callbacks', {})
+        export_config = final_config.setdefault('export_logging', {})
+        compatibility_config = final_config.setdefault('compatibility', {})
+        error_config = final_config.setdefault('error_handling', {})
+        experimental_config = final_config.setdefault('experimental', {})
+        run_tracking_config = final_config.setdefault('run_tracking', {})
+        
+        # Apply intelligent defaults with system awareness
+        learning_rate = core_config.setdefault('learning_rate', LEARNING_RATE)
+        batch_size = core_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
+        gradient_clip = core_config.setdefault('gradient_clip', GRADIENT_CLIP)
+        gradient_accumulation_steps = core_config.setdefault('gradient_accumulation_steps', GRADIENT_ACCUMULATION_STEPS)
+        max_grad_norm = core_config.setdefault('max_grad_norm', gradient_clip)
+        gradient_clipping_mode = core_config.setdefault('gradient_clipping_mode', 'norm')
+        gradient_scaling = core_config.setdefault('gradient_scaling', True)
+        
+        # Mixed precision defaults
+        mixed_precision = mixed_precision_config.setdefault('mixed_precision', MIXED_PRECISION and torch.cuda.is_available())
+        amp_enabled = mixed_precision_config.setdefault('amp_enabled', mixed_precision)
+        dynamic_loss_scaling = mixed_precision_config.setdefault('dynamic_loss_scaling', True)
+        loss_scaling = mixed_precision_config.setdefault('loss_scaling', 'dynamic' if dynamic_loss_scaling else None)
+        init_scale = mixed_precision_config.setdefault('init_scale', 65536.0)
+        growth_factor = mixed_precision_config.setdefault('growth_factor', 2.0 if dynamic_loss_scaling else 1.0)
+        backoff_factor = mixed_precision_config.setdefault('backoff_factor', 0.5 if dynamic_loss_scaling else 1.0)
+        growth_interval = mixed_precision_config.setdefault('growth_interval', 2000)
+        
+        # Scheduler defaults
+        scheduler_step_on_epoch = scheduler_config.setdefault('scheduler_step_on_epoch', True)
+        scheduler_step_on_batch = scheduler_config.setdefault('scheduler_step_on_batch', False)
+        scheduler_step_after_epoch = scheduler_config.setdefault('scheduler_step_after_epoch', False)
+        scheduler_metric = scheduler_config.setdefault('scheduler_metric', 'loss')
+        
+        # Monitoring defaults
+        track_metrics = monitoring_config.setdefault('track_metrics', True)
+        metrics_to_track = monitoring_config.setdefault('metrics_to_track', ['loss', 'learning_rate', 'gradient_norm', 'batch_time'])
+        calculate_detailed_metrics = monitoring_config.setdefault('calculate_detailed_metrics', False)
+        metrics_frequency = monitoring_config.setdefault('metrics_frequency', 10)
+        log_frequency = monitoring_config.setdefault('log_frequency', 10)
+        progress_bar = monitoring_config.setdefault('progress_bar', True)
+        progress_bar_desc = monitoring_config.setdefault('progress_bar_desc', f"Epoch {epoch if epoch is not None else 'N/A'}")
+        
+        # Performance defaults
+        performance_mode = performance_config.setdefault('performance_mode', 'standard')
+        benchmark_mode = performance_config.setdefault('benchmark_mode', False)
+        cudnn_benchmark = performance_config.setdefault('cudnn_benchmark', torch.cuda.is_available())
+        cudnn_deterministic = performance_config.setdefault('cudnn_deterministic', False)
+        compile_model = performance_config.setdefault('compile_model', False)
+        torch_compile_mode = performance_config.setdefault('torch_compile_mode', 'default')
+        
+        # Memory management defaults
+        memory_efficient = memory_config.setdefault('memory_efficient', True)
+        memory_optimization = memory_config.setdefault('memory_optimization', 'balanced')
+        gradient_checkpointing = memory_config.setdefault('gradient_checkpointing', False)
+        empty_cache_frequency = memory_config.setdefault('empty_cache_frequency', 10)
+        gc_collection_frequency = memory_config.setdefault('gc_collection_frequency', 100)
+        non_blocking_transfer = memory_config.setdefault('non_blocking_transfer', True)
+        
+        # Data processing defaults
+        data_preprocessing = data_processing_config.setdefault('data_preprocessing', False)
+        augmentation_during_training = data_processing_config.setdefault('augmentation_during_training', False)
+        
+        # Validation defaults
+        validate_inputs = validation_config.setdefault('validate_inputs', True)
+        check_finite = validation_config.setdefault('check_finite', True)
+        detect_anomaly = validation_config.setdefault('detect_anomaly', debug_config.get('debug_mode', False))
+        handle_nan_loss = validation_config.setdefault('handle_nan_loss', 'error')
+        loss_spike_detection = validation_config.setdefault('loss_spike_detection', True)
+        loss_spike_threshold = validation_config.setdefault('loss_spike_threshold', 10.0)
+        gradient_explosion_detection = validation_config.setdefault('gradient_explosion_detection', True)
+        
+        # Distributed defaults
+        distributed = distributed_config.setdefault('distributed', False)
+        find_unused_parameters = distributed_config.setdefault('find_unused_parameters', False)
+        broadcast_buffers = distributed_config.setdefault('broadcast_buffers', True)
+        gradient_as_bucket_view = distributed_config.setdefault('gradient_as_bucket_view', False)
+        
+        # Debug defaults
+        debug_mode = debug_config.setdefault('debug_mode', False)
+        verbose = debug_config.setdefault('verbose', False)
+        log_level = debug_config.setdefault('log_level', 'INFO' if verbose else 'WARNING')
+        profile_training = debug_config.setdefault('profile_training', False)
+        timing_analysis = debug_config.setdefault('timing_analysis', False)
+        
+        # Error handling defaults
+        error_handling = error_config.setdefault('error_handling', 'strict')
+        continue_on_error = error_config.setdefault('continue_on_error', False)
+        max_retries = error_config.setdefault('max_retries', 3)
+        graceful_degradation = error_config.setdefault('graceful_degradation', True)
+
+        # Extract run tracking parameters
+        run_id = run_tracking_config.get('run_id', run_id)
+        run_number = run_tracking_config.get('run_number', run_number)
+        run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+        use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+
+        # Checkpoint defaults
+        save_checkpoint = checkpoint_config.setdefault('save_checkpoint', False)
+        checkpoint_frequency = checkpoint_config.setdefault('checkpoint_frequency', 10)
+        checkpoint_path = checkpoint_config.get('checkpoint_path', None)
+        save_best_model = checkpoint_config.setdefault('save_best_model', False)
+        best_metric = checkpoint_config.setdefault('best_metric', 'loss')
+        model_state_dict = checkpoint_config.setdefault('model_state_dict', True)
+        save_optimizer_state = checkpoint_config.setdefault('save_optimizer_state', True)
+        save_scheduler_state = checkpoint_config.setdefault('save_scheduler_state', True)
+
+        # Loss function defaults
+        loss_function = loss_config.setdefault('loss_function', 'mse')
+        loss_weights = loss_config.setdefault('loss_weights', None)
+        multi_task_learning = loss_config.setdefault('multi_task_learning', False)
+        auxiliary_loss_weight = loss_config.setdefault('auxiliary_loss_weight', 0.1 if multi_task_learning else 0.0)
+        regularization_loss_weight = loss_config.setdefault('regularization_loss_weight', 0.0001 if weight_decay == 0 else 0.0)
+        reconstruction_loss_weight = loss_config.setdefault('reconstruction_loss_weight', 1.0)
+        
+        # Extract loss stability parameters
+        label_smoothing = loss_stability_config.setdefault('label_smoothing', None)
+        focal_loss_alpha = loss_stability_config.setdefault('focal_loss_alpha', None)
+        focal_loss_gamma = loss_stability_config.setdefault('focal_loss_gamma', None)
+        loss_smoothing = loss_stability_config.setdefault('loss_smoothing', None)
+        stable_loss_computation = loss_stability_config.setdefault('stable_loss_computation', None)
+
+        # Initialize batch processing mode
+        batch_processing_mode = batch_config.get('batch_processing_mode', 'standard')
+        variable_batch_size = batch_config.get('variable_batch_size', False)
+        dynamic_batching = batch_config.get('dynamic_batching', False)
+        batch_size_adaptation = batch_config.get('batch_size_adaptation', None)
+        max_tokens_per_batch = batch_config.get('max_tokens_per_batch', None)
+        
+        # Set up logging level
+        if verbose:
+            original_level = logger.level
+            logger.setLevel(getattr(logging, log_level.upper()))
+
+        # Apply dropout rate dynamically if model supports it
+        if dropout_rate is not None and hasattr(model, 'set_dropout'):
+            try:
+                model.set_dropout(dropout_rate)
+                logger.info(f"Applied dropout rate: {dropout_rate}")
+                dropout_rate_applied = dropout_rate
+            except Exception as e:
+                logger.warning(f"Failed to apply dropout rate: {e}")
+                dropout_rate_applied = None
+        else:
+            dropout_rate_applied = None
+            if dropout_rate is not None:
+                logger.warning(f"Model does not support dynamic dropout configuration (dropout_rate={dropout_rate})")
+        
+        # Apply spectral normalization if requested
+        if spectral_normalization and hasattr(model, 'apply_spectral_norm'):
+            try:
+                model.apply_spectral_norm()
+                logger.info("Applied spectral normalization to model")
+                spectral_normalization_applied = True
+            except Exception as e:
+                logger.warning(f"Failed to apply spectral normalization: {e}")
+                spectral_normalization_applied = False
+        elif spectral_normalization:
+            logger.warning("Spectral normalization requested but model does not support it")
+            spectral_normalization_applied = False
+            
+            # Alternative: Apply to all Conv and Linear layers
+            try:
+                from torch.nn.utils import spectral_norm
+                
+                spectral_norm_applied = 0
+                for name, module in model.named_modules():
+                    if isinstance(module, (nn.Conv2d, nn.Linear)):
+                        spectral_norm(module)
+                        spectral_norm_applied += 1
+                
+                if spectral_norm_applied > 0:
+                    logger.info(f"Applied spectral normalization to {spectral_norm_applied} layers")
+                    spectral_normalization_applied = True
+                    spectral_norm_layers = spectral_norm_applied
+                else:
+                    spectral_normalization_applied = False
+                    
+            except Exception as e:
+                logger.warning(f"Failed to apply spectral normalization: {e}")
+                spectral_normalization_applied = False
+        
+        # Configure batch normalization momentum
+        if batch_norm_momentum is not None:
+            try:
+                bn_layers_configured = 0
+                for name, module in model.named_modules():
+                    if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+                        module.momentum = batch_norm_momentum
+                        bn_layers_configured += 1
+                
+                if bn_layers_configured > 0:
+                    logger.info(f"Configured BatchNorm momentum={batch_norm_momentum} for {bn_layers_configured} layers")
+                    batch_norm_momentum_applied = True
+                    batch_norm_layers_configured = bn_layers_configured
+                else:
+                    logger.warning(f"No BatchNorm layers found to configure momentum")
+                    batch_norm_momentum_applied = False
+                    
+            except Exception as e:
+                logger.warning(f"Failed to configure BatchNorm momentum: {e}")
+                batch_norm_momentum_applied = False
+        
+        # Configure layer normalization epsilon
+        if layer_norm_eps is not None:
+            try:
+                ln_layers_configured = 0
+                for name, module in model.named_modules():
+                    if isinstance(module, nn.LayerNorm):
+                        module.eps = layer_norm_eps
+                        ln_layers_configured += 1
+                
+                if ln_layers_configured > 0:
+                    logger.info(f"Configured LayerNorm eps={layer_norm_eps} for {ln_layers_configured} layers")
+                    layer_norm_eps_applied = True
+                    layer_norm_layers_configured = ln_layers_configured
+                else:
+                    logger.warning(f"No LayerNorm layers found to configure epsilon")
+                    layer_norm_eps_applied = False
+                    
+            except Exception as e:
+                logger.warning(f"Failed to configure LayerNorm epsilon: {e}")
+                layer_norm_eps_applied = False
+        
+        logger.info(f"Starting training epoch {epoch if epoch is not None else 'N/A'}")
+        
+        # Parameter validation
+        if model is None:
+            raise ValueError("Model is required for training")
+        if loader is None:
+            raise ValueError("DataLoader is required for training")
+        if criterion is None:
+            raise ValueError("Loss criterion is required for training")
+        if optimizer is None:
+            raise ValueError("Optimizer is required for training")
+        
+        # Override criterion if loss_function is specified
+        if loss_function and loss_function != 'custom':
+            logger.info(f"Setting up loss function: {loss_function}")
+            
+            if loss_function.lower() == 'mse':
+                criterion = nn.MSELoss(reduction='mean')
+            elif loss_function.lower() == 'mae' or loss_function.lower() == 'l1':
+                criterion = nn.L1Loss(reduction='mean')
+            elif loss_function.lower() == 'smooth_l1' or loss_function.lower() == 'huber':
+                criterion = nn.SmoothL1Loss(reduction='mean')
+            elif loss_function.lower() == 'bce':
+                criterion = nn.BCELoss(reduction='mean')
+            elif loss_function.lower() == 'bce_with_logits':
+                criterion = nn.BCEWithLogitsLoss(reduction='mean')
+            elif loss_function.lower() == 'cosine':
+                criterion = nn.CosineEmbeddingLoss(reduction='mean')
+            else:
+                logger.warning(f"Unknown loss function '{loss_function}', using MSE")
+                criterion = nn.MSELoss(reduction='mean')
+        
+        loss_configuration = {
+            'loss_function': loss_function,
+            'loss_weights': loss_weights,
+            'multi_task_learning': multi_task_learning,
+            'auxiliary_loss_weight': auxiliary_loss_weight,
+            'regularization_loss_weight': regularization_loss_weight,
+            'reconstruction_loss_weight': reconstruction_loss_weight
+        }
+        
+        # Device configuration
+        if device is None:
+            device = next(model.parameters()).device if hasattr(model, 'parameters') else torch.device('cpu')
+        
+        # Set up reproducibility and cuDNN settings
+        if reproducibility_config.get('deterministic', False) or cudnn_deterministic:
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            logger.info("cuDNN deterministic mode enabled")
+            
+            if reproducibility_config.get('random_seed'):
+                torch.manual_seed(reproducibility_config['random_seed'])
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(reproducibility_config['random_seed'])
+            
+        elif benchmark_mode or cudnn_benchmark:
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.deterministic = False
+            logger.info("cuDNN benchmark mode enabled")
+        
+        # Initialize training statistics
+        training_stats = {
+            'start_time': start_time.isoformat(),
+            'epoch': epoch,
+            'config_applied': final_config,
+            'device': str(device),
+            'mixed_precision_enabled': mixed_precision,
+            'gradient_scaling_enabled': gradient_scaling,
+            'loss_scaling_method': loss_scaling if loss_scaling else ('dynamic' if dynamic_loss_scaling else 'disabled'),
+            'dynamic_loss_scaling': dynamic_loss_scaling,
+            'gradient_accumulation_steps': gradient_accumulation_steps,
+            'total_batches': len(loader),
+            'batch_size': batch_size,
+            'scheduler_enabled': scheduler is not None,
+            'scheduler_step_on_epoch': scheduler_step_on_epoch,
+            'scheduler_step_on_batch': scheduler_step_on_batch,
+            'scheduler_step_after_epoch': scheduler_step_after_epoch,
+            'scheduler_metric': scheduler_metric,
+            'warmup_enabled': warmup_steps > 0 if warmup_steps else False,
+            'warmup_steps': warmup_steps if warmup_steps else 0,
+            'loss_configuration': loss_configuration,
+            'cudnn_deterministic': torch.backends.cudnn.deterministic,
+            'cudnn_benchmark': torch.backends.cudnn.benchmark,
+            'dropout_rate_applied': dropout_rate_applied if 'dropout_rate_applied' in locals() else None,
+            'spectral_normalization_applied': spectral_normalization_applied if 'spectral_normalization_applied' in locals() else False,
+            'batch_norm_momentum_applied': batch_norm_momentum_applied if 'batch_norm_momentum_applied' in locals() else False,
+            'layer_norm_eps_applied': layer_norm_eps_applied if 'layer_norm_eps_applied' in locals() else False,
+            'spectral_norm_layers': spectral_norm_layers if 'spectral_norm_layers' in locals() else 0,
+            'batch_norm_layers_configured': batch_norm_layers_configured if 'batch_norm_layers_configured' in locals() else 0,
+            'layer_norm_layers_configured': layer_norm_layers_configured if 'layer_norm_layers_configured' in locals() else 0
+        }
+        
+        # Set up mixed precision scaler
+        if mixed_precision and scaler is None:
+            # Only create scaler if gradient_scaling is enabled
+            if gradient_scaling:
+                # Determine initial scale based on loss_scaling parameter
+                if loss_scaling == 'static':
+                    # Static scaling - disable dynamic adjustments
+                    scaler = GradScaler(
+                        enabled=amp_enabled,
+                        init_scale=init_scale,
+                        growth_factor=1.0,  # No growth
+                        backoff_factor=1.0,  # No backoff
+                        growth_interval=2000  # Never triggered
+                    )
+                    logger.info("Static loss scaling enabled")
+                elif loss_scaling == 'dynamic' or dynamic_loss_scaling:
+                    # Dynamic scaling (default behavior)
+                    scaler = GradScaler(
+                        enabled=amp_enabled,
+                        init_scale=init_scale,
+                        growth_factor=growth_factor,
+                        backoff_factor=backoff_factor,
+                        growth_interval=growth_interval
+                    )
+                    logger.info("Dynamic loss scaling enabled")
+                else:
+                    # Manual/custom scaling
+                    scaler = GradScaler(
+                        enabled=amp_enabled,
+                        init_scale=init_scale,
+                        growth_factor=growth_factor if dynamic_loss_scaling else 1.0,
+                        backoff_factor=backoff_factor if dynamic_loss_scaling else 1.0,
+                        growth_interval=growth_interval
+                    )
+                    logger.info(f"Loss scaling configured: dynamic={dynamic_loss_scaling}")
+            else:
+                # Mixed precision without gradient scaling
+                scaler = None
+                logger.info("Mixed precision enabled without gradient scaling")
+        
+        # Warmup scheduler setup
+        warmup_steps = scheduler_config.get('warmup_steps', 0)
+        warmup_scheduler = scheduler_config.get('warmup_scheduler')
+        current_warmup_step = 0
+
+        if warmup_steps > 0 and warmup_scheduler:
+            logger.info(f"Warmup scheduler enabled for {warmup_steps} steps")
+            training_stats['warmup_enabled'] = True
+            training_stats['warmup_steps'] = warmup_steps
+        else:
+            warmup_scheduler = None
+            training_stats['warmup_enabled'] = False
+        
+        # Model compilation if requested
+        if compile_model and hasattr(torch, 'compile'):
+            try:
+                logger.info(f"Compiling model with mode: {torch_compile_mode}")
+                model = torch.compile(model, mode=torch_compile_mode)
+                training_stats['model_compiled'] = True
+            except Exception as e:
+                logger.warning(f"Model compilation failed: {e}")
+                training_stats['model_compiled'] = False
+        
+        # Set model to training mode
+        model.train()
+
+        # Apply performance mode optimizations
+        if performance_mode == 'maximum':
+            # Maximum performance - sacrifice some stability
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.deterministic = False
+            torch.set_float32_matmul_precision('medium')
+            if hasattr(torch, 'set_num_threads'):
+                torch.set_num_threads(max(1, torch.get_num_threads() // 2))
+            logger.info("Performance mode: Maximum - optimized for speed")
+            
+        elif performance_mode == 'balanced':
+            # Balanced - good speed with stability
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.deterministic = False
+            if hasattr(torch, 'set_float32_matmul_precision'):
+                torch.set_float32_matmul_precision('high')
+            logger.info("Performance mode: Balanced - optimized for speed/stability balance")
+            
+        elif performance_mode == 'stable':
+            # Stable - prioritize reproducibility
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+            if hasattr(torch, 'set_float32_matmul_precision'):
+                torch.set_float32_matmul_precision('highest')
+            logger.info("Performance mode: Stable - optimized for reproducibility")
+            
+        else:  # 'standard'
+            # Standard - PyTorch defaults
+            logger.info("Performance mode: Standard - using PyTorch defaults")
+
+        training_stats['performance_mode_applied'] = performance_mode
+
+        # Apply channels_last memory format if requested
+        if channels_last and device.type == 'cuda':
+            try:
+                model = model.to(memory_format=torch.channels_last)
+                logger.info("Applied channels_last memory format to model")
+                training_stats['channels_last_enabled'] = True
+            except Exception as e:
+                logger.warning(f"Failed to apply channels_last format: {e}")
+                training_stats['channels_last_enabled'] = False
+        else:
+            training_stats['channels_last_enabled'] = False
+        
+        # Memory optimization setup
+        if memory_efficient:
+            if gradient_checkpointing and hasattr(model, 'gradient_checkpointing_enable'):
+                try:
+                    model.gradient_checkpointing_enable()
+                    logger.debug("Enabled gradient checkpointing")
+                except Exception as e:
+                    logger.warning(f"Failed to enable gradient checkpointing: {e}")
+        
+        # Apply memory optimization strategy
+        if memory_optimization == 'aggressive':
+            # Aggressive memory saving - slower but uses less memory
+            empty_cache_frequency = max(1, empty_cache_frequency // 2)  # More frequent cache clearing
+            gc_collection_frequency = max(10, gc_collection_frequency // 2)  # More frequent GC
+            gradient_accumulation_steps = max(2, gradient_accumulation_steps)  # Force gradient accumulation
+            
+            if hasattr(model, 'gradient_checkpointing_enable'):
+                try:
+                    model.gradient_checkpointing_enable()
+                    logger.info("Memory optimization: Aggressive - enabled gradient checkpointing")
+                except:
+                    pass
+            
+            logger.info(f"Memory optimization: Aggressive - cache_freq={empty_cache_frequency}, gc_freq={gc_collection_frequency}")
+            
+        elif memory_optimization == 'balanced':
+            # Balanced approach - moderate memory usage
+            logger.info(f"Memory optimization: Balanced - cache_freq={empty_cache_frequency}, gc_freq={gc_collection_frequency}")
+            
+        elif memory_optimization == 'minimal':
+            # Minimal optimization - prioritize speed
+            empty_cache_frequency = empty_cache_frequency * 2  # Less frequent cache clearing
+            gc_collection_frequency = gc_collection_frequency * 2  # Less frequent GC
+            logger.info(f"Memory optimization: Minimal - cache_freq={empty_cache_frequency}, gc_freq={gc_collection_frequency}")
+
+        training_stats['memory_optimization_strategy'] = memory_optimization
+        training_stats['effective_cache_frequency'] = empty_cache_frequency
+        training_stats['effective_gc_frequency'] = gc_collection_frequency
+
+        # Initialize metrics tracking
+        metrics_tracker = {
+            'losses': [],
+            'batch_times': [],
+            'learning_rates': [],
+            'gradient_norms': [],
+            'memory_usage': [],
+            'detailed_metrics': defaultdict(list) if calculate_detailed_metrics else None
+        }
+
+        # Initialize early stopping state
+        early_stopping_state = {
+            'best_metric': float('inf') if early_stopping_mode == 'min' else float('-inf'),
+            'patience_counter': 0,
+            'best_epoch': 0,
+            'best_weights': None,
+            'stopped': False
+        }
+
+        if early_stopping:
+            logger.info(f"Early stopping enabled: patience={early_stopping_patience}, metric={early_stopping_metric}, delta={early_stopping_delta}")
+            
+            # Store initial weights if restore_best_weights is enabled
+            if restore_best_weights:
+                early_stopping_state['best_weights'] = {
+                    'model': model.state_dict().copy() if hasattr(model, 'state_dict') else None,
+                    'optimizer': optimizer.state_dict().copy() if optimizer else None,
+                    'scheduler': scheduler.state_dict().copy() if scheduler else None
+                }
+        
+        # Initialize loss tracking for spike detection
+        if loss_spike_detection:
+            recent_losses = deque(maxlen=10)
+        
+        # Initialize loss smoothing tracker
+        smoothed_loss_value = None
+        if loss_smoothing is not None and loss_smoothing in ['ema', 'exponential', 'temporal']:
+            smoothing_momentum = loss_stability_config.get('loss_smoothing_momentum', 0.9)
+            logger.info(f"Loss smoothing enabled: {loss_smoothing} (momentum: {smoothing_momentum})")
+            
+            # Initialize temporal smoothing window if needed
+            if loss_smoothing == 'temporal':
+                loss_window_size = loss_stability_config.get('loss_window_size', 10)
+                metrics_tracker['loss_window'] = deque(maxlen=loss_window_size)
+        
+        # Set up alive-progress bar
+        if progress_bar:
+            try:
+                pbar = alive_bar(
+                    total=len(loader),
+                    title=f'Training {progress_bar_desc}\t',
+                    unit='batches',
+                    bar='smooth',
+                    spinner='dots',
+                    stats=False,
+                    monitor=True,
+                    elapsed=True,
+                    stats_end=False
+                )
+                pbar.__enter__()  # Manually enter the context since we're not using 'with' statement
+            except ImportError:
+                logger.warning("alive-progress not available, progress bar disabled")
+                pbar = None
+            except Exception as e:
+                logger.warning(f"Failed to initialize alive-progress bar: {e}")
+                pbar = None
+        else:
+            pbar = None
+        
+        # Initialize profiling if requested
+        if profile_training:
+            try:
+                # Use run-specific directory if available
+                if use_run_tracking and 'metrics' in run_specific_dirs:
+                    export_path = str(run_specific_dirs['metrics'] / f'profiler_epoch_{epoch}')
+                else:
+                    export_path = export_config.get('export_path', './profiler_logs')
+                
+                profiler_activities = [torch.profiler.ProfilerActivity.CPU]
+                
+                # Add CUDA profiling if available
+                if torch.cuda.is_available():
+                    profiler_activities.append(torch.profiler.ProfilerActivity.CUDA)
+                
+                # Configure profiler with all requested features
+                profiler_config = {
+                    'activities': profiler_activities,
+                    'schedule': torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+                    'on_trace_ready': torch.profiler.tensorboard_trace_handler(export_path),
+                    'record_shapes': True,
+                    'profile_memory': debug_config.get('profile_memory', True),
+                    'with_stack': True
+                }
+                
+                # Add compute profiling if requested
+                if debug_config.get('profile_compute', False):
+                    profiler_config['with_flops'] = True
+                    logger.info("Compute profiling (FLOPs) enabled")
+                
+                profiler = torch.profiler.profile(**profiler_config)
+                profiler.start()
+                training_stats['profiling_enabled'] = True
+                training_stats['profiling_config'] = {
+                    'memory': debug_config.get('profile_memory', True),
+                    'compute': debug_config.get('profile_compute', False),
+                    'activities': [str(a) for a in profiler_activities]
+                }
+                
+            except Exception as e:
+                logger.warning(f"Failed to initialize profiler: {e}")
+                profiler = None
+                training_stats['profiling_enabled'] = False
+        else:
+            profiler = None
+        
+        # Anomaly detection setup
+        anomaly_context = torch.autograd.detect_anomaly() if detect_anomaly else nullcontext()
+        
+        # Initialize training variables
+        total_loss = 0.0
+        num_batches = 0
+        num_samples = 0
+        accumulated_steps = 0
+        best_loss = float('inf')
+
+        # Initialize best metric tracking for checkpointing
+        if save_best_model:
+            if best_metric == 'loss':
+                best_metric_value = float('inf')
+                metric_improved = lambda current, best: current < best
+            else:
+                best_metric_value = float('-inf')
+                metric_improved = lambda current, best: current > best
+        
+        # Initialize batch processing variables
+        batch_start_time = None
+        data_loading_time = 0
+        forward_time = 0
+        backward_time = 0
+        optimizer_time = 0
+        
+        # Custom callbacks setup
+        callbacks = callback_config.get('callbacks', [])
+        custom_training_step = callback_config.get('custom_training_step')
+        pre_batch_callback = callback_config.get('pre_batch_callback')
+        post_batch_callback = callback_config.get('post_batch_callback')
+
+        # Set up distributed training if enabled
+        if distributed:
+            try:
+                import torch.distributed as dist
+                from torch.nn.parallel import DistributedDataParallel as DDP
+                
+                # Initialize process group if not already initialized
+                if not dist.is_initialized():
+                    # Determine backend
+                    backend = ddp_backend if ddp_backend in ['nccl', 'gloo', 'mpi'] else 'nccl'
+                    
+                    # Initialize distributed process group
+                    if world_size is None or rank is None:
+                        # Auto-detect from environment
+                        world_size = int(os.environ.get('WORLD_SIZE', 1))
+                        rank = int(os.environ.get('RANK', 0))
+                        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+                    
+                    # Set device for this process
+                    if local_rank is not None and device.type == 'cuda':
+                        torch.cuda.set_device(local_rank)
+                        device = torch.device(f'cuda:{local_rank}')
+                    
+                    # Initialize process group
+                    dist.init_process_group(
+                        backend=backend,
+                        world_size=world_size,
+                        rank=rank
+                    )
+                    
+                    logger.info(f"Initialized distributed training: backend={backend}, world_size={world_size}, rank={rank}")
+                
+                # Wrap model with DDP
+                model = DDP(
+                    model,
+                    device_ids=[local_rank] if device.type == 'cuda' and local_rank is not None else None,
+                    output_device=local_rank if device.type == 'cuda' and local_rank is not None else None,
+                    find_unused_parameters=find_unused_parameters,
+                    broadcast_buffers=broadcast_buffers,
+                    gradient_as_bucket_view=gradient_as_bucket_view
+                )
+                
+                logger.info(f"Model wrapped with DDP: find_unused={find_unused_parameters}, broadcast_buffers={broadcast_buffers}, bucket_view={gradient_as_bucket_view}")
+                
+                training_stats['distributed_training'] = {
+                    'enabled': True,
+                    'backend': ddp_backend,
+                    'world_size': world_size,
+                    'rank': rank,
+                    'local_rank': local_rank,
+                    'find_unused_parameters': find_unused_parameters,
+                    'broadcast_buffers': broadcast_buffers,
+                    'gradient_as_bucket_view': gradient_as_bucket_view
+                }
+                
+            except ImportError:
+                logger.error("Distributed training requested but torch.distributed not available")
+                distributed = False
+                training_stats['distributed_training'] = {'enabled': False, 'error': 'torch.distributed not available'}
+            
+            except Exception as e:
+                logger.error(f"Failed to initialize distributed training: {e}")
+                distributed = False
+                training_stats['distributed_training'] = {'enabled': False, 'error': str(e)}
+        else:
+            training_stats['distributed_training'] = {'enabled': False}
+        
+        # Validate batch processing configuration
+        if batch_processing_mode not in ['standard', 'dynamic', 'adaptive', 'memory_optimized', 'gradient_accumulation']:
+            logger.warning(f"Invalid batch_processing_mode '{batch_processing_mode}', using 'standard'")
+            batch_processing_mode = 'standard'
+
+        # Initialize batch processing state
+        batch_processing_state = {
+            'current_batch_size': batch_size,
+            'original_batch_size': batch_size,
+            'min_batch_size': batch_config.get('min_batch_size', max(1, batch_size // 4)),
+            'max_batch_size': batch_config.get('max_batch_size', batch_size * 2),
+            'adaptation_history': [],
+            'last_adaptation_epoch': 0,
+            'oom_count': 0,
+            'success_count': 0,
+            'mode': batch_processing_mode
+        }
+
+        logger.info(f"Batch processing mode: {batch_processing_mode}")
+        if variable_batch_size or dynamic_batching:
+            logger.info(
+                f"Dynamic batching enabled - Range: [{batch_processing_state['min_batch_size']}, "
+                f"{batch_processing_state['max_batch_size']}]"
+            )
+        
+        logger.info(f"Starting epoch with {len(loader)} batches")
+        
+        # Gradient accumulation for large effective batch sizes
+        if batch_processing_mode == 'gradient_accumulation':
+            # Calculate effective batch size through gradient accumulation
+            target_effective_batch_size = batch_config.get('target_effective_batch_size', batch_size * 4)
+            
+            # Adjust gradient accumulation steps dynamically
+            if batch_processing_state['current_batch_size'] < target_effective_batch_size:
+                dynamic_accumulation_steps = max(
+                    1,
+                    target_effective_batch_size // batch_processing_state['current_batch_size']
+                )
+                
+                if dynamic_accumulation_steps != gradient_accumulation_steps:
+                    logger.info(
+                        f"Adjusting gradient accumulation: {gradient_accumulation_steps} → {dynamic_accumulation_steps} "
+                        f"(target effective batch: {target_effective_batch_size})"
+                    )
+                    gradient_accumulation_steps = dynamic_accumulation_steps
+        
+        # Main training loop
+        with anomaly_context:
+            # Zero gradients before starting
+            optimizer.zero_grad()
+
+            # Create batch iterator with variable batch size capability
+            if variable_batch_size or dynamic_batching:
+                batch_iterator = _create_variable_batch_iterator(
+                    loader=loader,
+                    batch_processing_state=batch_processing_state,
+                    device=device,
+                    non_blocking_transfer=non_blocking_transfer
+                )
+            else:
+                batch_iterator = enumerate(loader)
+            
+            for batch_idx, batch in batch_iterator:
+                batch_start_time = time.time()
+                
+                try:
+                    # Get current effective batch size
+                    if variable_batch_size or dynamic_batching:
+                        effective_batch_size = batch_processing_state['current_batch_size']
+                        
+                        # Adjust batch if needed
+                        if isinstance(batch, (list, tuple)):
+                            actual_batch_size = batch[0].size(0)
+                        else:
+                            actual_batch_size = batch.size(0)
+                        
+                        if actual_batch_size != effective_batch_size:
+                            logger.debug(
+                                f"Batch size mismatch: expected {effective_batch_size}, "
+                                f"got {actual_batch_size}"
+                            )
+                    else:
+                        effective_batch_size = batch_size
+                    
+                    # Pre-batch callback
+                    if pre_batch_callback:
+                        pre_batch_callback(batch_idx, batch, model, optimizer)
+                    
+                    # Data loading timing
+                    data_load_end_time = time.time()
+                    if batch_idx > 0:  # Skip first batch for timing accuracy
+                        data_loading_time += (data_load_end_time - batch_start_time)
+                    
+                    # Move data to device with timing
+                    try:
+                        # Handle all possible batch formats with robust error checking
+                        if isinstance(batch, torch.Tensor):
+                            # Case 1: Single tensor batch (autoencoder-style)
+                            inputs = batch.to(device, non_blocking=non_blocking_transfer)
+                            targets = inputs
+                            
+                        elif isinstance(batch, (list, tuple)):
+                            # Case 2: List or tuple batch (most common)
+                            if len(batch) == 0:
+                                raise ValueError("Empty batch received")
+                            
+                            # Handle inputs (first element) with proper type checking
+                            if isinstance(batch[0], torch.Tensor):
+                                inputs = batch[0].to(device, non_blocking=non_blocking_transfer)
+                            else:
+                                # Convert non-tensor inputs to tensor
+                                inputs = torch.tensor(batch[0], dtype=torch.float32).to(device, non_blocking=non_blocking_transfer)
+                            
+                            # Handle targets (second element if exists, otherwise use inputs)
+                            if len(batch) > 1:
+                                if isinstance(batch[1], torch.Tensor):
+                                    targets = batch[1].to(device, non_blocking=non_blocking_transfer)
+                                else:
+                                    # Convert non-tensor targets to tensor
+                                    targets = torch.tensor(batch[1], dtype=torch.float32).to(device, non_blocking=non_blocking_transfer)
+                            else:
+                                targets = inputs  # Autoencoder case
+                                
+                        else:
+                            # Case 3: Unknown format - attempt conversion
+                            try:
+                                inputs = torch.tensor(batch, dtype=torch.float32).to(device, non_blocking=non_blocking_transfer)
+                                targets = inputs
+                            except Exception as conversion_error:
+                                raise ValueError(f"Unable to convert batch of type {type(batch)} to tensor: {conversion_error}")
+                        
+                        # Apply pin_memory optimization if enabled (only for CPU tensors)
+                        if pin_memory and device.type == 'cuda' and not inputs.is_cuda:
+                            try:
+                                # Re-transfer with pin_memory for better performance
+                                if isinstance(batch, torch.Tensor):
+                                    inputs = batch.pin_memory().to(device, non_blocking=non_blocking_transfer)
+                                    targets = inputs
+                                elif isinstance(batch, (list, tuple)) and len(batch) > 0:
+                                    if isinstance(batch[0], torch.Tensor):
+                                        inputs = batch[0].pin_memory().to(device, non_blocking=non_blocking_transfer)
+                                    if len(batch) > 1 and isinstance(batch[1], torch.Tensor):
+                                        targets = batch[1].pin_memory().to(device, non_blocking=non_blocking_transfer)
+                            except Exception as pin_error:
+                                # Fallback to regular transfer if pin_memory fails
+                                logger.debug(f"Pin memory optimization failed: {pin_error}")
+                    
+                    except Exception as batch_processing_error:
+                        logger.error(f"Failed to process batch {batch_idx}: {batch_processing_error}")
+                        
+                        # Safe batch content logging for debugging
+                        try:
+                            if isinstance(batch, (list, tuple)) and len(batch) < 5:
+                                batch_sample = f"Batch content: {[type(x).__name__ for x in batch]}"
+                            else:
+                                batch_sample = f"Batch type: {type(batch)}, too large to log"
+                            logger.error(batch_sample)
+                        except:
+                            logger.error("Unable to extract batch sample")
+                        
+                        if handle_nan_loss == 'skip':
+                            logger.warning(f"Skipping batch {batch_idx} due to processing error")
+                            continue
+                        elif handle_nan_loss == 'error':
+                            raise
+                        else:
+                            # Create dummy data to continue training
+                            logger.warning(f"Creating dummy data for batch {batch_idx} to continue training")
+                            inputs = torch.randn(batch_size, 10, device=device)  # Default shape
+                            targets = inputs
+                    
+                    # Apply data preprocessing if enabled
+                    if data_preprocessing:
+                        try:
+                            # Normalize inputs
+                            if data_processing_config.get('normalize_inputs', True):
+                                # Apply normalization (assuming data is already scaled, this is runtime normalization)
+                                if inputs.numel() > 0:
+                                    inputs = (inputs - inputs.mean(dim=0, keepdim=True)) / (inputs.std(dim=0, keepdim=True) + 1e-8)
+                            
+                            # Handle outliers
+                            if data_processing_config.get('clip_outliers', False):
+                                clip_value = data_processing_config.get('outlier_clip_value', 3.0)
+                                inputs = torch.clamp(inputs, -clip_value, clip_value)
+                            
+                            # Add noise for regularization
+                            if data_processing_config.get('add_noise', False):
+                                noise_std = data_processing_config.get('noise_std', 0.01)
+                                if model.training:
+                                    inputs = inputs + torch.randn_like(inputs) * noise_std
+                        
+                        except Exception as preprocessing_error:
+                            logger.warning(f"Data preprocessing failed: {preprocessing_error}, continuing without preprocessing")
+                    
+                    # Apply channels_last memory format if enabled and applicable
+                    if channels_last and device.type == 'cuda' and inputs.dim() == 4:
+                        try:
+                            inputs = inputs.to(memory_format=torch.channels_last)
+                            if targets.dim() == 4 and not torch.equal(inputs, targets):
+                                targets = targets.to(memory_format=torch.channels_last)
+                        except Exception as channels_last_error:
+                            logger.debug(f"channels_last conversion failed: {channels_last_error}")
+                    
+                    # Final validation of loaded data
+                    if validate_inputs and check_finite:
+                        try:
+                            # Check for finite values in inputs
+                            if not torch.isfinite(inputs).all():
+                                finite_ratio = torch.isfinite(inputs).float().mean().item()
+                                logger.warning(f"Non-finite values in inputs: {1 - finite_ratio:.2%} invalid")
+                                
+                                if handle_nan_loss == 'error':
+                                    raise ValueError(f"Non-finite input values detected in batch {batch_idx}")
+                                elif handle_nan_loss == 'skip':
+                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite inputs")
+                                    continue
+                                elif handle_nan_loss == 'clip':
+                                    inputs = torch.nan_to_num(inputs, nan=0.0, posinf=1e6, neginf=-1e6)
+                            
+                            # Check for finite values in targets
+                            if not torch.isfinite(targets).all():
+                                finite_ratio = torch.isfinite(targets).float().mean().item()
+                                logger.warning(f"Non-finite values in targets: {1 - finite_ratio:.2%} invalid")
+                                
+                                if handle_nan_loss == 'error':
+                                    raise ValueError(f"Non-finite target values detected in batch {batch_idx}")
+                                elif handle_nan_loss == 'skip':
+                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite targets")
+                                    continue
+                                elif handle_nan_loss == 'clip':
+                                    targets = torch.nan_to_num(targets, nan=0.0, posinf=1e6, neginf=-1e6)
+                        
+                        except Exception as validation_error:
+                            logger.error(f"Input validation failed: {validation_error}")
+                            if handle_nan_loss == 'skip':
+                                continue
+                            elif handle_nan_loss == 'error':
+                                raise
+                    
+                    # Update current batch size for tracking
+                    current_batch_size = inputs.size(0)
+                    
+                    # Apply input transforms if specified
+                    if data_processing_config.get('input_transforms'):
+                        for transform in data_processing_config['input_transforms']:
+                            inputs = transform(inputs)
+                    
+                    # Apply target transforms if specified
+                    if data_processing_config.get('target_transforms'):
+                        for transform in data_processing_config['target_transforms']:
+                            targets = transform(targets)
+                    
+                    # Apply data augmentation during training
+                    if augmentation_during_training:
+                        # Mixup augmentation
+                        if data_processing_config.get('mixup_alpha', 0) > 0:
+                            mixup_alpha = data_processing_config['mixup_alpha']
+                            lam = np.random.beta(mixup_alpha, mixup_alpha)
+                            batch_size_current = inputs.size(0)
+                            index = torch.randperm(batch_size_current).to(device)
+                            inputs = lam * inputs + (1 - lam) * inputs[index]
+                            if isinstance(targets, torch.Tensor) and targets.numel() > 0:
+                                targets = lam * targets + (1 - lam) * targets[index]
+                        
+                        # CutMix augmentation (alternative to Mixup)
+                        if data_processing_config.get('cutmix_alpha', 0) > 0 and inputs.dim() >= 3:
+                            cutmix_alpha = data_processing_config['cutmix_alpha']
+                            lam = np.random.beta(cutmix_alpha, cutmix_alpha)
+                            batch_size_current = inputs.size(0)
+                            index = torch.randperm(batch_size_current).to(device)
+                            
+                            # Generate random bounding box
+                            if inputs.dim() == 4:  # [batch, channels, height, width]
+                                height, width = inputs.shape[2], inputs.shape[3]
+                                cut_h = int(height * np.sqrt(1 - lam))
+                                cut_w = int(width * np.sqrt(1 - lam))
+                                
+                                # Random center position
+                                cx = np.random.randint(width)
+                                cy = np.random.randint(height)
+                                
+                                # Bounding box coordinates
+                                bbx1 = np.clip(cx - cut_w // 2, 0, width)
+                                bby1 = np.clip(cy - cut_h // 2, 0, height)
+                                bbx2 = np.clip(cx + cut_w // 2, 0, width)
+                                bby2 = np.clip(cy + cut_h // 2, 0, height)
+                                
+                                # Apply CutMix
+                                inputs[:, :, bby1:bby2, bbx1:bbx2] = inputs[index, :, bby1:bby2, bbx1:bbx2]
+                                
+                                # Adjust lambda to match actual cut region
+                                lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (height * width))
+                                
+                                # Mix targets
+                                if isinstance(targets, torch.Tensor) and targets.numel() > 0:
+                                    targets = lam * targets + (1 - lam) * targets[index]
+                            
+                            elif inputs.dim() == 2:  # [batch, features] - Feature CutMix
+                                num_features = inputs.size(1)
+                                cut_size = int(num_features * (1 - lam))
+                                
+                                # Random feature selection
+                                cut_indices = torch.randperm(num_features)[:cut_size]
+                                
+                                # Apply feature mixing
+                                inputs[:, cut_indices] = inputs[index, :][:, cut_indices]
+                                
+                                # Mix targets
+                                if isinstance(targets, torch.Tensor) and targets.numel() > 0:
+                                    targets = lam * targets + (1 - lam) * targets[index]
+                    
+                    current_batch_size = inputs.size(0)
+                    num_samples += current_batch_size
+
+                    # Advanced training techniques
+                    if advanced_config.get('curriculum_learning', False):
+                        # Curriculum learning: adjust difficulty based on epoch/batch
+                        curriculum_schedule = advanced_config.get('curriculum_schedule', 'linear')
+                        
+                        # Calculate curriculum progress (0.0 to 1.0)
+                        if curriculum_schedule == 'linear':
+                            curriculum_progress = min(1.0, batch_idx / len(loader))
+                        elif curriculum_schedule == 'exponential':
+                            curriculum_progress = 1.0 - np.exp(-batch_idx / (len(loader) / 3))
+                        elif curriculum_schedule == 'step':
+                            curriculum_progress = 1.0 if batch_idx > len(loader) // 2 else 0.5
+                        else:
+                            curriculum_progress = 1.0
+                        
+                        # Apply curriculum (example: filter easy samples early)
+                        if curriculum_progress < 1.0:
+                            # Example: Use simpler data or reduced features early in training
+                            # This is model/task specific
+                            logger.debug(f"Curriculum progress: {curriculum_progress:.2%} (batch {batch_idx})")
+
+                    # Progressive training: gradually increase model complexity
+                    if advanced_config.get('progressive_training', False):
+                        # Example: gradually enable model features
+                        progressive_epoch_threshold = advanced_config.get('progressive_epoch_threshold', len(loader) // 4)
+                        
+                        if batch_idx < progressive_epoch_threshold:
+                            # Example: Use simpler forward pass or disable certain features
+                            logger.debug(f"Progressive training: warmup phase (batch {batch_idx}/{progressive_epoch_threshold})")
+
+                    # Adaptive training: adjust learning dynamically
+                    if advanced_config.get('adaptive_training', False):
+                        # Example: adjust learning rate based on loss trends
+                        if len(metrics_tracker['losses']) > 10:
+                            recent_losses = metrics_tracker['losses'][-10:]
+                            loss_trend = np.mean(np.diff(recent_losses))
+                            
+                            if loss_trend > 0:  # Loss increasing
+                                # Reduce learning rate temporarily
+                                for param_group in optimizer.param_groups:
+                                    param_group['lr'] *= 0.95
+                                logger.debug(f"Adaptive training: reduced LR due to increasing loss trend")
+
+                    # Self-supervised pretext tasks
+                    if advanced_config.get('self_supervised_pretext', False):
+                        # Example: Add auxiliary self-supervised task
+                        # This is typically done before or alongside main task
+                        
+                        try:
+                            # Example pretext task: rotation prediction
+                            if hasattr(model, 'encode') and inputs.dim() == 4:
+                                # Rotate input and predict rotation
+                                rotation_angles = [0, 90, 180, 270]
+                                rotation_idx = np.random.randint(0, 4)
+                                rotated_input = torch.rot90(inputs, k=rotation_idx, dims=[2, 3])
+                                
+                                # Get embedding
+                                embedding = model.encode(rotated_input)
+                                
+                                # Simple rotation classifier (would need to be added to model)
+                                if hasattr(model, 'rotation_classifier'):
+                                    rotation_pred = model.rotation_classifier(embedding)
+                                    rotation_target = torch.tensor([rotation_idx] * inputs.size(0), device=device)
+                                    rotation_loss = nn.CrossEntropyLoss()(rotation_pred, rotation_target)
+                                    
+                                    # Add to main loss with weight
+                                    pretext_weight = advanced_config.get('pretext_loss_weight', 0.1)
+                                    loss = loss + (pretext_weight * rotation_loss)
+                                    
+                                    logger.debug(f"Self-supervised pretext loss: {rotation_loss.item():.6f}")
+                        
+                        except Exception as e:
+                            logger.debug(f"Self-supervised pretext task failed: {e}")
+
+                    # Teacher forcing (for sequence models)
+                    if advanced_config.get('teacher_forcing_ratio', None) is not None:
+                        teacher_forcing_ratio = advanced_config['teacher_forcing_ratio']
+                        
+                        # Determine whether to use teacher forcing for this batch
+                        use_teacher_forcing = np.random.random() < teacher_forcing_ratio
+                        
+                        if use_teacher_forcing:
+                            # Use ground truth as input for next step (sequence models)
+                            logger.debug(f"Using teacher forcing (ratio: {teacher_forcing_ratio:.2f})")
+                            # Implementation would be model-specific
+                    
+                    # Forward pass with mixed precision and timing
+                    forward_start_time = time.time()
+                    
+                    if custom_training_step:
+                        # Custom training step
+                        loss = custom_training_step(model, inputs, targets, criterion, optimizer, scaler, batch_idx)
+                    else:
+                        autocast_context = get_autocast_context(device, mixed_precision, True)
+                        
+                        with autocast_context:
+                            outputs = model(inputs)
+                            
+                            # CRITICAL: Ensure targets match outputs for autoencoder
+                            if targets.shape != outputs.shape:
+                                if hasattr(model, '__class__') and 'autoencoder' in model.__class__.__name__.lower():
+                                    targets = inputs  # For autoencoder, target should be input
+                                    logger.debug("Set targets = inputs for autoencoder training")
+                                else:
+                                    # Try to reshape
+                                    if outputs.numel() == targets.numel():
+                                        targets = targets.view_as(outputs)
+                                        logger.debug(f"Reshaped targets to match outputs: {outputs.shape}")
+                                    else:
+                                        # Try to match dimensions intelligently
+                                        batch_size = outputs.size(0)
+                                        if len(outputs.shape) == 2:  # [batch_size, features]
+                                            output_features = outputs.size(1)
+                                            if targets.size(1) != output_features:
+                                                if targets.size(1) > output_features:
+                                                    # Truncate targets
+                                                    targets = targets[:, :output_features]
+                                                else:
+                                                    # Pad targets
+                                                    padding_size = output_features - targets.size(1)
+                                                    padding = torch.zeros(batch_size, padding_size, device=device, dtype=targets.dtype)
+                                                    targets = torch.cat([targets, padding], dim=1)
+                                                logger.debug(f"Adjusted targets shape to {targets.shape}")
+                                        else:
+                                            # For complex shapes, use inputs as targets
+                                            targets = inputs
+                                            logger.warning(f"Using inputs as targets for complex shape mismatch")
+                            
+                            # Custom loss computation with error handling
+                            if callback_config.get('custom_loss_computation'):
+                                try:
+                                    loss = callback_config['custom_loss_computation'](outputs, targets, criterion)
+                                except Exception as loss_e:
+                                    logger.error(f"Custom loss computation failed: {loss_e}")
+                                    if handle_nan_loss == 'skip':
+                                        logger.warning(f"Skipping batch {batch_idx} due to custom loss error")
+                                        continue
+                                    else:
+                                        raise
+                            else:
+                                try:
+                                    # LOSS COMPUTATION WITH STABILITY FEATURES
+                                    # Step 1: Stable computation of base loss
+                                    if stable_loss_computation:
+                                        stability_epsilon = loss_stability_config.get('stability_epsilon', 1e-7)
+                                        stability_clip_value = loss_stability_config.get('stability_clip_value', 10.0)
+                                        outputs_stable = torch.clamp(outputs, -stability_clip_value, stability_clip_value)
+                                    else:
+                                        outputs_stable = outputs
+
+                                    # Step 2: Apply label smoothing to targets
+                                    if label_smoothing is not None and label_smoothing > 0:
+                                        target_mean = targets.mean()
+                                        targets_smooth = (1.0 - label_smoothing) * targets + label_smoothing * target_mean
+                                        logger.debug(f"Label smoothing applied: {label_smoothing:.4f}")
+                                    else:
+                                        targets_smooth = targets
+
+                                    # Step 3: Compute base loss (with focal loss if enabled)
+                                    if focal_loss_alpha is not None and focal_loss_gamma is not None:
+                                        # Focal loss computation for regression
+                                        base_loss = criterion(outputs_stable, targets_smooth)
+                                        absolute_error = torch.abs(outputs_stable - targets_smooth)
+                                        max_error = absolute_error.max() + 1e-8
+                                        normalized_error = absolute_error / max_error
+                                        p_t = 1.0 - normalized_error
+                                        focal_weight = torch.pow(1.0 - p_t, focal_loss_gamma)
+                                        
+                                        if focal_loss_alpha > 0:
+                                            focal_weight = focal_loss_alpha * focal_weight
+                                        
+                                        reconstruction_loss = (focal_weight * base_loss).mean()
+                                        
+                                        # Track focal loss components
+                                        loss_components = {
+                                            'reconstruction': reconstruction_loss.item(),
+                                            'focal_loss': reconstruction_loss.item(),
+                                            'avg_focal_weight': focal_weight.mean().item()
+                                        }
+                                        
+                                        if verbose and batch_idx % (log_frequency * 10) == 0:
+                                            logger.debug(
+                                                f"Focal loss - alpha: {focal_loss_alpha:.3f}, "
+                                                f"gamma: {focal_loss_gamma:.3f}, "
+                                                f"avg_weight: {focal_weight.mean():.3f}"
+                                            )
+                                    
+                                    else:
+                                        # Standard loss computation
+                                        if stable_loss_computation and isinstance(criterion, nn.MSELoss):
+                                            diff = outputs_stable - targets_smooth
+                                            diff_clipped = torch.clamp(diff, -stability_clip_value, stability_clip_value)
+                                            reconstruction_loss = torch.mean(diff_clipped ** 2)
+                                        elif stable_loss_computation and isinstance(criterion, nn.L1Loss):
+                                            diff = torch.abs(outputs_stable - targets_smooth)
+                                            diff_clipped = torch.clamp(diff, 0, stability_clip_value)
+                                            reconstruction_loss = torch.mean(diff_clipped)
+                                        elif stable_loss_computation and isinstance(criterion, (nn.BCELoss, nn.BCEWithLogitsLoss)):
+                                            # BCE with numerical stability
+                                            if isinstance(criterion, nn.BCELoss):
+                                                probs_stable = torch.clamp(outputs_stable, stability_epsilon, 1.0 - stability_epsilon)
+                                                targets_stable = torch.clamp(targets_smooth, stability_epsilon, 1.0 - stability_epsilon)
+                                                reconstruction_loss = -(
+                                                    targets_stable * torch.log(probs_stable) + 
+                                                    (1 - targets_stable) * torch.log(1 - probs_stable)
+                                                ).mean()
+                                            else:
+                                                # BCEWithLogitsLoss already has stability built-in
+                                                reconstruction_loss = criterion(outputs_stable, targets_smooth)
+                                        else:
+                                            reconstruction_loss = criterion(outputs_stable, targets_smooth)
+                                        
+                                        loss_components = {
+                                            'reconstruction': reconstruction_loss.item()
+                                        }
+
+                                    # Step 4: Apply loss smoothing
+                                    if loss_smoothing in ['ema', 'exponential']:
+                                        current_loss = reconstruction_loss.item()
+                                        
+                                        if smoothed_loss_value is None:
+                                            smoothed_loss_value = current_loss
+                                        else:
+                                            smoothing_momentum = loss_stability_config.get('loss_smoothing_momentum', 0.9)
+                                            smoothed_loss_value = (
+                                                smoothing_momentum * smoothed_loss_value + 
+                                                (1.0 - smoothing_momentum) * current_loss
+                                            )
+                                        
+                                        loss_scale = smoothed_loss_value / (current_loss + 1e-8)
+                                        reconstruction_loss = reconstruction_loss * loss_scale
+                                        
+                                        loss_components['smoothed_loss'] = smoothed_loss_value
+                                        loss_components['loss_scale'] = loss_scale
+                                        
+                                        if verbose and batch_idx % (log_frequency * 10) == 0:
+                                            logger.debug(
+                                                f"Loss smoothing - current: {current_loss:.6f}, "
+                                                f"smoothed: {smoothed_loss_value:.6f}, "
+                                                f"scale: {loss_scale:.3f}"
+                                            )
+
+                                    elif loss_smoothing == 'temporal':
+                                        current_loss = reconstruction_loss.item()
+                                        metrics_tracker['loss_window'].append(current_loss)
+                                        
+                                        if len(metrics_tracker['loss_window']) > 0:
+                                            window_avg = sum(metrics_tracker['loss_window']) / len(metrics_tracker['loss_window'])
+                                            loss_scale = window_avg / (current_loss + 1e-8)
+                                            reconstruction_loss = reconstruction_loss * loss_scale
+                                            
+                                            loss_components['temporal_smoothed_loss'] = window_avg
+                                            
+                                            if verbose and batch_idx % (log_frequency * 10) == 0:
+                                                logger.debug(
+                                                    f"Temporal smoothing - current: {current_loss:.6f}, "
+                                                    f"window_avg: {window_avg:.6f}, "
+                                                    f"window_size: {len(metrics_tracker['loss_window'])}"
+                                                )
+
+                                    # Initialize total loss with weighted reconstruction
+                                    loss = reconstruction_loss_weight * reconstruction_loss
+
+                                    # Multi-task learning: Add auxiliary losses if enabled
+                                    if multi_task_learning and auxiliary_loss_weight > 0:
+                                        # Auxiliary loss: Encourage diverse representations
+                                        if hasattr(model, 'encode'):
+                                            try:
+                                                encoded = model.encode(inputs)
+                                                # Variance regularization to prevent collapse
+                                                encoding_var = torch.var(encoded, dim=0).mean()
+                                                auxiliary_loss = -torch.log(encoding_var + 1e-8)  # Negative log to maximize variance
+                                                
+                                                loss = loss + (auxiliary_loss_weight * auxiliary_loss)
+                                                loss_components['auxiliary'] = auxiliary_loss.item()
+                                                
+                                                if verbose and batch_idx % (log_frequency * 10) == 0:
+                                                    logger.debug(f"Auxiliary loss: {auxiliary_loss.item():.6f}")
+                                            except Exception as aux_e:
+                                                logger.debug(f"Auxiliary loss computation skipped: {aux_e}")
+                                    
+                                    # Regularization loss: L1/L2 weight regularization
+                                    if l2_regularization is not None and l2_regularization > 0:
+                                        l2_loss = torch.tensor(0.0, device=device)
+                                        
+                                        # L2 regularization on model parameters
+                                        for param in model.parameters():
+                                            l2_loss = l2_loss + torch.norm(param, p=2)
+                                        
+                                        loss = loss + (l2_regularization * l2_loss)
+                                        loss_components['l2_regularization'] = l2_loss.item()
+                                        
+                                        if verbose and batch_idx % (log_frequency * 10) == 0:
+                                            logger.debug(f"L2 regularization loss: {l2_loss.item():.6f}")
+
+                                    # Legacy regularization_loss_weight support
+                                    elif regularization_loss_weight > 0:
+                                        reg_loss = torch.tensor(0.0, device=device)
+                                        
+                                        # L2 regularization on model parameters
+                                        for param in model.parameters():
+                                            reg_loss = reg_loss + torch.norm(param, p=2)
+                                        
+                                        loss = loss + (regularization_loss_weight * reg_loss)
+                                        loss_components['regularization'] = reg_loss.item()
+                                        
+                                        if verbose and batch_idx % (log_frequency * 10) == 0:
+                                            logger.debug(f"Regularization loss: {reg_loss.item():.6f}")
+                                    
+                                    # L1 regularization
+                                    if l1_regularization is not None and l1_regularization > 0:
+                                        l1_loss = torch.tensor(0.0, device=device)
+                                        
+                                        # L1 penalty on model parameters
+                                        for param in model.parameters():
+                                            l1_loss = l1_loss + torch.norm(param, p=1)
+                                        
+                                        loss = loss + (l1_regularization * l1_loss)
+                                        loss_components['l1_regularization'] = l1_loss.item()
+                                        
+                                        if verbose and batch_idx % (log_frequency * 10) == 0:
+                                            logger.debug(f"L1 regularization loss: {l1_loss.item():.6f}")
+                                    
+                                    # Weighted loss: Apply custom weights if specified
+                                    if loss_weights:
+                                        # Example: Apply different weights to different feature groups
+                                        try:
+                                            if isinstance(loss_weights, dict):
+                                                # Feature-wise weighting
+                                                weighted_loss = torch.tensor(0.0, device=device)
+                                                
+                                                for feature_group, weight in loss_weights.items():
+                                                    if feature_group == 'all':
+                                                        weighted_loss = weighted_loss + (weight * reconstruction_loss)
+                                                    else:
+                                                        # Parse feature group (e.g., "0-10" for first 10 features)
+                                                        try:
+                                                            start, end = map(int, feature_group.split('-'))
+                                                            group_loss = criterion(outputs[:, start:end], targets[:, start:end])
+                                                            weighted_loss = weighted_loss + (weight * group_loss)
+                                                        except:
+                                                            logger.debug(f"Invalid feature group format: {feature_group}")
+                                                
+                                                loss = weighted_loss
+                                                loss_components['weighted'] = True
+                                                
+                                        except Exception as weight_e:
+                                            logger.debug(f"Loss weighting failed: {weight_e}")
+                                    
+                                    # Store loss components in metrics tracker
+                                    if track_metrics and calculate_detailed_metrics:
+                                        for component, value in loss_components.items():
+                                            metrics_tracker['detailed_metrics'].setdefault(f'loss_{component}', []).append(value)
+                                
+                                except Exception as loss_e:
+                                    logger.error(f"Standard loss computation failed: {loss_e}")
+                                    logger.error(f"Shapes - outputs: {outputs.shape}, targets: {targets.shape}")
+                                    
+                                    # Emergency shape fix
+                                    try:
+                                        if 'autoencoder' in str(type(model)).lower():
+                                            targets = inputs
+                                            logger.info("Emergency fix: Set targets = inputs for autoencoder")
+                                        else:
+                                            # Force reshape
+                                            if outputs.dim() == 2 and targets.dim() == 2:
+                                                min_features = min(outputs.size(1), targets.size(1))
+                                                outputs_fixed = outputs[:, :min_features]
+                                                targets_fixed = targets[:, :min_features]
+                                                loss = criterion(outputs_fixed, targets_fixed)
+                                                logger.info(f"Emergency fix: Used {min_features} features for loss")
+                                            else:
+                                                targets = targets.view_as(outputs)
+                                                loss = criterion(outputs, targets)
+                                                logger.info("Emergency fix: Forced target reshape")
+                                        
+                                        if 'targets_fixed' not in locals():
+                                            loss = criterion(outputs, targets)
+                                        
+                                    except Exception as final_e:
+                                        logger.error(f"Final loss computation attempt failed: {final_e}")
+                                        if handle_nan_loss == 'skip':
+                                            logger.warning(f"Skipping batch {batch_idx} due to unresolvable shape mismatch")
+                                            continue
+                                        elif handle_nan_loss == 'error':
+                                            raise RuntimeError(f"Unresolvable shape mismatch in batch {batch_idx}") from loss_e
+                                        else:
+                                            # Create a dummy loss to continue training
+                                            loss = torch.tensor(0.0, device=device, requires_grad=True)
+                                            logger.warning(f"Using dummy loss for batch {batch_idx}")
+                            
+                            # Scale loss for gradient accumulation
+                            loss = loss / gradient_accumulation_steps
+                    
+                    forward_end_time = time.time()
+                    forward_time += (forward_end_time - forward_start_time)
+                    
+                    # Loss validation
+                    if check_finite:
+                        if not torch.isfinite(loss):
+                            if handle_nan_loss == 'error':
+                                raise ValueError(f"Non-finite loss detected in batch {batch_idx}: {loss.item()}")
+                            elif handle_nan_loss == 'skip':
+                                logger.warning(f"Skipping batch {batch_idx} due to non-finite loss: {loss.item()}")
+                                continue
+                            elif handle_nan_loss == 'clip':
+                                loss = torch.nan_to_num(loss, nan=0.0, posinf=1e6, neginf=-1e6)
+                    
+                    # Loss spike detection
+                    if loss_spike_detection and len(recent_losses) > 0:
+                        current_loss = loss.item() * gradient_accumulation_steps
+                        avg_recent_loss = sum(recent_losses) / len(recent_losses)
+                        if current_loss > avg_recent_loss * loss_spike_threshold:
+                            logger.warning(f"Loss spike detected: current={current_loss:.4f}, avg_recent={avg_recent_loss:.4f}")
+                            if handle_nan_loss == 'skip':
+                                continue
+                        recent_losses.append(current_loss)
+                    elif loss_spike_detection:
+                        recent_losses.append(loss.item() * gradient_accumulation_steps)
+                    
+                    # Backward pass with timing
+                    backward_start_time = time.time()
+                    
+                    if mixed_precision and scaler is not None and gradient_scaling:
+                        scaler.scale(loss).backward()
+                    else:
+                        loss.backward()
+                    
+                    backward_end_time = time.time()
+                    backward_time += (backward_end_time - backward_start_time)
+                    
+                    accumulated_steps += 1
+                    
+                    # Optimizer step with gradient accumulation
+                    if accumulated_steps % gradient_accumulation_steps == 0:
+                        optimizer_start_time = time.time()
+                        
+                        # Track effective batch size for gradient accumulation mode
+                        if batch_processing_mode == 'gradient_accumulation':
+                            effective_batch_size = batch_processing_state['current_batch_size'] * gradient_accumulation_steps
+                            
+                            if verbose and batch_idx % (log_frequency * 10) == 0:
+                                logger.debug(
+                                    f"Batch processing - Physical: {batch_processing_state['current_batch_size']}, "
+                                    f"Effective: {effective_batch_size}, "
+                                    f"Accumulation: {gradient_accumulation_steps}"
+                                )
+                        
+                        # Gradient clipping
+                        if gradient_clip > 0 or max_grad_norm > 0:
+                            # Unscale gradients if using gradient scaling
+                            if mixed_precision and scaler is not None and gradient_scaling:
+                                scaler.unscale_(optimizer)
+                            
+                            if gradient_clipping_mode == 'norm':
+                                grad_norm = torch.nn.utils.clip_grad_norm_(
+                                    model.parameters(), 
+                                    max_grad_norm or gradient_clip
+                                )
+                            elif gradient_clipping_mode == 'value':
+                                grad_norm = torch.nn.utils.clip_grad_value_(
+                                    model.parameters(), 
+                                    gradient_clip
+                                )
+                                # Calculate norm for tracking
+                                grad_norm = torch.sqrt(sum(param.grad.data.norm()**2 for param in model.parameters() if param.grad is not None))
+                            else:
+                                grad_norm = torch.sqrt(sum(param.grad.data.norm()**2 for param in model.parameters() if param.grad is not None))
+                        else:
+                            grad_norm = torch.sqrt(sum(param.grad.data.norm()**2 for param in model.parameters() if param.grad is not None))
+                        
+                        # Gradient explosion detection with corrective action
+                        if gradient_explosion_detection and grad_norm > 100.0:
+                            explosion_threshold = validation_config.get('gradient_explosion_threshold', 100.0)
+                            explosion_action = validation_config.get('gradient_explosion_action', 'clip')
+                            
+                            logger.warning(f"Large gradient norm detected: {grad_norm:.4f} (threshold: {explosion_threshold})")
+                            
+                            if explosion_action == 'clip':
+                                # Emergency gradient clipping
+                                emergency_clip_value = min(explosion_threshold, grad_norm / 2.0)
+                                torch.nn.utils.clip_grad_norm_(model.parameters(), emergency_clip_value)
+                                logger.info(f"Applied emergency gradient clipping: {emergency_clip_value:.2f}")
+                            
+                            elif explosion_action == 'skip':
+                                # Skip this batch
+                                logger.warning(f"Skipping batch {batch_idx} due to gradient explosion")
+                                optimizer.zero_grad()
+                                continue
+                            
+                            elif explosion_action == 'reduce_lr':
+                                # Reduce learning rate temporarily
+                                for param_group in optimizer.param_groups:
+                                    param_group['lr'] *= 0.5
+                                logger.info(f"Reduced learning rate to {optimizer.param_groups[0]['lr']:.2e}")
+                            
+                            elif explosion_action == 'reset':
+                                # Reset gradients and skip optimization step
+                                optimizer.zero_grad()
+                                logger.warning(f"Reset gradients for batch {batch_idx}")
+                                continue
+                            
+                            # Track explosion events
+                            if not hasattr(metrics_tracker, 'gradient_explosions'):
+                                metrics_tracker['gradient_explosions'] = 0
+                            metrics_tracker['gradient_explosions'] += 1
+                        
+                        # Optimizer step with conditional gradient scaling
+                        if mixed_precision and scaler is not None and gradient_scaling:
+                            scaler.step(optimizer)
+                            scaler.update()
+                        else:
+                            optimizer.step()
+                        
+                        # Warmup scheduler step (before main scheduler)
+                        if warmup_scheduler and current_warmup_step < warmup_steps:
+                            current_warmup_step += 1
+                            try:
+                                warmup_scheduler.step()
+                                logger.debug(f"Warmup step {current_warmup_step}/{warmup_steps}")
+                            except Exception as e:
+                                logger.warning(f"Warmup scheduler step failed: {e}")
+                        
+                        # Scheduler step on batch if configured
+                        elif scheduler and scheduler_step_on_batch:
+                            if hasattr(scheduler, 'step'):
+                                try:
+                                    if 'ReduceLROnPlateau' in str(type(scheduler)):
+                                        # Don't step ReduceLROnPlateau on batch
+                                        pass
+                                    else:
+                                        scheduler.step()
+                                except Exception as e:
+                                    logger.warning(f"Scheduler step failed: {e}")
+                        
+                        optimizer.zero_grad()
+                        
+                        optimizer_end_time = time.time()
+                        optimizer_time += (optimizer_end_time - optimizer_start_time)
+                        
+                        # Store gradient norm for tracking
+                        if track_metrics and 'gradient_norm' in metrics_to_track:
+                            metrics_tracker['gradient_norms'].append(grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm)
+                    
+                    # Implement bottleneck detection
+                    if bottleneck_detection and batch_idx % (log_frequency * 10) == 0:
+                        try:
+                            # Analyze timing bottlenecks
+                            total_batch_time = time.time() - batch_start_time if batch_start_time else 0
+                            
+                            if total_batch_time > 0:
+                                forward_pct = (forward_time / batch_idx / total_batch_time) * 100 if batch_idx > 0 else 0
+                                backward_pct = (backward_time / batch_idx / total_batch_time) * 100 if batch_idx > 0 else 0
+                                optimizer_pct = (optimizer_time / max(accumulated_steps // gradient_accumulation_steps, 1) / total_batch_time) * 100
+                                data_loading_pct = (data_loading_time / batch_idx / total_batch_time) * 100 if batch_idx > 0 else 0
+                                
+                                # Identify bottleneck
+                                bottleneck = 'unknown'
+                                bottleneck_time = 0
+                                
+                                if forward_pct > max(backward_pct, optimizer_pct, data_loading_pct):
+                                    bottleneck = 'forward_pass'
+                                    bottleneck_time = forward_pct
+                                elif backward_pct > max(forward_pct, optimizer_pct, data_loading_pct):
+                                    bottleneck = 'backward_pass'
+                                    bottleneck_time = backward_pct
+                                elif optimizer_pct > max(forward_pct, backward_pct, data_loading_pct):
+                                    bottleneck = 'optimizer_step'
+                                    bottleneck_time = optimizer_pct
+                                else:
+                                    bottleneck = 'data_loading'
+                                    bottleneck_time = data_loading_pct
+                                
+                                # Log bottleneck if significant
+                                if bottleneck_time > 40:  # If any component takes >40% of time
+                                    logger.warning(
+                                        f"Bottleneck detected: {bottleneck} ({bottleneck_time:.1f}% of batch time)\n"
+                                        f"  Forward: {forward_pct:.1f}%, Backward: {backward_pct:.1f}%, "
+                                        f"Optimizer: {optimizer_pct:.1f}%, Data Loading: {data_loading_pct:.1f}%"
+                                    )
+                                    
+                                    # Track bottleneck in metrics
+                                    if not hasattr(metrics_tracker, 'bottlenecks'):
+                                        metrics_tracker['bottlenecks'] = []
+                                    metrics_tracker['bottlenecks'].append({
+                                        'batch': batch_idx,
+                                        'component': bottleneck,
+                                        'percentage': bottleneck_time,
+                                        'breakdown': {
+                                            'forward': forward_pct,
+                                            'backward': backward_pct,
+                                            'optimizer': optimizer_pct,
+                                            'data_loading': data_loading_pct
+                                        }
+                                    })
+                        
+                        except Exception as e:
+                            logger.debug(f"Bottleneck detection failed: {e}")
+
+                    # Add bottleneck info to final metrics
+                    if bottleneck_detection and hasattr(metrics_tracker, 'bottlenecks'):
+                        metrics_tracker['bottleneck_analysis'] = {
+                            'detected': len(metrics_tracker['bottlenecks']),
+                            'details': metrics_tracker['bottlenecks']
+                        }
+                    
+                    # Add early stopping check after each batch (or at specific intervals)
+                    if early_stopping and batch_idx % metrics_frequency == 0:
+                        # Get the metric to monitor
+                        if early_stopping_metric == 'loss':
+                            current_metric = loss.item() * gradient_accumulation_steps
+                        elif early_stopping_metric in metrics_tracker:
+                            if len(metrics_tracker[early_stopping_metric]) > 0:
+                                current_metric = metrics_tracker[early_stopping_metric][-1]
+                            else:
+                                logger.warning(f"No recorded values for early stopping metric '{early_stopping_metric}', using loss")
+                                current_metric = loss.item() * gradient_accumulation_steps
+                        else:
+                            logger.warning(f"Early stopping metric '{early_stopping_metric}' not found, using loss")
+                            current_metric = loss.item() * gradient_accumulation_steps
+                        
+                        # Check if metric improved
+                        metric_improved = False
+                        if early_stopping_mode == 'min':
+                            if current_metric < (early_stopping_state['best_metric'] - early_stopping_delta):
+                                metric_improved = True
+                        else:  # 'max'
+                            if current_metric > (early_stopping_state['best_metric'] + early_stopping_delta):
+                                metric_improved = True
+                        
+                        if metric_improved:
+                            early_stopping_state['best_metric'] = current_metric
+                            early_stopping_state['patience_counter'] = 0
+                            early_stopping_state['best_epoch'] = batch_idx
+                            
+                            # Save best weights if enabled
+                            if restore_best_weights:
+                                early_stopping_state['best_weights'] = {
+                                    'model': model.state_dict().copy() if hasattr(model, 'state_dict') else None,
+                                    'optimizer': optimizer.state_dict().copy() if optimizer else None,
+                                    'scheduler': scheduler.state_dict().copy() if scheduler else None
+                                }
+                            
+                            logger.debug(f"Early stopping: metric improved to {current_metric:.6f} (batch {batch_idx})")
+                        else:
+                            early_stopping_state['patience_counter'] += 1
+                            
+                            if early_stopping_state['patience_counter'] >= early_stopping_patience:
+                                logger.info(f"Early stopping triggered at batch {batch_idx} (patience: {early_stopping_patience})")
+                                early_stopping_state['stopped'] = True
+                                
+                                # Restore best weights if enabled
+                                if restore_best_weights and early_stopping_state['best_weights']:
+                                    logger.info(f"Restoring best weights from batch {early_stopping_state['best_epoch']}")
+                                    if early_stopping_state['best_weights']['model']:
+                                        model.load_state_dict(early_stopping_state['best_weights']['model'])
+                                    if early_stopping_state['best_weights']['optimizer']:
+                                        optimizer.load_state_dict(early_stopping_state['best_weights']['optimizer'])
+                                    if early_stopping_state['best_weights']['scheduler']:
+                                        scheduler.load_state_dict(early_stopping_state['best_weights']['scheduler'])
+                                
+                                # Break out of training loop
+                                break
+
+                    # Add early stopping info to final metrics
+                    metrics_tracker['early_stopping'] = {
+                        'enabled': early_stopping,
+                        'stopped': early_stopping_state['stopped'] if early_stopping else False,
+                        'best_metric': early_stopping_state['best_metric'] if early_stopping else None,
+                        'best_epoch': early_stopping_state['best_epoch'] if early_stopping else None,
+                        'patience_counter': early_stopping_state['patience_counter'] if early_stopping else 0,
+                        'weights_restored': restore_best_weights and early_stopping_state.get('stopped', False)
+                    }
+                    
+                    # Monitor scaler behavior for dynamic loss scaling
+                    if mixed_precision and scaler is not None and gradient_scaling and dynamic_loss_scaling:
+                        current_scale = scaler.get_scale()
+                        
+                        # Track scale changes
+                        if not hasattr(metrics_tracker, 'scaler_scales'):
+                            metrics_tracker['scaler_scales'] = []
+                        metrics_tracker['scaler_scales'].append(current_scale)
+                        
+                        # Detect scale adjustments
+                        if len(metrics_tracker['scaler_scales']) > 1:
+                            prev_scale = metrics_tracker['scaler_scales'][-2]
+                            if current_scale != prev_scale:
+                                scale_change = 'increased' if current_scale > prev_scale else 'decreased'
+                                logger.debug(f"Loss scale {scale_change}: {prev_scale:.0f} -> {current_scale:.0f}")
+                                
+                                # Warn on frequent scale reductions (indicates instability)
+                                if current_scale < prev_scale:
+                                    if not hasattr(metrics_tracker, 'scale_reductions'):
+                                        metrics_tracker['scale_reductions'] = 0
+                                    metrics_tracker['scale_reductions'] += 1
+                                    
+                                    if metrics_tracker['scale_reductions'] > 10:
+                                        logger.warning(f"Frequent loss scale reductions detected ({metrics_tracker['scale_reductions']} times) - training may be unstable")
+                    
+                    # Update running loss
+                    total_loss += loss.item() * gradient_accumulation_steps
+                    num_batches += 1
+                    
+                    # Store metrics based on frequency
+                    if track_metrics and (batch_idx % metrics_frequency == 0):
+                        if 'loss' in metrics_to_track:
+                            metrics_tracker['losses'].append(loss.item() * gradient_accumulation_steps)
+                        
+                        if 'learning_rate' in metrics_to_track:
+                            current_lr = optimizer.param_groups[0]['lr']
+                            metrics_tracker['learning_rates'].append(current_lr)
+                        
+                        if 'batch_time' in metrics_to_track and batch_start_time:
+                            batch_time = time.time() - batch_start_time
+                            metrics_tracker['batch_times'].append(batch_time)
+                        
+                        # Detailed metrics (only when frequency allows)
+                        if calculate_detailed_metrics:
+                            # Track gradient statistics
+                            if 'gradient_norm' in metrics_to_track and 'grad_norm' in locals():
+                                metrics_tracker['gradient_norms'].append(grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm)
+                            
+                            # Track activation statistics
+                            if hasattr(model, 'get_activation_stats'):
+                                activation_stats = model.get_activation_stats()
+                                for layer_name, stats in activation_stats.items():
+                                    metrics_tracker['detailed_metrics'].setdefault(f'activation_{layer_name}', []).append(stats)
+                            
+                            # Track weight statistics
+                            if 'weight_stats' in metrics_to_track:
+                                for name, param in model.named_parameters():
+                                    if param.requires_grad:
+                                        metrics_tracker['detailed_metrics'].setdefault(f'weight_{name}_mean', []).append(param.data.mean().item())
+                                        metrics_tracker['detailed_metrics'].setdefault(f'weight_{name}_std', []).append(param.data.std().item())
+                        
+                        # Memory usage tracking
+                        if 'memory_usage' in metrics_to_track and torch.cuda.is_available():
+                            memory_allocated = torch.cuda.memory_allocated(device) / 1024**2  # MB
+                            metrics_tracker['memory_usage'].append(memory_allocated)
+                    
+                    # Memory management
+                    if memory_efficient:
+                        if batch_idx % empty_cache_frequency == 0 and torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        
+                        if batch_idx % gc_collection_frequency == 0:
+                            gc.collect()
+                    
+                    # Logging
+                    if batch_idx % log_frequency == 0 and batch_idx > 0:
+                        avg_loss = total_loss / num_batches
+                        current_lr = optimizer.param_groups[0]['lr']
+                        
+                        if timing_analysis:
+                            logger.info(
+                                f"Batch {batch_idx}/{len(loader)} | "
+                                f"Loss: {avg_loss:.6f} | "
+                                f"LR: {current_lr:.2e} | "
+                                f"Forward: {forward_time/batch_idx:.3f}s | "
+                                f"Backward: {backward_time/batch_idx:.3f}s | "
+                                f"Optimizer: {optimizer_time/(accumulated_steps//gradient_accumulation_steps):.3f}s"
+                            )
+                        else:
+                            logger.info(
+                                f"Batch {batch_idx}/{len(loader)} | "
+                                f"Loss: {avg_loss:.6f} | "
+                                f"LR: {current_lr:.2e}"
+                            )
+                    
+                    # Update alive-progress bar
+                    if pbar:
+                        current_loss_display = loss.item() * gradient_accumulation_steps
+                        avg_loss_display = total_loss / num_batches
+                        current_lr_display = optimizer.param_groups[0]['lr']
+                        
+                        # Format the text for the progress bar
+                        progress_text = (f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}")
+                        #progress_text = f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}"
+                        
+                        # Update the progress bar text
+                        pbar.text(progress_text)
+                        
+                        # Update the progress
+                        pbar()
+                    
+                    # Post-batch callback
+                    if post_batch_callback:
+                        post_batch_callback(batch_idx, batch, model, optimizer, loss)
+                    
+                    # Dynamic batch size adaptation
+                    if dynamic_batching and (batch_idx + 1) % metrics_frequency == 0:
+                        try:
+                            # Collect performance metrics
+                            current_batch_time = time.time() - batch_start_time
+                            
+                            # Memory-based adaptation
+                            if device.type == 'cuda':
+                                try:
+                                    memory_allocated = torch.cuda.memory_allocated(device) / torch.cuda.max_memory_allocated(device)
+                                    memory_reserved = torch.cuda.memory_reserved(device) / torch.cuda.max_memory_reserved(device)
+                                    
+                                    # Adjust batch size based on memory usage
+                                    if memory_allocated > 0.85:  # High memory usage
+                                        # Reduce batch size
+                                        new_batch_size = max(
+                                            batch_processing_state['min_batch_size'],
+                                            int(batch_processing_state['current_batch_size'] * 0.8)
+                                        )
+                                        
+                                        if new_batch_size != batch_processing_state['current_batch_size']:
+                                            logger.info(
+                                                f"Reducing batch size due to high memory usage: "
+                                                f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
+                                                f"(memory: {memory_allocated:.1%})"
+                                            )
+                                            batch_processing_state['current_batch_size'] = new_batch_size
+                                            batch_processing_state['adaptation_history'].append({
+                                                'batch': batch_idx,
+                                                'old_size': batch_processing_state['current_batch_size'],
+                                                'new_size': new_batch_size,
+                                                'reason': 'high_memory',
+                                                'memory_usage': memory_allocated
+                                            })
+                                    
+                                    elif memory_allocated < 0.6 and batch_processing_state['success_count'] > 10:
+                                        # Increase batch size if memory allows
+                                        new_batch_size = min(
+                                            batch_processing_state['max_batch_size'],
+                                            int(batch_processing_state['current_batch_size'] * 1.2)
+                                        )
+                                        
+                                        if new_batch_size != batch_processing_state['current_batch_size']:
+                                            logger.info(
+                                                f"Increasing batch size due to low memory usage: "
+                                                f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
+                                                f"(memory: {memory_allocated:.1%})"
+                                            )
+                                            batch_processing_state['current_batch_size'] = new_batch_size
+                                            batch_processing_state['success_count'] = 0  # Reset counter
+                                            batch_processing_state['adaptation_history'].append({
+                                                'batch': batch_idx,
+                                                'old_size': batch_processing_state['current_batch_size'],
+                                                'new_size': new_batch_size,
+                                                'reason': 'low_memory',
+                                                'memory_usage': memory_allocated
+                                            })
+                                except RuntimeError as mem_err:
+                                    logger.debug(f"Memory statistics unavailable: {mem_err}")
+                            
+                            # Time-based adaptation
+                            if batch_size_adaptation == 'time_optimized':
+                                avg_batch_time = np.mean(metrics_tracker['batch_times'][-10:]) if len(metrics_tracker['batch_times']) >= 10 else current_batch_time
+                                
+                                # Target batch time (e.g., 1 second)
+                                target_time = batch_config.get('target_batch_time', 1.0)
+                                
+                                if avg_batch_time > target_time * 1.5:
+                                    # Reduce batch size to speed up
+                                    new_batch_size = max(
+                                        batch_processing_state['min_batch_size'],
+                                        int(batch_processing_state['current_batch_size'] * 0.9)
+                                    )
+                                    
+                                    if new_batch_size != batch_processing_state['current_batch_size']:
+                                        logger.info(
+                                            f"Reducing batch size for faster iteration: "
+                                            f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
+                                            f"(avg time: {avg_batch_time:.3f}s)"
+                                        )
+                                        batch_processing_state['current_batch_size'] = new_batch_size
+                                        batch_processing_state['adaptation_history'].append({
+                                            'batch': batch_idx,
+                                            'old_size': batch_processing_state['current_batch_size'],
+                                            'new_size': new_batch_size,
+                                            'reason': 'slow_batch_time',
+                                            'avg_batch_time': avg_batch_time,
+                                            'target_time': target_time
+                                        })
+                                
+                                elif avg_batch_time < target_time * 0.5 and batch_processing_state['success_count'] > 10:
+                                    # Increase batch size for better throughput
+                                    new_batch_size = min(
+                                        batch_processing_state['max_batch_size'],
+                                        int(batch_processing_state['current_batch_size'] * 1.1)
+                                    )
+                                    
+                                    if new_batch_size != batch_processing_state['current_batch_size']:
+                                        logger.info(
+                                            f"Increasing batch size for better throughput: "
+                                            f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
+                                            f"(avg time: {avg_batch_time:.3f}s)"
+                                        )
+                                        batch_processing_state['current_batch_size'] = new_batch_size
+                                        batch_processing_state['success_count'] = 0
+                                        batch_processing_state['adaptation_history'].append({
+                                            'batch': batch_idx,
+                                            'old_size': batch_processing_state['current_batch_size'],
+                                            'new_size': new_batch_size,
+                                            'reason': 'fast_batch_time',
+                                            'avg_batch_time': avg_batch_time,
+                                            'target_time': target_time
+                                        })
+                            
+                            # Track successful batches
+                            batch_processing_state['success_count'] += 1
+                            
+                        except Exception as e:
+                            logger.warning(f"Dynamic batching adaptation failed: {e}")
+                    
+                    # Profiler step
+                    if profiler:
+                        profiler.step()
+                    
+                    # Execute callbacks
+                    for callback in callbacks:
+                        try:
+                            callback(
+                                batch_idx=batch_idx,
+                                loss=loss.item() * gradient_accumulation_steps,
+                                model=model,
+                                optimizer=optimizer,
+                                metrics=metrics_tracker
+                            )
+                        except Exception as e:
+                            logger.warning(f"Callback execution failed: {e}")
+                    
+                    # Checkpoint saving (periodic)
+                    if save_checkpoint and checkpoint_frequency > 0:
+                        if (batch_idx + 1) % checkpoint_frequency == 0:
+                            try:
+                                # Determine checkpoint path
+                                if checkpoint_path is None:
+                                    if use_run_tracking and 'checkpoints' in run_specific_dirs:
+                                        checkpoint_save_path = run_specific_dirs['checkpoints'] / f"epoch_{epoch}_batch_{batch_idx+1}_checkpoint.pth"
+                                    else:
+                                        checkpoint_save_path = Path.cwd() / f"checkpoint_epoch_{epoch}_batch_{batch_idx+1}.pth"
+                                else:
+                                    checkpoint_save_path = Path(checkpoint_path)
+                                    # Append batch info if it's a directory or base name
+                                    if checkpoint_save_path.is_dir():
+                                        checkpoint_save_path = checkpoint_save_path / f"epoch_{epoch}_batch_{batch_idx+1}_checkpoint.pth"
+                                
+                                # Prepare checkpoint data
+                                checkpoint_data = {
+                                    'epoch': epoch,
+                                    'batch': batch_idx + 1,
+                                    'total_batches': len(loader),
+                                    'loss': loss.item() * gradient_accumulation_steps,
+                                    'avg_loss': total_loss / num_batches if num_batches > 0 else float('inf'),
+                                }
+                                
+                                # Add model state
+                                if model_state_dict:
+                                    checkpoint_data['model_state_dict'] = model.state_dict()
+                                
+                                # Add optimizer state
+                                if save_optimizer_state and optimizer is not None:
+                                    checkpoint_data['optimizer_state_dict'] = optimizer.state_dict()
+                                
+                                # Add scheduler state
+                                if save_scheduler_state and scheduler is not None:
+                                    checkpoint_data['scheduler_state_dict'] = scheduler.state_dict()
+                                
+                                # Add training metrics
+                                checkpoint_data['metrics'] = {
+                                    'learning_rate': optimizer.param_groups[0]['lr'],
+                                    'num_batches_processed': num_batches,
+                                    'num_samples_processed': num_samples,
+                                    'gradient_accumulation_steps': gradient_accumulation_steps,
+                                }
+                                
+                                # Add run tracking info
+                                if use_run_tracking:
+                                    checkpoint_data['run_tracking'] = {
+                                        'run_id': run_id,
+                                        'run_number': run_number,
+                                    }
+                                
+                                # Save checkpoint
+                                checkpoint_save_path.parent.mkdir(parents=True, exist_ok=True)
+                                torch.save(checkpoint_data, checkpoint_save_path)
+                                
+                                if verbose and batch_idx % (log_frequency * 10) == 0:
+                                    logger.info(f"Checkpoint saved: {checkpoint_save_path}")
+                                    
+                            except Exception as e:
+                                logger.warning(f"Failed to save checkpoint at batch {batch_idx}: {e}")
+                    
+                except Exception as batch_error:
+                    # Add OOM handling BEFORE the generic error logging
+                    if isinstance(batch_error, RuntimeError):
+                        if "out of memory" in str(batch_error).lower() or "cuda out of memory" in str(batch_error).lower():
+                            logger.error(f"CUDA Out of Memory error at batch {batch_idx}")
+                            
+                            # Track OOM events
+                            batch_processing_state['oom_count'] += 1
+                            
+                            # Automatic batch size reduction
+                            if dynamic_batching or batch_processing_mode == 'memory_optimized':
+                                old_batch_size = batch_processing_state['current_batch_size']
+                                new_batch_size = max(
+                                    batch_processing_state['min_batch_size'],
+                                    int(old_batch_size * 0.5)  # Halve the batch size
+                                )
+                                
+                                if new_batch_size < old_batch_size:
+                                    logger.warning(
+                                        f"Reducing batch size due to OOM: {old_batch_size} → {new_batch_size}"
+                                    )
+                                    batch_processing_state['current_batch_size'] = new_batch_size
+                                    batch_processing_state['adaptation_history'].append({
+                                        'batch': batch_idx,
+                                        'old_size': old_batch_size,
+                                        'new_size': new_batch_size,
+                                        'reason': 'oom_error',
+                                        'oom_count': batch_processing_state['oom_count']
+                                    })
+                                    
+                                    # Clear CUDA cache
+                                    if torch.cuda.is_available():
+                                        torch.cuda.empty_cache()
+                                    
+                                    # Retry with smaller batch size
+                                    if error_handling == 'retry' or batch_processing_mode == 'memory_optimized':
+                                        logger.info(f"Retrying batch {batch_idx} with reduced batch size")
+                                        optimizer.zero_grad()
+                                        continue
+                                else:
+                                    logger.error(f"Minimum batch size reached, cannot reduce further")
+                                    if not graceful_degradation:
+                                        raise
+                            else:
+                                logger.error("Dynamic batching not enabled, cannot automatically reduce batch size")
+                                if not graceful_degradation:
+                                    raise
+                    
+                    # Existing generic error handling
+                    logger.error(f"Error in batch {batch_idx}: {batch_error}")
+                    if continue_on_error:
+                        if error_handling == 'skip':
+                            continue
+                        elif error_handling == 'retry':
+                            retry_count = 0
+                            while retry_count < max_retries:
+                                try:
+                                    logger.info(f"Retrying batch {batch_idx}, attempt {retry_count + 1}")
+                                    optimizer.zero_grad()
+                                    break
+                                except Exception as retry_e:
+                                    retry_count += 1
+                                    logger.warning(f"Retry {retry_count} failed: {retry_e}")
+                            
+                            if retry_count >= max_retries:
+                                logger.error(f"Max retries exceeded for batch {batch_idx}")
+                                if graceful_degradation:
+                                    continue
+                                else:
+                                    raise
+                        else:
+                            # Add dummy values to continue
+                            total_loss += 1.0
+                            num_batches += 1
+                            continue
+                    else:
+                        # Return partial results
+                        avg_loss = total_loss / max(num_batches, 1)
+                        partial_metrics = default_metrics.copy()
+                        partial_metrics.update({
+                            'loss': avg_loss,
+                            'num_batches': num_batches,
+                            'num_samples': num_samples,
+                            'error': f"Batch {batch_idx} failed: {str(batch_error)}",
+                            'partial_completion': True
+                        })
+                        return avg_loss, partial_metrics
+        
+        # Handle remaining gradients after main loop
+        if accumulated_steps % gradient_accumulation_steps != 0:
+            # Apply gradient scaling conditionally
+            if mixed_precision and scaler is not None and gradient_scaling:
+                if gradient_clip > 0:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip)
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                if gradient_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip)
+                optimizer.step()
+        
+        # Reduce metrics across distributed processes if enabled
+        if distributed:
+            try:
+                import torch.distributed as dist
+                
+                # Synchronize before metric reduction
+                dist.barrier()
+                
+                # Reduce total loss
+                total_loss_tensor = torch.tensor(total_loss, device=device)
+                dist.all_reduce(total_loss_tensor, op=dist.ReduceOp.SUM)
+                total_loss = total_loss_tensor.item() / world_size
+                
+                # Reduce num_batches and num_samples
+                num_batches_tensor = torch.tensor(num_batches, device=device)
+                num_samples_tensor = torch.tensor(num_samples, device=device)
+                dist.all_reduce(num_batches_tensor, op=dist.ReduceOp.SUM)
+                dist.all_reduce(num_samples_tensor, op=dist.ReduceOp.SUM)
+                num_batches = num_batches_tensor.item()
+                num_samples = num_samples_tensor.item()
+                
+                # Reduce tracked metrics
+                if track_metrics and metrics_tracker['losses']:
+                    losses_tensor = torch.tensor(metrics_tracker['losses'], device=device)
+                    dist.all_reduce(losses_tensor, op=dist.ReduceOp.AVG)
+                    metrics_tracker['losses'] = losses_tensor.cpu().tolist()
+                
+                logger.debug(f"Reduced metrics across {world_size} processes (rank {rank})")
+                
+            except Exception as e:
+                logger.warning(f"Failed to reduce distributed metrics: {e}")
+        
+        # Scheduler step after epoch
+        if scheduler and (scheduler_step_on_epoch or scheduler_step_after_epoch):
+            try:
+                if 'ReduceLROnPlateau' in str(type(scheduler)):
+                    # Use scheduler_metric parameter if specified
+                    if scheduler_metric and scheduler_metric in metrics:
+                        metric_value = metrics[scheduler_metric]
+                        scheduler.step(metric_value)
+                        logger.debug(f"Scheduler stepped with {scheduler_metric}={metric_value}")
+                    else:
+                        # Fallback to average loss
+                        avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
+                        scheduler.step(avg_loss)
+                        logger.debug(f"Scheduler stepped with loss={avg_loss}")
+                else:
+                    scheduler.step()
+                logger.debug("Scheduler step completed")
+            except Exception as e:
+                logger.warning(f"Scheduler step failed: {e}")
+        
+        # Calculate final metrics
+        epoch_end_time = time.time()
+        total_epoch_time = epoch_end_time - epoch_start_time
+        avg_loss = total_loss / num_batches if num_batches > 0 else default_loss
+        
+        # Save best model checkpoint if enabled
+        if save_best_model and avg_loss < best_metric_value:
+            try:
+                # Determine best model path
+                if checkpoint_path is None:
+                    if use_run_tracking and 'checkpoints' in run_specific_dirs:
+                        best_model_path = run_specific_dirs['checkpoints'] / f"best_model_epoch_{epoch}.pth"
+                    else:
+                        best_model_path = Path.cwd() / f"best_model_epoch_{epoch}.pth"
+                else:
+                    best_model_path = Path(checkpoint_path).parent / f"best_model_epoch_{epoch}.pth"
+                
+                # Prepare best model checkpoint
+                best_checkpoint = {
+                    'epoch': epoch,
+                    'best_metric': best_metric,
+                    'best_metric_value': avg_loss,
+                    'loss': avg_loss,
+                    'model_state_dict': model.state_dict() if model_state_dict else None,
+                    'optimizer_state_dict': optimizer.state_dict() if save_optimizer_state and optimizer else None,
+                    'scheduler_state_dict': scheduler.state_dict() if save_scheduler_state and scheduler else None,
+                    'config': final_config,
+                    'training_metrics': {
+                        'learning_rate': optimizer.param_groups[0]['lr'],
+                        'total_epoch_time': total_epoch_time,
+                        'num_batches': num_batches,
+                        'num_samples': num_samples,
+                    }
+                }
+                
+                # Add run tracking info
+                if use_run_tracking:
+                    best_checkpoint['run_tracking'] = {
+                        'run_id': run_id,
+                        'run_number': run_number,
+                        'is_best_for_run': True,
+                    }
+                
+                # Save best model
+                best_model_path.parent.mkdir(parents=True, exist_ok=True)
+                torch.save(best_checkpoint, best_model_path)
+                
+                # Update best metric value
+                best_metric_value = avg_loss
+                
+                if verbose:
+                    logger.info(f"New best model saved: {best_model_path} (loss: {avg_loss:.6f})")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to save best model checkpoint: {e}")
+        
+        # Metrics dictionary
+        metrics = {
+            'loss': avg_loss,
+            'epoch': epoch if epoch is not None else 0,
+            'num_batches': num_batches,
+            'num_samples': num_samples,
+            'total_epoch_time': total_epoch_time,
+            'avg_batch_time': total_epoch_time / num_batches if num_batches > 0 else 0,
+            'learning_rate': optimizer.param_groups[0]['lr'],
+            'final_learning_rate': optimizer.param_groups[0]['lr'],
+            'gradient_accumulation_steps': gradient_accumulation_steps,
+            'effective_batch_size': batch_size * gradient_accumulation_steps,
+            'mixed_precision_enabled': mixed_precision,
+            'gradient_scaling_enabled': gradient_scaling,
+            'loss_scaling_method': loss_scaling if loss_scaling else ('dynamic' if dynamic_loss_scaling else 'disabled'),
+            'dynamic_loss_scaling_enabled': dynamic_loss_scaling,
+            'scaler_scale': scaler.get_scale() if scaler and gradient_scaling else None,
+            'scaler_growth_tracker': scaler._growth_tracker if scaler and gradient_scaling and hasattr(scaler, '_growth_tracker') else None,
+            # Loss stability information
+            'loss_stability_info': {
+                'label_smoothing': label_smoothing,
+                'label_smoothing_applied': label_smoothing is not None and label_smoothing > 0,
+                'focal_loss_alpha': focal_loss_alpha,
+                'focal_loss_gamma': focal_loss_gamma,
+                'focal_loss_enabled': focal_loss_alpha is not None and focal_loss_gamma is not None,
+                'loss_smoothing_method': loss_smoothing,
+                'loss_smoothing_enabled': loss_smoothing is not None,
+                'loss_smoothing_momentum': loss_stability_config.get('loss_smoothing_momentum', 0.9) if loss_smoothing in ['ema', 'exponential'] else None,
+                'loss_window_size': loss_stability_config.get('loss_window_size', 10) if loss_smoothing == 'temporal' else None,
+                'stable_computation_enabled': stable_loss_computation,
+                'stability_epsilon': loss_stability_config.get('stability_epsilon', 1e-7) if stable_loss_computation else None,
+                'stability_clip_value': loss_stability_config.get('stability_clip_value', 10.0) if stable_loss_computation else None,
+                'final_smoothed_value': smoothed_loss_value if loss_smoothing and 'smoothed_loss_value' in locals() else None,
+                'average_focal_weight': float(np.mean([m for m in metrics_tracker['detailed_metrics'].get('avg_focal_weight', [0])])) if calculate_detailed_metrics and focal_loss_alpha is not None else None
+            },
+            # Regularization information
+            'regularization_info': {
+                'dropout_rate': dropout_rate,
+                'dropout_applied': training_stats.get('dropout_rate_applied'),
+                'weight_decay': weight_decay,
+                'l1_regularization': l1_regularization,
+                'l1_applied': l1_regularization is not None and l1_regularization > 0,
+                'l2_regularization': l2_regularization,
+                'l2_applied': l2_regularization is not None and l2_regularization > 0,
+                'spectral_normalization': spectral_normalization,
+                'spectral_norm_applied': training_stats.get('spectral_normalization_applied', False),
+                'spectral_norm_layers': training_stats.get('spectral_norm_layers', 0),
+                'batch_norm_momentum': batch_norm_momentum,
+                'batch_norm_momentum_applied': training_stats.get('batch_norm_momentum_applied', False),
+                'batch_norm_layers': training_stats.get('batch_norm_layers_configured', 0),
+                'layer_norm_eps': layer_norm_eps,
+                'layer_norm_eps_applied': training_stats.get('layer_norm_eps_applied', False),
+                'layer_norm_layers': training_stats.get('layer_norm_layers_configured', 0),
+                'total_regularization_penalty': sum([
+                    loss_components.get('l1_regularization', 0),
+                    loss_components.get('l2_regularization', 0),
+                    loss_components.get('regularization', 0)
+                ]) / max(num_batches, 1) if 'loss_components' in locals() else 0
+            },
+            # Loss information
+            'loss_info': {
+                'loss_function': loss_function,
+                'reconstruction_weight': reconstruction_loss_weight,
+                'auxiliary_weight': auxiliary_loss_weight if multi_task_learning else 0.0,
+                'regularization_weight': regularization_loss_weight,
+                'multi_task_learning': multi_task_learning,
+                'weighted_loss': loss_weights is not None,
+                'loss_components': {
+                    'reconstruction': float(np.mean([m for m in metrics_tracker['detailed_metrics'].get('loss_reconstruction', [0])])) if calculate_detailed_metrics else None,
+                    'auxiliary': float(np.mean([m for m in metrics_tracker['detailed_metrics'].get('loss_auxiliary', [0])])) if calculate_detailed_metrics and multi_task_learning else None,
+                    'regularization': float(np.mean([m for m in metrics_tracker['detailed_metrics'].get('loss_regularization', [0])])) if calculate_detailed_metrics and regularization_loss_weight > 0 else None
+                }
+            },
+            'scheduler_info': {
+                'scheduler_used': scheduler is not None,
+                'scheduler_type': str(type(scheduler).__name__) if scheduler else None,
+                'scheduler_step_on_epoch': scheduler_step_on_epoch,
+                'scheduler_step_on_batch': scheduler_step_on_batch,
+                'scheduler_metric_used': scheduler_metric,
+                'warmup_completed': current_warmup_step >= warmup_steps if warmup_steps else None,
+                'warmup_steps_taken': current_warmup_step if warmup_scheduler else 0
+            },
+            'memory_allocated_mb': torch.cuda.memory_allocated(device) / 1024**2 if torch.cuda.is_available() else 0,
+            'memory_reserved_mb': torch.cuda.memory_reserved(device) / 1024**2 if torch.cuda.is_available() else 0,
+            'samples_per_second': num_samples / total_epoch_time if total_epoch_time > 0 else 0,
+            'batches_per_second': num_batches / total_epoch_time if total_epoch_time > 0 else 0,
+            'timing': {
+                'forward_time': forward_time,
+                'backward_time': backward_time,
+                'optimizer_time': optimizer_time,
+                'data_loading_time': data_loading_time,
+                'avg_forward_time': forward_time / num_batches if num_batches > 0 else 0,
+                'avg_backward_time': backward_time / num_batches if num_batches > 0 else 0,
+                'avg_optimizer_time': optimizer_time / max(accumulated_steps // gradient_accumulation_steps, 1) if accumulated_steps > 0 else 0,
+                'avg_data_loading_time': data_loading_time / num_batches if num_batches > 0 else 0
+            },
+            'config_applied': final_config,
+            'device': str(device),
+            'distributed_training': distributed,
+            'training_stable': not any(loss > 1000 for loss in metrics_tracker['losses'][-10:]) if metrics_tracker['losses'] else True,
+            'loss_spikes_detected': len([l for l in metrics_tracker['losses'] if l > avg_loss * loss_spike_threshold]) if loss_spike_detection else 0,
+            'training_completed': True,
+            # Batch processing information
+            'batch_processing_info': {
+                'mode': batch_processing_mode,
+                'variable_batch_size_enabled': variable_batch_size,
+                'dynamic_batching_enabled': dynamic_batching,
+                'batch_size_adaptation': batch_size_adaptation,
+                'original_batch_size': batch_processing_state['original_batch_size'],
+                'final_batch_size': batch_processing_state['current_batch_size'],
+                'min_batch_size': batch_processing_state['min_batch_size'],
+                'max_batch_size': batch_processing_state['max_batch_size'],
+                'adaptation_count': len(batch_processing_state['adaptation_history']),
+                'oom_count': batch_processing_state['oom_count'],
+                'success_count': batch_processing_state['success_count'],
+                'adaptation_history': batch_processing_state['adaptation_history'][-10:] if calculate_detailed_metrics else None,
+                'average_batch_size': float(np.mean([
+                    h['new_size'] for h in batch_processing_state['adaptation_history']
+                ])) if batch_processing_state['adaptation_history'] else batch_processing_state['current_batch_size']
+            },
+            # Add checkpoint information
+            'checkpointing': {
+                'save_checkpoint_enabled': save_checkpoint,
+                'checkpoint_frequency': checkpoint_frequency,
+                'checkpoints_saved': num_batches // checkpoint_frequency if checkpoint_frequency > 0 else 0,
+                'best_model_saved': save_best_model and avg_loss < best_metric_value,
+                'best_metric_value': best_metric_value if save_best_model else None,
+            } if save_checkpoint or save_best_model else None,
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_directories': {
+                    k: str(v) for k, v in run_specific_dirs.items()
+                } if run_specific_dirs else None,
+                'epoch_trained_for_run': run_id if use_run_tracking else None,
+                'is_run_specific_output': use_run_tracking and run_id is not None,
+                'checkpoint_directory': str(run_specific_dirs.get('checkpoints')) if use_run_tracking and 'checkpoints' in run_specific_dirs else None,
+            } if use_run_tracking else None
+        }
+        
+        # Add tracked metrics
+        if track_metrics:
+            if metrics_tracker['losses']:
+                metrics['loss_std'] = float(np.std(metrics_tracker['losses']))
+                metrics['min_loss'] = float(np.min(metrics_tracker['losses']))
+                metrics['max_loss'] = float(np.max(metrics_tracker['losses']))
+            
+            if metrics_tracker['gradient_norms']:
+                metrics['avg_gradient_norm'] = float(np.mean(metrics_tracker['gradient_norms']))
+                metrics['max_gradient_norm'] = float(np.max(metrics_tracker['gradient_norms']))
+                metrics['gradient_norm_std'] = float(np.std(metrics_tracker['gradient_norms']))
+            
+            if metrics_tracker['batch_times']:
+                metrics['avg_batch_time'] = float(np.mean(metrics_tracker['batch_times']))
+                metrics['batch_time_std'] = float(np.std(metrics_tracker['batch_times']))
+            
+            if metrics_tracker['memory_usage']:
+                metrics['avg_memory_usage_mb'] = float(np.mean(metrics_tracker['memory_usage']))
+                metrics['max_memory_usage_mb'] = float(np.max(metrics_tracker['memory_usage']))
+        
+        logger.info(f"Training epoch completed: loss={avg_loss:.6f}, batches={num_batches}")
+        return avg_loss, metrics
+        
+    except Exception as e:
+        logger.error(f"Training epoch failed: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Calculate what we can from available data
+        try:
+            final_loss = total_loss / max(num_batches, 1) if num_batches > 0 else default_loss
+        except:
+            final_loss = default_loss
+        
+        error_metrics = default_metrics.copy()
+        error_metrics.update({
+            'loss': final_loss,
+            'num_batches': num_batches,
+            'num_samples': num_samples,
+            'error': str(e),
+            'error_type': type(e).__name__,
+            'training_failed': True
+        })
+        
+        if graceful_degradation:
+            logger.warning(f"Returning error results: {error_metrics}")
+            return final_loss, error_metrics
+        else:
+            # Still return something to avoid unpacking errors
+            return default_loss, error_metrics
+    
+    finally:
+        # Restore original logging level
+        if verbose and original_level is not None:
+            logger.setLevel(original_level)
+        
+        # Cleanup
+        try:
+            if pbar:
+                # Close progress bars
+                if hasattr(pbar, '__exit__'):
+                    pbar.__exit__(None, None, None)
+                else:
+                    # Fallback for different alive_bar versions
+                    pbar.close()
+            
+            if profiler:
+                profiler.stop()
+            
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+        except:
+            pass
+
 def train_model(
     # Core Training Parameters
     model_type: Optional[str] = None,
@@ -47692,17 +49721,24 @@ def train_model(
 
         # Create run-specific subdirectories for all outputs
         run_model_dir = model_dir / run_id
+        run_log_dir = log_dir / run_id
+        run_tensorboard_dir = tensorboard_dir / run_id
+        run_config_dir = config_dir / run_id
         run_checkpoint_dir = checkpoint_dir / run_id
         run_results_dir = results_dir / run_id
-        run_artifacts_dir = artifacts_dir / run_id
-        run_metrics_dir = metrics_dir / run_id
-        run_figures_dir = figures_dir / run_id
         run_data_dir = data_dir / run_id
-        #run_config_dir = config_dir / run_id
+        run_reports_dir = reports_dir / run_id
+        run_metrics_dir = metrics_dir / run_id
+        run_datasets_dir = datasets_dir / run_id
+        run_artifacts_dir = artifacts_dir / run_id
+        run_figures_dir = figures_dir / run_id
+        run_info_dir = info_dir / run_id
 
         # Create all run-specific directories
-        #run_directories = [run_model_dir, run_checkpoint_dir, run_results_dir, run_artifacts_dir, run_metrics_dir, run_figures_dir, run_data_dir, run_config_dir]
-        run_directories = [run_model_dir, run_checkpoint_dir, run_results_dir, run_artifacts_dir, run_metrics_dir, run_figures_dir, run_data_dir]
+        run_directories = [
+            run_model_dir, run_log_dir, run_tensorboard_dir, run_config_dir, run_checkpoint_dir, run_results_dir, run_data_dir,
+            run_reports_dir, run_metrics_dir, run_datasets_dir, run_artifacts_dir, run_figures_dir, run_info_dir
+        ]
 
         for directory in run_directories:
             try:
@@ -47757,13 +49793,19 @@ def train_model(
                 'process_id': process_id,
                 'directories': {
                     'experiment': str(experiment_dir),
-                    'model': str(run_model_dir),
+                    'models': str(run_model_dir),
+                    'logs': str(run_log_dir),
+                    'tensorboard': str(run_tensorboard_dir),
+                    'config': str(run_config_dir),
                     'checkpoints': str(run_checkpoint_dir),
                     'results': str(run_results_dir),
-                    'artifacts': str(run_artifacts_dir),
+                    'data': str(run_data_dir),
+                    'reports': str(run_reports_dir),
                     'metrics': str(run_metrics_dir),
+                    'datasets': str(run_datasets_dir),
+                    'artifacts': str(run_artifacts_dir),
                     'figures': str(run_figures_dir),
-                    'data': str(run_data_dir)
+                    'info': str(run_info_dir)
                 },
                 'system': {
                     'hostname': platform.node(),
@@ -47855,6 +49897,15 @@ def train_model(
                     artifacts_path=artifacts_path,
                     silent=silent_mode,
                     config=config,
+                    # Pass run tracking information
+                    run_id=run_id,
+                    run_number=run_number,
+                    run_specific_dirs={
+                        'data': run_data_dir,
+                        'artifacts': run_artifacts_dir,
+                        'metrics': run_metrics_dir
+                    },
+                    use_run_tracking=True,
                     **{k: v for k, v in data_config.items() if k not in ['data_path', 'artifacts_path']}
                 )
                 
@@ -47894,7 +49945,6 @@ def train_model(
                     'features': input_dim,
                     'validation_split': validation_split,
                     'random_state': random_seed
-                    #'config': config
                 }
                 
                 # Add synthetic-specific config
@@ -47919,6 +49969,17 @@ def train_model(
                 data = generate_synthetic_data(
                     silent=silent_mode,
                     config=config,
+                    # Pass run tracking information
+                    run_id=run_id,
+                    run_number=run_number,
+                    run_specific_dirs={
+                        'datasets': run_datasets_dir,
+                        'reports': run_reports_dir,
+                        'results': run_results_dir,
+                        'data': run_data_dir,
+                        'metrics': run_metrics_dir
+                    },
+                    use_run_tracking=True,
                     **synthetic_params
                 )
                 data_metadata = data.get("metadata", {})
@@ -47956,13 +50017,25 @@ def train_model(
                 'pin_memory': pin_memory,
                 'persistent_workers': persistent_workers,
                 'shuffle': True,
-                'drop_last': False,
-                'config': config
+                'drop_last': False
             }
             
             train_loader, val_loader, test_loader = create_dataloaders(
                 data=data,
                 silent=silent_mode,
+                config=config,
+                # Pass run tracking information
+                run_id=run_id,
+                run_number=run_number,
+                run_specific_dirs={
+                    'metrics': run_metrics_dir,
+                    'data': run_data_dir,
+                    'artifacts': run_artifacts_dir,
+                    'datasets': run_datasets_dir,
+                    'reports': run_reports_dir,
+                    'results': run_results_dir
+                },
+                use_run_tracking=True,
                 **dataloader_config
             )
             
@@ -48200,6 +50273,16 @@ def train_model(
                     scheduler=scheduler,
                     progress_bar=progress_bar and not epoch_pbar,
                     verbose=debug_mode,
+                    # Pass run tracking information
+                    run_id=run_id,
+                    run_number=run_number,
+                    run_specific_dirs={
+                        'checkpoints': run_checkpoint_dir,
+                        'metrics': run_metrics_dir,
+                        'artifacts': run_artifacts_dir,
+                        'logs': run_log_dir
+                    },
+                    use_run_tracking=True,
                     config=config
                 )
                 
@@ -52737,7 +54820,7 @@ def train_model_quick(
     
     **kwargs
 ) -> Dict[str, Any]:
-    """Quick model training with enhanced context display and error handling."""
+    """Quick model training with context display and error handling."""
     try:
         # Clear screen and show banner with config
         print("\033c", end="")
@@ -52883,8 +54966,8 @@ def train_model_quick(
             
             while True:
                 try:
-                    choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-5): " + Style.RESET_ALL).strip()
-                    if choice in ['0', '1', '2', '3', '4', '5']:
+                    choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-5), Enter to keep current: " + Style.RESET_ALL).strip()
+                    if choice in ['', '0', '1', '2', '3', '4', '5']:
                         break
                     print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
                 except (EOFError, KeyboardInterrupt):
@@ -52985,7 +55068,7 @@ def train_model_quick(
                     use_real_data = True
                     quick_training_config['use_real_data'] = True
                     print(Fore.GREEN + Style.BRIGHT + "\nSwitched to real data mode")
-                elif use_real_choice in ['n', 'no']:
+                elif use_real_choice in ['', 'n', 'no']:
                     use_real_data = False
                     quick_training_config['use_real_data'] = False
                     print(Fore.GREEN + Style.BRIGHT + "\nUsing synthetic data")
@@ -53122,7 +55205,7 @@ def train_model_quick(
                 print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.YELLOW + Style.BRIGHT + f"{'Real data' if use_real_data else 'Synthetic data'}")
                 print(Fore.CYAN + Style.BRIGHT + "-"*40)
             
-            # Prepare comprehensive training configuration optimized for speed
+            # Prepare training configuration optimized for speed
             comprehensive_config = {
                 # Model architecture - simplified for speed
                 #'model_architecture': {
@@ -53304,7 +55387,7 @@ def train_model_quick(
                 logger.info("Starting quick training with optimized configuration")
                 logger.info(f"Target: {quick_epochs} epochs, {quick_batch_size} batch size, {quick_learning_rate} learning rate")
             
-            # Execute the comprehensive training pipeline
+            # Execute the training pipeline
             training_results = train_model(config=comprehensive_config)
             
             # Calculate quick training duration
@@ -53324,7 +55407,7 @@ def train_model_quick(
                     'quick_training_time_minutes': quick_duration / 60,
                     'quick_stats': quick_stats,
                     
-                    # Core results from comprehensive training
+                    # Core results from training
                     'run_id': training_results.get('run_id'),
                     'timestamp': training_results.get('timestamp'),
                     'model_type': quick_model_type,
@@ -53380,7 +55463,7 @@ def train_model_quick(
                     # Recommendations for production use
                     'recommendations': [],
                     
-                    # Original comprehensive results for reference
+                    # Original results for reference
                     'comprehensive_results': training_results
                 }
                 
