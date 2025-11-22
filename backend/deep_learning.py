@@ -6366,11 +6366,6 @@ def enhanced_clear_memory(aggressive: bool = False, hardware_data: Optional[Dict
         Dictionary with clearing results and memory statistics
     """
     try:
-        # Suppress individual log messages during system checks
-        # logger = logging.getLogger(__name__)
-        # original_level = logger.level
-        # logger.setLevel(logging.WARNING)  # Only show warnings/errors
-        # LOG ALL DETAILED INFORMATION TO FILE ONLY (no console output)
         # Store the original logger level to suppress console handlers temporarily
         handlers_to_suppress = []
         for handler in logger.handlers:
@@ -6467,8 +6462,6 @@ def enhanced_clear_memory(aggressive: bool = False, hardware_data: Optional[Dict
             return clearing_results
         
         finally:
-            # Restore original logging level
-            #logger.setLevel(original_level)
             # Restore original logger levels
             for handler in handlers_to_suppress:
                 #handler.setLevel(logging.NOTSET)
@@ -6553,7 +6546,10 @@ STABILITY_PRESET = {
         'compatibility': ['SimpleAutoencoder', 'EnhancedAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            'architecture': platform.machine(), 'processor': platform.processor() or 'unknown',
+            #'architecture': platform.machine(),
+            'architecture': platform.architecture(),
+            'machine': platform.machine(),
+            'processor': platform.processor() or 'unknown',
             'pytorch_version': torch.__version__, 'cuda_available': torch.cuda.is_available(),
             'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
             'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
@@ -6674,7 +6670,10 @@ PERFORMANCE_PRESET = {
         'compatibility': ['EnhancedAutoencoder', 'AutoencoderEnsemble'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            'architecture': platform.machine(), 'processor': platform.processor() or 'unknown',
+            #'architecture': platform.machine(),
+            'architecture': platform.architecture(),
+            'machine': platform.machine(),
+            'processor': platform.processor() or 'unknown',
             'pytorch_version': torch.__version__, 'cuda_available': torch.cuda.is_available(),
             'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
             'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
@@ -6799,7 +6798,10 @@ BASELINE_PRESET = {
         'compatibility': ['EnhancedAutoencoder', 'SimpleAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            'architecture': platform.machine(), 'processor': platform.processor() or 'unknown',
+            #'architecture': platform.machine(),
+            'architecture': platform.architecture(),
+            'machine': platform.machine(),
+            'processor': platform.processor() or 'unknown',
             'pytorch_version': torch.__version__, 'cuda_available': torch.cuda.is_available(),
             'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
             'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
@@ -6920,7 +6922,10 @@ DEBUG_PRESET = {
         'compatibility': ['SimpleAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            'architecture': platform.machine(), 'processor': platform.processor() or 'unknown',
+            #'architecture': platform.machine(),
+            'architecture': platform.architecture(),
+            'machine': platform.machine(),
+            'processor': platform.processor() or 'unknown',
             'pytorch_version': torch.__version__, 'cuda_available': torch.cuda.is_available(),
             'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
             'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
@@ -7022,7 +7027,10 @@ LIGHTWEIGHT_PRESET = {
         'compatibility': ['SimpleAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            'architecture': platform.machine(), 'processor': platform.processor() or 'unknown',
+            #'architecture': platform.machine(),
+            'architecture': platform.architecture(),
+            'machine': platform.machine(),
+            'processor': platform.processor() or 'unknown',
             'pytorch_version': torch.__version__, 'cuda_available': torch.cuda.is_available(),
             'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
             'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
@@ -7122,13 +7130,20 @@ ADVANCED_PRESET = {
         'preset_used': 'advanced', 'recommended_hardware': {'gpu_memory_gb': 16, 'cpu_cores': 16, 'ram_gb': 32},
         'compatibility': ['EnhancedAutoencoder', 'AutoencoderEnsemble'],
         'system': {
-            'python_version': platform.python_version(), 'platform': platform.platform(),
-            'architecture': platform.machine(), 'processor': platform.processor() or 'unknown',
-            'pytorch_version': torch.__version__, 'cuda_available': torch.cuda.is_available(),
+            'python_version': platform.python_version(),
+            'platform': platform.platform(),
+            #'architecture': platform.machine(),
+            'architecture': platform.architecture(),
+            'machine': platform.machine(),
+            'processor': platform.processor() or 'unknown',
+            'pytorch_version': torch.__version__,
+            'cuda_available': torch.cuda.is_available(),
             'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
             'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
-            'hostname': platform.node(), 'os': platform.system(),
-            'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
+            'hostname': platform.node(),
+            'os': platform.system(),
+            'os_release': platform.release(),
+            'cpu_count': os.cpu_count() or 1
         },
         'validation': {
             'schema_version': '2.1',
@@ -7242,7 +7257,9 @@ DEFAULT_PRESET = {
         'system': {
             'python_version': platform.python_version(),
             'platform': platform.platform(),
-            'architecture': platform.machine(),
+            #'architecture': platform.machine(),
+            'architecture': platform.architecture(),
+            'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
             'pytorch_version': torch.__version__,
             'cuda_available': torch.cuda.is_available(),
@@ -39053,6 +39070,14 @@ def generate_synthetic_data(
     # Check if save_data was explicitly provided
     save_data_provided = ('save_data' in export_config or save_data is not None or 'export' in config and 'save_data' in config.get('export', {}))
 
+    # Set up logging level
+    if verbose:
+        original_level = logger.level
+        logger.setLevel(logging.INFO)
+    
+    if verbose:
+        logger.info("Starting synthetic data generation")
+    
     if not save_data_provided:
         # Check if we're in a non-interactive context
         is_automated_context = (
@@ -39450,14 +39475,6 @@ def generate_synthetic_data(
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
             print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
-
-    # Set up logging level
-    if verbose:
-        original_level = logger.level
-        logger.setLevel(logging.INFO)
-    
-    if verbose:
-        logger.info("Starting synthetic data generation")
     
     # Initialize progress tracking
     progress_data = {
@@ -40896,13 +40913,14 @@ def generate_synthetic_data(
                     compression_type = csv_compression_map.get(compression, None)
                     
                     if compression_type:
-                        df_combined.to_csv(datasets_path, index=False, compression=compression_type)
+                        df_combined.to_csv(datasets_path, index=False, compression=compression_type, encoding='utf-8')
                     else:
-                        df_combined.to_csv(datasets_path, index=False)
+                        df_combined.to_csv(datasets_path, index=False, encoding='utf-8')
                     
                     metadata['saved_file'] = str(datasets_path)
                     metadata['file_format'] = 'csv'
                     metadata['compression'] = compression_type or 'none'
+                    metadata['encoding'] = 'utf-8'
                 
                 elif file_format == 'parquet':
                     # Save as Parquet
@@ -40934,10 +40952,11 @@ def generate_synthetic_data(
                             logger.warning(warning_msg)
                         # Fallback to CSV
                         datasets_path = datasets_path.with_suffix('.csv')
-                        df_combined.to_csv(datasets_path, index=False)
+                        df_combined.to_csv(datasets_path, index=False, encoding='utf-8')
                         metadata['saved_file'] = str(datasets_path)
                         metadata['file_format'] = 'csv'
                         metadata['compression'] = 'none'
+                        metadata['encoding'] = 'utf-8'
                 
                 elif file_format == 'json':
                     # Save as JSON
@@ -40955,11 +40974,12 @@ def generate_synthetic_data(
                     
                     compression_type = json_compression_map.get(compression, 'infer')
                     
-                    df_combined.to_json(datasets_path, orient='records', compression=compression_type, indent=2)
+                    df_combined.to_json(datasets_path, orient='records', compression=compression_type, indent=2, force_ascii=False)
                     
                     metadata['saved_file'] = str(datasets_path)
                     metadata['file_format'] = 'json'
                     metadata['compression'] = compression or 'none'
+                    metadata['encoding'] = 'utf-8'
                 
                 elif file_format == 'pickle':
                     # Save as pickle
@@ -41020,19 +41040,25 @@ def generate_synthetic_data(
                             f.create_dataset('y_test', data=y_test)
                             
                             # Store feature names
-                            f.create_dataset('feature_names', data=np.array(feature_names, dtype='S'))
+                            feature_names_encoded = [name.encode('utf-8') for name in feature_names]
+                            f.create_dataset('feature_names', data=np.array(feature_names_encoded, dtype='S'))
                             
                             # Store metadata as attributes
                             for key, value in metadata.items():
                                 if isinstance(value, (str, int, float, bool)):
                                     try:
-                                        f.attrs[key] = value
+                                        # Encode strings as UTF-8
+                                        if isinstance(value, str):
+                                            f.attrs[key] = value.encode('utf-8')
+                                        else:
+                                            f.attrs[key] = value
                                     except Exception:
                                         pass  # Skip non-serializable attributes
                         
                         metadata['saved_file'] = str(datasets_path)
                         metadata['file_format'] = 'hdf5'
                         metadata['compression'] = 'gzip'
+                        metadata['encoding'] = 'utf-8'
                         
                     except ImportError:
                         warning_msg = "h5py not available, falling back to numpy format"
@@ -41085,15 +41111,37 @@ def generate_synthetic_data(
                             logger.warning(warning_msg)
                         # Fallback to CSV
                         datasets_path = datasets_path.with_suffix('.csv')
-                        df_combined.to_csv(datasets_path, index=False)
+                        df_combined.to_csv(datasets_path, index=False, encoding='utf-8')
                         metadata['saved_file'] = str(datasets_path)
                         metadata['file_format'] = 'csv'
                         metadata['compression'] = 'none'
+                        metadata['encoding'] = 'utf-8'
+                
+                # Dataset file size
+                if datasets_path.exists():
+                    file_size_bytes = datasets_path.stat().st_size
+                    if file_size_bytes < 1024:
+                        dataset_file_size = file_size_bytes
+                        size_unit = 'bytes'
+                    elif file_size_bytes >= 1024 and file_size_bytes < 1048576:
+                        dataset_file_size = file_size_bytes / 1024
+                        size_unit = 'KB'
+                    elif file_size_bytes >= 1048576:
+                        dataset_file_size = file_size_bytes / 1048576
+                        size_unit = 'MB'
+                    elif file_size_bytes >= 1073741824:
+                        dataset_file_size = file_size_bytes / 1073741824
+                        size_unit = 'GB'
+                    else:
+                        dataset_file_size = file_size_bytes
+                        size_unit = 'bytes'
+                    
+                    metadata['dataset_file_size'] = f"{dataset_file_size:.2f} {size_unit}"
                 
                 if verbose:
                     logger.info(f"Successfully saved data to: {datasets_path}")
                     print(Fore.GREEN + Style.BRIGHT + "\nSuccessfully generated dataset:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Dataset Location: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_path}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Dataset Location: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_path} ({metadata['dataset_file_size']})")
                 
                 # Save metadata if requested
                 if metadata_file:
@@ -41127,11 +41175,32 @@ def generate_synthetic_data(
                         json.dump(serializable_metadata, f, indent=2)
                     
                     metadata['metadata_file_path'] = str(metadata_path)
+
+                    # Metadata file size in mb if greater than 1024 kb else in kb
+                    if metadata_path.exists():
+                        meta_file_size_bytes = metadata_path.stat().st_size
+                        if meta_file_size_bytes < 1024:
+                            metadata_file_size = meta_file_size_bytes
+                            meta_size_unit = 'bytes'
+                        elif meta_file_size_bytes >= 1024 and meta_file_size_bytes < 1048576:
+                            metadata_file_size = meta_file_size_bytes / 1024
+                            meta_size_unit = 'KB'
+                        elif meta_file_size_bytes >= 1048576:
+                            metadata_file_size = meta_file_size_bytes / 1048576
+                            meta_size_unit = 'MB'
+                        elif meta_file_size_bytes >= 1073741824:
+                            metadata_file_size = meta_file_size_bytes / 1073741824
+                            meta_size_unit = 'GB'
+                        else:
+                            metadata_file_size = meta_file_size_bytes
+                            meta_size_unit = 'bytes'
+                        
+                        metadata['metadata_file_size'] = f"{metadata_file_size:.2f} {meta_size_unit}"
                     
                     if verbose:
                         logger.info(f"Saved metadata to {metadata_path}")
                         print(Fore.GREEN + Style.BRIGHT + "\nSuccessfully saved metadata:")
-                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Metadata Location: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_path}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Metadata Location: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_path} ({metadata['metadata_file_size']})")
                 
             except Exception as e:
                 error_msg = f"Failed to save data: {e}"
@@ -41942,161 +42011,128 @@ def create_enhanced_collate_fn(config=None, dtype=torch.float32, error_handling=
         error_handling=error_handling
     )
 
-def validate(
-    # Core Validation Parameters
-    model: Optional[nn.Module] = None,
-    loader: Optional[DataLoader] = None,
-    criterion: Optional[nn.Module] = None,
-    device: Optional[torch.device] = None,
-    epoch: Optional[int] = None,
+
+
+def load_and_validate_data(
+    # Core Data Parameters
+    data_path: Optional[Union[str, Path]] = None,
+    artifacts_path: Optional[Union[str, Path]] = None,
+    config: Optional[Dict[str, Any]] = None,
     
-    # Validation Configuration Parameters
-    validation_type: Optional[str] = None,
-    batch_size: Optional[int] = None,
-    eval_mode: Optional[bool] = None,
-    no_grad: Optional[bool] = None,
-    inference_mode: Optional[bool] = None,
+    # Data Loading Parameters
+    use_real_data: Optional[bool] = None,
+    data_format: Optional[str] = None,
+    encoding: Optional[str] = None,
+    delimiter: Optional[str] = None,
+    header: Optional[Union[int, str]] = None,
+    index_col: Optional[Union[int, str]] = None,
+    skiprows: Optional[Union[int, List[int]]] = None,
+    nrows: Optional[int] = None,
+    chunk_size: Optional[int] = None,
+    low_memory: Optional[bool] = None,
+    memory_map: Optional[bool] = None,
     
-    # Mixed Precision Parameters
-    mixed_precision: Optional[bool] = None,
-    amp_enabled: Optional[bool] = None,
-    scaler: Optional[GradScaler] = None,
-    autocast_enabled: Optional[bool] = None,
-    
-    # Metrics and Evaluation Parameters
-    calculate_metrics: Optional[bool] = None,
-    metrics_to_calculate: Optional[List[str]] = None,
-    detailed_metrics: Optional[bool] = None,
-    per_sample_metrics: Optional[bool] = None,
-    aggregate_metrics: Optional[bool] = None,
-    statistical_metrics: Optional[bool] = None,
-    distribution_analysis: Optional[bool] = None,
-    anomaly_detection: Optional[bool] = None,
-    threshold_analysis: Optional[bool] = None,
-    
-    # Performance and Optimization Parameters
-    performance_mode: Optional[str] = None,
-    benchmark_mode: Optional[bool] = None,
-    memory_efficient: Optional[bool] = None,
-    batch_processing: Optional[bool] = None,
-    parallel_validation: Optional[bool] = None,
+    # Data Validation Parameters
+    min_samples: Optional[int] = None,
+    max_samples: Optional[int] = None,
+    min_features: Optional[int] = None,
+    max_features: Optional[int] = None,
+    required_columns: Optional[List[str]] = None,
+    label_column: Optional[str] = None,
+    feature_columns: Optional[List[str]] = None,
+    exclude_columns: Optional[List[str]] = None,
     
     # Data Processing Parameters
-    data_preprocessing: Optional[bool] = None,
-    input_transforms: Optional[List[Callable]] = None,
-    target_transforms: Optional[List[Callable]] = None,
-    normalize_outputs: Optional[bool] = None,
-    denormalize_outputs: Optional[bool] = None,
+    normalization: Optional[str] = None,
+    scaling_method: Optional[str] = None,
+    handle_missing: Optional[str] = None,
+    missing_value_strategy: Optional[str] = None,
+    outlier_detection: Optional[bool] = None,
+    outlier_method: Optional[str] = None,
+    outlier_threshold: Optional[float] = None,
     
-    # Validation Quality Control Parameters
-    validate_inputs: Optional[bool] = None,
-    check_finite: Optional[bool] = None,
-    handle_nan_outputs: Optional[str] = None,
-    handle_inf_outputs: Optional[str] = None,
-    output_validation: Optional[bool] = None,
-    consistency_checks: Optional[bool] = None,
+    # Data Splitting Parameters
+    train_split: Optional[float] = None,
+    validation_split: Optional[float] = None,
+    test_split: Optional[float] = None,
+    stratified_split: Optional[bool] = None,
+    shuffle: Optional[bool] = None,
+    random_state: Optional[int] = None,
     
-    # Reconstruction and Anomaly Parameters
-    reconstruction_threshold: Optional[float] = None,
-    anomaly_threshold: Optional[float] = None,
-    percentile_threshold: Optional[float] = None,
-    adaptive_threshold: Optional[bool] = None,
-    threshold_method: Optional[str] = None,
-    contamination_rate: Optional[float] = None,
+    # Class Balance Parameters
+    balance_classes: Optional[bool] = None,
+    balance_method: Optional[str] = None,
+    min_class_samples: Optional[int] = None,
+    max_class_ratio: Optional[float] = None,
     
-    # Statistical Analysis Parameters
-    confidence_interval: Optional[float] = None,
-    significance_level: Optional[float] = None,
-    statistical_tests: Optional[bool] = None,
-    distribution_tests: Optional[bool] = None,
-    normality_tests: Optional[bool] = None,
-    outlier_analysis: Optional[bool] = None,
+    # Feature Engineering Parameters
+    feature_selection: Optional[bool] = None,
+    feature_selection_method: Optional[str] = None,
+    n_features_select: Optional[int] = None,
+    correlation_threshold: Optional[float] = None,
+    variance_threshold: Optional[float] = None,
     
-    # Monitoring and Logging Parameters
-    progress_bar: Optional[bool] = None,
-    progress_bar_desc: Optional[str] = None,
-    log_frequency: Optional[int] = None,
+    # Synthetic Data Parameters
+    synthetic_normal_samples: Optional[int] = None,
+    synthetic_attack_samples: Optional[int] = None,
+    synthetic_generation_method: Optional[str] = None,
+    synthetic_noise_level: Optional[float] = None,
+    synthetic_seed: Optional[int] = None,
+    
+    # Performance Parameters
+    parallel_loading: Optional[bool] = None,
+    n_jobs: Optional[int] = None,
+    batch_processing: Optional[bool] = None,
+    memory_efficient: Optional[bool] = None,
+    cache_data: Optional[bool] = None,
+    
+    # Security Parameters
+    validate_data_integrity: Optional[bool] = None,
+    check_data_corruption: Optional[bool] = None,
+    anomaly_detection_threshold: Optional[float] = None,
+    security_validation: Optional[bool] = None,
+    
+    # Monitoring Parameters
     verbose: Optional[bool] = None,
-    debug_mode: Optional[bool] = None,
-    timing_analysis: Optional[bool] = None,
-    
-    # Memory Management Parameters
-    empty_cache_frequency: Optional[int] = None,
-    gc_collection_frequency: Optional[int] = None,
-    memory_monitoring: Optional[bool] = None,
-    
-    # Distributed Validation Parameters
-    distributed: Optional[bool] = None,
-    world_size: Optional[int] = None,
-    rank: Optional[int] = None,
-    reduce_metrics: Optional[bool] = None,
-    
-    # Export and Visualization Parameters
-    save_results: Optional[bool] = None,
-    results_path: Optional[str] = None,
-    save_predictions: Optional[bool] = None,
-    save_reconstructions: Optional[bool] = None,
-    visualization: Optional[bool] = None,
-    plot_distributions: Optional[bool] = None,
-    plot_reconstructions: Optional[bool] = None,
-    
-    # Cross-validation Parameters
-    cross_validation: Optional[bool] = None,
-    cv_folds: Optional[int] = None,
-    stratified_cv: Optional[bool] = None,
-    cv_metrics: Optional[bool] = None,
-    
-    # Advanced Analysis Parameters
-    feature_importance: Optional[bool] = None,
-    attention_analysis: Optional[bool] = None,
-    gradient_analysis: Optional[bool] = None,
-    activation_analysis: Optional[bool] = None,
-    layer_analysis: Optional[bool] = None,
-    
-    # Error Handling Parameters
-    error_handling: Optional[str] = None,
-    continue_on_error: Optional[bool] = None,
-    max_retries: Optional[int] = None,
-    graceful_degradation: Optional[bool] = None,
-    fallback_mode: Optional[bool] = None,
+    log_level: Optional[str] = None,
+    progress_bar: Optional[bool] = None,
+    silent: Optional[bool] = None,
+    save_statistics: Optional[bool] = True,
+    statistics_path: Optional[Union[str, Path]] = None,
     
     # Compatibility Parameters
-    legacy_mode: Optional[bool] = None,
+    legacy_format: Optional[bool] = None,
     backward_compatibility: Optional[bool] = None,
     version_check: Optional[bool] = None,
     
+    # Advanced Parameters
+    data_quality_checks: Optional[bool] = None,
+    statistical_validation: Optional[bool] = None,
+    distribution_checks: Optional[bool] = None,
+    cross_validation_ready: Optional[bool] = None,
+    
     # Experimental Parameters
     experimental_features: Optional[bool] = None,
-    experimental_metrics: Optional[bool] = None,
-    beta_features: Optional[bool] = None,
-    
-    # Custom Functions Parameters
-    custom_metric_fn: Optional[Callable] = None,
-    custom_threshold_fn: Optional[Callable] = None,
-    custom_analysis_fn: Optional[Callable] = None,
-    validation_callbacks: Optional[List[Callable]] = None,
-    
-    # Direct Configuration Override
-    config: Optional[Dict[str, Any]] = None,
-    validation_config: Optional[Dict[str, Any]] = None,
+    advanced_preprocessing: Optional[bool] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
     
     **kwargs
-) -> Tuple[float, np.ndarray, Dict[str, Any]]:
-    
+) -> Dict[str, Union[np.ndarray, Dict[str, Any]]]:
+
     # Start timing
     start_time = datetime.now()
-    validation_start_time = time.time()
     
-    # Initialize configuration with comprehensive defaults
+    # Initialize configuration with defaults
     if config is None:
         try:
             config = get_current_config() if 'get_current_config' in globals() else {}
         except Exception:
             config = {}
-    
-    # Apply validation-specific configuration
-    if validation_config:
-        config.setdefault('validation', {}).update(validation_config)
     
     # Apply all parameters to configuration
     final_config = {}
@@ -42104,86 +42140,58 @@ def validate(
     # Merge with existing config
     final_config.update(config)
     
-    # Apply individual parameters with intelligent organization
+    # Apply individual parameters
     params = locals().copy()
     params.update(kwargs)
     
     # Remove non-parameter items
     params_to_remove = {
-        'config', 'validation_config', 'kwargs', 'start_time', 'validation_start_time',
-        'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
-        'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast', 'stats'
+        'config', 'kwargs', 'start_time', 'datetime', 'traceback', 'hashlib', 'train_test_split', 'StratifiedShuffleSplit', 'StandardScaler', 'MinMaxScaler', 'RobustScaler',
+        'QuantileTransformer','SelectKBest', 'f_classif', 'VarianceThreshold', 'SimpleImputer', 'KNNImputer', 'IsolationForest', 'stats', 'joblib', 'os', 'pd', 'np'
     }
     
     cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
     
     # Organize parameters into logical sections
     param_sections = {
-        'core_validation': [
-            'validation_type', 'batch_size', 'eval_mode', 'no_grad', 'inference_mode'
+        'data_loading': [
+            'use_real_data', 'data_format', 'encoding', 'delimiter', 'header', 'index_col', 'skiprows', 'nrows', 'chunk_size', 'low_memory', 'memory_map'
         ],
-        'mixed_precision': [
-            'mixed_precision', 'amp_enabled', 'scaler', 'autocast_enabled'
-        ],
-        'metrics_evaluation': [
-            'calculate_metrics', 'metrics_to_calculate', 'detailed_metrics',
-            'per_sample_metrics', 'aggregate_metrics', 'statistical_metrics',
-            'distribution_analysis', 'anomaly_detection', 'threshold_analysis'
-        ],
-        'performance': [
-            'performance_mode', 'benchmark_mode', 'memory_efficient',
-            'batch_processing', 'parallel_validation'
+        'data_validation': [
+            'min_samples', 'max_samples', 'min_features', 'max_features', 'required_columns', 'label_column', 'feature_columns', 'exclude_columns'
         ],
         'data_processing': [
-            'data_preprocessing', 'input_transforms', 'target_transforms',
-            'normalize_outputs', 'denormalize_outputs'
+            'normalization', 'scaling_method', 'handle_missing', 'missing_value_strategy', 'outlier_detection', 'outlier_method', 'outlier_threshold'
         ],
-        'validation_quality': [
-            'validate_inputs', 'check_finite', 'handle_nan_outputs',
-            'handle_inf_outputs', 'output_validation', 'consistency_checks'
+        'data_splitting': [
+            'train_split', 'validation_split', 'test_split', 'stratified_split', 'shuffle', 'random_state'
         ],
-        'reconstruction_anomaly': [
-            'reconstruction_threshold', 'anomaly_threshold', 'percentile_threshold',
-            'adaptive_threshold', 'threshold_method', 'contamination_rate'
+        'class_balance': [
+            'balance_classes', 'balance_method', 'min_class_samples', 'max_class_ratio'
         ],
-        'statistical_analysis': [
-            'confidence_interval', 'significance_level', 'statistical_tests',
-            'distribution_tests', 'normality_tests', 'outlier_analysis'
+        'feature_engineering': [
+            'feature_selection', 'feature_selection_method', 'n_features_select', 'correlation_threshold', 'variance_threshold'
         ],
-        'monitoring_logging': [
-            'progress_bar', 'progress_bar_desc', 'log_frequency',
-            'verbose', 'debug_mode', 'timing_analysis'
+        'synthetic_data': [
+            'synthetic_normal_samples', 'synthetic_attack_samples', 'synthetic_generation_method', 'synthetic_noise_level', 'synthetic_seed'
         ],
-        'memory_management': [
-            'empty_cache_frequency', 'gc_collection_frequency', 'memory_monitoring'
+        'performance': [
+            'parallel_loading', 'n_jobs', 'batch_processing', 'memory_efficient', 'cache_data'
         ],
-        'distributed': [
-            'distributed', 'world_size', 'rank', 'reduce_metrics'
+        'security': [
+            'validate_data_integrity', 'check_data_corruption', 'anomaly_detection_threshold', 'security_validation'
         ],
-        'export_visualization': [
-            'save_results', 'results_path', 'save_predictions', 'save_reconstructions',
-            'visualization', 'plot_distributions', 'plot_reconstructions'
-        ],
-        'cross_validation': [
-            'cross_validation', 'cv_folds', 'stratified_cv', 'cv_metrics'
-        ],
-        'advanced_analysis': [
-            'feature_importance', 'attention_analysis', 'gradient_analysis',
-            'activation_analysis', 'layer_analysis'
-        ],
-        'error_handling': [
-            'error_handling', 'continue_on_error', 'max_retries',
-            'graceful_degradation', 'fallback_mode'
+        'monitoring': [
+            'verbose', 'log_level', 'progress_bar', 'silent', 'save_statistics', 'statistics_path'
         ],
         'compatibility': [
-            'legacy_mode', 'backward_compatibility', 'version_check'
+            'legacy_format', 'backward_compatibility', 'version_check'
         ],
-        'experimental': [
-            'experimental_features', 'experimental_metrics', 'beta_features'
+        'advanced': [
+            'data_quality_checks', 'statistical_validation', 'distribution_checks', 'cross_validation_ready', 'experimental_features', 'advanced_preprocessing'
         ],
-        'custom_functions': [
-            'custom_metric_fn', 'custom_threshold_fn', 'custom_analysis_fn',
-            'validation_callbacks'
+        'run_tracking': [
+            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
         ]
     }
     
@@ -42194,2101 +42202,1063 @@ def validate(
             if param in cleaned_params:
                 section_config[param] = cleaned_params[param]
     
-    # Set up comprehensive defaults
-    core_config = final_config.setdefault('core_validation', {})
-    mixed_precision_config = final_config.setdefault('mixed_precision', {})
-    metrics_config = final_config.setdefault('metrics_evaluation', {})
-    performance_config = final_config.setdefault('performance', {})
+    # Set up defaults
+    data_loading_config = final_config.setdefault('data_loading', {})
+    data_validation_config = final_config.setdefault('data_validation', {})
     data_processing_config = final_config.setdefault('data_processing', {})
-    validation_quality_config = final_config.setdefault('validation_quality', {})
-    reconstruction_config = final_config.setdefault('reconstruction_anomaly', {})
-    statistical_config = final_config.setdefault('statistical_analysis', {})
-    monitoring_config = final_config.setdefault('monitoring_logging', {})
-    memory_config = final_config.setdefault('memory_management', {})
-    distributed_config = final_config.setdefault('distributed', {})
-    export_config = final_config.setdefault('export_visualization', {})
-    cv_config = final_config.setdefault('cross_validation', {})
-    advanced_config = final_config.setdefault('advanced_analysis', {})
-    error_config = final_config.setdefault('error_handling', {})
-    experimental_config = final_config.setdefault('experimental', {})
-    custom_config = final_config.setdefault('custom_functions', {})
-    training_config = final_config.get('training', {})
+    data_splitting_config = final_config.setdefault('data_splitting', {})
+    class_balance_config = final_config.setdefault('class_balance', {})
+    feature_engineering_config = final_config.setdefault('feature_engineering', {})
+    synthetic_data_config = final_config.setdefault('synthetic_data', {})
+    performance_config = final_config.setdefault('performance', {})
+    security_config = final_config.setdefault('security', {})
+    monitoring_config = final_config.setdefault('monitoring', {})
+    compatibility_config = final_config.setdefault('compatibility', {})
+    advanced_config = final_config.setdefault('advanced', {})
+    run_tracking_config = final_config.setdefault('run_tracking', {})
     
-    # Apply intelligent defaults with system awareness
-    validation_type = core_config.setdefault('validation_type', 'standard')
-    eval_mode = core_config.setdefault('eval_mode', True)
-    no_grad = core_config.setdefault('no_grad', True)
-    inference_mode = core_config.setdefault('inference_mode', False)
+    # Handle silent mode - override verbose and progress_bar if silent is True
+    silent_mode = monitoring_config.get('silent', False)
+    if silent_mode:
+        # Force silent mode behavior
+        monitoring_config['verbose'] = False
+        monitoring_config['progress_bar'] = False
     
-    # Mixed precision defaults
-    mixed_precision = mixed_precision_config.setdefault('mixed_precision', MIXED_PRECISION and torch.cuda.is_available())
-    amp_enabled = mixed_precision_config.setdefault('amp_enabled', mixed_precision)
-    autocast_enabled = mixed_precision_config.setdefault('autocast_enabled', mixed_precision)
-
-    # Training defaults
-    batch_size = training_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
-    epochs = training_config.setdefault('epochs', DEFAULT_EPOCHS)
-    epoch = epoch if epoch is not None else 0
+    # Data Loading parameters
+    use_real_data = data_loading_config.setdefault('use_real_data', True)
+    data_format = data_loading_config.setdefault('data_format', 'csv')
+    encoding = data_loading_config.setdefault('encoding', 'utf-8')
+    delimiter = data_loading_config.setdefault('delimiter', ',')
+    header = data_loading_config.setdefault('header', 0)
+    low_memory = data_loading_config.setdefault('low_memory', True)
     
-    # Metrics defaults
-    calculate_metrics = metrics_config.setdefault('calculate_metrics', True)
-    metrics_to_calculate = metrics_config.setdefault('metrics_to_calculate', ['loss', 'mse', 'mae', 'reconstruction_error'])
-    detailed_metrics = metrics_config.setdefault('detailed_metrics', True)
-    per_sample_metrics = metrics_config.setdefault('per_sample_metrics', True)
-    aggregate_metrics = metrics_config.setdefault('aggregate_metrics', True)
-    statistical_metrics = metrics_config.setdefault('statistical_metrics', True)
-    distribution_analysis = metrics_config.setdefault('distribution_analysis', False)
-    anomaly_detection = metrics_config.setdefault('anomaly_detection', validation_type == 'anomaly_detection')
-    threshold_analysis = metrics_config.setdefault('threshold_analysis', anomaly_detection)
+    # Validation parameters
+    min_features = data_validation_config.setdefault('min_features', MIN_FEATURES)
+    min_samples = data_validation_config.setdefault('min_samples', 100)
+    label_column = data_validation_config.setdefault('label_column', 'Label')
+    required_columns = data_validation_config.setdefault('required_columns', [label_column])
     
-    # Performance defaults
-    performance_mode = performance_config.setdefault('performance_mode', 'standard')
-    benchmark_mode = performance_config.setdefault('benchmark_mode', False)
+    # Processing parameters
+    normalization = data_processing_config.setdefault('normalization', 'standard')
+    handle_missing = data_processing_config.setdefault('handle_missing', 'drop')
+    outlier_detection = data_processing_config.setdefault('outlier_detection', False)
+    outlier_method = data_processing_config.setdefault('outlier_method', 'iqr')
+    outlier_threshold = data_processing_config.setdefault('outlier_threshold', 1.5)
+    
+    # Splitting parameters
+    validation_split = data_splitting_config.setdefault('validation_split', 0.2)
+    test_split = data_splitting_config.setdefault('test_split', 0.2)
+    stratified_split = data_splitting_config.setdefault('stratified_split', True)
+    shuffle_data = data_splitting_config.setdefault('shuffle', True)
+    random_state = data_splitting_config.setdefault('random_state', 42)
+    
+    # Performance parameters
+    parallel_loading = performance_config.setdefault('parallel_loading', False)
+    n_jobs = performance_config.setdefault('n_jobs', -1)
     memory_efficient = performance_config.setdefault('memory_efficient', True)
-    batch_processing = performance_config.setdefault('batch_processing', True)
+    cache_data = performance_config.setdefault('cache_data', False)
     
-    # Validation quality defaults
-    validate_inputs = validation_quality_config.setdefault('validate_inputs', True)
-    check_finite = validation_quality_config.setdefault('check_finite', True)
-    handle_nan_outputs = validation_quality_config.setdefault('handle_nan_outputs', 'error')
-    handle_inf_outputs = validation_quality_config.setdefault('handle_inf_outputs', 'error')
-    output_validation = validation_quality_config.setdefault('output_validation', True)
-    consistency_checks = validation_quality_config.setdefault('consistency_checks', True)
+    # Security parameters
+    validate_data_integrity = security_config.setdefault('validate_data_integrity', True)
+    check_data_corruption = security_config.setdefault('check_data_corruption', False)
     
-    # Reconstruction and anomaly defaults
-    percentile_threshold = reconstruction_config.setdefault('percentile_threshold', 95.0)
-    adaptive_threshold = reconstruction_config.setdefault('adaptive_threshold', True)
-    threshold_method = reconstruction_config.setdefault('threshold_method', 'percentile')
-    contamination_rate = reconstruction_config.setdefault('contamination_rate', 0.1)
-    
-    # Statistical analysis defaults
-    confidence_interval = statistical_config.setdefault('confidence_interval', 0.95)
-    significance_level = statistical_config.setdefault('significance_level', 0.05)
-    statistical_tests = statistical_config.setdefault('statistical_tests', False)
-    distribution_tests = statistical_config.setdefault('distribution_tests', False)
-    outlier_analysis = statistical_config.setdefault('outlier_analysis', False)
-    
-    # Monitoring defaults
-    progress_bar = monitoring_config.setdefault('progress_bar', True)
-    progress_bar_desc = monitoring_config.setdefault('progress_bar_desc', f"{epoch+1}/{epochs}" if epoch is not None else "N/A")
-    log_frequency = monitoring_config.setdefault('log_frequency', 100)
+    # Monitoring parameters
     verbose = monitoring_config.setdefault('verbose', False)
-    debug_mode = monitoring_config.setdefault('debug_mode', False)
-    timing_analysis = monitoring_config.setdefault('timing_analysis', False)
+    progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
+    save_statistics = monitoring_config.setdefault('save_statistics', True)
+    statistics_path = monitoring_config.get('statistics_path', None)
     
-    # Memory management defaults
-    empty_cache_frequency = memory_config.setdefault('empty_cache_frequency', 50)
-    gc_collection_frequency = memory_config.setdefault('gc_collection_frequency', 200)
-    memory_monitoring = memory_config.setdefault('memory_monitoring', torch.cuda.is_available())
+    # Advanced parameters
+    data_quality_checks = advanced_config.setdefault('data_quality_checks', True)
+    statistical_validation = advanced_config.setdefault('statistical_validation', False)
+
+    # Extract run tracking parameters
+    run_id = run_tracking_config.get('run_id', run_id)
+    run_number = run_tracking_config.get('run_number', run_number)
+    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+
+    if statistics_path is None and save_statistics:
+        if use_run_tracking and run_id is not None:
+            if 'metrics' in run_specific_dirs:
+                statistics_path = run_specific_dirs['metrics'] / f"data_loading_statistics.json"
+            else:
+                statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
+        else:
+            statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
     
-    # Distributed defaults
-    distributed = distributed_config.setdefault('distributed', False)
-    reduce_metrics = distributed_config.setdefault('reduce_metrics', distributed)
+    # Convert to Path object if necessary
+    if statistics_path is not None:
+        statistics_path = Path(statistics_path)
     
-    # Error handling defaults
-    error_handling = error_config.setdefault('error_handling', 'strict')
-    continue_on_error = error_config.setdefault('continue_on_error', False)
-    max_retries = error_config.setdefault('max_retries', 3)
-    graceful_degradation = error_config.setdefault('graceful_degradation', True)
-    
-    # Set up logging level
-    if verbose:
+    # Set up logging level based on silent mode
+    if not silent_mode and verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
-    logger.info(f"Starting comprehensive validation for epoch {epoch if epoch is not None else 'N/A'}")
+    if not silent_mode:
+        logger.info("Starting data loading and validation")
     
-    # Initialize variables for cleanup
-    pbar = None
+    # Initialize progress tracking
+    progress_data = {
+        'current_stage': 'Starting...',
+        'current_substage': None,
+        'rows_processed': 0,
+        'features_processed': 0,
+        'data_quality_score': 0.0,
+        'validation_passed': 0,
+        'validation_failed': 0
+    }
+    
+    # Initialize statistics
+    loading_stats = {
+        'start_time': start_time.isoformat(),
+        'data_path': None,
+        'artifacts_path': None,
+        'use_real_data': use_real_data,
+        'config_applied': final_config,
+        'stages_completed': [],
+        'errors_encountered': [],
+        'warnings_encountered': [],
+        'performance_metrics': {}
+    }
     
     try:
-        # Parameter validation
-        if model is None:
-            raise ValueError("Model is required for validation")
-        if loader is None:
-            raise ValueError("DataLoader is required for validation")
-        if criterion is None:
-            raise ValueError("Loss criterion is required for validation")
+        # Calculate total stages for progress tracking
+        total_stages = 8  # Configuration, Paths, Loading, Validation, Processing, Splitting, Statistics, Finalization
         
-        # Device configuration
-        if device is None:
-            device = next(model.parameters()).device if hasattr(model, 'parameters') else torch.device('cpu')
-        
-        # Initialize validation statistics
-        validation_stats = {
-            'start_time': start_time.isoformat(),
-            'epoch': epoch,
-            'validation_type': validation_type,
-            'config_applied': final_config,
-            'device': str(device),
-            'mixed_precision_enabled': mixed_precision,
-            'total_batches': len(loader),
-            'batch_size': getattr(loader, 'batch_size', 'unknown')
-        }
-        
-        # Set model to appropriate mode
-        if eval_mode:
-            model.eval()
-            logger.debug("Set model to eval mode")
-        
-        # Initialize metrics tracking
-        metrics_tracker = {
-            'losses': [],
-            'batch_times': [],
-            'memory_usage': [],
-            'reconstruction_errors': [],
-            'per_sample_mse': [],
-            'per_sample_mae': [],
-            'detailed_metrics': defaultdict(list) if detailed_metrics else None
-        }
-        
-        # Initialize validation variables
-        total_loss = 0.0
-        num_batches = 0
-        num_samples = 0
-        all_reconstruction_errors = []
-        all_predictions = []
-        all_targets = []
-        
-        # Initialize batch processing variables
-        validation_time = 0
-        forward_time = 0
-        metrics_time = 0
-        
-        # Set up alive-progress bar
-        if progress_bar:
-            try:
-                pbar_context = alive_bar(
-                    total=len(loader),
-                    title=f'Validation {progress_bar_desc}\t\t',
-                    unit='batches',
-                    bar='smooth',
-                    spinner='dots',
-                    stats=False,
-                    monitor=True,
-                    elapsed=True,
-                    stats_end=False
-                )
-                pbar = pbar_context.__enter__()
-            except ImportError:
-                logger.warning("alive-progress not available, progress bar disabled")
-                pbar = None
-                pbar_context = None
-            except Exception as e:
-                logger.warning(f"Failed to initialize alive-progress bar: {e}")
-                pbar = None
-                pbar_context = None
+        # Use progress bar only if not in silent mode and progress_bar is True
+        if not silent_mode and progress_bar:
+            print(Fore.GREEN + Style.BRIGHT + "\nStarting data loading and validation..." + Style.RESET_ALL)
+            bar_context = alive_bar(total_stages, title='Data Loading & Validation\t', unit='stages')
         else:
-            pbar = None
-            pbar_context = None
+            # Create a dummy context manager that does nothing
+            class DummyBar:
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    pass
+                def __call__(self):
+                    pass
+                def __setattr__(self, name, value):
+                    pass
+            bar_context = DummyBar()
         
-        # Validation callbacks setup
-        validation_callbacks = custom_config.get('validation_callbacks', [])
-        
-        logger.info(f"Starting validation with {len(loader)} batches")
-        
-        # Determine validation context
-        if inference_mode and hasattr(torch, 'inference_mode'):
-            validation_context = torch.inference_mode()
-        elif no_grad:
-            validation_context = torch.no_grad()
-        else:
-            validation_context = nullcontext()
-        
-        # Main validation loop
-        with validation_context:
-            for batch_idx, batch in enumerate(loader):
-                batch_start_time = time.time()
-                
-                try:
-                    # Update progress bar with current batch processing status
-                    if pbar:
-                        pbar.text = f"Processing batch {batch_idx+1}/{len(loader)}"
-                    
-                    # Move data to device
-                    if isinstance(batch, (list, tuple)):
-                        inputs = batch[0].to(device, non_blocking=True)
-                        targets = batch[1].to(device, non_blocking=True) if len(batch) > 1 else inputs
-                    else:
-                        inputs = batch.to(device, non_blocking=True)
-                        targets = inputs
-                    
-                    # Input validation
-                    if validate_inputs:
-                        if check_finite:
-                            if not torch.isfinite(inputs).all():
-                                if error_handling == 'strict':
-                                    raise ValueError(f"Non-finite input values detected in batch {batch_idx}")
-                                else:
-                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite inputs")
-                                    continue
-                    
-                    # Apply input transforms if specified
-                    if data_processing_config.get('input_transforms'):
-                        for transform in data_processing_config['input_transforms']:
-                            inputs = transform(inputs)
-                    
-                    current_batch_size = inputs.size(0)
-                    num_samples += current_batch_size
-                    
-                    # Update progress bar with data loading status
-                    if pbar:
-                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Data loaded | Processing..."
-                    
-                    # Forward pass with mixed precision and timing
-                    forward_start_time = time.time()
-                    
-                    autocast_context = get_autocast_context(device, mixed_precision, autocast_enabled)
-                    with autocast_context:
-                        outputs = model(inputs)
-                        
-                        # CRITICAL: Ensure targets match outputs for loss calculation
-                        if targets.shape != outputs.shape:
-                            if hasattr(model, '__class__') and 'autoencoder' in model.__class__.__name__.lower():
-                                # For autoencoder, target should be input
-                                targets = inputs
-                                logger.debug("Set targets = inputs for autoencoder validation")
-                            else:
-                                # Try to reshape targets to match outputs
-                                if outputs.numel() == targets.numel():
-                                    targets = targets.view_as(outputs)
-                                    logger.debug(f"Reshaped targets from {targets.shape} to {outputs.shape}")
-                                else:
-                                    # Try to match batch size and feature dimensions
-                                    batch_size = outputs.size(0)
-                                    if len(outputs.shape) == 2:  # [batch_size, features]
-                                        if targets.size(0) == batch_size:
-                                            # Try to extract the correct number of features
-                                            target_features = outputs.size(1)
-                                            if targets.size(1) >= target_features:
-                                                targets = targets[:, :target_features]
-                                            else:
-                                                # Pad or repeat features if needed
-                                                targets = torch.cat([targets, targets[:, :target_features - targets.size(1)]], dim=1)
-                                        else:
-                                            # As last resort, use inputs as targets
-                                            targets = inputs
-                                            logger.warning(f"Using inputs as targets due to irreconcilable shape mismatch")
-                                    else:
-                                        # For other shapes, try to use inputs
-                                        targets = inputs
-                                        logger.warning(f"Complex shape mismatch, using inputs as targets")
-                            
-                            logger.debug(f"Fixed shape mismatch: outputs {outputs.shape}, targets {targets.shape}")
-                        
-                        # Calculate loss with proper error handling
-                        try:
-                            loss = criterion(outputs, targets)
-                        except RuntimeError as loss_error:
-                            logger.error(f"Loss calculation failed even after shape fixing: {loss_error}")
-                            logger.error(f"Final shapes - outputs: {outputs.shape}, targets: {targets.shape}")
-                            
-                            # Final attempt: force targets to match outputs exactly
-                            if 'autoencoder' in str(type(model)).lower():
-                                targets = inputs
-                            else:
-                                targets = outputs.detach().clone()  # Use model output as target (will give 0 loss)
-                            
-                            try:
-                                loss = criterion(outputs, targets)
-                                logger.warning("Used fallback target matching for loss calculation")
-                            except Exception as final_error:
-                                logger.error(f"Final loss calculation attempt failed: {final_error}")
-                                if handle_nan_outputs == 'skip':
-                                    logger.warning(f"Skipping batch {batch_idx} due to unresolvable loss calculation")
-                                    continue
-                                elif graceful_degradation:
-                                    # Create a dummy loss to continue
-                                    loss = torch.tensor(0.0, device=device, requires_grad=True)
-                                    logger.warning(f"Using dummy loss for batch {batch_idx}")
-                                else:
-                                    raise
-                    
-                    forward_end_time = time.time()
-                    forward_time += (forward_end_time - forward_start_time)
-                    
-                    # Output validation
-                    if output_validation:
-                        if check_finite:
-                            if not torch.isfinite(outputs).all():
-                                if handle_nan_outputs == 'error':
-                                    raise ValueError(f"Non-finite output values detected in batch {batch_idx}")
-                                elif handle_nan_outputs == 'skip':
-                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite outputs")
-                                    continue
-                                elif handle_nan_outputs == 'replace':
-                                    outputs = torch.nan_to_num(outputs, nan=0.0, posinf=1.0, neginf=0.0)
-                    
-                    # Update progress bar with forward pass completion
-                    if pbar:
-                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Forward pass completed | Calculating metrics..."
-                    
-                    # Calculate metrics with timing
-                    metrics_start_time = time.time()
-                    
-                    # Basic metrics
-                    total_loss += loss.item()
-                    num_batches += 1
-                    
-                    if per_sample_metrics:
-                        # Calculate per-sample reconstruction error (MSE)
-                        per_sample_mse = torch.mean((inputs - outputs)**2, dim=tuple(range(1, inputs.dim()))).cpu().numpy()
-                        metrics_tracker['per_sample_mse'].extend(per_sample_mse)
-                        all_reconstruction_errors.extend(per_sample_mse)
-                        
-                        # Calculate per-sample MAE
-                        if 'mae' in metrics_to_calculate:
-                            per_sample_mae = torch.mean(torch.abs(inputs - outputs), dim=tuple(range(1, inputs.dim()))).cpu().numpy()
-                            metrics_tracker['per_sample_mae'].extend(per_sample_mae)
-                    
-                    # Store predictions and targets for advanced analysis
-                    if advanced_config.get('feature_importance', False) or export_config.get('save_predictions', False):
-                        all_predictions.append(outputs.cpu().numpy())
-                        all_targets.append(targets.cpu().numpy())
-                    
-                    # Custom metric calculation
-                    if custom_config.get('custom_metric_fn'):
-                        try:
-                            custom_metrics = custom_config['custom_metric_fn'](inputs, outputs, targets, loss)
-                            if detailed_metrics and metrics_tracker['detailed_metrics'] is not None:
-                                for metric_name, metric_value in custom_metrics.items():
-                                    metrics_tracker['detailed_metrics'][metric_name].append(metric_value)
-                        except Exception as e:
-                            logger.warning(f"Custom metric calculation failed: {e}")
-                    
-                    # Detailed metrics calculation
-                    if detailed_metrics and batch_idx % 10 == 0:
-                        # Statistical metrics
-                        if statistical_metrics:
-                            reconstruction_error = torch.mean((inputs - outputs)**2)
-                            reconstruction_std = torch.std((inputs - outputs)**2)
-                            
-                            if metrics_tracker['detailed_metrics'] is not None:
-                                metrics_tracker['detailed_metrics']['reconstruction_mean'].append(reconstruction_error.item())
-                                metrics_tracker['detailed_metrics']['reconstruction_std'].append(reconstruction_std.item())
-                        
-                        # Distribution analysis
-                        if distribution_analysis:
-                            input_mean = torch.mean(inputs).item()
-                            output_mean = torch.mean(outputs).item()
-                            input_std = torch.std(inputs).item()
-                            output_std = torch.std(outputs).item()
-                            
-                            if metrics_tracker['detailed_metrics'] is not None:
-                                metrics_tracker['detailed_metrics']['input_mean'].append(input_mean)
-                                metrics_tracker['detailed_metrics']['output_mean'].append(output_mean)
-                                metrics_tracker['detailed_metrics']['input_std'].append(input_std)
-                                metrics_tracker['detailed_metrics']['output_std'].append(output_std)
-                    
-                    metrics_end_time = time.time()
-                    metrics_time += (metrics_end_time - metrics_start_time)
-                    
-                    # Store batch metrics
-                    if calculate_metrics:
-                        batch_time = time.time() - batch_start_time
-                        metrics_tracker['losses'].append(loss.item())
-                        metrics_tracker['batch_times'].append(batch_time)
-                        
-                        # Memory usage tracking
-                        if memory_monitoring and torch.cuda.is_available():
-                            memory_allocated = torch.cuda.memory_allocated(device) / 1024**2  # MB
-                            metrics_tracker['memory_usage'].append(memory_allocated)
-                    
-                    # Memory management
-                    if memory_efficient:
-                        if batch_idx % empty_cache_frequency == 0 and torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                        
-                        if batch_idx % gc_collection_frequency == 0:
-                            gc.collect()
-                    
-                    # Update progress bar with comprehensive metrics
-                    if pbar:
-                        current_loss_display = loss.item()
-                        avg_loss_display = total_loss / num_batches
-                        
-                        # Format the text for the progress bar with detailed status
-                        progress_text = (
-                            f"Batch {batch_idx+1}/{len(loader)} | "
-                            f"Loss: {current_loss_display:.4f} | "
-                            f"Avg: {avg_loss_display:.4f} | "
-                            f"Samples: {num_samples:,} | "
-                            f"Memory: {torch.cuda.memory_allocated(device)/1024**2:.0f}MB"
-                        )
-                        
-                        # Update the progress bar text
-                        pbar.text = progress_text
-                        
-                        # Update the progress
-                        pbar()
-                    
-                    # Logging
-                    if batch_idx % log_frequency == 0 and batch_idx > 0:
-                        avg_loss = total_loss / num_batches
-                        
-                        if timing_analysis:
-                            logger.info(
-                                f"Validation batch {batch_idx}/{len(loader)} | "
-                                f"Loss: {avg_loss:.6f} | "
-                                f"Forward: {forward_time/batch_idx:.3f}s | "
-                                f"Metrics: {metrics_time/batch_idx:.3f}s"
-                            )
-                        else:
-                            logger.info(
-                                f"Validation batch {batch_idx}/{len(loader)} | "
-                                f"Loss: {avg_loss:.6f}"
-                            )
-                    
-                    # Execute validation callbacks
-                    for callback in validation_callbacks:
-                        try:
-                            callback(
-                                batch_idx=batch_idx,
-                                inputs=inputs,
-                                outputs=outputs,
-                                loss=loss.item(),
-                                model=model,
-                                metrics=metrics_tracker
-                            )
-                        except Exception as e:
-                            logger.warning(f"Validation callback execution failed: {e}")
-                    
-                except Exception as e:
-                    if continue_on_error:
-                        logger.error(f"Error in validation batch {batch_idx}: {e}")
-                        if error_handling == 'skip':
-                            continue
-                        elif error_handling == 'retry':
-                            retry_count = 0
-                            while retry_count < max_retries:
-                                try:
-                                    logger.info(f"Retrying validation batch {batch_idx}, attempt {retry_count + 1}")
-                                    # Re-process the batch (simplified retry logic)
-                                    break
-                                except Exception as retry_e:
-                                    retry_count += 1
-                                    logger.warning(f"Retry {retry_count} failed: {retry_e}")
-                            
-                            if retry_count >= max_retries:
-                                logger.error(f"Max retries exceeded for batch {batch_idx}")
-                                if graceful_degradation:
-                                    continue
-                                else:
-                                    raise
-                    else:
-                        raise RuntimeError(f"Validation failed on batch {batch_idx}: {e}") from e
-        
-        # Update progress bar for post-processing phase
-        if pbar:
-            pbar.text = "Validation completed | Calculating final metrics..."
-        
-        # Calculate final metrics
-        validation_end_time = time.time()
-        total_validation_time = validation_end_time - validation_start_time
-        avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
-        
-        # Convert reconstruction errors to numpy array
-        reconstruction_errors_array = np.array(all_reconstruction_errors)
-        
-        # Update progress bar for anomaly detection
-        if pbar and (anomaly_detection or threshold_analysis):
-            pbar.text = "Validation completed | Performing anomaly detection..."
-        
-        # Anomaly detection and threshold analysis
-        anomaly_results = {}
-        if anomaly_detection or threshold_analysis:
-            logger.info("Performing anomaly detection and threshold analysis")
+        with bar_context as main_bar:
             
-            if len(reconstruction_errors_array) > 0:
-                # Calculate threshold based on method
-                if threshold_method == 'percentile':
-                    threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
-                elif threshold_method == 'mean_std':
-                    mean_error = np.mean(reconstruction_errors_array)
-                    std_error = np.std(reconstruction_errors_array)
-                    threshold = mean_error + 2 * std_error
-                elif threshold_method == 'iqr':
-                    Q1 = np.percentile(reconstruction_errors_array, 25)
-                    Q3 = np.percentile(reconstruction_errors_array, 75)
-                    IQR = Q3 - Q1
-                    threshold = Q3 + 1.5 * IQR
-                elif custom_config.get('custom_threshold_fn'):
-                    threshold = custom_config['custom_threshold_fn'](reconstruction_errors_array)
+            # STAGE 1: Configuration and Setup
+            progress_data['current_stage'] = "Configuration Setup"
+            if not silent_mode:
+                main_bar.text = "Setting up configuration and parameters..."
+            
+            # Determine paths with multiple fallback strategies
+            if data_path is None:
+                # Try to get from config
+                data_path = final_config.get('data', {}).get('data_path') or final_config.get('system', {}).get('data_dir')
+                
+                if data_path is None:
+                    # Use default path
+                    data_path = DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"
                 else:
-                    threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
-                
-                # Anomaly detection results
-                anomalies = reconstruction_errors_array > threshold
-                n_anomalies = np.sum(anomalies)
-                anomaly_rate = n_anomalies / len(reconstruction_errors_array) if len(reconstruction_errors_array) > 0 else 0
-                
-                anomaly_results = {
-                    'threshold': float(threshold),
-                    'threshold_method': threshold_method,
-                    'n_anomalies': int(n_anomalies),
-                    'anomaly_rate': float(anomaly_rate),
-                    'anomaly_indices': np.where(anomalies)[0].tolist() if export_config.get('save_predictions', False) else []
-                }
+                    #data_path = Path(data_path) / "preprocessed_dataset.csv"
+                    data_path = Path(data_path)
             else:
-                logger.warning("No reconstruction errors available for anomaly detection")
-        
-        # Update progress bar for statistical analysis
-        if pbar and statistical_metrics:
-            pbar.text = "Validation completed | Performing statistical analysis..."
-        
-        # Statistical analysis
-        statistical_results = {}
-        if statistical_metrics and len(reconstruction_errors_array) > 0:
-            logger.info("Performing statistical analysis")
+                data_path = Path(data_path)
             
-            # Basic statistics
-            statistical_results.update({
-                'mean_reconstruction_error': float(np.mean(reconstruction_errors_array)),
-                'std_reconstruction_error': float(np.std(reconstruction_errors_array)),
-                'min_reconstruction_error': float(np.min(reconstruction_errors_array)),
-                'max_reconstruction_error': float(np.max(reconstruction_errors_array)),
-                'median_reconstruction_error': float(np.median(reconstruction_errors_array)),
-                'q25_reconstruction_error': float(np.percentile(reconstruction_errors_array, 25)),
-                'q75_reconstruction_error': float(np.percentile(reconstruction_errors_array, 75))
-            })
+            if artifacts_path is None:
+                # Try to get from config or derive from data path
+                artifacts_path = final_config.get('data', {}).get('artifacts_path')
+                if artifacts_path is None:
+                    artifacts_path = data_path.parent / "preprocessing_artifacts.pkl"
+                else:
+                    artifacts_path = Path(artifacts_path)
+            else:
+                artifacts_path = Path(artifacts_path)
             
-            # Advanced statistical analysis
-            if statistical_tests and len(reconstruction_errors_array) > 10:
-                try:
-                    # Normality test
-                    normality_stat, normality_p = stats.normaltest(reconstruction_errors_array)
-                    statistical_results.update({
-                        'normality_test_statistic': float(normality_stat),
-                        'normality_test_pvalue': float(normality_p),
-                        'is_normal': normality_p > significance_level
-                    })
+            loading_stats['data_path'] = str(data_path)
+            loading_stats['artifacts_path'] = str(artifacts_path)
+            
+            if not silent_mode:
+                logger.info(f"Data path: {data_path}")
+                logger.info(f"Artifacts path: {artifacts_path}")
+            
+            if not silent_mode:
+                main_bar.text = "Configuration complete"
+            loading_stats['stages_completed'].append('configuration')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 2: Path Validation and File Discovery
+            progress_data['current_stage'] = "Path Validation"
+            if not silent_mode:
+                main_bar.text = "Validating paths and discovering files..."
+            
+            # Validate file existence with helpful error messages
+            if use_real_data:
+                if not data_path.exists():
+                    # Try alternative locations
+                    alternative_paths = [
+                        data_path.parent / "dataset.csv",
+                        data_path.parent / "data.csv",
+                        Path.cwd() / "data" / data_path.name,
+                        Path.cwd() / data_path.name
+                    ]
                     
-                    # Skewness and kurtosis
-                    statistical_results.update({
-                        'skewness': float(stats.skew(reconstruction_errors_array)),
-                        'kurtosis': float(stats.kurtosis(reconstruction_errors_array))
-                    })
+                    found_alternative = None
+                    for alt_path in alternative_paths:
+                        if alt_path.exists():
+                            found_alternative = alt_path
+                            break
+                    
+                    if found_alternative:
+                        if not silent_mode:
+                            logger.warning(f"Data file not found at {data_path}, using {found_alternative}")
+                        data_path = found_alternative
+                        loading_stats['data_path'] = str(data_path)
+                        loading_stats['warnings_encountered'].append(f"Used alternative path: {found_alternative}")
+                    else:
+                        error_msg = f"Data file not found: {data_path}\nTried alternatives: {alternative_paths}"
+                        loading_stats['errors_encountered'].append(error_msg)
+                        raise FileNotFoundError(error_msg)
+                
+                if not artifacts_path.exists() and normalization != 'none':
+                    if not silent_mode:
+                        logger.warning(f"Artifacts file not found: {artifacts_path}")
+                        logger.info("Will attempt to load data without preprocessing artifacts")
+                    loading_stats['warnings_encountered'].append("Artifacts file not found")
+            
+            if not silent_mode:
+                main_bar.text = "Path validation complete"
+            loading_stats['stages_completed'].append('path_validation')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 3: Data Loading
+            progress_data['current_stage'] = "Data Loading"
+            if not silent_mode:
+                main_bar.text = "Loading data from source..."
+            
+            # Load data based on format and parameters
+            if not silent_mode:
+                logger.info(f"Loading data in {data_format} format")
+            
+            if use_real_data:
+                try:
+                    # Load data based on format
+                    if data_format.lower() == 'csv':
+                        load_params = {
+                            'encoding': encoding,
+                            'sep': delimiter,
+                            'header': header,
+                            'low_memory': low_memory
+                        }
+                        
+                        if index_col is not None:
+                            load_params['index_col'] = index_col
+                        if skiprows is not None:
+                            load_params['skiprows'] = skiprows
+                        if nrows is not None:
+                            load_params['nrows'] = nrows
+                        
+                        if chunk_size is not None:
+                            # Handle large files with chunking
+                            if not silent_mode:
+                                logger.info(f"Loading data in chunks of size {chunk_size}")
+                            chunk_iter = pd.read_csv(data_path, chunksize=chunk_size, **load_params)
+                            df_chunks = []
+                            
+                            # Show chunk loading progress only if not in silent mode and progress_bar is True
+                            if not silent_mode and progress_bar:
+                                total_chunks = (os.path.getsize(data_path) // (chunk_size * 1000)) + 1
+                                with alive_bar(total_chunks, title='Loading Chunks\t\t', unit='chunks') as chunk_bar:
+                                    for i, chunk in enumerate(chunk_iter):
+                                        df_chunks.append(chunk)
+                                        chunk_bar.text = f"Chunk {i+1}: {len(chunk)} rows"
+                                        chunk_bar()
+                                        if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
+                                            break
+                            else:
+                                # Silent mode or no progress bar - just load chunks
+                                for i, chunk in enumerate(chunk_iter):
+                                    df_chunks.append(chunk)
+                                    if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
+                                        break
+                            
+                            df = pd.concat(df_chunks, ignore_index=True)
+                        else:
+                            df = pd.read_csv(data_path, **load_params)
+                            
+                    elif data_format.lower() == 'parquet':
+                        df = pd.read_parquet(data_path)
+                    elif data_format.lower() == 'json':
+                        df = pd.read_json(data_path, encoding=encoding)
+                    elif data_format.lower() == 'pickle':
+                        df = pd.read_pickle(data_path)
+                    else:
+                        raise ValueError(f"Unsupported data format: {data_format}")
+                    
+                    loading_stats['rows_loaded'] = len(df)
+                    loading_stats['columns_loaded'] = len(df.columns)
+                    progress_data['rows_processed'] = len(df)
+                    progress_data['features_processed'] = len(df.columns)
+                    
+                    if not silent_mode:
+                        logger.info(f"Loaded {len(df)} rows and {len(df.columns)} columns")
                     
                 except Exception as e:
-                    logger.warning(f"Statistical tests failed: {e}")
+                    if not silent_mode:
+                        logger.error(f"Failed to load data from {data_path}: {e}")
+                    loading_stats['errors_encountered'].append(f"Data loading failed: {str(e)}")
+                    
+                    if not use_real_data:
+                        if not silent_mode:
+                            logger.info("Falling back to synthetic data generation")
+                    else:
+                        raise RuntimeError(f"Data loading failed: {str(e)}")
             
-            # Confidence interval
-            if confidence_interval < 1.0:
-                alpha = 1 - confidence_interval
-                ci_lower = np.percentile(reconstruction_errors_array, 100 * alpha / 2)
-                ci_upper = np.percentile(reconstruction_errors_array, 100 * (1 - alpha / 2))
-                statistical_results.update({
-                    f'ci_{confidence_interval}_lower': float(ci_lower),
-                    f'ci_{confidence_interval}_upper': float(ci_upper)
-                })
-        
-        # Outlier analysis
-        outlier_results = {}
-        if outlier_analysis and len(reconstruction_errors_array) > 0:
-            logger.info("Performing outlier analysis")
-            
-            # IQR-based outliers
-            Q1 = np.percentile(reconstruction_errors_array, 25)
-            Q3 = np.percentile(reconstruction_errors_array, 75)
-            IQR = Q3 - Q1
-            lower_bound = Q1 - 1.5 * IQR
-            upper_bound = Q3 + 1.5 * IQR
-            
-            iqr_outliers = (reconstruction_errors_array < lower_bound) | (reconstruction_errors_array > upper_bound)
-            n_iqr_outliers = np.sum(iqr_outliers)
-            
-            outlier_results.update({
-                'iqr_outliers': int(n_iqr_outliers),
-                'iqr_outlier_rate': float(n_iqr_outliers / len(reconstruction_errors_array)),
-                'iqr_lower_bound': float(lower_bound),
-                'iqr_upper_bound': float(upper_bound)
-            })
-        
-        # Distributed metrics reduction
-        if distributed and reduce_metrics:
-            try:
-                # Reduce loss across processes
-                loss_tensor = torch.tensor(avg_loss, device=device)
-                dist.all_reduce(loss_tensor, op=dist.ReduceOp.SUM)
-                avg_loss = (loss_tensor / distributed_config.get('world_size', 1)).item()
+            # Generate synthetic data if needed
+            if not use_real_data or (use_real_data and 'df' not in locals()):
+                progress_data['current_substage'] = "Synthetic Data Generation"
+                if not silent_mode:
+                    main_bar.text = "Generating synthetic data..."
                 
-                # Reduce sample count
-                samples_tensor = torch.tensor(num_samples, device=device)
-                dist.all_reduce(samples_tensor, op=dist.ReduceOp.SUM)
-                num_samples = samples_tensor.item()
+                if not silent_mode:
+                    logger.info("Generating synthetic data")
                 
-                logger.info("Reduced metrics across distributed processes")
+                normal_samples = synthetic_data_config.get('synthetic_normal_samples', 8000)
+                attack_samples = synthetic_data_config.get('synthetic_attack_samples', 2000)
+                n_features = min_features
+                generation_method = synthetic_data_config.get('synthetic_generation_method', 'gaussian')
+                noise_level = synthetic_data_config.get('synthetic_noise_level', 0.1)
+                synthetic_seed = synthetic_data_config.get('synthetic_seed', random_state)
                 
-            except Exception as e:
-                logger.warning(f"Failed to reduce distributed metrics: {e}")
-        
-        # Update progress bar for custom analysis
-        if pbar and custom_config.get('custom_analysis_fn'):
-            pbar.text("Validation completed | Performing custom analysis...")
-            pbar.text = "Validation completed | Performing custom analysis..."
-        
-        # Custom analysis
-        custom_analysis_results = {}
-        if custom_config.get('custom_analysis_fn'):
-            try:
-                custom_analysis_results = custom_config['custom_analysis_fn'](
-                    model=model,
-                    predictions=np.concatenate(all_predictions) if all_predictions else None,
-                    targets=np.concatenate(all_targets) if all_targets else None,
-                    reconstruction_errors=reconstruction_errors_array,
-                    metrics_tracker=metrics_tracker
-                )
-                logger.info("Completed custom analysis")
-            except Exception as e:
-                logger.warning(f"Custom analysis failed: {e}")
-        
-        # Update progress bar for finalization
-        if pbar:
-            pbar.text = "Validation completed | Finalizing results..."
-        
-        # Comprehensive metrics dictionary
-        comprehensive_metrics = {
-            # Core metrics
-            'loss': avg_loss,
-            'epoch': epoch,
-            'validation_type': validation_type,
-            'num_batches': num_batches,
-            'num_samples': num_samples,
-            'total_validation_time': total_validation_time,
-            'avg_batch_time': total_validation_time / num_batches if num_batches > 0 else 0,
-            
-            # Basic reconstruction metrics
-            'mean_mse': float(np.mean(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
-            'std_mse': float(np.std(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
-            'min_mse': float(np.min(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
-            'max_mse': float(np.max(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
-            'samples_validated': len(reconstruction_errors_array),
-            
-            # Mixed precision information
-            'mixed_precision_enabled': mixed_precision,
-            'autocast_enabled': autocast_enabled,
-            
-            # Memory information
-            'memory_allocated_mb': torch.cuda.memory_allocated(device) / 1024**2 if torch.cuda.is_available() else 0,
-            'memory_reserved_mb': torch.cuda.memory_reserved(device) / 1024**2 if torch.cuda.is_available() else 0,
-            
-            # Performance metrics
-            'samples_per_second': num_samples / total_validation_time if total_validation_time > 0 else 0,
-            'batches_per_second': num_batches / total_validation_time if total_validation_time > 0 else 0,
-            
-            # Timing breakdown
-            'timing': {
-                'forward_time': forward_time,
-                'metrics_time': metrics_time,
-                'total_time': total_validation_time,
-                'avg_forward_time': forward_time / num_batches if num_batches > 0 else 0,
-                'avg_metrics_time': metrics_time / num_batches if num_batches > 0 else 0
-            },
-            
-            # Configuration info
-            'config_applied': final_config,
-            'device': str(device),
-            'distributed_validation': distributed,
-            
-            # Quality metrics
-            'validation_stable': not any(loss > 1000 for loss in metrics_tracker['losses'][-10:]) if metrics_tracker['losses'] else True
-        }
-        
-        # Add tracked metrics
-        if calculate_metrics:
-            if metrics_tracker['losses']:
-                comprehensive_metrics.update({
-                    'loss_std': float(np.std(metrics_tracker['losses'])),
-                    'min_batch_loss': float(np.min(metrics_tracker['losses'])),
-                    'max_batch_loss': float(np.max(metrics_tracker['losses']))
+                np.random.seed(synthetic_seed)
+                
+                if generation_method == 'gaussian':
+                    # Generate normal data
+                    X_normal = np.random.normal(0, 1, (normal_samples, n_features))
+                    
+                    # Generate attack data with different distribution
+                    X_attack = np.random.normal(2, 1.5, (attack_samples, n_features))
+                    X_attack += np.random.normal(0, noise_level, X_attack.shape)
+                    
+                elif generation_method == 'mixed':
+                    # More complex synthetic data
+                    X_normal = np.random.multivariate_normal(
+                        np.zeros(n_features), 
+                        np.eye(n_features), 
+                        normal_samples
+                    )
+                    
+                    # Create correlated attack features
+                    attack_mean = np.random.uniform(-2, 2, n_features)
+                    attack_cov = np.eye(n_features) * np.random.uniform(0.5, 2, n_features)
+                    X_attack = np.random.multivariate_normal(attack_mean, attack_cov, attack_samples)
+                    
+                else:
+                    raise ValueError(f"Unknown synthetic generation method: {generation_method}")
+                
+                # Combine data
+                X = np.vstack([X_normal, X_attack])
+                y = np.hstack([np.zeros(normal_samples), np.ones(attack_samples)])
+                
+                # Create DataFrame
+                feature_names = [f'feature_{i}' for i in range(n_features)]
+                df = pd.DataFrame(X, columns=feature_names)
+                df[label_column] = y
+                
+                loading_stats.update({
+                    'synthetic_data_generated': True,
+                    'normal_samples': normal_samples,
+                    'attack_samples': attack_samples,
+                    'generation_method': generation_method,
+                    'noise_level': noise_level
                 })
+                
+                progress_data['rows_processed'] = len(df)
+                progress_data['features_processed'] = len(df.columns)
+                
+                if not silent_mode:
+                    logger.info(f"Generated synthetic data: {normal_samples} normal, {attack_samples} attack samples")
             
-            if metrics_tracker['batch_times']:
-                comprehensive_metrics.update({
-                    'avg_batch_time': float(np.mean(metrics_tracker['batch_times'])),
-                    'batch_time_std': float(np.std(metrics_tracker['batch_times']))
-                })
+            if not silent_mode:
+                main_bar.text = "Data loading complete"
+            loading_stats['stages_completed'].append('data_loading')
+            if not silent_mode:
+                main_bar()
             
-            if metrics_tracker['memory_usage']:
-                comprehensive_metrics.update({
-                    'avg_memory_usage_mb': float(np.mean(metrics_tracker['memory_usage'])),
-                    'max_memory_usage_mb': float(np.max(metrics_tracker['memory_usage']))
-                })
-        
-        # Add detailed metrics
-        if detailed_metrics and metrics_tracker['detailed_metrics']:
-            comprehensive_metrics['detailed_metrics'] = {}
-            for metric_name, values in metrics_tracker['detailed_metrics'].items():
-                if values:
-                    comprehensive_metrics['detailed_metrics'][metric_name] = {
-                        'mean': float(np.mean(values)),
-                        'std': float(np.std(values)),
-                        'min': float(np.min(values)),
-                        'max': float(np.max(values))
-                    }
-        
-        # Add anomaly detection results
-        if anomaly_results:
-            comprehensive_metrics['anomaly_detection'] = anomaly_results
-        
-        # Add statistical results
-        if statistical_results:
-            comprehensive_metrics['statistics'] = statistical_results
-        
-        # Add outlier results
-        if outlier_results:
-            comprehensive_metrics['outliers'] = outlier_results
-        
-        # Add custom analysis results
-        if custom_analysis_results:
-            comprehensive_metrics['custom_analysis'] = custom_analysis_results
-        
-        # Save results if requested
-        if export_config.get('save_results', False):
-            results_path = export_config.get('results_path', f'./validation_results_epoch_{epoch}.json')
-            try:
-                with open(results_path, 'w') as f:
-                    # Make metrics JSON serializable
-                    serializable_metrics = {}
-                    for key, value in comprehensive_metrics.items():
+            # STAGE 4: Data Validation
+            progress_data['current_stage'] = "Data Validation"
+            if not silent_mode:
+                main_bar.text = "Validating data structure and quality..."
+            
+            if not silent_mode:
+                logger.info("Performing data validation")
+            
+            if df is None or df.empty:
+                error_msg = "No data loaded or generated"
+                loading_stats['errors_encountered'].append(error_msg)
+                raise ValueError(error_msg)
+            
+            # Check required columns
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                error_msg = f"Missing required columns: {missing_columns}"
+                loading_stats['errors_encountered'].append(error_msg)
+                raise ValueError(error_msg)
+            
+            # Validate label column
+            if label_column not in df.columns:
+                error_msg = f"Label column '{label_column}' not found in dataset"
+                loading_stats['errors_encountered'].append(error_msg)
+                raise ValueError(error_msg)
+            
+            # Check data types and handle mixed types
+            numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
+            if label_column in numeric_columns:
+                numeric_columns.remove(label_column)
+            
+            if len(numeric_columns) < min_features:
+                if not silent_mode:
+                    logger.warning(f"Only {len(numeric_columns)} numeric features found, minimum is {min_features}")
+                loading_stats['warnings_encountered'].append(f"Low numeric features: {len(numeric_columns)}")
+                
+                # Try to convert non-numeric columns
+                conversion_attempts = 0
+                for col in df.columns:
+                    if col != label_column and col not in numeric_columns:
                         try:
-                            json.dumps(value)
-                            serializable_metrics[key] = value
-                        except TypeError:
-                            serializable_metrics[key] = str(value)
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                            if not df[col].isna().all():
+                                numeric_columns.append(col)
+                                conversion_attempts += 1
+                        except Exception:
+                            continue
+                
+                if conversion_attempts > 0 and not silent_mode:
+                    logger.info(f"Converted {conversion_attempts} columns to numeric")
+            
+            # Update feature columns
+            if feature_columns is None:
+                feature_columns = [col for col in numeric_columns if col != label_column]
+            
+            # Exclude specified columns
+            if exclude_columns:
+                feature_columns = [col for col in feature_columns if col not in exclude_columns]
+            
+            # Validate final feature set
+            if len(feature_columns) < min_features:
+                error_msg = f"Too few valid features ({len(feature_columns)}), need at least {min_features}"
+                loading_stats['errors_encountered'].append(error_msg)
+                raise ValueError(error_msg)
+            
+            if max_features and len(feature_columns) > max_features:
+                if not silent_mode:
+                    logger.info(f"Reducing features from {len(feature_columns)} to {max_features}")
+                feature_columns = feature_columns[:max_features]
+            
+            loading_stats['feature_columns'] = feature_columns
+            loading_stats['n_features'] = len(feature_columns)
+            progress_data['features_processed'] = len(feature_columns)
+            
+            # Extract features and labels
+            X = df[feature_columns].values.astype(np.float32)
+            y = df[label_column].values
+            
+            progress_data['validation_passed'] += 1
+            if not silent_mode:
+                main_bar.text = "Data validation complete"
+            loading_stats['stages_completed'].append('data_validation')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 5: Data Processing
+            progress_data['current_stage'] = "Data Processing"
+            if not silent_mode:
+                main_bar.text = "Processing data (cleaning, scaling, etc.)..."
+            
+            # Validate data quality
+            if data_quality_checks:
+                progress_data['current_substage'] = "Quality Checks"
+                if not silent_mode:
+                    main_bar.text = "Performing data quality checks..."
+                
+                if not silent_mode:
+                    logger.info("Performing data quality checks")
+                
+                # Check for infinite values
+                inf_mask = np.isinf(X)
+                if inf_mask.any():
+                    if not silent_mode:
+                        logger.warning(f"Found {inf_mask.sum()} infinite values, replacing with NaN")
+                    X[inf_mask] = np.nan
+                    loading_stats['warnings_encountered'].append(f"Fixed {inf_mask.sum()} infinite values")
+                
+                # Check for excessive missing values
+                missing_per_feature = np.isnan(X).sum(axis=0) / len(X)
+                problematic_features = np.where(missing_per_feature > 0.5)[0]
+                if len(problematic_features) > 0:
+                    warning_msg = f"Features with >50% missing values: {problematic_features}"
+                    if not silent_mode:
+                        logger.warning(warning_msg)
+                    loading_stats['warnings_encountered'].append(warning_msg)
+                
+                # Check for zero variance features
+                if feature_engineering_config.get('variance_threshold', 0) > 0:
+                    variances = np.var(X, axis=0)
+                    zero_var_features = np.where(variances < feature_engineering_config['variance_threshold'])[0]
+                    if len(zero_var_features) > 0:
+                        warning_msg = f"Low variance features detected: {zero_var_features}"
+                        if not silent_mode:
+                            logger.warning(warning_msg)
+                        loading_stats['warnings_encountered'].append(warning_msg)
+            
+            # Handle missing values
+            if handle_missing and np.isnan(X).any():
+                progress_data['current_substage'] = "Missing Value Handling"
+                if not silent_mode:
+                    main_bar.text = "Handling missing values..."
+                
+                if not silent_mode:
+                    logger.info(f"Handling missing values using strategy: {handle_missing}")
+                
+                if handle_missing == 'drop':
+                    # Drop rows with any missing values
+                    valid_mask = ~np.isnan(X).any(axis=1)
+                    rows_dropped = (~valid_mask).sum()
+                    X = X[valid_mask]
+                    y = y[valid_mask]
+                    if not silent_mode:
+                        logger.info(f"Dropped {rows_dropped} rows with missing values")
+                    loading_stats['rows_dropped_missing'] = rows_dropped
                     
-                    json.dump(serializable_metrics, f, indent=2)
-                logger.info(f"Saved validation results to {results_path}")
-            except Exception as e:
-                logger.warning(f"Failed to save validation results: {e}")
-        
-        # Save predictions if requested
-        if export_config.get('save_predictions', False) and all_predictions:
-            predictions_path = export_config.get('results_path', './').replace('.json', '_predictions.npy')
-            try:
-                np.save(predictions_path, np.concatenate(all_predictions))
-                logger.info(f"Saved predictions to {predictions_path}")
-            except Exception as e:
-                logger.warning(f"Failed to save predictions: {e}")
-        
-        # Log comprehensive summary
-        logger.info("=" * 80)
-        logger.info(f"VALIDATION EPOCH {epoch if epoch is not None else 'N/A'} SUMMARY")
-        logger.info("=" * 80)
-        logger.info(f"Validation Type: {validation_type}")
-        logger.info(f"Average Loss: {avg_loss:.6f}")
-        logger.info(f"Batches Processed: {num_batches:,}")
-        logger.info(f"Samples Processed: {num_samples:,}")
-        logger.info(f"Total Time: {total_validation_time:.2f}s")
-        logger.info(f"Throughput: {comprehensive_metrics['samples_per_second']:.1f} samples/sec")
-        
-        if len(reconstruction_errors_array) > 0:
-            logger.info(f"Mean Reconstruction Error: {comprehensive_metrics['mean_mse']:.6f}")
-            logger.info(f"Std Reconstruction Error: {comprehensive_metrics['std_mse']:.6f}")
-        
-        if mixed_precision:
-            logger.info(f"Mixed Precision: Enabled")
-        
-        if torch.cuda.is_available():
-            logger.info(f"Memory: {comprehensive_metrics['memory_allocated_mb']:.1f}MB allocated")
-        
-        if anomaly_results:
-            logger.info(f"Anomalies Detected: {anomaly_results['n_anomalies']} ({anomaly_results['anomaly_rate']*100:.1f}%)")
-            logger.info(f"Anomaly Threshold: {anomaly_results['threshold']:.6f}")
-        
-        if timing_analysis:
-            timing = comprehensive_metrics['timing']
-            logger.info(f"Timing - Forward: {timing['forward_time']:.2f}s")
-            logger.info(f"Timing - Metrics: {timing['metrics_time']:.2f}s")
-        
-        logger.info("=" * 80)
-        
-        # Final progress bar update
-        if pbar:
-            pbar.text = f"Validation completed | Loss: {avg_loss:.4f} | Time: {total_validation_time:.1f}s"
-        
-        # Restore original logging level
-        if verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        return avg_loss, reconstruction_errors_array, comprehensive_metrics
-        
-    except Exception as e:
-        # Restore original logging level on error
-        if verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        error_msg = f"Validation failed: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        # Provide helpful error context
-        logger.error(f"Error occurred at epoch {epoch}, batch {batch_idx if 'batch_idx' in locals() else 'N/A'}")
-        logger.error(f"Configuration used: {final_config}")
-        
-        # Attempt graceful recovery if enabled
-        if graceful_degradation and 'num_batches' in locals() and num_batches > 0:
-            logger.warning("Attempting graceful recovery with partial results")
-            try:
-                # Return partial results
-                avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
-                partial_errors = np.array(all_reconstruction_errors)
-                partial_metrics = {
-                    'loss': avg_loss,
-                    'epoch': epoch,
-                    'num_batches': num_batches,
-                    'num_samples': num_samples,
-                    'error': str(e),
-                    'partial_results': True
-                }
-                
-                logger.warning(f"Returning partial results from {num_batches} processed batches")
-                return avg_loss, partial_errors, partial_metrics
-                
-            except Exception as recovery_e:
-                logger.error(f"Graceful recovery also failed: {recovery_e}")
-        
-        raise RuntimeError(error_msg) from e
-    
-    finally:
-        # Final cleanup
-        try:
-            if pbar_context:
-                pbar_context.__exit__(None, None, None)
-            
-            if memory_efficient:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
-            
-            # Restore model to original training state if it was changed
-            if eval_mode and hasattr(model, 'training') and not model.training:
-                # Don't automatically restore to training mode - let caller decide
-                pass
-        except:
-            pass
-
-def calculate_threshold(
-    # Core Threshold Calculation Parameters
-    model: Optional[nn.Module] = None,
-    loader: Optional[DataLoader] = None,
-    data: Optional[Union[np.ndarray, torch.Tensor]] = None,
-    reconstruction_errors: Optional[np.ndarray] = None,
-    percentile: Optional[float] = None,
-    device: Optional[torch.device] = None,
-    
-    # Threshold Method Parameters
-    threshold_method: Optional[str] = None,
-    threshold_strategy: Optional[str] = None,
-    threshold_type: Optional[str] = None,
-    adaptive_threshold: Optional[bool] = None,
-    dynamic_threshold: Optional[bool] = None,
-    multi_threshold: Optional[bool] = None,
-    hierarchical_threshold: Optional[bool] = None,
-    
-    # Statistical Threshold Parameters
-    statistical_method: Optional[str] = None,
-    confidence_level: Optional[float] = None,
-    significance_level: Optional[float] = None,
-    z_score_threshold: Optional[float] = None,
-    iqr_multiplier: Optional[float] = None,
-    mad_multiplier: Optional[float] = None,
-    std_multiplier: Optional[float] = None,
-    contamination_rate: Optional[float] = None,
-    
-    # Percentile-based Parameters
-    percentile_method: Optional[str] = None,
-    percentile_range: Optional[Tuple[float, float]] = None,
-    multi_percentile: Optional[List[float]] = None,
-    percentile_interpolation: Optional[str] = None,
-    robust_percentile: Optional[bool] = None,
-    
-    # Distribution-based Parameters
-    distribution_type: Optional[str] = None,
-    distribution_params: Optional[Dict[str, float]] = None,
-    distribution_fit_method: Optional[str] = None,
-    use_empirical_distribution: Optional[bool] = None,
-    kernel_density_estimation: Optional[bool] = None,
-    kde_bandwidth: Optional[Union[str, float]] = None,
-    
-    # Machine Learning Threshold Parameters
-    ml_threshold_method: Optional[str] = None,
-    isolation_forest_contamination: Optional[float] = None,
-    local_outlier_factor_neighbors: Optional[int] = None,
-    one_class_svm_nu: Optional[float] = None,
-    one_class_svm_kernel: Optional[str] = None,
-    elliptic_envelope_contamination: Optional[float] = None,
-    
-    # Cross-validation Parameters
-    cross_validation_threshold: Optional[bool] = None,
-    cv_folds: Optional[int] = None,
-    cv_strategy: Optional[str] = None,
-    threshold_stability_analysis: Optional[bool] = None,
-    bootstrap_threshold: Optional[bool] = None,
-    bootstrap_samples: Optional[int] = None,
-    
-    # Time Series Threshold Parameters
-    temporal_threshold: Optional[bool] = None,
-    window_size: Optional[int] = None,
-    sliding_window: Optional[bool] = None,
-    seasonal_adjustment: Optional[bool] = None,
-    trend_adjustment: Optional[bool] = None,
-    change_point_detection: Optional[bool] = None,
-    
-    # Multi-modal Threshold Parameters
-    mixture_model_threshold: Optional[bool] = None,
-    n_components: Optional[int] = None,
-    mixture_type: Optional[str] = None,
-    component_weights: Optional[List[float]] = None,
-    
-    # Validation and Quality Parameters
-    validate_threshold: Optional[bool] = None,
-    threshold_validation_data: Optional[np.ndarray] = None,
-    quality_metrics: Optional[List[str]] = None,
-    stability_check: Optional[bool] = None,
-    sensitivity_analysis: Optional[bool] = None,
-    robustness_test: Optional[bool] = None,
-    
-    # Performance Parameters
-    performance_mode: Optional[str] = None,
-    batch_processing: Optional[bool] = None,
-    parallel_processing: Optional[bool] = None,
-    n_jobs: Optional[int] = None,
-    memory_efficient: Optional[bool] = None,
-    cache_results: Optional[bool] = None,
-    
-    # Data Processing Parameters
-    data_preprocessing: Optional[bool] = None,
-    outlier_removal: Optional[bool] = None,
-    outlier_method: Optional[str] = None,
-    data_transformation: Optional[str] = None,
-    normalization: Optional[str] = None,
-    scaling_method: Optional[str] = None,
-    
-    # Model Evaluation Parameters
-    eval_mode: Optional[bool] = None,
-    no_grad: Optional[bool] = None,
-    mixed_precision: Optional[bool] = None,
-    batch_size: Optional[int] = None,
-    model_ensemble: Optional[bool] = None,
-    ensemble_method: Optional[str] = None,
-    
-    # Advanced Analysis Parameters
-    feature_importance: Optional[bool] = None,
-    feature_weights: Optional[np.ndarray] = None,
-    weighted_threshold: Optional[bool] = None,
-    dimension_reduction: Optional[bool] = None,
-    dimension_reduction_method: Optional[str] = None,
-    n_components_pca: Optional[int] = None,
-    
-    # Uncertainty Quantification Parameters
-    uncertainty_estimation: Optional[bool] = None,
-    confidence_intervals: Optional[bool] = None,
-    prediction_intervals: Optional[bool] = None,
-    bayesian_threshold: Optional[bool] = None,
-    mcmc_samples: Optional[int] = None,
-    
-    # Multi-class Threshold Parameters
-    multi_class_threshold: Optional[bool] = None,
-    class_specific_thresholds: Optional[bool] = None,
-    class_weights: Optional[Dict[str, float]] = None,
-    threshold_per_class: Optional[Dict[str, float]] = None,
-    
-    # Cost-sensitive Parameters
-    cost_sensitive_threshold: Optional[bool] = None,
-    false_positive_cost: Optional[float] = None,
-    false_negative_cost: Optional[float] = None,
-    cost_matrix: Optional[np.ndarray] = None,
-    business_objective: Optional[str] = None,
-    
-    # Monitoring and Logging Parameters
-    verbose: Optional[bool] = None,
-    debug_mode: Optional[bool] = None,
-    log_level: Optional[str] = None,
-    progress_bar: Optional[bool] = None,
-    timing_analysis: Optional[bool] = None,
-    memory_profiling: Optional[bool] = None,
-    
-    # Export and Visualization Parameters
-    save_results: Optional[bool] = None,
-    results_path: Optional[str] = None,
-    save_threshold_analysis: Optional[bool] = None,
-    visualization: Optional[bool] = None,
-    plot_distribution: Optional[bool] = None,
-    plot_threshold: Optional[bool] = None,
-    plot_roc_curve: Optional[bool] = None,
-    
-    # Error Handling Parameters
-    error_handling: Optional[str] = None,
-    handle_edge_cases: Optional[bool] = None,
-    min_samples_required: Optional[int] = None,
-    fallback_threshold: Optional[float] = None,
-    graceful_degradation: Optional[bool] = None,
-    
-    # Experimental Parameters
-    experimental_methods: Optional[bool] = None,
-    deep_learning_threshold: Optional[bool] = None,
-    autoencoder_threshold: Optional[bool] = None,
-    gan_threshold: Optional[bool] = None,
-    
-    # System Parameters
-    random_state: Optional[int] = None,
-    reproducible: Optional[bool] = None,
-    deterministic: Optional[bool] = None,
-    
-    # Direct Configuration Override
-    config: Optional[Dict[str, Any]] = None,
-    threshold_config: Optional[Dict[str, Any]] = None,
-    
-    **kwargs
-) -> Tuple[Union[float, Dict[str, float]], Dict[str, Any]]:
-    # Start timing
-    start_time = datetime.now()
-    
-    # Initialize configuration with comprehensive defaults
-    if config is None:
-        try:
-            config = get_current_config() if 'get_current_config' in globals() else {}
-        except Exception:
-            config = {}
-    
-    # Apply threshold-specific configuration
-    if threshold_config:
-        config.setdefault('threshold', {}).update(threshold_config)
-    
-    # Apply all parameters to configuration
-    final_config = {}
-    
-    # Merge with existing config
-    final_config.update(config)
-    
-    # Apply individual parameters with intelligent organization
-    params = locals().copy()
-    params.update(kwargs)
-    
-    # Remove non-parameter items
-    params_to_remove = {
-        'config', 'threshold_config', 'kwargs', 'start_time', 'datetime',
-        'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
-        'nullcontext', 'nn', 'optim', 'DataLoader', 'stats', 'IsolationForest',
-        'LocalOutlierFactor', 'OneClassSVM', 'EllipticEnvelope', 'GaussianMixture'
-    }
-    
-    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
-    
-    # Organize parameters into logical sections
-    param_sections = {
-        'core_threshold': [
-            'percentile', 'threshold_method', 'threshold_strategy', 'threshold_type',
-            'adaptive_threshold', 'dynamic_threshold', 'multi_threshold', 'hierarchical_threshold'
-        ],
-        'statistical_methods': [
-            'statistical_method', 'confidence_level', 'significance_level', 'z_score_threshold',
-            'iqr_multiplier', 'mad_multiplier', 'std_multiplier', 'contamination_rate'
-        ],
-        'percentile_methods': [
-            'percentile_method', 'percentile_range', 'multi_percentile',
-            'percentile_interpolation', 'robust_percentile'
-        ],
-        'distribution_methods': [
-            'distribution_type', 'distribution_params', 'distribution_fit_method',
-            'use_empirical_distribution', 'kernel_density_estimation', 'kde_bandwidth'
-        ],
-        'ml_methods': [
-            'ml_threshold_method', 'isolation_forest_contamination', 'local_outlier_factor_neighbors',
-            'one_class_svm_nu', 'one_class_svm_kernel', 'elliptic_envelope_contamination'
-        ],
-        'cross_validation': [
-            'cross_validation_threshold', 'cv_folds', 'cv_strategy',
-            'threshold_stability_analysis', 'bootstrap_threshold', 'bootstrap_samples'
-        ],
-        'temporal': [
-            'temporal_threshold', 'window_size', 'sliding_window',
-            'seasonal_adjustment', 'trend_adjustment', 'change_point_detection'
-        ],
-        'multi_modal': [
-            'mixture_model_threshold', 'n_components', 'mixture_type', 'component_weights'
-        ],
-        'validation': [
-            'validate_threshold', 'threshold_validation_data', 'quality_metrics',
-            'stability_check', 'sensitivity_analysis', 'robustness_test'
-        ],
-        'performance': [
-            'performance_mode', 'batch_processing', 'parallel_processing',
-            'n_jobs', 'memory_efficient', 'cache_results'
-        ],
-        'data_processing': [
-            'data_preprocessing', 'outlier_removal', 'outlier_method',
-            'data_transformation', 'normalization', 'scaling_method'
-        ],
-        'model_evaluation': [
-            'eval_mode', 'no_grad', 'mixed_precision', 'batch_size',
-            'model_ensemble', 'ensemble_method'
-        ],
-        'advanced_analysis': [
-            'feature_importance', 'feature_weights', 'weighted_threshold',
-            'dimension_reduction', 'dimension_reduction_method', 'n_components_pca'
-        ],
-        'uncertainty': [
-            'uncertainty_estimation', 'confidence_intervals', 'prediction_intervals',
-            'bayesian_threshold', 'mcmc_samples'
-        ],
-        'multi_class': [
-            'multi_class_threshold', 'class_specific_thresholds', 'class_weights',
-            'threshold_per_class'
-        ],
-        'cost_sensitive': [
-            'cost_sensitive_threshold', 'false_positive_cost', 'false_negative_cost',
-            'cost_matrix', 'business_objective'
-        ],
-        'monitoring': [
-            'verbose', 'debug_mode', 'log_level', 'progress_bar',
-            'timing_analysis', 'memory_profiling'
-        ],
-        'export': [
-            'save_results', 'results_path', 'save_threshold_analysis',
-            'visualization', 'plot_distribution', 'plot_threshold', 'plot_roc_curve'
-        ],
-        'error_handling': [
-            'error_handling', 'handle_edge_cases', 'min_samples_required',
-            'fallback_threshold', 'graceful_degradation'
-        ],
-        'experimental': [
-            'experimental_methods', 'deep_learning_threshold', 'autoencoder_threshold',
-            'gan_threshold'
-        ],
-        'system': [
-            'random_state', 'reproducible', 'deterministic'
-        ]
-    }
-    
-    # Apply parameters to appropriate sections
-    for section, param_list in param_sections.items():
-        section_config = final_config.setdefault(section, {})
-        for param in param_list:
-            if param in cleaned_params:
-                section_config[param] = cleaned_params[param]
-    
-    # Set up comprehensive defaults
-    core_config = final_config.setdefault('core_threshold', {})
-    statistical_config = final_config.setdefault('statistical_methods', {})
-    percentile_config = final_config.setdefault('percentile_methods', {})
-    distribution_config = final_config.setdefault('distribution_methods', {})
-    ml_config = final_config.setdefault('ml_methods', {})
-    validation_config = final_config.setdefault('validation', {})
-    performance_config = final_config.setdefault('performance', {})
-    data_processing_config = final_config.setdefault('data_processing', {})
-    model_config = final_config.setdefault('model_evaluation', {})
-    monitoring_config = final_config.setdefault('monitoring', {})
-    error_config = final_config.setdefault('error_handling', {})
-    system_config = final_config.setdefault('system', {})
-    
-    # Apply intelligent defaults
-    percentile = core_config.setdefault('percentile', DEFAULT_PERCENTILE)
-    threshold_method = core_config.setdefault('threshold_method', 'percentile')
-    adaptive_threshold = core_config.setdefault('adaptive_threshold', True)
-    contamination_rate = statistical_config.setdefault('contamination_rate', 0.1)
-    
-    # Statistical defaults
-    confidence_level = statistical_config.setdefault('confidence_level', 0.95)
-    z_score_threshold = statistical_config.setdefault('z_score_threshold', 2.0)
-    iqr_multiplier = statistical_config.setdefault('iqr_multiplier', 1.5)
-    std_multiplier = statistical_config.setdefault('std_multiplier', 2.0)
-    
-    # Performance defaults
-    performance_mode = performance_config.setdefault('performance_mode', 'standard')
-    batch_processing = performance_config.setdefault('batch_processing', True)
-    memory_efficient = performance_config.setdefault('memory_efficient', True)
-    n_jobs = performance_config.setdefault('n_jobs', -1)
-    
-    # Model evaluation defaults
-    eval_mode = model_config.setdefault('eval_mode', True)
-    no_grad = model_config.setdefault('no_grad', True)
-    mixed_precision = model_config.setdefault('mixed_precision', torch.cuda.is_available())
-    
-    # Error handling defaults
-    error_handling = error_config.setdefault('error_handling', 'strict')
-    min_samples_required = error_config.setdefault('min_samples_required', 10)
-    fallback_threshold = error_config.setdefault('fallback_threshold', 0.1)
-    graceful_degradation = error_config.setdefault('graceful_degradation', True)
-    
-    # System defaults
-    random_state = system_config.setdefault('random_state', 42)
-    reproducible = system_config.setdefault('reproducible', True)
-    
-    # Monitoring defaults
-    verbose = monitoring_config.setdefault('verbose', False)
-    debug_mode = monitoring_config.setdefault('debug_mode', False)
-    progress_bar = monitoring_config.setdefault('progress_bar', True)
-    timing_analysis = monitoring_config.setdefault('timing_analysis', False)
-    
-    # Set up logging level
-    # if verbose:
-    #     original_level = logger.level
-    #     logger.setLevel(logging.INFO)
-    
-    logger.info(f"Starting comprehensive threshold calculation using method: {threshold_method}")
-    
-    # Initialize variables for cleanup
-    pbar = None
-    
-    try:
-        # Initialize calculation statistics
-        calculation_stats = {
-            'start_time': start_time.isoformat(),
-            'threshold_method': threshold_method,
-            'config_applied': final_config
-        }
-        
-        # Set random seed for reproducibility
-        if reproducible:
-            np.random.seed(random_state)
-            if torch.cuda.is_available():
-                torch.manual_seed(random_state)
-        
-        # Device configuration
-        if device is None:
-            if model is not None:
-                device = next(model.parameters()).device
-            else:
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        # Set up main progress bar for the entire threshold calculation process
-        if progress_bar:
-            try:
-                pbar_context = alive_bar(
-                    title='Threshold Calculation\t',
-                    bar='smooth',
-                    spinner='dots',
-                    stats=False,
-                    monitor=True,
-                    elapsed=True,
-                    stats_end=False
-                )
-                pbar = pbar_context.__enter__()  # Get the actual progress bar iterator
-            except ImportError:
-                logger.warning("alive-progress not available, progress bar disabled")
-                pbar = None
-                pbar_context = None
-            except Exception as e:
-                logger.warning(f"Failed to initialize alive-progress bar: {e}")
-                pbar = None
-                pbar_context = None
-        
-        # Data preparation and validation
-        if pbar:
-            pbar.text = "Preparing and validating input data..."
-        logger.info("Preparing and validating input data")
-        
-        mse_values = None
-        data_source = None
-        
-        # Extract reconstruction errors from various sources
-        if reconstruction_errors is not None:
-            mse_values = np.array(reconstruction_errors)
-            data_source = "provided_reconstruction_errors"
-            logger.debug(f"Using provided reconstruction errors: {len(mse_values)} samples")
-            
-        elif data is not None and model is not None:
-            # Calculate reconstruction errors from data and model
-            if pbar:
-                pbar.text = "Calculating reconstruction errors from model and data..."
-            logger.info("Calculating reconstruction errors from model and data")
-            data_source = "calculated_from_model"
-            
-            if model_config.get('eval_mode', True):
-                model.eval()
-            
-            mse_list = []
-            
-            # Convert data to tensor if needed
-            if isinstance(data, np.ndarray):
-                data_tensor = torch.tensor(data, dtype=torch.float32)
-            else:
-                data_tensor = data
-            
-            # Batch processing for memory efficiency
-            if batch_processing:
-                batch_size = model_config.get('batch_size', 32)
-                n_samples = len(data_tensor)
-                total_batches = n_samples // batch_size + 1
-                
-                context = torch.no_grad() if no_grad else nullcontext()
-                
-                with context:
-                    for i in range(0, n_samples, batch_size):
-                        current_batch = i // batch_size + 1
-                        
-                        # Update progress bar with batch processing status
-                        if pbar:
-                            progress_text = (
-                                f"Processing batch {current_batch}/{total_batches} | "
-                                f"Samples: {len(mse_list):,} | "
-                                f"Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
-                            )
-                            pbar.text = progress_text
-                        
-                        batch_data = data_tensor[i:i+batch_size].to(device)
-                        
-                        # Mixed precision inference
-                        autocast_context = get_autocast_context(device, mixed_precision, True)
-                        with autocast_context:
-                            outputs = model(batch_data)
-                        
-                        # Calculate MSE per sample with proper shape handling
-                        if outputs.shape != batch_data.shape:
-                            if outputs.numel() == batch_data.numel():
-                                outputs = outputs.view_as(batch_data)
-                            else:
-                                # For autoencoders, ensure output matches input
-                                min_features = min(outputs.size(-1), batch_data.size(-1))
-                                batch_data_adjusted = batch_data[..., :min_features]
-                                outputs_adjusted = outputs[..., :min_features]
-                                outputs = outputs_adjusted
-                                batch_data = batch_data_adjusted
-                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
-                            if 'batch_mse' not in locals():
-                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
-                        else:
-                            batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
-                        mse_list.extend(batch_mse)
-                        
-                        # Memory management
-                        if memory_efficient and torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                
-                mse_values = np.array(mse_list)
-                
-            else:
-                # Process all data at once
-                data_tensor = data_tensor.to(device)
-                
-                context = torch.no_grad() if no_grad else nullcontext()
-                
-                with context:
-                    autocast_context = get_autocast_context(device, mixed_precision, True)
-                    with autocast_context:
-                        outputs = model(data_tensor)
-                    
-                    # Calculate MSE per sample with proper shape handling
-                    if data_tensor.shape != outputs.shape:
-                        if outputs.numel() == data_tensor.numel():
-                            outputs = outputs.view_as(data_tensor)
-                        else:
-                            min_features = min(outputs.size(-1), data_tensor.size(-1))
-                            outputs_adjusted = outputs[..., :min_features]
-                            outputs = outputs_adjusted
-                            data_tensor_adjusted = data_tensor[..., :min_features]
-                            data_tensor = data_tensor_adjusted
-                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
-                        if 'batch_mse' not in locals():
-                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
+                elif handle_missing == 'fill':
+                    strategy = data_processing_config.get('missing_value_strategy', 'mean')
+                    if strategy in ['mean', 'median', 'most_frequent']:
+                        imputer = SimpleImputer(strategy=strategy)
+                    elif strategy == 'knn':
+                        imputer = KNNImputer(n_neighbors=5)
                     else:
-                        batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
-                    mse_list.extend(batch_mse)
+                        imputer = SimpleImputer(strategy='mean')
                     
-                    if memory_efficient and torch.cuda.is_available():
-                        torch.cuda.empty_cache
-                    
-                    if 'mse_list' in locals():
-                        mse_values = np.array(mse_list)
-                    else:
-                        mse_values = batch_mse
+                    X = imputer.fit_transform(X)
+                    if not silent_mode:
+                        logger.info(f"Filled missing values using {strategy} strategy")
+                    loading_stats['missing_values_filled'] = True
+                    loading_stats['imputation_strategy'] = strategy
             
-        elif loader is not None and model is not None:
-            # Calculate reconstruction errors from DataLoader
-            if pbar:
-                pbar.text = "Calculating reconstruction errors from DataLoader..."
-            logger.info("Calculating reconstruction errors from DataLoader")
-            data_source = "calculated_from_dataloader"
+            # Validate sample sizes
+            if len(X) < min_samples:
+                error_msg = f"Too few samples ({len(X)}), need at least {min_samples}"
+                loading_stats['errors_encountered'].append(error_msg)
+                raise ValueError(error_msg)
             
-            if model_config.get('eval_mode', True):
-                model.eval()
+            if max_samples and len(X) > max_samples:
+                if not silent_mode:
+                    logger.info(f"Limiting dataset to {max_samples} samples")
+                indices = np.random.choice(len(X), max_samples, replace=False)
+                X = X[indices]
+                y = y[indices]
+                loading_stats['samples_limited'] = max_samples
             
-            mse_list = []
-            context = torch.no_grad() if no_grad else nullcontext()
+            # Validate label distribution
+            unique_labels = np.unique(y)
+            label_counts = {label: np.sum(y == label) for label in unique_labels}
             
-            with context:
-                for batch_idx, batch in enumerate(loader):
-                    # Update progress bar with DataLoader processing status
-                    if pbar:
-                        progress_text = (
-                            f"Processing batch {batch_idx+1}/{len(loader)} | "
-                            f"Samples: {len(mse_list):,} | "
-                            f"Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
-                        )
-                        pbar.text = progress_text
-                    
-                    if isinstance(batch, (list, tuple)):
-                        inputs = batch[0].to(device)
-                    else:
-                        inputs = batch.to(device)
-                    
-                    autocast_context = get_autocast_context(device, mixed_precision, True)
-                    with autocast_context:
-                        outputs = model(inputs)
-                    
-                    batch_mse = torch.mean((inputs - outputs)**2, dim=tuple(range(1, inputs.dim()))).cpu().numpy()
-                    mse_list.extend(batch_mse)
-                    
-                    # Memory management
-                    if memory_efficient and torch.cuda.is_available():
-                        torch.cuda.empty_cache()
+            if not silent_mode:
+                logger.info(f"Label distribution: {label_counts}")
+            loading_stats['label_distribution'] = label_counts
             
-            mse_values = np.array(mse_list)
+            # Check for class balance issues
+            if class_balance_config.get('min_class_samples', 10):
+                min_class_size = min(label_counts.values())
+                if min_class_size < class_balance_config['min_class_samples']:
+                    warning_msg = f"Smallest class has only {min_class_size} samples"
+                    if not silent_mode:
+                        logger.warning(warning_msg)
+                    loading_stats['warnings_encountered'].append(warning_msg)
             
-        else:
-            raise ValueError("Must provide either reconstruction_errors, or (model and data), or (model and loader)")
-        
-        # Validate data
-        if mse_values is None or len(mse_values) == 0:
-            raise ValueError("No reconstruction errors available for threshold calculation")
-        
-        if len(mse_values) < min_samples_required:
-            if graceful_degradation:
-                logger.warning(f"Only {len(mse_values)} samples available, less than minimum {min_samples_required}")
-                logger.warning(f"Using fallback threshold: {fallback_threshold}")
-                return fallback_threshold, {'method': 'fallback', 'samples': len(mse_values)}
-            else:
-                raise ValueError(f"Insufficient samples: {len(mse_values)}, minimum required: {min_samples_required}")
-        
-        calculation_stats['n_samples'] = len(mse_values)
-        calculation_stats['data_source'] = data_source
-        
-        # Data preprocessing if requested
-        if data_processing_config.get('data_preprocessing', False):
-            if pbar:
-                pbar.text = "Applying data preprocessing..."
-            logger.info("Applying data preprocessing")
+            if class_balance_config.get('max_class_ratio', 10):
+                max_class_size = max(label_counts.values())
+                min_class_size = min(label_counts.values())
+                class_ratio = max_class_size / min_class_size if min_class_size > 0 else float('inf')
+                if class_ratio > class_balance_config['max_class_ratio']:
+                    warning_msg = f"Class imbalance ratio: {class_ratio:.2f}"
+                    if not silent_mode:
+                        logger.warning(warning_msg)
+                    loading_stats['warnings_encountered'].append(warning_msg)
             
-            # Remove outliers if requested
-            if data_processing_config.get('outlier_removal', False):
-                outlier_method = data_processing_config.get('outlier_method', 'iqr')
-                original_size = len(mse_values)
+            # Outlier detection and handling
+            if outlier_detection:
+                progress_data['current_substage'] = "Outlier Detection"
+                if not silent_mode:
+                    main_bar.text = "Detecting and handling outliers..."
+                
+                if not silent_mode:
+                    logger.info(f"Detecting outliers using {outlier_method} method")
                 
                 if outlier_method == 'iqr':
-                    Q1 = np.percentile(mse_values, 25)
-                    Q3 = np.percentile(mse_values, 75)
+                    Q1 = np.percentile(X, 25, axis=0)
+                    Q3 = np.percentile(X, 75, axis=0)
                     IQR = Q3 - Q1
-                    lower_bound = Q1 - 1.5 * IQR
-                    upper_bound = Q3 + 1.5 * IQR
-                    mse_values = mse_values[(mse_values >= lower_bound) & (mse_values <= upper_bound)]
+                    lower_bound = Q1 - outlier_threshold * IQR
+                    upper_bound = Q3 + outlier_threshold * IQR
+                    
+                    outlier_mask = ((X < lower_bound) | (X > upper_bound)).any(axis=1)
+                    
                 elif outlier_method == 'zscore':
-                    z_scores = np.abs(stats.zscore(mse_values))
-                    mse_values = mse_values[z_scores < 3]
+                    z_scores = np.abs(stats.zscore(X, axis=0, nan_policy='omit'))
+                    outlier_mask = (z_scores > outlier_threshold).any(axis=1)
+                    
+                elif outlier_method == 'isolation':
+                    iso_forest = IsolationForest(contamination=0.1, random_state=random_state)
+                    outlier_labels = iso_forest.fit_predict(X)
+                    outlier_mask = outlier_labels == -1
+                    
+                else:
+                    if not silent_mode:
+                        logger.warning(f"Unknown outlier method: {outlier_method}")
+                    outlier_mask = np.zeros(len(X), dtype=bool)
+                    loading_stats['warnings_encountered'].append(f"Unknown outlier method: {outlier_method}")
                 
-                logger.info(f"Outlier removal: {original_size} -> {len(mse_values)} samples")
+                n_outliers = outlier_mask.sum()
+                if n_outliers > 0:
+                    if not silent_mode:
+                        logger.info(f"Detected {n_outliers} outliers ({n_outliers/len(X)*100:.1f}%)")
+                    # Remove outliers
+                    X = X[~outlier_mask]
+                    y = y[~outlier_mask]
+                    if not silent_mode:
+                        logger.info(f"Removed outliers, dataset size: {len(X)}")
+                    loading_stats['outliers_removed'] = n_outliers
+                    loading_stats['outlier_percentage'] = n_outliers/len(X)*100
             
-            # Apply data transformation
-            transformation = data_processing_config.get('data_transformation')
-            if transformation == 'log':
-                mse_values = np.log(mse_values + 1e-8)
-            elif transformation == 'sqrt':
-                mse_values = np.sqrt(mse_values)
-            elif transformation == 'box_cox':
+            # Load preprocessing artifacts if available
+            scaler = None
+            feature_selector = None
+            artifacts = {}
+            
+            if artifacts_path.exists():
                 try:
-                    mse_values, lambda_param = stats.boxcox(mse_values + 1e-8)
-                    calculation_stats['box_cox_lambda'] = lambda_param
+                    progress_data['current_substage'] = "Loading Artifacts"
+                    if not silent_mode:
+                        main_bar.text = "Loading preprocessing artifacts..."
+                    
+                    if not silent_mode:
+                        logger.info("Loading preprocessing artifacts")
+                    artifacts = joblib.load(artifacts_path)
+                    
+                    # Validate artifacts
+                    artifacts_features = artifacts.get("feature_names", [])
+                    if artifacts_features and set(artifacts_features) != set(feature_columns):
+                        warning_msg = "Feature names in artifacts don't match current features"
+                        if not silent_mode:
+                            logger.warning(warning_msg)
+                            logger.warning(f"Artifacts features: {len(artifacts_features)}")
+                            logger.warning(f"Current features: {len(feature_columns)}")
+                        loading_stats['warnings_encountered'].append(warning_msg)
+                    
+                    scaler = artifacts.get("scaler")
+                    feature_selector = artifacts.get("feature_selector")
+                    
+                    loading_stats['artifacts_loaded'] = True
+                    loading_stats['scaler_type'] = type(scaler).__name__ if scaler else None
+                    
                 except Exception as e:
-                    logger.warning(f"Box-Cox transformation failed: {e}")
-        
-        # Calculate basic statistics
-        if pbar:
-            pbar.text = "Calculating basic statistics..."
-        
-        basic_stats = {
-            'mean': float(np.mean(mse_values)),
-            'std': float(np.std(mse_values)),
-            'min': float(np.min(mse_values)),
-            'max': float(np.max(mse_values)),
-            'median': float(np.median(mse_values)),
-            'q25': float(np.percentile(mse_values, 25)),
-            'q75': float(np.percentile(mse_values, 75)),
-            'skewness': float(stats.skew(mse_values)),
-            'kurtosis': float(stats.kurtosis(mse_values))
-        }
-        
-        calculation_stats['basic_statistics'] = basic_stats
-        
-        # Main threshold calculation based on method
-        threshold_results = {}
-        
-        if threshold_method == 'percentile':
-            if pbar:
-                pbar.text = f"Calculating percentile-based threshold: P{percentile}..."
-            logger.info(f"Calculating percentile-based threshold: P{percentile}")
+                    warning_msg = f"Failed to load artifacts: {e}"
+                    if not silent_mode:
+                        logger.warning(warning_msg)
+                    loading_stats['warnings_encountered'].append(warning_msg)
+                    artifacts = {}
             
-            interpolation = percentile_config.get('percentile_interpolation', 'linear')
-            threshold = np.percentile(mse_values, percentile, interpolation=interpolation)
-            
-            # Multi-percentile analysis if requested
-            if percentile_config.get('multi_percentile'):
-                multi_perc = percentile_config['multi_percentile']
-                multi_thresholds = {}
-                for p in multi_perc:
-                    multi_thresholds[f'P{p}'] = float(np.percentile(mse_values, p, interpolation=interpolation))
-                threshold_results['multi_percentile_thresholds'] = multi_thresholds
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'percentile',
-                'percentile_used': percentile,
-                'interpolation': interpolation
-            })
-            
-        elif threshold_method == 'statistical':
-            statistical_method = statistical_config.get('statistical_method', 'mean_std')
-            if pbar:
-                pbar.text = f"Calculating statistical threshold using: {statistical_method}..."
-            logger.info(f"Calculating statistical threshold using: {statistical_method}")
-            
-            if statistical_method == 'mean_std':
-                threshold = basic_stats['mean'] + std_multiplier * basic_stats['std']
-            elif statistical_method == 'median_mad':
-                mad = np.median(np.abs(mse_values - basic_stats['median']))
-                threshold = basic_stats['median'] + statistical_config.get('mad_multiplier', 2.0) * mad
-                threshold_results['mad'] = float(mad)
-            elif statistical_method == 'iqr':
-                IQR = basic_stats['q75'] - basic_stats['q25']
-                threshold = basic_stats['q75'] + iqr_multiplier * IQR
-                threshold_results['iqr'] = float(IQR)
-            elif statistical_method == 'z_score':
-                threshold = basic_stats['mean'] + z_score_threshold * basic_stats['std']
-            elif statistical_method == 'modified_z_score':
-                mad = np.median(np.abs(mse_values - basic_stats['median']))
-                modified_z_scores = 0.6745 * (mse_values - basic_stats['median']) / mad
-                threshold = basic_stats['median'] + z_score_threshold * mad / 0.6745
-                threshold_results['modified_z_mad'] = float(mad)
-            else:
-                threshold = basic_stats['mean'] + 2 * basic_stats['std']
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'statistical',
-                'statistical_method': statistical_method,
-                'multiplier_used': std_multiplier if statistical_method == 'mean_std' else iqr_multiplier
-            })
-            
-        elif threshold_method == 'distribution':
-            distribution_type = distribution_config.get('distribution_type', 'normal')
-            if pbar:
-                pbar.text = f"Calculating distribution-based threshold using: {distribution_type}..."
-            logger.info(f"Calculating distribution-based threshold using: {distribution_type}")
-            
-            if distribution_type == 'normal':
-                # Fit normal distribution
-                mu, sigma = stats.norm.fit(mse_values)
-                threshold = stats.norm.ppf(confidence_level, mu, sigma)
-                threshold_results.update({
-                    'mu': float(mu),
-                    'sigma': float(sigma),
-                    'distribution_params': {'mu': mu, 'sigma': sigma}
-                })
+            # Apply or create scaling
+            if normalization and normalization != 'none':
+                progress_data['current_substage'] = "Feature Scaling"
+                if not silent_mode:
+                    main_bar.text = "Applying feature scaling..."
                 
-            elif distribution_type == 'gamma':
-                # Fit gamma distribution
-                shape, loc, scale = stats.gamma.fit(mse_values)
-                threshold = stats.gamma.ppf(confidence_level, shape, loc, scale)
-                threshold_results.update({
-                    'shape': float(shape),
-                    'loc': float(loc),
-                    'scale': float(scale),
-                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
-                })
+                if scaler is not None:
+                    if not silent_mode:
+                        logger.info(f"Applying existing {type(scaler).__name__} scaler")
+                    try:
+                        X_scaled = scaler.transform(X)
+                        loading_stats['scaling_applied'] = 'existing'
+                    except Exception as e:
+                        warning_msg = f"Failed to apply existing scaler: {e}"
+                        if not silent_mode:
+                            logger.warning(warning_msg)
+                        loading_stats['warnings_encountered'].append(warning_msg)
+                        scaler = None
                 
-            elif distribution_type == 'lognorm':
-                # Fit lognormal distribution
-                shape, loc, scale = stats.lognorm.fit(mse_values)
-                threshold = stats.lognorm.ppf(confidence_level, shape, loc, scale)
-                threshold_results.update({
-                    'shape': float(shape),
-                    'loc': float(loc),
-                    'scale': float(scale),
-                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
-                })
-                
-            elif distribution_type == 'exponential':
-                # Fit exponential distribution
-                loc, scale = stats.expon.fit(mse_values)
-                threshold = stats.expon.ppf(confidence_level, loc, scale)
-                threshold_results.update({
-                    'loc': float(loc),
-                    'scale': float(scale),
-                    'distribution_params': {'loc': loc, 'scale': scale}
-                })
-                
-            else:
-                # Default to normal distribution
-                mu, sigma = stats.norm.fit(mse_values)
-                threshold = stats.norm.ppf(confidence_level, mu, sigma)
-                threshold_results['distribution_params'] = {'mu': mu, 'sigma': sigma}
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'distribution',
-                'distribution_type': distribution_type,
-                'confidence_level': confidence_level
-            })
-            
-        elif threshold_method == 'ml':
-            ml_method = ml_config.get('ml_threshold_method', 'isolation_forest')
-            if pbar:
-                pbar.text = f"Calculating ML-based threshold using: {ml_method}..."
-            logger.info(f"Calculating ML-based threshold using: {ml_method}")
-            
-            # Reshape data for sklearn
-            X = mse_values.reshape(-1, 1)
-            
-            if ml_method == 'isolation_forest':
-                contamination = ml_config.get('isolation_forest_contamination', contamination_rate)
-                clf = IsolationForest(contamination=contamination, random_state=random_state)
-                clf.fit(X)
-                
-                # Get decision scores
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, (1 - contamination) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_method,
-                    'contamination': contamination,
-                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
-                })
-                
-            elif ml_method == 'local_outlier_factor':
-                n_neighbors = ml_config.get('local_outlier_factor_neighbors', 20)
-                contamination = ml_config.get('contamination_rate', contamination_rate)
-                
-                clf = LocalOutlierFactor(n_neighbors=n_neighbors, contamination=contamination)
-                outlier_labels = clf.fit_predict(X)
-                
-                # Get LOF scores
-                lof_scores = -clf.negative_outlier_factor_
-                threshold = np.percentile(lof_scores, (1 - contamination) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_method,
-                    'n_neighbors': n_neighbors,
-                    'contamination': contamination,
-                    'lof_scores_range': [float(np.min(lof_scores)), float(np.max(lof_scores))]
-                })
-                
-            elif ml_method == 'one_class_svm':
-                nu = ml_config.get('one_class_svm_nu', contamination_rate)
-                kernel = ml_config.get('one_class_svm_kernel', 'rbf')
-                
-                clf = OneClassSVM(nu=nu, kernel=kernel)
-                clf.fit(X)
-                
-                # Get decision scores
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, nu * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_method,
-                    'nu': nu,
-                    'kernel': kernel,
-                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
-                })
-                
-            elif ml_method == 'elliptic_envelope':
-                contamination = ml_config.get('elliptic_envelope_contamination', contamination_rate)
-                
-                clf = EllipticEnvelope(contamination=contamination, random_state=random_state)
-                clf.fit(X)
-                
-                # Get Mahalanobis distances
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, (1 - contamination) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_method,
-                    'contamination': contamination,
-                    'mahalanobis_distances_range': [float(np.min(scores)), float(np.max(scores))]
-                })
-                
-            else:
-                # Fallback to isolation forest
-                clf = IsolationForest(contamination=contamination_rate, random_state=random_state)
-                clf.fit(X)
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, (1 - contamination_rate) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': 'isolation_forest_fallback',
-                    'contamination': contamination_rate
-                })
-                
-        elif threshold_method == 'mixture':
-            if pbar:
-                pbar.text = "Calculating mixture model threshold..."
-            logger.info("Calculating mixture model threshold")
-            
-            n_components = final_config.get('multi_modal', {}).get('n_components', 2)
-            mixture_type = final_config.get('multi_modal', {}).get('mixture_type', 'gaussian')
-            
-            if mixture_type == 'gaussian':
-                # Fit Gaussian Mixture Model
-                gmm = GaussianMixture(n_components=n_components, random_state=random_state)
-                gmm.fit(mse_values.reshape(-1, 1))
-                
-                # Get component with highest mean (anomaly component)
-                component_means = gmm.means_.flatten()
-                anomaly_component = np.argmax(component_means)
-                
-                # Calculate threshold based on anomaly component
-                anomaly_mean = component_means[anomaly_component]
-                anomaly_std = np.sqrt(gmm.covariances_[anomaly_component].flatten()[0])
-                
-                threshold = anomaly_mean - 2 * anomaly_std  # Conservative threshold
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'mixture',
-                    'mixture_type': mixture_type,
-                    'n_components': n_components,
-                    'component_means': component_means.tolist(),
-                    'component_weights': gmm.weights_.tolist(),
-                    'anomaly_component': int(anomaly_component)
-                })
-            else:
-                # Fallback to percentile method
-                threshold = np.percentile(mse_values, percentile)
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'mixture_fallback_percentile',
-                    'percentile_used': percentile
-                })
-                
-        elif threshold_method == 'adaptive':
-            if pbar:
-                pbar.text = "Calculating adaptive threshold..."
-            logger.info("Calculating adaptive threshold")
-            
-            # Calculate multiple thresholds and select based on data characteristics
-            percentile_thresh = np.percentile(mse_values, percentile)
-            statistical_thresh = basic_stats['mean'] + 2 * basic_stats['std']
-            iqr_thresh = basic_stats['q75'] + 1.5 * (basic_stats['q75'] - basic_stats['q25'])
-            
-            # Selection based on distribution characteristics
-            if basic_stats['skewness'] > 1:  # Right-skewed
-                threshold = percentile_thresh
-                method_used = 'percentile_skewed'
-            elif basic_stats['kurtosis'] > 3:  # Heavy-tailed
-                threshold = iqr_thresh
-                method_used = 'iqr_heavy_tailed'
-            else:  # Approximately normal
-                threshold = statistical_thresh
-                method_used = 'statistical_normal'
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'adaptive',
-                'adaptive_method_used': method_used,
-                'candidate_thresholds': {
-                    'percentile': float(percentile_thresh),
-                    'statistical': float(statistical_thresh),
-                    'iqr': float(iqr_thresh)
-                },
-                'selection_criteria': {
-                    'skewness': basic_stats['skewness'],
-                    'kurtosis': basic_stats['kurtosis']
-                }
-            })
-            
-        else:
-            # Default to percentile method
-            logger.warning(f"Unknown threshold method '{threshold_method}', using percentile")
-            threshold = np.percentile(mse_values, percentile)
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'percentile_default',
-                'percentile_used': percentile
-            })
-        
-        # Cross-validation if requested
-        cv_results = {}
-        if final_config.get('cross_validation', {}).get('cross_validation_threshold', False):
-            if pbar:
-                pbar.text = "Performing cross-validation threshold analysis..."
-            logger.info("Performing cross-validation threshold analysis")
-            
-            cv_folds = final_config.get('cross_validation', {}).get('cv_folds', 5)
-            fold_thresholds = []
-            
-            # Simple k-fold validation
-            fold_size = len(mse_values) // cv_folds
-            for fold in range(cv_folds):
-                start_idx = fold * fold_size
-                end_idx = start_idx + fold_size if fold < cv_folds - 1 else len(mse_values)
-                fold_data = mse_values[start_idx:end_idx]
-                
-                # Calculate threshold for this fold
-                fold_threshold = np.percentile(fold_data, percentile)
-                fold_thresholds.append(fold_threshold)
-                
-                # Update progress bar with CV status
-                if pbar:
-                    progress_text = (
-                        f"Cross-validation: Fold {fold+1}/{cv_folds} | "
-                        f"Threshold: {fold_threshold:.4f} | "
-                        f"Samples: {len(fold_data):,}"
-                    )
-                    pbar.text = progress_text
-            
-            cv_results = {
-                'cv_folds': cv_folds,
-                'fold_thresholds': [float(t) for t in fold_thresholds],
-                'cv_mean_threshold': float(np.mean(fold_thresholds)),
-                'cv_std_threshold': float(np.std(fold_thresholds)),
-                'cv_min_threshold': float(np.min(fold_thresholds)),
-                'cv_max_threshold': float(np.max(fold_thresholds))
-            }
-        
-        # Bootstrap confidence intervals if requested
-        bootstrap_results = {}
-        if final_config.get('cross_validation', {}).get('bootstrap_threshold', False):
-            if pbar:
-                pbar.text = "Performing bootstrap confidence interval analysis..."
-            logger.info("Performing bootstrap confidence interval analysis")
-            
-            bootstrap_samples = final_config.get('cross_validation', {}).get('bootstrap_samples', 1000)
-            bootstrap_thresholds = []
-            
-            for i in range(bootstrap_samples):
-                # Bootstrap sample
-                bootstrap_data = np.random.choice(mse_values, size=len(mse_values), replace=True)
-                bootstrap_threshold = np.percentile(bootstrap_data, percentile)
-                bootstrap_thresholds.append(bootstrap_threshold)
-                
-                # Update progress bar every 100 samples to avoid performance hit
-                if pbar and i % 100 == 0:
-                    progress_text = (
-                        f"Bootstrap: {i+1}/{bootstrap_samples} | "
-                        f"Current CI: [{np.percentile(bootstrap_thresholds, 2.5):.4f}, "
-                        f"{np.percentile(bootstrap_thresholds, 97.5):.4f}]"
-                    )
-                    pbar.text = progress_text
-            
-            bootstrap_results = {
-                'bootstrap_samples': bootstrap_samples,
-                'bootstrap_mean': float(np.mean(bootstrap_thresholds)),
-                'bootstrap_std': float(np.std(bootstrap_thresholds)),
-                'bootstrap_ci_lower': float(np.percentile(bootstrap_thresholds, 2.5)),
-                'bootstrap_ci_upper': float(np.percentile(bootstrap_thresholds, 97.5))
-            }
-        
-        # Validation if requested
-        validation_results = {}
-        if validation_config.get('validate_threshold', False):
-            if pbar:
-                pbar.text = "Performing threshold validation..."
-            logger.info("Performing threshold validation")
-            
-            # Calculate some validation metrics
-            threshold_value = threshold_results['threshold']
-            anomalies = mse_values > threshold_value
-            
-            validation_results = {
-                'anomaly_rate': float(np.mean(anomalies)),
-                'n_anomalies': int(np.sum(anomalies)),
-                'n_normal': int(np.sum(~anomalies)),
-                'threshold_percentile_actual': float(stats.percentileofscore(mse_values, threshold_value)),
-                'validation_passed': True
-            }
-            
-            # Additional validation checks
-            quality_metrics = validation_config.get('quality_metrics', [])
-            for metric in quality_metrics:
-                if metric == 'stability':
-                    # Simple stability check
-                    validation_results['stability_score'] = 1.0 - (np.std(mse_values) / np.mean(mse_values))
-                elif metric == 'sensitivity':
-                    # Sensitivity to threshold changes
-                    thresh_variations = [threshold_value * 0.9, threshold_value * 1.1]
-                    anomaly_rates = []
-                    for tv in thresh_variations:
-                        anomaly_rates.append(np.mean(mse_values > tv))
-                    validation_results['sensitivity_score'] = float(np.std(anomaly_rates))
-        
-        # Calculate final timing
-        calculation_time = (datetime.now() - start_time).total_seconds()
-        
-        # Prepare comprehensive results
-        final_threshold = threshold_results.get('threshold', fallback_threshold)
-        
-        comprehensive_results = {
-            # Core results
-            'threshold': final_threshold,
-            'method': threshold_results.get('method', threshold_method),
-            'calculation_time_seconds': calculation_time,
-            
-            # Data information
-            'n_samples': len(mse_values),
-            'data_source': data_source,
-            'basic_statistics': basic_stats,
-            
-            # Method-specific results
-            'method_details': threshold_results,
-            
-            # Configuration applied
-            'config_applied': final_config,
-            
-            # Additional analyses
-            'cross_validation': cv_results if cv_results else None,
-            'bootstrap_analysis': bootstrap_results if bootstrap_results else None,
-            'validation_results': validation_results if validation_results else None,
-            
-            # System information
-            'device': str(device),
-            'random_state': random_state,
-            'reproducible': reproducible
-        }
-        
-        # Add calculation statistics
-        comprehensive_results.update(calculation_stats)
-        
-        # Save results if requested
-        export_config = final_config.get('export', {})
-        if export_config.get('save_results', False):
-            if pbar:
-                pbar.text = "Saving results..."
-            results_path = export_config.get('results_path', f'./threshold_results.json')
-            try:
-                with open(results_path, 'w') as f:
-                    # Make results JSON serializable
-                    serializable_results = {}
-                    for key, value in comprehensive_results.items():
-                        try:
-                            json.dumps(value)
-                            serializable_results[key] = value
-                        except TypeError:
-                            serializable_results[key] = str(value)
+                if scaler is None:
+                    if not silent_mode:
+                        logger.info(f"Creating new {normalization} scaler")
                     
-                    json.dump(serializable_results, f, indent=2)
-                logger.info(f"Saved threshold results to {results_path}")
-            except Exception as e:
-                logger.warning(f"Failed to save results: {e}")
-        
-        # Visualization if requested
-        if export_config.get('visualization', False):
-            try:
-                if export_config.get('plot_distribution', False):
-                    if pbar:
-                        pbar.text("Generating visualization...")
-                    plt.figure(figsize=(10, 6))
-                    plt.hist(mse_values, bins=50, alpha=0.7, density=True, label='Reconstruction Errors')
-                    plt.axvline(final_threshold, color='red', linestyle='--', 
-                              label=f'Threshold ({threshold_method}): {final_threshold:.4f}')
-                    plt.xlabel('Reconstruction Error (MSE)')
-                    plt.ylabel('Density')
-                    plt.title('Reconstruction Error Distribution and Threshold')
-                    plt.legend()
-                    plt.grid(True, alpha=0.3)
+                    if normalization == 'standard':
+                        scaler = StandardScaler()
+                    elif normalization == 'minmax':
+                        scaler = MinMaxScaler()
+                    elif normalization == 'robust':
+                        scaler = RobustScaler()
+                    elif normalization == 'quantile':
+                        scaler = QuantileTransformer()
+                    else:
+                        if not silent_mode:
+                            logger.warning(f"Unknown normalization method: {normalization}, using standard")
+                        scaler = StandardScaler()
                     
-                    plot_path = export_config.get('results_path', './').replace('.json', '_distribution.png')
-                    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-                    plt.close()
-                    logger.info(f"Saved distribution plot to {plot_path}")
+                    X_scaled = scaler.fit_transform(X)
+                    loading_stats['scaling_applied'] = 'new'
+                
+                X = X_scaled.astype(np.float32)
+            else:
+                loading_stats['scaling_applied'] = 'none'
+            
+            # Feature selection
+            if feature_engineering_config.get('feature_selection', False):
+                progress_data['current_substage'] = "Feature Selection"
+                if not silent_mode:
+                    main_bar.text = "Performing feature selection..."
+                
+                n_features_select = feature_engineering_config.get('n_features_select', min(50, len(feature_columns)))
+                selection_method = feature_engineering_config.get('feature_selection_method', 'k_best')
+                
+                if not silent_mode:
+                    logger.info(f"Performing feature selection: {selection_method}")
+                
+                if selection_method == 'k_best':
+                    if feature_selector is None:
+                        feature_selector = SelectKBest(f_classif, k=n_features_select)
+                        X_selected = feature_selector.fit_transform(X, y)
+                        loading_stats['feature_selection_applied'] = 'new'
+                    else:
+                        X_selected = feature_selector.transform(X)
+                        loading_stats['feature_selection_applied'] = 'existing'
                     
-            except ImportError:
-                logger.warning("Matplotlib not available, skipping visualization")
-            except Exception as e:
-                logger.warning(f"Visualization failed: {e}")
-        
-        # Final progress bar update
-        if pbar:
-            pbar.text = f"Threshold calculation completed: {final_threshold:.4f}"
-        
-        # Log comprehensive summary
-        logger.info("=" * 80)
-        logger.info("THRESHOLD CALCULATION SUMMARY")
-        logger.info("=" * 80)
-        logger.info(f"Method: {threshold_results.get('method', threshold_method)}")
-        logger.info(f"Threshold: {final_threshold:.6f}")
-        logger.info(f"Samples Used: {len(mse_values):,}")
-        logger.info(f"Data Source: {data_source}")
-        logger.info(f"Calculation Time: {calculation_time:.3f} seconds")
-        
-        if 'anomaly_rate' in validation_results:
-            logger.info(f"Expected Anomaly Rate: {validation_results['anomaly_rate']*100:.2f}%")
-        
-        logger.info(f"Data Statistics:")
-        logger.info(f"  Mean: {basic_stats['mean']:.6f}")
-        logger.info(f"  Std: {basic_stats['std']:.6f}")
-        logger.info(f"  Min: {basic_stats['min']:.6f}")
-        logger.info(f"  Max: {basic_stats['max']:.6f}")
-        logger.info(f"  Skewness: {basic_stats['skewness']:.3f}")
-        
-        if cv_results:
-            logger.info(f"Cross-validation: {cv_results['cv_mean_threshold']:.6f} ± {cv_results['cv_std_threshold']:.6f}")
-        
-        if bootstrap_results:
-            logger.info(f"Bootstrap CI: [{bootstrap_results['bootstrap_ci_lower']:.6f}, {bootstrap_results['bootstrap_ci_upper']:.6f}]")
-        
-        logger.info("=" * 80)
-        
-        # Restore original logging level
-        # if verbose and 'original_level' in locals():
-        #     logger.setLevel(original_level)
-        
-        # Return threshold and comprehensive results
-        return final_threshold, comprehensive_results
-    
-    except (EOFError, KeyboardInterrupt):
-        logger.warning("Threshold calculation interrupted by user")
+                    selected_features = feature_selector.get_support()
+                    selected_feature_names = [feature_columns[i] for i in range(len(feature_columns)) if selected_features[i]]
+                    
+                    X = X_selected
+                    feature_columns = selected_feature_names
+                    
+                    if not silent_mode:
+                        logger.info(f"Selected {len(feature_columns)} features from {len(selected_features)}")
+                    loading_stats['features_selected'] = len(feature_columns)
+            
+            progress_data['validation_passed'] += 1
+            if not silent_mode:
+                main_bar.text = "Data processing complete"
+            loading_stats['stages_completed'].append('data_processing')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 6: Data Splitting
+            progress_data['current_stage'] = "Data Splitting"
+            if not silent_mode:
+                main_bar.text = "Splitting data into train/validation/test sets..."
+            
+            # Split data into normal and attack samples
+            normal_mask = (y == 0)
+            attack_mask = (y == 1) if len(unique_labels) == 2 else (~normal_mask)
+            
+            X_normal = X[normal_mask]
+            X_attack = X[attack_mask]
+            
+            if not silent_mode:
+                logger.info(f"Data split: {len(X_normal)} normal, {len(X_attack)} attack samples")
+            
+            # Perform train/validation/test splits
+            if len(X_normal) == 0:
+                error_msg = "No normal samples found in dataset"
+                loading_stats['errors_encountered'].append(error_msg)
+                raise ValueError(error_msg)
+            
+            # Split normal data for training and validation
+            if validation_split > 0:
+                X_train_normal, X_val_normal = train_test_split(
+                    X_normal,
+                    test_size=validation_split,
+                    random_state=random_state,
+                    shuffle=shuffle_data
+                )
+            else:
+                X_train_normal = X_normal
+                X_val_normal = np.array([]).reshape(0, X_normal.shape[1])
+            
+            # Handle test data
+            if len(X_attack) > 0:
+                if test_split > 0 and test_split < 1.0:
+                    test_size = int(len(X_attack) * test_split)
+                    X_test = X_attack[:test_size] if test_size > 0 else X_attack
+                else:
+                    X_test = X_attack
+            else:
+                # If no attack data, use a portion of normal data for testing
+                if test_split > 0:
+                    test_size = int(len(X_train_normal) * test_split)
+                    if test_size > 0:
+                        X_test = X_train_normal[:test_size]
+                        X_train_normal = X_train_normal[test_size:]
+                    else:
+                        X_test = np.array([]).reshape(0, X_train_normal.shape[1])
+                else:
+                    X_test = np.array([]).reshape(0, X_train_normal.shape[1])
+            
+            loading_stats.update({
+                'train_samples': len(X_train_normal),
+                'val_samples': len(X_val_normal),
+                'test_samples': len(X_test),
+                'final_feature_count': len(feature_columns)
+            })
+            
+            progress_data['validation_passed'] += 1
+            if not silent_mode:
+                main_bar.text = "Data splitting complete"
+            loading_stats['stages_completed'].append('data_splitting')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 7: Statistical Validation and Quality Assessment
+            progress_data['current_stage'] = "Quality Assessment"
+            if not silent_mode:
+                main_bar.text = "Performing final quality assessment..."
+            
+            # Statistical validation
+            if statistical_validation:
+                if not silent_mode:
+                    logger.info("Performing statistical validation")
+                
+                # Check data distributions
+                if advanced_config.get('distribution_checks', False):
+                    # Kolmogorov-Smirnov test for normality
+                    normality_results = []
+                    for i, feature_name in enumerate(feature_columns):
+                        # Ensure we don't exceed dimensions
+                        if i < X_train_normal.shape[1]:
+                            feature_data = X_train_normal[:, i]
+                            ks_stat, p_value = stats.kstest(feature_data, 'norm')
+                            normality_results.append({
+                                'feature': feature_name,
+                                'ks_statistic': ks_stat,
+                                'p_value': p_value,
+                                'normal': p_value >= 0.05
+                            })
+                            if p_value < 0.05 and not silent_mode:
+                                logger.debug(f"Feature {feature_name} may not be normally distributed (p={p_value:.4f})")
+                    
+                    loading_stats['normality_tests'] = normality_results
+            
+            # Calculate data quality score
+            quality_metrics = []
+            
+            # Sample size adequacy
+            sample_score = min(1.0, len(X) / max(min_samples, 1000))
+            quality_metrics.append(('sample_size', sample_score))
+            
+            # Feature adequacy
+            feature_score = min(1.0, len(feature_columns) / max(min_features, 10))
+            quality_metrics.append(('feature_count', feature_score))
+            
+            # Class balance (if applicable)
+            if len(label_counts) > 1:
+                min_class = min(label_counts.values())
+                max_class = max(label_counts.values())
+                balance_score = min_class / max_class if max_class > 0 else 1.0
+                quality_metrics.append(('class_balance', balance_score))
+            else:
+                quality_metrics.append(('class_balance', 1.0))
+            
+            # Missing data handling
+            missing_score = 1.0 if not np.isnan(X).any() else 0.8
+            quality_metrics.append(('missing_data', missing_score))
+            
+            # Overall quality score (weighted average)
+            weights = [0.3, 0.3, 0.2, 0.2]  # Adjust weights as needed
+            quality_score = sum(score * weight for (_, score), weight in zip(quality_metrics, weights))
+            
+            progress_data['data_quality_score'] = quality_score
+            loading_stats['data_quality_score'] = quality_score
+            loading_stats['quality_metrics'] = dict(quality_metrics)
+            
+            if not silent_mode:
+                main_bar.text = "Quality assessment complete"
+            loading_stats['stages_completed'].append('quality_assessment')
+            if not silent_mode:
+                main_bar()
+            
+            # STAGE 8: Finalization and Statistics
+            progress_data['current_stage'] = "Finalization"
+            if not silent_mode:
+                main_bar.text = "Finalizing data preparation..."
+            
+            # Prepare final data dictionary
+            data_dict = {
+                "X_train": X_train_normal.astype(np.float32),
+                "X_val": X_val_normal.astype(np.float32),
+                "X_test": X_test.astype(np.float32),
+                "feature_names": feature_columns,
+                "metadata": {
+                    # Basic statistics
+                    "total_samples": len(X),
+                    "total_normal": len(X_normal),
+                    "total_attack": len(X_attack),
+                    "n_features": len(feature_columns),
+                    "train_samples": len(X_train_normal),
+                    "val_samples": len(X_val_normal),
+                    "test_samples": len(X_test),
+                    
+                    # Configuration used
+                    "validation_split": validation_split,
+                    "test_split": test_split,
+                    "stratified_split": stratified_split,
+                    "random_state": random_state,
+                    "normalization": normalization,
+                    
+                    # Processing applied
+                    "scaler_applied": scaler is not None,
+                    "scaler_type": type(scaler).__name__ if scaler else None,
+                    "feature_selection_applied": feature_selector is not None,
+                    "outliers_removed": outlier_detection,
+                    "missing_values_handled": handle_missing if np.isnan(X).any() else 'none',
+                    
+                    # Data quality metrics
+                    "class_balance_ratio": max(label_counts.values()) / min(label_counts.values()) if min(label_counts.values()) > 0 else float('inf'),
+                    "data_quality_score": quality_score,
+                    
+                    # Loading statistics
+                    "loading_time_seconds": (datetime.now() - start_time).total_seconds(),
+                    "data_source": "real" if use_real_data else "synthetic",
+                    "config_applied": final_config,
+                    
+                    # Artifacts information
+                    "artifacts_available": scaler is not None or feature_selector is not None,
+                    "preprocessing_pipeline": {
+                        "scaler": type(scaler).__name__ if scaler else None,
+                        "feature_selector": type(feature_selector).__name__ if feature_selector else None,
+                        "steps_applied": loading_stats.get('steps_applied', [])
+                    },
 
-    except Exception as e:
-        # Restore original logging level on error
-        # if verbose and 'original_level' in locals():
-        #     logger.setLevel(original_level)
-        
-        error_msg = f"Threshold calculation failed: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        # Provide helpful error context
-        logger.error(f"Method used: {threshold_method}")
-        logger.error(f"Configuration: {final_config}")
-        
-        # Attempt graceful recovery if enabled
-        if graceful_degradation:
-            logger.warning(f"Using fallback threshold: {fallback_threshold}")
-            
-            fallback_results = {
-                'threshold': fallback_threshold,
-                'method': 'fallback',
-                'error': str(e),
-                'graceful_degradation': True,
-                'config_applied': final_config
+                    # Run tracking information
+                    "run_tracking": {
+                        "run_id": run_id,
+                        "run_number": run_number,
+                        "use_run_tracking": use_run_tracking,
+                        "run_specific_directories": {
+                            k: str(v) for k, v in run_specific_dirs.items()
+                        } if run_specific_dirs else None,
+                        "data_loaded_from_run": run_id if use_run_tracking else None
+                    } if use_run_tracking else None,
+                },
+                
+                # Include preprocessing components for future use
+                "scaler": scaler,
+                "feature_selector": feature_selector,
+                "label_encoder": artifacts.get("label_encoder"),
+                
+                # Raw data for advanced use cases
+                "raw_data": {
+                    "X_full": X,
+                    "y_full": y,
+                    "original_features": df.columns.tolist() if 'df' in locals() else feature_columns
+                } if advanced_config.get('include_raw_data', False) else None
             }
             
-            return fallback_threshold, fallback_results
-        
-        raise RuntimeError(error_msg) from e
-    
-    finally:
-        # Final cleanup
-        try:
-            if pbar_context:
-                # Properly exit the context manager
-                pbar_context.__exit__(None, None, None)
+            # Validate final data shapes and consistency
+            if not silent_mode:
+                logger.info("Performing final data validation")
             
-            if final_config.get('performance', {}).get('memory_efficient', True):
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
-        except:
-            pass
+            # Shape consistency checks
+            expected_features = len(feature_columns)
+            for key in ["X_train", "X_val", "X_test"]:
+                # Only check non-empty arrays
+                if data_dict[key].size > 0:
+                    if data_dict[key].shape[1] != expected_features:
+                        error_msg = f"{key} has {data_dict[key].shape[1]} features, expected {expected_features}"
+                        loading_stats['errors_encountered'].append(error_msg)
+                        raise ValueError(error_msg)
+            
+            # Data type consistency
+            for key in ["X_train", "X_val", "X_test"]:
+                if data_dict[key].dtype != np.float32:
+                    if not silent_mode:
+                        logger.warning(f"{key} has dtype {data_dict[key].dtype}, converting to float32")
+                    data_dict[key] = data_dict[key].astype(np.float32)
+            
+            # Save statistics if requested
+            if save_statistics and statistics_path:
+                if not silent_mode:
+                    logger.info(f"Saving loading statistics to {statistics_path}")
+                try:
+                    with open(statistics_path, 'w') as f:
+                        # Make loading_stats JSON serializable
+                        serializable_stats = {}
+                        for key, value in loading_stats.items():
+                            if isinstance(value, (str, int, float, bool, list, dict)):
+                                serializable_stats[key] = value
+                            else:
+                                serializable_stats[key] = str(value)
+                        
+                        json.dump(serializable_stats, f, indent=2)
+                    if not silent_mode:
+                        logger.info(f"Saved loading statistics to {statistics_path}")
+                except Exception as e:
+                    if not silent_mode:
+                        logger.warning(f"Failed to save statistics: {e}")
+            
+            if not silent_mode:
+                main_bar.text = "Finalization complete"
+            loading_stats['stages_completed'].append('finalization')
+            if not silent_mode:
+                main_bar()
+        
+        # Log summary
+        total_time = (datetime.now() - start_time).total_seconds()
+        loading_stats['total_processing_time'] = total_time
+        loading_stats['completion_status'] = 'success'
+        
+        if verbose:
+            logger.info("-" * 40)
+            logger.info("DATA LOADING SUMMARY")
+            logger.info("-" * 40)
+            logger.info(f"Data source: {'Real data' if use_real_data else 'Synthetic data'}")
+            logger.info(f"Total samples: {len(X):,} ({len(X_normal):,} normal, {len(X_attack):,} attack)")
+            logger.info(f"Features: {len(feature_columns)} (after processing)")
+            logger.info(f"Train/Val/Test split: {len(X_train_normal)}/{len(X_val_normal)}/{len(X_test)}")
+            logger.info(f"Normalization: {normalization} ({'applied' if scaler else 'none'})")
+            logger.info(f"Feature selection: {'applied' if feature_selector else 'none'}")
+            logger.info(f"Data quality score: {quality_score:.3f}")
+            logger.info(f"Processing time: {total_time:.2f} seconds")
+            logger.info(f"Stages completed: {len(loading_stats['stages_completed'])}/{total_stages}")
+            logger.info(f"Warnings encountered: {len(loading_stats['warnings_encountered'])}")
+            logger.info("-" * 40)
+        
+        # Restore original logging level if it was changed
+        if not silent_mode and verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        return data_dict
+        
+    except Exception as e:
+        # Update loading stats with error information
+        loading_stats['completion_status'] = 'failed'
+        loading_stats['error_message'] = str(e)
+        loading_stats['error_traceback'] = traceback.format_exc()
+        
+        # Restore original logging level on error
+        if not silent_mode and verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        error_msg = f"Data loading and validation failed: {str(e)}"
+        if not silent_mode:
+            logger.error(error_msg)
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Provide helpful error context
+            logger.error(f"Error occurred while processing: {data_path}")
+            logger.error(f"Configuration used: {final_config}")
+            logger.error(f"Stages completed: {loading_stats['stages_completed']}")
+        
+        raise RuntimeError(error_msg)
 
 def create_dataloaders(
     # Core Data Parameters
@@ -44659,10 +43629,10 @@ def create_dataloaders(
                 statistics_path = run_specific_dirs['metrics'] / f"dataloader_statistics_{run_id}.json"
             else:
                 # Fallback to default location with run_id suffix
-                statistics_path = Path.cwd() / f"dataloader_statistics_{run_id}.json"
+                statistics_path = Path(__file__).resolve().parent / "metrics" / f"dataloader_statistics_{run_id}.json"
         else:
             # Default behavior for standalone usage
-            statistics_path = Path.cwd() / "dataloader_statistics.json"
+            statistics_path = Path(__file__).resolve().parent / "metrics" / "dataloader_statistics.json"
     
     # Set up logging level
     if verbose:
@@ -48857,6 +47827,3563 @@ def train_epoch(
         except:
             pass
 
+
+
+def _default_security_metrics(inputs, outputs, targets, loss):
+    """
+    Custom metrics for intrusion detection validation.
+    
+    Calculates security-critical metrics focusing on reconstruction error patterns
+    that indicate potential attacks or anomalous behavior. Designed to work with
+    the validate() function's detailed_metrics tracking.
+    
+    Args:
+        inputs (torch.Tensor): Input samples (shape: [batch_size, features])
+        outputs (torch.Tensor): Model reconstructions (shape: [batch_size, features])
+        targets (torch.Tensor): Target samples (typically same as inputs for autoencoders)
+        loss (torch.Tensor): Current batch loss value
+        
+    Returns:
+        dict: Security-focused metrics including:
+            - max_reconstruction_error: Worst-case error for attack detection
+            - high_error_ratio: Percentage of samples with anomalous errors
+            - reconstruction_stability: Inverse variance measure
+            - feature_wise_max_error: Most vulnerable feature dimension
+            - batch_anomaly_score: Overall batch anomaly indicator
+            - error_concentration: Measure of error localization
+    """
+    try:
+        # Ensure targets match outputs shape (critical for autoencoder validation)
+        if targets.shape != outputs.shape:
+            targets = inputs
+        
+        # Calculate element-wise reconstruction error
+        reconstruction_error = torch.abs(outputs - targets)
+        
+        # Calculate error statistics
+        error_mean = torch.mean(reconstruction_error)
+        error_std = torch.std(reconstruction_error)
+        error_max = torch.max(reconstruction_error)
+        
+        # Avoid division by zero in stability calculation
+        stability_denominator = 1.0 + error_std
+        
+        # Calculate high error threshold (3-sigma rule for anomaly detection)
+        high_error_threshold = error_mean + 3 * error_std
+        high_error_mask = reconstruction_error > high_error_threshold
+        high_error_ratio = high_error_mask.float().mean()
+        
+        # Feature-wise analysis (per-dimension error)
+        feature_wise_error = torch.mean(reconstruction_error, dim=0)
+        feature_wise_max = torch.max(feature_wise_error)
+        
+        # Batch-level anomaly score (weighted combination of indicators)
+        # Higher score indicates more anomalous batch
+        normalized_loss = float(loss) / (error_mean.item() + 1e-8)
+        batch_anomaly_score = (
+            0.4 * normalized_loss +
+            0.3 * high_error_ratio.item() +
+            0.3 * (error_max.item() / (error_mean.item() + 1e-8))
+        )
+        
+        # Error concentration measure (Gini-like coefficient)
+        # High concentration suggests targeted feature attacks
+        sorted_errors, _ = torch.sort(reconstruction_error.flatten(), descending=True)
+        cumsum_errors = torch.cumsum(sorted_errors, dim=0)
+        total_error = cumsum_errors[-1]
+        n = sorted_errors.numel()
+        
+        # Calculate concentration (0 = uniform, 1 = highly concentrated)
+        if total_error > 0:
+            normalized_cumsum = cumsum_errors / total_error
+            concentration_area = torch.sum(normalized_cumsum) / n
+            error_concentration = float(2 * concentration_area - 1)
+        else:
+            error_concentration = 0.0
+        
+        return {
+            # Critical metrics for security monitoring
+            'max_reconstruction_error': float(error_max),
+            'high_error_ratio': float(high_error_ratio),
+            'reconstruction_stability': float(1.0 / stability_denominator),
+            'feature_wise_max_error': float(feature_wise_max),
+            
+            # Advanced security indicators
+            'batch_anomaly_score': float(batch_anomaly_score),
+            'error_concentration': error_concentration,
+            'mean_reconstruction_error': float(error_mean),
+            'std_reconstruction_error': float(error_std),
+            
+            # Sample-level statistics
+            'anomalous_samples_count': int(high_error_mask.sum()),
+            'anomalous_samples_percentage': float(high_error_ratio * 100),
+        }
+        
+    except Exception as e:
+        logger.warning(f"Failed to calculate security metrics: {e}")
+        # Return safe defaults on failure
+        return {
+            'max_reconstruction_error': 0.0,
+            'high_error_ratio': 0.0,
+            'reconstruction_stability': 0.0,
+            'feature_wise_max_error': 0.0,
+            'batch_anomaly_score': 0.0,
+            'error_concentration': 0.0,
+            'error': str(e)
+        }
+
+def _default_adaptive_threshold(reconstruction_errors: np.ndarray) -> float:
+    """
+    Conservative threshold combining multiple statistical methods.
+    Prioritizes false negative reduction for security applications.
+    
+    Uses an ensemble of threshold estimation methods and returns a conservative
+    estimate to minimize missed attacks (false negatives) at the cost of potential
+    false positives. Designed to work with validate()'s threshold_analysis.
+    
+    Args:
+        reconstruction_errors (np.ndarray): Array of reconstruction errors from validation
+        
+    Returns:
+        float: Conservative threshold value for anomaly detection
+        
+    Note:
+        - Returns 95th percentile for small datasets (< 10 samples)
+        - Combines percentile-based, IQR-based, and statistical methods for robustness
+        - Uses 95th percentile of all estimates for conservative detection
+    """
+    try:
+        # Validate input
+        if reconstruction_errors is None or len(reconstruction_errors) == 0:
+            logger.warning("Empty reconstruction errors, using default threshold")
+            return 0.1
+        
+        # Handle small datasets
+        if len(reconstruction_errors) < 10:
+            threshold = float(np.percentile(reconstruction_errors, 95))
+            logger.debug(f"Small dataset ({len(reconstruction_errors)} samples), using P95 threshold: {threshold:.6f}")
+            return threshold
+        
+        # Method 1: Percentile-based thresholds
+        p90 = np.percentile(reconstruction_errors, 90)
+        p95 = np.percentile(reconstruction_errors, 95)
+        p99 = np.percentile(reconstruction_errors, 99)
+        
+        # Method 2: Interquartile Range (IQR) - robust to outliers
+        q75, q25 = np.percentile(reconstruction_errors, [75, 25])
+        iqr = q75 - q25
+        iqr_threshold = q75 + 1.5 * iqr
+        
+        # Method 3: Mean + k*std (standard statistical approach)
+        mean = np.mean(reconstruction_errors)
+        std = np.std(reconstruction_errors)
+        mean_2std_threshold = mean + 2.0 * std
+        mean_3std_threshold = mean + 3.0 * std
+        
+        # Method 4: Median Absolute Deviation (MAD) - very robust
+        median = np.median(reconstruction_errors)
+        mad = np.median(np.abs(reconstruction_errors - median))
+        mad_threshold = median + 3.0 * mad
+        
+        # Method 5: Modified Z-score threshold
+        modified_z_threshold = median + (2.5 * mad / 0.6745)
+        
+        # Collect all threshold estimates
+        thresholds = [
+            p90,
+            p95,
+            p99,
+            iqr_threshold,
+            mean_2std_threshold,
+            mean_3std_threshold,
+            mad_threshold,
+            modified_z_threshold
+        ]
+        
+        # Remove any NaN or infinite values
+        valid_thresholds = [t for t in thresholds if np.isfinite(t)]
+        
+        if not valid_thresholds:
+            logger.warning("All threshold methods produced invalid values, using P95 fallback")
+            return float(np.percentile(reconstruction_errors, 95))
+        
+        # Conservative approach: use 95th percentile of all estimates
+        # This tends to catch more anomalies (lower threshold than max)
+        # while still being more conservative than median
+        final_threshold = float(np.percentile(valid_thresholds, 95))
+        
+        # Safety check: ensure threshold is reasonable
+        max_error = np.max(reconstruction_errors)
+        min_error = np.min(reconstruction_errors)
+        
+        # Threshold should be between min and max errors
+        if final_threshold < min_error:
+            logger.warning(f"Calculated threshold {final_threshold:.6f} below minimum error {min_error:.6f}, adjusting")
+            final_threshold = min_error + 0.1 * (max_error - min_error)
+        elif final_threshold > max_error:
+            logger.warning(f"Calculated threshold {final_threshold:.6f} above maximum error {max_error:.6f}, adjusting")
+            final_threshold = max_error
+        
+        logger.debug(f"Adaptive threshold calculation: P95={p95:.6f}, IQR={iqr_threshold:.6f}, Mean+2std={mean_2std_threshold:.6f}, MAD={mad_threshold:.6f}, Final={final_threshold:.6f}")
+        
+        return final_threshold
+        
+    except Exception as e:
+        logger.error(f"Adaptive threshold calculation failed: {e}")
+        # Fallback to simple percentile
+        try:
+            fallback = float(np.percentile(reconstruction_errors, 95))
+            logger.warning(f"Using fallback P95 threshold: {fallback:.6f}")
+            return fallback
+        except:
+            logger.error("Complete threshold calculation failure, using hardcoded fallback")
+            return 0.1
+
+def _default_validation_analysis(model, predictions, targets, reconstruction_errors, metrics_tracker):
+    """
+    Default analysis for intrusion detection system validation.
+    Focuses on security-critical insights and model health assessment.
+    
+    Designed to work as custom_analysis_fn in validate() function, providing
+    deep insights into model behavior, error patterns, and potential vulnerabilities.
+    
+    Args:
+        model (nn.Module): The autoencoder model being validated
+        predictions (np.ndarray): Model output predictions (shape: [n_samples, features])
+        targets (np.ndarray): Target values (shape: [n_samples, features])
+        reconstruction_errors (np.ndarray): Per-sample MSE values (shape: [n_samples,])
+        metrics_tracker (dict): Validation metrics collected during validate()
+        
+    Returns:
+        dict: Analysis including:
+            - error_distribution: Statistical analysis of reconstruction errors
+            - anomaly_clusters: High-error sample analysis
+            - vulnerable_features: Feature-wise vulnerability assessment
+            - validation_stability: Temporal stability metrics
+            - model_health_score: Overall quality indicator
+            - security_assessment: Risk and readiness evaluation
+    """
+    try:
+        analysis = {}
+        
+        # === 1. ERROR DISTRIBUTION ANALYSIS ===
+        if reconstruction_errors is not None and len(reconstruction_errors) > 0:
+            # Basic statistics
+            error_mean = float(np.mean(reconstruction_errors))
+            error_std = float(np.std(reconstruction_errors))
+            error_min = float(np.min(reconstruction_errors))
+            error_max = float(np.max(reconstruction_errors))
+            error_median = float(np.median(reconstruction_errors))
+            
+            # Distribution shape
+            error_skewness = float(stats.skew(reconstruction_errors))
+            error_kurtosis = float(stats.kurtosis(reconstruction_errors))
+            
+            # Percentiles for threshold calibration
+            percentiles = [50, 75, 90, 95, 99, 99.9]
+            error_percentiles = {
+                f'p{p}': float(np.percentile(reconstruction_errors, p))
+                for p in percentiles
+            }
+            
+            # Coefficient of variation (normalized variability)
+            cv = error_std / error_mean if error_mean > 0 else 0.0
+            
+            analysis['error_distribution'] = {
+                'mean': error_mean,
+                'std': error_std,
+                'min': error_min,
+                'max': error_max,
+                'median': error_median,
+                'range': error_max - error_min,
+                'skewness': error_skewness,
+                'kurtosis': error_kurtosis,
+                'coefficient_of_variation': float(cv),
+                **error_percentiles
+            }
+            
+            # Distribution shape interpretation
+            if abs(error_skewness) < 0.5:
+                shape = 'symmetric'
+            elif error_skewness > 0.5:
+                shape = 'right_skewed'  # Long tail towards high errors (concerning)
+            else:
+                shape = 'left_skewed'
+            
+            analysis['error_distribution']['shape'] = shape
+            analysis['error_distribution']['interpretation'] = (
+                'normal-like' if abs(error_skewness) < 0.5 and abs(error_kurtosis) < 3
+                else 'heavy_tailed' if error_kurtosis > 3
+                else 'light_tailed'
+            )
+        else:
+            analysis['error_distribution'] = {'error': 'No reconstruction errors available'}
+        
+        # === 2. ANOMALY CLUSTER DETECTION ===
+        if reconstruction_errors is not None and len(reconstruction_errors) > 0:
+            # Define high-error threshold (adaptive based on distribution)
+            if error_skewness > 1.0:
+                # Right-skewed: use percentile-based threshold
+                high_error_threshold = float(np.percentile(reconstruction_errors, 95))
+            else:
+                # Approximately symmetric: use statistical threshold
+                high_error_threshold = error_mean + 2 * error_std
+            
+            high_error_mask = reconstruction_errors > high_error_threshold
+            n_high_error = int(np.sum(high_error_mask))
+            
+            if n_high_error > 0:
+                high_error_samples = reconstruction_errors[high_error_mask]
+                normal_error_samples = reconstruction_errors[~high_error_mask]
+                
+                # Calculate separation between normal and anomalous samples
+                separation_ratio = (
+                    float(np.mean(high_error_samples) / np.mean(normal_error_samples))
+                    if len(normal_error_samples) > 0 and np.mean(normal_error_samples) > 0
+                    else float('inf')
+                )
+                
+                # Cluster compactness (lower = more distinct cluster)
+                cluster_std = float(np.std(high_error_samples))
+                cluster_compactness = cluster_std / np.mean(high_error_samples) if np.mean(high_error_samples) > 0 else 0.0
+                
+                analysis['anomaly_clusters'] = {
+                    'count': n_high_error,
+                    'percentage': float(np.mean(high_error_mask) * 100),
+                    'threshold_used': high_error_threshold,
+                    'mean_error': float(np.mean(high_error_samples)),
+                    'max_error': float(np.max(high_error_samples)),
+                    'separation_ratio': separation_ratio,
+                    'cluster_compactness': float(cluster_compactness),
+                    'distinctness': 'high' if separation_ratio > 2.0 else 'moderate' if separation_ratio > 1.5 else 'low'
+                }
+            else:
+                analysis['anomaly_clusters'] = {
+                    'count': 0,
+                    'percentage': 0.0,
+                    'threshold_used': high_error_threshold,
+                    'note': 'No samples exceed anomaly threshold'
+                }
+        else:
+            analysis['anomaly_clusters'] = {'error': 'No reconstruction errors available'}
+        
+        # === 3. FEATURE-WISE VULNERABILITY ANALYSIS ===
+        if predictions is not None and targets is not None:
+            try:
+                # Calculate per-feature errors
+                feature_errors = np.abs(predictions - targets)
+                feature_mse = np.mean(feature_errors ** 2, axis=0)
+                feature_mae = np.mean(feature_errors, axis=0)
+                feature_std = np.std(feature_errors, axis=0)
+                
+                # Identify most vulnerable features
+                n_features = len(feature_mse)
+                n_worst = min(5, n_features)
+                
+                worst_indices = np.argsort(feature_mse)[-n_worst:][::-1]  # Descending order
+                worst_mse = feature_mse[worst_indices]
+                
+                # Feature vulnerability score (normalized MSE)
+                total_mse = np.sum(feature_mse)
+                vulnerability_scores = feature_mse / total_mse if total_mse > 0 else np.zeros_like(feature_mse)
+                
+                # Calculate feature variability (some features should be more stable)
+                feature_cv = feature_std / (np.mean(np.abs(predictions), axis=0) + 1e-8)
+                
+                analysis['vulnerable_features'] = {
+                    'total_features': n_features,
+                    'worst_5_indices': worst_indices.tolist(),
+                    'worst_5_mse': worst_mse.tolist(),
+                    'worst_5_mae': feature_mae[worst_indices].tolist(),
+                    'max_feature_mse': float(np.max(feature_mse)),
+                    'min_feature_mse': float(np.min(feature_mse)),
+                    'feature_mse_range': float(np.max(feature_mse) - np.min(feature_mse)),
+                    'feature_variability': float(np.std(feature_mse)),
+                    'feature_cv_mean': float(np.mean(feature_cv)),
+                    'feature_cv_max': float(np.max(feature_cv)),
+                    
+                    # Vulnerability concentration
+                    'top_5_contribution': float(np.sum(vulnerability_scores[worst_indices]) * 100),
+                    'vulnerability_concentration': 'high' if np.sum(vulnerability_scores[worst_indices]) > 0.5 else 'moderate' if np.sum(vulnerability_scores[worst_indices]) > 0.3 else 'low'
+                }
+            except Exception as e:
+                logger.warning(f"Feature vulnerability analysis failed: {e}")
+                analysis['vulnerable_features'] = {'error': str(e)}
+        else:
+            analysis['vulnerable_features'] = {'error': 'Predictions or targets not available'}
+        
+        # === 4. TEMPORAL STABILITY ANALYSIS ===
+        if metrics_tracker and 'losses' in metrics_tracker and len(metrics_tracker['losses']) > 0:
+            losses = np.array(metrics_tracker['losses'])
+            n_batches = len(losses)
+            
+            # Basic stability metrics
+            loss_mean = float(np.mean(losses))
+            loss_std = float(np.std(losses))
+            loss_cv = loss_std / loss_mean if loss_mean > 0 else 0.0
+            
+            # Trend analysis (simple linear regression)
+            if n_batches > 1:
+                x = np.arange(n_batches)
+                slope, intercept = np.polyfit(x, losses, 1)
+                trend = 'increasing' if slope > 0.001 else 'decreasing' if slope < -0.001 else 'stable'
+                trend_magnitude = abs(slope) / loss_mean if loss_mean > 0 else 0.0
+            else:
+                slope = 0.0
+                trend = 'insufficient_data'
+                trend_magnitude = 0.0
+            
+            # Stability score (lower CV = more stable)
+            stability_score = 1.0 / (1.0 + loss_cv)
+            
+            # Check for anomalous batches
+            loss_threshold = loss_mean + 3 * loss_std
+            anomalous_batches = int(np.sum(losses > loss_threshold))
+            
+            analysis['validation_stability'] = {
+                'batches_analyzed': n_batches,
+                'loss_mean': loss_mean,
+                'loss_std': loss_std,
+                'loss_min': float(np.min(losses)),
+                'loss_max': float(np.max(losses)),
+                'loss_range': float(np.max(losses) - np.min(losses)),
+                'coefficient_of_variation': float(loss_cv),
+                'stability_score': float(stability_score),
+                'trend': trend,
+                'trend_slope': float(slope),
+                'trend_magnitude_percent': float(trend_magnitude * 100),
+                'anomalous_batches': anomalous_batches,
+                'stability_rating': 'high' if stability_score > 0.8 else 'moderate' if stability_score > 0.6 else 'low'
+            }
+        else:
+            analysis['validation_stability'] = {'error': 'No loss history available'}
+        
+        # === 5. OVERALL MODEL HEALTH SCORE ===
+        quality_factors = []
+        
+        # Factor 1: Error distribution quality (normalized CV, lower is better)
+        if 'error_distribution' in analysis and 'coefficient_of_variation' in analysis['error_distribution']:
+            cv = analysis['error_distribution']['coefficient_of_variation']
+            error_quality = 1.0 / (1.0 + cv)
+            quality_factors.append(error_quality)
+        
+        # Factor 2: Validation stability
+        if 'validation_stability' in analysis and 'stability_score' in analysis['validation_stability']:
+            quality_factors.append(analysis['validation_stability']['stability_score'])
+        
+        # Factor 3: Anomaly separation quality
+        if 'anomaly_clusters' in analysis and 'percentage' in analysis['anomaly_clusters']:
+            # Lower anomaly percentage is better (assuming validation on normal data)
+            anomaly_pct = analysis['anomaly_clusters']['percentage']
+            anomaly_quality = max(0.0, 1.0 - (anomaly_pct / 100.0))
+            quality_factors.append(anomaly_quality)
+        
+        # Factor 4: Feature vulnerability distribution
+        if 'vulnerable_features' in analysis and 'top_5_contribution' in analysis['vulnerable_features']:
+            # Lower concentration is better (errors spread across features)
+            concentration = analysis['vulnerable_features']['top_5_contribution'] / 100.0
+            feature_quality = max(0.0, 1.0 - concentration)
+            quality_factors.append(feature_quality)
+        
+        # Calculate overall health score
+        if quality_factors:
+            model_health_score = float(np.mean(quality_factors))
+            health_rating = (
+                'excellent' if model_health_score > 0.8
+                else 'good' if model_health_score > 0.6
+                else 'fair' if model_health_score > 0.4
+                else 'poor'
+            )
+        else:
+            model_health_score = 0.0
+            health_rating = 'unknown'
+        
+        analysis['model_health_score'] = model_health_score
+        analysis['health_rating'] = health_rating
+        analysis['quality_factors'] = {
+            'count': len(quality_factors),
+            'individual_scores': [float(f) for f in quality_factors],
+            'overall_score': model_health_score
+        }
+        
+        # === 6. SECURITY ASSESSMENT ===
+        security_risks = []
+        security_warnings = []
+        
+        # Check for high error variability (inconsistent detection)
+        if 'error_distribution' in analysis and 'coefficient_of_variation' in analysis['error_distribution']:
+            if analysis['error_distribution']['coefficient_of_variation'] > 1.0:
+                security_warnings.append('High error variability detected - may indicate inconsistent anomaly detection')
+        
+        # Check for poor anomaly separation
+        if 'anomaly_clusters' in analysis and 'separation_ratio' in analysis['anomaly_clusters']:
+            if analysis['anomaly_clusters']['separation_ratio'] < 1.5:
+                security_risks.append('Low anomaly separation - may struggle to distinguish attacks from normal traffic')
+        
+        # Check for concentrated vulnerabilities
+        if 'vulnerable_features' in analysis and 'top_5_contribution' in analysis['vulnerable_features']:
+            if analysis['vulnerable_features']['top_5_contribution'] > 50:
+                security_risks.append(f"Concentrated feature vulnerabilities ({analysis['vulnerable_features']['top_5_contribution']:.1f}% in top 5 features)")
+        
+        # Check for unstable validation
+        if 'validation_stability' in analysis and 'stability_rating' in analysis['validation_stability']:
+            if analysis['validation_stability']['stability_rating'] == 'low':
+                security_warnings.append('Low validation stability - model performance may be unreliable')
+        
+        # Overall security readiness
+        n_risks = len(security_risks)
+        n_warnings = len(security_warnings)
+        
+        if n_risks == 0 and n_warnings == 0:
+            security_readiness = 'ready'
+        elif n_risks == 0:
+            security_readiness = 'ready_with_warnings'
+        elif n_risks <= 1:
+            security_readiness = 'caution_advised'
+        else:
+            security_readiness = 'not_recommended'
+        
+        analysis['security_assessment'] = {
+            'readiness': security_readiness,
+            'risk_count': n_risks,
+            'warning_count': n_warnings,
+            'risks': security_risks,
+            'warnings': security_warnings,
+            'recommendation': (
+                'Model is ready for deployment' if security_readiness == 'ready'
+                else 'Model can be deployed with monitoring' if security_readiness == 'ready_with_warnings'
+                else 'Deploy with caution and enhanced monitoring' if security_readiness == 'caution_advised'
+                else 'Additional training or tuning recommended before deployment'
+            )
+        }
+        
+        return analysis
+        
+    except Exception as e:
+        logger.error(f"Validation analysis failed: {e}")
+        logger.debug(traceback.format_exc())
+        return {
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'partial_analysis': analysis if 'analysis' in locals() else {}
+        }
+
+def _default_validation_callbacks():
+    """
+    Create security-focused validation callbacks for real-time monitoring.
+    
+    Returns a list of callback functions designed to work with the validate()
+    function's validation_callbacks parameter. Each callback monitors specific
+    aspects of validation for security-critical issues.
+    
+    Returns:
+        list: List of callback functions with signature:
+            callback(batch_idx, inputs, outputs, loss, model, metrics)
+    
+    Callbacks included:
+        1. critical_error_alert: Detects critically high loss values
+        2. memory_leak_monitor: Tracks GPU/CPU memory usage
+        3. attack_pattern_detector: Identifies sudden loss spikes
+        4. validation_checkpointing: Tracks validation progress
+    """
+    callbacks = []
+    
+    # === CALLBACK 1: CRITICAL ERROR ALERTING ===
+    def critical_error_alert(batch_idx, inputs, outputs, loss, model, metrics):
+        """
+        Alert on critically high loss values that may indicate model failure
+        or presence of severe attacks in validation data.
+        """
+        try:
+            # Dynamic threshold based on recent history
+            if 'losses' in metrics and len(metrics['losses']) > 10:
+                recent_losses = metrics['losses'][-10:]
+                mean_loss = np.mean(recent_losses)
+                std_loss = np.std(recent_losses)
+                dynamic_threshold = mean_loss + 5 * std_loss
+            else:
+                dynamic_threshold = 5.0  # Baseline threshold
+            
+            if loss > dynamic_threshold:
+                logger.critical(f"CRITICAL VALIDATION ALERT: Batch {batch_idx} loss {loss:.4f} exceeds dynamic threshold {dynamic_threshold:.4f}!")
+                
+                # Additional diagnostics
+                if hasattr(outputs, 'isnan') and outputs.isnan().any():
+                    logger.critical("  └─ NaN values detected in model outputs!")
+                
+                if hasattr(outputs, 'isinf') and outputs.isinf().any():
+                    logger.critical("  └─ Infinite values detected in model outputs!")
+                
+                # Track critical events
+                if not hasattr(critical_error_alert, 'critical_count'):
+                    critical_error_alert.critical_count = 0
+                critical_error_alert.critical_count += 1
+                
+                if critical_error_alert.critical_count > 5:
+                    logger.critical(f"  └─ REPEATED CRITICAL EVENTS: {critical_error_alert.critical_count} occurrences. Consider stopping validation!")
+        
+        except Exception as e:
+            logger.debug(f"Critical error alert callback failed: {e}")
+    
+    callbacks.append(critical_error_alert)
+    
+    # === CALLBACK 2: MEMORY LEAK DETECTION ===
+    def memory_leak_monitor(batch_idx, inputs, outputs, loss, model, metrics):
+        """
+        Monitor memory usage to detect leaks and trigger cleanup when needed.
+        Tracks both GPU (CUDA) and CPU (RAM) memory.
+        """
+        try:
+            # Only check every 20 batches to reduce overhead
+            if batch_idx % 20 != 0:
+                return
+            
+            memory_warning_triggered = False
+            
+            # GPU Memory Monitoring (CUDA)
+            if torch.cuda.is_available():
+                allocated = torch.cuda.memory_allocated() / 1024**3  # GB
+                reserved = torch.cuda.memory_reserved() / 1024**3    # GB
+                max_allocated = torch.cuda.max_memory_allocated() / 1024**3
+                
+                # Track memory growth
+                if not hasattr(memory_leak_monitor, 'gpu_baseline'):
+                    memory_leak_monitor.gpu_baseline = allocated
+                    memory_leak_monitor.gpu_growth_checks = 0
+                
+                growth_ratio = allocated / memory_leak_monitor.gpu_baseline if memory_leak_monitor.gpu_baseline > 0 else 1.0
+                
+                # High utilization warning
+                if allocated > 0.95 * reserved:
+                    logger.warning(f"HIGH GPU MEMORY: {allocated:.2f}GB/{reserved:.2f}GB (Batch {batch_idx}) - attempting cache clear")
+                    torch.cuda.empty_cache()
+                    memory_warning_triggered = True
+                
+                # Memory leak detection (gradual growth)
+                elif growth_ratio > 1.5 and memory_leak_monitor.gpu_growth_checks > 3:
+                    logger.warning(f"POTENTIAL GPU MEMORY LEAK: Baseline {memory_leak_monitor.gpu_baseline:.2f}GB, Current {allocated:.2f}GB (growth: {(growth_ratio-1)*100:.1f}%)")
+                    torch.cuda.empty_cache()
+                    memory_leak_monitor.gpu_baseline = allocated  # Reset baseline
+                    memory_leak_monitor.gpu_growth_checks = 0
+                
+                memory_leak_monitor.gpu_growth_checks += 1
+            
+            # CPU Memory Monitoring (RAM)
+            try:
+                process = psutil.Process()
+                ram_usage = process.memory_info().rss / 1024**3  # GB
+                ram_percent = process.memory_percent()
+                
+                if ram_percent > 80:
+                    logger.warning(f"HIGH RAM USAGE: {ram_usage:.2f}GB ({ram_percent:.1f}%) (Batch {batch_idx})")
+                    memory_warning_triggered = True
+                    
+                    # Trigger garbage collection
+                    gc.collect()
+            
+            except ImportError:
+                pass  # psutil not available
+            
+            # Store memory stats in metrics for later analysis
+            if batch_idx % 100 == 0 and not memory_warning_triggered:
+                logger.debug(f"Memory OK @ Batch {batch_idx}: GPU {allocated:.2f}GB" if torch.cuda.is_available() else "CPU monitoring")
+        
+        except Exception as e:
+            logger.debug(f"Memory monitor callback failed: {e}")
+    
+    callbacks.append(memory_leak_monitor)
+    
+    # === CALLBACK 3: ATTACK PATTERN DETECTION ===
+    def attack_pattern_detector(batch_idx, inputs, outputs, loss, model, metrics):
+        """
+        Detect sudden loss spikes that may indicate attack samples in validation data.
+        Uses a sliding window to track recent loss patterns.
+        """
+        try:
+            # Initialize sliding window for loss tracking
+            if not hasattr(attack_pattern_detector, 'recent_losses'):
+                attack_pattern_detector.recent_losses = deque(maxlen=10)
+                attack_pattern_detector.spike_count = 0
+            
+            attack_pattern_detector.recent_losses.append(loss)
+            
+            # Need enough history for pattern detection
+            if len(attack_pattern_detector.recent_losses) < 10:
+                return
+            
+            # Calculate baseline and detect spikes
+            recent_array = np.array(attack_pattern_detector.recent_losses)
+            baseline_mean = np.mean(recent_array[:-1])  # Exclude current loss
+            baseline_std = np.std(recent_array[:-1])
+            
+            # Detect significant spike (> 3 sigma above recent mean)
+            spike_threshold = baseline_mean + 3 * baseline_std
+            
+            if loss > spike_threshold and loss > 2 * baseline_mean:
+                attack_pattern_detector.spike_count += 1
+                
+                logger.warning(f"POTENTIAL ATTACK PATTERN DETECTED @ Batch {batch_idx}: Loss {loss:.4f} significantly exceeds recent average {baseline_mean:.4f} (threshold: {spike_threshold:.4f})")
+                
+                # Additional analysis for repeated spikes
+                if attack_pattern_detector.spike_count > 3:
+                    logger.warning(f"  └─ REPEATED SPIKES: {attack_pattern_detector.spike_count} occurrences. Validation data may contain high concentration of anomalies.")
+                
+                # Feature-level analysis if inputs/outputs available
+                try:
+                    if hasattr(inputs, 'shape') and hasattr(outputs, 'shape'):
+                        reconstruction_error = torch.abs(inputs - outputs)
+                        max_feature_error = torch.max(torch.mean(reconstruction_error, dim=0))
+                        logger.debug(f"  └─ Max feature reconstruction error: {max_feature_error:.4f}")
+                except:
+                    pass
+        
+        except Exception as e:
+            logger.debug(f"Attack pattern detector callback failed: {e}")
+    
+    callbacks.append(attack_pattern_detector)
+    
+    # === CALLBACK 4: VALIDATION CHECKPOINTING ===
+    def validation_checkpointing(batch_idx, inputs, outputs, loss, model, metrics):
+        """
+        Track validation progress and log checkpoints for long-running validations.
+        Helps monitor validation health and provides periodic status updates.
+        """
+        try:
+            # Initialize checkpoint state
+            if not hasattr(validation_checkpointing, 'state'):
+                validation_checkpointing.state = {
+                    'best_loss': float('inf'),
+                    'checkpoint_count': 0,
+                    'start_time': time.time(),
+                    'total_batches': 0
+                }
+            
+            CHECKPOINT_FREQUENCY = 100
+            state = validation_checkpointing.state
+            state['total_batches'] += 1
+            
+            # Periodic checkpoint logging
+            if batch_idx > 0 and batch_idx % CHECKPOINT_FREQUENCY == 0:
+                # Calculate recent average loss
+                if 'losses' in metrics and len(metrics['losses']) >= CHECKPOINT_FREQUENCY:
+                    recent_losses = metrics['losses'][-CHECKPOINT_FREQUENCY:]
+                    current_avg_loss = float(np.mean(recent_losses))
+                    current_std_loss = float(np.std(recent_losses))
+                    
+                    # Update best loss
+                    is_new_best = current_avg_loss < state['best_loss']
+                    if is_new_best:
+                        state['best_loss'] = current_avg_loss
+                        state['checkpoint_count'] += 1
+                    
+                    # Calculate elapsed time and throughput
+                    elapsed_time = time.time() - state['start_time']
+                    batches_per_sec = state['total_batches'] / elapsed_time if elapsed_time > 0 else 0
+                    
+                    # Log checkpoint
+                    status_marker = "✓ NEW BEST" if is_new_best else "  Progress"
+                    logger.info(f"Validation Checkpoint @ Batch {batch_idx}: {status_marker} | Avg Loss: {current_avg_loss:.6f} ± {current_std_loss:.6f} | Best: {state['best_loss']:.6f} | Throughput: {batches_per_sec:.1f} batches/sec")
+                    
+                    # Memory status if available
+                    if torch.cuda.is_available():
+                        gpu_mem = torch.cuda.memory_allocated() / 1024**3
+                        logger.debug(f"  └─ GPU Memory: {gpu_mem:.2f}GB")
+        
+        except Exception as e:
+            logger.debug(f"Validation checkpointing callback failed: {e}")
+    
+    callbacks.append(validation_checkpointing)
+    
+    # === CALLBACK 5: GRADIENT MONITORING (if model requires_grad) ===
+    def gradient_monitor(batch_idx, inputs, outputs, loss, model, metrics):
+        """
+        Monitor gradient flow even during validation (useful for debug).
+        Only activates if model has gradients enabled.
+        """
+        try:
+            # Only check periodically and if gradients are available
+            if batch_idx % 50 != 0:
+                return
+            
+            if not any(p.requires_grad for p in model.parameters()):
+                return
+            
+            # Check for gradient anomalies
+            total_norm = 0.0
+            for p in model.parameters():
+                if p.grad is not None:
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** 0.5
+            
+            if total_norm > 100.0:
+                logger.warning(f"High gradient norm during validation @ Batch {batch_idx}: {total_norm:.2f}")
+        
+        except Exception as e:
+            logger.debug(f"Gradient monitor callback failed: {e}")
+    
+    callbacks.append(gradient_monitor)
+    
+    return callbacks
+
+def validate(
+    # Core Validation Parameters
+    model: Optional[nn.Module] = None,
+    loader: Optional[DataLoader] = None,
+    criterion: Optional[nn.Module] = None,
+    device: Optional[torch.device] = None,
+    epoch: Optional[int] = None,
+    
+    # Validation Configuration Parameters
+    validation_type: Optional[str] = None,
+    batch_size: Optional[int] = None,
+    eval_mode: Optional[bool] = None,
+    no_grad: Optional[bool] = None,
+    inference_mode: Optional[bool] = None,
+    
+    # Mixed Precision Parameters
+    mixed_precision: Optional[bool] = None,
+    amp_enabled: Optional[bool] = None,
+    scaler: Optional[GradScaler] = None,
+    autocast_enabled: Optional[bool] = None,
+    
+    # Metrics and Evaluation Parameters
+    calculate_metrics: Optional[bool] = None,
+    metrics_to_calculate: Optional[List[str]] = None,
+    detailed_metrics: Optional[bool] = None,
+    per_sample_metrics: Optional[bool] = None,
+    aggregate_metrics: Optional[bool] = None,
+    statistical_metrics: Optional[bool] = None,
+    distribution_analysis: Optional[bool] = None,
+    anomaly_detection: Optional[bool] = None,
+    threshold_analysis: Optional[bool] = None,
+    
+    # Performance and Optimization Parameters
+    performance_mode: Optional[str] = None,
+    benchmark_mode: Optional[bool] = None,
+    memory_efficient: Optional[bool] = None,
+    batch_processing: Optional[bool] = None,
+    parallel_validation: Optional[bool] = None,
+    
+    # Data Processing Parameters
+    data_preprocessing: Optional[bool] = None,
+    input_transforms: Optional[List[Callable]] = None,
+    target_transforms: Optional[List[Callable]] = None,
+    normalize_outputs: Optional[bool] = None,
+    denormalize_outputs: Optional[bool] = None,
+    
+    # Validation Quality Control Parameters
+    validate_inputs: Optional[bool] = None,
+    check_finite: Optional[bool] = None,
+    handle_nan_outputs: Optional[str] = None,
+    handle_inf_outputs: Optional[str] = None,
+    output_validation: Optional[bool] = None,
+    consistency_checks: Optional[bool] = None,
+    
+    # Reconstruction and Anomaly Parameters
+    reconstruction_threshold: Optional[float] = None,
+    anomaly_threshold: Optional[float] = None,
+    percentile_threshold: Optional[float] = None,
+    adaptive_threshold: Optional[bool] = None,
+    threshold_method: Optional[str] = None,
+    contamination_rate: Optional[float] = None,
+    
+    # Statistical Analysis Parameters
+    confidence_interval: Optional[float] = None,
+    significance_level: Optional[float] = None,
+    statistical_tests: Optional[bool] = None,
+    distribution_tests: Optional[bool] = None,
+    normality_tests: Optional[bool] = None,
+    outlier_analysis: Optional[bool] = None,
+    
+    # Monitoring and Logging Parameters
+    progress_bar: Optional[bool] = None,
+    progress_bar_desc: Optional[str] = None,
+    log_frequency: Optional[int] = None,
+    verbose: Optional[bool] = None,
+    debug_mode: Optional[bool] = None,
+    timing_analysis: Optional[bool] = None,
+    
+    # Memory Management Parameters
+    empty_cache_frequency: Optional[int] = None,
+    gc_collection_frequency: Optional[int] = None,
+    memory_monitoring: Optional[bool] = None,
+    
+    # Distributed Validation Parameters
+    distributed: Optional[bool] = None,
+    world_size: Optional[int] = None,
+    rank: Optional[int] = None,
+    reduce_metrics: Optional[bool] = None,
+
+    # Directory Parameters
+    artifacts_dir: Optional[Union[str, Path]] = None,
+    checkpoints_dir: Optional[Union[str, Path]] = None,
+    data_dir: Optional[Union[str, Path]] = None,
+    datasets_dir: Optional[Union[str, Path]] = None,
+    metrics_dir: Optional[Union[str, Path]] = None,
+    model_dir: Optional[Union[str, Path]] = None,
+    reports_dir: Optional[Union[str, Path]] = None,
+    results_dir: Optional[Union[str, Path]] = None,
+    
+    # Export and Visualization Parameters
+    save_results: Optional[bool] = None,
+    results_path: Optional[str] = None,
+    save_predictions: Optional[bool] = None,
+    save_reconstructions: Optional[bool] = None,
+    visualization: Optional[bool] = None,
+    plot_distributions: Optional[bool] = None,
+    plot_reconstructions: Optional[bool] = None,
+    
+    # Cross-validation Parameters
+    cross_validation: Optional[bool] = None,
+    cv_folds: Optional[int] = None,
+    stratified_cv: Optional[bool] = None,
+    cv_metrics: Optional[bool] = None,
+    
+    # Advanced Analysis Parameters
+    feature_importance: Optional[bool] = None,
+    attention_analysis: Optional[bool] = None,
+    gradient_analysis: Optional[bool] = None,
+    activation_analysis: Optional[bool] = None,
+    layer_analysis: Optional[bool] = None,
+    
+    # Error Handling Parameters
+    error_handling: Optional[str] = None,
+    continue_on_error: Optional[bool] = None,
+    max_retries: Optional[int] = None,
+    graceful_degradation: Optional[bool] = None,
+    fallback_mode: Optional[bool] = None,
+    
+    # Compatibility Parameters
+    legacy_mode: Optional[bool] = None,
+    backward_compatibility: Optional[bool] = None,
+    version_check: Optional[bool] = None,
+    
+    # Experimental Parameters
+    experimental_features: Optional[bool] = None,
+    experimental_metrics: Optional[bool] = None,
+    beta_features: Optional[bool] = None,
+    
+    # Custom Functions Parameters
+    custom_metric_fn: Optional[Callable] = None,
+    custom_threshold_fn: Optional[Callable] = None,
+    custom_analysis_fn: Optional[Callable] = None,
+    validation_callbacks: Optional[List[Callable]] = None,
+
+    # Security Parameters
+    enable_security_metrics: Optional[bool] = None,
+    real_time_monitoring: Optional[bool] = None,
+    security_validation: Optional[bool] = None,
+    
+    # Direct Configuration Override
+    config: Optional[Dict[str, Any]] = None,
+    validation_config: Optional[Dict[str, Any]] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
+    
+    **kwargs
+) -> Tuple[float, np.ndarray, Dict[str, Any]]:
+    
+    # Start timing
+    start_time = datetime.now()
+    validation_start_time = time.time()
+    
+    # Initialize configuration with defaults
+    if config is None:
+        try:
+            config = get_current_config() if 'get_current_config' in globals() else {}
+        except Exception:
+            config = {}
+    
+    # Apply validation-specific configuration
+    if validation_config:
+        config.setdefault('validation', {}).update(validation_config)
+    
+    # Apply all parameters to configuration
+    final_config = {}
+    
+    # Merge with existing config
+    final_config.update(config)
+    
+    # Apply individual parameters with intelligent organization
+    params = locals().copy()
+    params.update(kwargs)
+    
+    # Remove non-parameter items
+    params_to_remove = {
+        'config', 'validation_config', 'kwargs', 'start_time', 'validation_start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
+        'nullcontext', 'nn', 'optim', 'DataLoader', 'GradScaler', 'autocast', 'stats'
+    }
+    
+    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
+    
+    # Organize parameters into logical sections
+    param_sections = {
+        'core_validation': [
+            'validation_type', 'batch_size', 'eval_mode', 'no_grad', 'inference_mode'
+        ],
+        'mixed_precision': [
+            'mixed_precision', 'amp_enabled', 'scaler', 'autocast_enabled'
+        ],
+        'metrics_evaluation': [
+            'calculate_metrics', 'metrics_to_calculate', 'detailed_metrics', 'per_sample_metrics', 'aggregate_metrics', 'statistical_metrics', 'distribution_analysis', 'anomaly_detection', 'threshold_analysis'
+        ],
+        'performance': [
+            'performance_mode', 'benchmark_mode', 'memory_efficient', 'batch_processing', 'parallel_validation'
+        ],
+        'data_processing': [
+            'data_preprocessing', 'input_transforms', 'target_transforms', 'normalize_outputs', 'denormalize_outputs'
+        ],
+        'validation_quality': [
+            'validate_inputs', 'check_finite', 'handle_nan_outputs', 'handle_inf_outputs', 'output_validation', 'consistency_checks'
+        ],
+        'reconstruction_anomaly': [
+            'reconstruction_threshold', 'anomaly_threshold', 'percentile_threshold', 'adaptive_threshold', 'threshold_method', 'contamination_rate'
+        ],
+        'statistical_analysis': [
+            'confidence_interval', 'significance_level', 'statistical_tests', 'distribution_tests', 'normality_tests', 'outlier_analysis'
+        ],
+        'monitoring_logging': [
+            'progress_bar', 'progress_bar_desc', 'log_frequency', 'verbose', 'debug_mode', 'timing_analysis'
+        ],
+        'memory_management': [
+            'empty_cache_frequency', 'gc_collection_frequency', 'memory_monitoring'
+        ],
+        'distributed': [
+            'distributed', 'world_size', 'rank', 'reduce_metrics'
+        ],
+        'output_directories': [
+            'artifacts_dir', 'checkpoints_dir', 'data_dir', 'datasets_dir', 'metrics_dir', 'model_dir', 'reports_dir', 'results_dir'
+        ],
+        'export_visualization': [
+            'save_results', 'results_path', 'save_predictions', 'save_reconstructions', 'visualization', 'plot_distributions', 'plot_reconstructions'
+        ],
+        'cross_validation': [
+            'cross_validation', 'cv_folds', 'stratified_cv', 'cv_metrics'
+        ],
+        'advanced_analysis': [
+            'feature_importance', 'attention_analysis', 'gradient_analysis', 'activation_analysis', 'layer_analysis'
+        ],
+        'error_handling': [
+            'error_handling', 'continue_on_error', 'max_retries', 'graceful_degradation', 'fallback_mode'
+        ],
+        'compatibility': [
+            'legacy_mode', 'backward_compatibility', 'version_check'
+        ],
+        'experimental': [
+            'experimental_features', 'experimental_metrics', 'beta_features'
+        ],
+        'custom_functions': [
+            'custom_metric_fn', 'custom_threshold_fn', 'custom_analysis_fn', 'validation_callbacks'
+        ],
+        'security': [
+            'enable_security_metrics', 'real_time_monitoring', 'security_validation'
+        ],
+        'run_tracking': [
+            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
+        ]
+    }
+    
+    # Apply parameters to appropriate sections
+    for section, param_list in param_sections.items():
+        section_config = final_config.setdefault(section, {})
+        for param in param_list:
+            if param in cleaned_params:
+                section_config[param] = cleaned_params[param]
+    
+    # Extract ALL configuration sections
+    core_config = final_config.setdefault('core_validation', {})
+    mixed_precision_config = final_config.setdefault('mixed_precision', {})
+    metrics_config = final_config.setdefault('metrics_evaluation', {})
+    performance_config = final_config.setdefault('performance', {})
+    data_processing_config = final_config.setdefault('data_processing', {})
+    validation_quality_config = final_config.setdefault('validation_quality', {})
+    reconstruction_config = final_config.setdefault('reconstruction_anomaly', {})
+    statistical_config = final_config.setdefault('statistical_analysis', {})
+    monitoring_config = final_config.setdefault('monitoring_logging', {})
+    memory_config = final_config.setdefault('memory_management', {})
+    distributed_config = final_config.setdefault('distributed', {})
+    directories_config = final_config.setdefault('output_directories', {})
+    export_config = final_config.setdefault('export_visualization', {})
+    cv_config = final_config.setdefault('cross_validation', {})
+    advanced_config = final_config.setdefault('advanced_analysis', {})
+    error_config = final_config.setdefault('error_handling', {})
+    compatibility_config = final_config.setdefault('compatibility', {})
+    experimental_config = final_config.setdefault('experimental', {})
+    custom_config = final_config.setdefault('custom_functions', {})
+    security_config = final_config.setdefault('security', {})
+    validation_config = final_config.setdefault('validation', {})
+    training_config = final_config.setdefault('training', {})
+    run_tracking_config = final_config.setdefault('run_tracking', {})
+
+    # Core validation parameters
+    validation_type = core_config.setdefault('validation_type', 'standard')
+    eval_mode = core_config.setdefault('eval_mode', True)
+    no_grad = core_config.setdefault('no_grad', True)
+    inference_mode = core_config.setdefault('inference_mode', False)
+    
+    # Mixed precision parameters
+    mixed_precision = mixed_precision_config.setdefault('mixed_precision', MIXED_PRECISION and torch.cuda.is_available())
+    amp_enabled = mixed_precision_config.setdefault('amp_enabled', mixed_precision)
+    autocast_enabled = mixed_precision_config.setdefault('autocast_enabled', mixed_precision)
+    scaler = mixed_precision_config.get('scaler')
+
+    # Training parameters
+    batch_size = training_config.setdefault('batch_size', DEFAULT_BATCH_SIZE)
+    epochs = training_config.setdefault('epochs', DEFAULT_EPOCHS)
+    epoch = epoch if epoch is not None else 0
+    
+    # Metrics parameters
+    calculate_metrics = metrics_config.setdefault('calculate_metrics', True)
+    metrics_to_calculate = metrics_config.setdefault('metrics_to_calculate', ['loss', 'mse', 'mae', 'reconstruction_error'])
+    detailed_metrics = metrics_config.setdefault('detailed_metrics', True)
+    per_sample_metrics = metrics_config.setdefault('per_sample_metrics', True)
+    aggregate_metrics = metrics_config.setdefault('aggregate_metrics', True)
+    statistical_metrics = metrics_config.setdefault('statistical_metrics', True)
+    distribution_analysis = metrics_config.setdefault('distribution_analysis', False)
+    anomaly_detection = metrics_config.setdefault('anomaly_detection', validation_type == 'anomaly_detection')
+    threshold_analysis = metrics_config.setdefault('threshold_analysis', anomaly_detection)
+    
+    # Performance parameters
+    performance_mode = performance_config.setdefault('performance_mode', 'standard')
+    benchmark_mode = performance_config.setdefault('benchmark_mode', False)
+    memory_efficient = performance_config.setdefault('memory_efficient', True)
+    batch_processing = performance_config.setdefault('batch_processing', True)
+    parallel_validation = performance_config.setdefault('parallel_validation', False)
+    
+    # Data processing parameters
+    data_preprocessing = data_processing_config.setdefault('data_preprocessing', False)
+    input_transforms = data_processing_config.get('input_transforms')
+    target_transforms = data_processing_config.get('target_transforms')
+    normalize_outputs = data_processing_config.setdefault('normalize_outputs', False)
+    denormalize_outputs = data_processing_config.setdefault('denormalize_outputs', False)
+    
+    # Validation quality parameters
+    validate_inputs = validation_quality_config.setdefault('validate_inputs', True)
+    check_finite = validation_quality_config.setdefault('check_finite', True)
+    handle_nan_outputs = validation_quality_config.setdefault('handle_nan_outputs', 'error')
+    handle_inf_outputs = validation_quality_config.setdefault('handle_inf_outputs', 'error')
+    output_validation = validation_quality_config.setdefault('output_validation', True)
+    consistency_checks = validation_quality_config.setdefault('consistency_checks', True)
+    
+    # Reconstruction and anomaly parameters
+    reconstruction_threshold = reconstruction_config.get('reconstruction_threshold')
+    anomaly_threshold = reconstruction_config.get('anomaly_threshold')
+    percentile_threshold = reconstruction_config.setdefault('percentile_threshold', 95.0)
+    adaptive_threshold = reconstruction_config.setdefault('adaptive_threshold', True)
+    threshold_method = reconstruction_config.setdefault('threshold_method', 'percentile')
+    contamination_rate = reconstruction_config.setdefault('contamination_rate', 0.1)
+    
+    # Statistical analysis parameters
+    confidence_interval = statistical_config.setdefault('confidence_interval', 0.95)
+    significance_level = statistical_config.setdefault('significance_level', 0.05)
+    statistical_tests = statistical_config.setdefault('statistical_tests', False)
+    distribution_tests = statistical_config.setdefault('distribution_tests', False)
+    normality_tests = statistical_config.setdefault('normality_tests', False)
+    outlier_analysis = statistical_config.setdefault('outlier_analysis', False)
+    
+    # Monitoring and logging parameters
+    progress_bar = monitoring_config.setdefault('progress_bar', True)
+    progress_bar_desc = monitoring_config.setdefault('progress_bar_desc', f"Validating Epoch {epoch+1}/{epochs}" if epoch is not None else "N/A")
+    log_frequency = monitoring_config.setdefault('log_frequency', 100)
+    verbose = monitoring_config.setdefault('verbose', False)
+    debug_mode = monitoring_config.setdefault('debug_mode', False)
+    timing_analysis = monitoring_config.setdefault('timing_analysis', False)
+    
+    # Memory management parameters
+    empty_cache_frequency = memory_config.setdefault('empty_cache_frequency', 50)
+    gc_collection_frequency = memory_config.setdefault('gc_collection_frequency', 200)
+    memory_monitoring = memory_config.setdefault('memory_monitoring', torch.cuda.is_available())
+    
+    # Distributed parameters
+    distributed = distributed_config.setdefault('distributed', False)
+    world_size = distributed_config.get('world_size')
+    rank = distributed_config.get('rank')
+    reduce_metrics = distributed_config.setdefault('reduce_metrics', distributed)
+    
+    # Directory parameters
+    artifacts_dir = directories_config.get('artifacts_dir')
+    checkpoints_dir = directories_config.get('checkpoints_dir')
+    data_dir = directories_config.get('data_dir')
+    datasets_dir = directories_config.get('datasets_dir')
+    metrics_dir = directories_config.get('metrics_dir')
+    model_dir = directories_config.get('model_dir')
+    reports_dir = directories_config.get('reports_dir')
+    results_dir = directories_config.get('results_dir')
+    
+    # Export and visualization parameters
+    save_results = export_config.setdefault('save_results', True)
+    results_path = export_config.setdefault('results_path', './validation_results')
+    save_predictions = export_config.setdefault('save_predictions', True)
+    save_reconstructions = export_config.setdefault('save_reconstructions', True)
+    visualization = export_config.setdefault('visualization', True)
+    plot_distributions = export_config.setdefault('plot_distributions', True)
+    plot_reconstructions = export_config.setdefault('plot_reconstructions', True)
+    
+    # Cross-validation parameters
+    cross_validation = cv_config.setdefault('cross_validation', False)
+    cv_folds = cv_config.setdefault('cv_folds', 5)
+    stratified_cv = cv_config.setdefault('stratified_cv', False)
+    cv_metrics = cv_config.setdefault('cv_metrics', False)
+    
+    # Advanced analysis parameters
+    feature_importance = advanced_config.setdefault('feature_importance', False)
+    attention_analysis = advanced_config.setdefault('attention_analysis', False)
+    gradient_analysis = advanced_config.setdefault('gradient_analysis', False)
+    activation_analysis = advanced_config.setdefault('activation_analysis', False)
+    layer_analysis = advanced_config.setdefault('layer_analysis', False)
+    
+    # Error handling parameters
+    error_handling = error_config.setdefault('error_handling', 'strict')
+    continue_on_error = error_config.setdefault('continue_on_error', False)
+    max_retries = error_config.setdefault('max_retries', 3)
+    graceful_degradation = error_config.setdefault('graceful_degradation', True)
+    fallback_mode = error_config.setdefault('fallback_mode', False)
+    
+    # Compatibility parameters
+    legacy_mode = compatibility_config.setdefault('legacy_mode', False)
+    backward_compatibility = compatibility_config.setdefault('backward_compatibility', False)
+    version_check = compatibility_config.setdefault('version_check', False)
+    
+    # Experimental parameters
+    experimental_features = experimental_config.setdefault('experimental_features', False)
+    experimental_metrics = experimental_config.setdefault('experimental_metrics', False)
+    beta_features = experimental_config.setdefault('beta_features', False)
+
+    # Security parameters
+    enable_security_metrics = security_config.setdefault('enable_security_metrics', True)
+    real_time_monitoring = security_config.setdefault('real_time_monitoring', True)
+    
+    # Custom functions parameters
+    custom_metric_fn = custom_config.get('custom_metric_fn')
+    custom_threshold_fn = custom_config.get('custom_threshold_fn')
+    custom_analysis_fn = custom_config.get('custom_analysis_fn')
+    validation_callbacks = custom_config.get('validation_callbacks', [])
+
+    # Apply IDS-specific defaults if not provided
+    if custom_metric_fn is None and enable_security_metrics:
+        custom_metric_fn = _default_security_metrics
+        logger.debug("Using default security metrics function")
+
+    if custom_threshold_fn is None and adaptive_threshold:
+        custom_threshold_fn = _default_adaptive_threshold
+        logger.debug("Using default adaptive threshold function")
+
+    if custom_analysis_fn is None and detailed_metrics:
+        custom_analysis_fn = _default_validation_analysis
+        logger.debug("Using default validation analysis function")
+
+    if not validation_callbacks and real_time_monitoring:
+        validation_callbacks = _default_validation_callbacks()
+        logger.debug(f"Using {len(validation_callbacks)} default validation callbacks")
+    
+    custom_functions = {
+        'custom_metric_fn': custom_metric_fn is not None,
+        'custom_metric_fn_name': custom_metric_fn.__name__ if custom_metric_fn else None,
+        'custom_threshold_fn': custom_threshold_fn is not None,
+        'custom_threshold_fn_name': custom_threshold_fn.__name__ if custom_threshold_fn else None,
+        'custom_analysis_fn': custom_analysis_fn is not None,
+        'custom_analysis_fn_name': custom_analysis_fn.__name__ if custom_analysis_fn else None,
+        'validation_callbacks_count': len(validation_callbacks),
+        'validation_callbacks_names': [cb.__name__ for cb in validation_callbacks] if validation_callbacks else []
+    }
+    
+    # Run tracking parameters
+    run_id = run_tracking_config.get('run_id', run_id)
+    run_number = run_tracking_config.get('run_number', run_number)
+    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+
+    # Set up logging level
+    if verbose:
+        original_level = logger.level
+        logger.setLevel(logging.INFO)
+    
+    logger.info(f"Starting validation for epoch {epoch if epoch is not None else 'N/A'}")
+    
+    # Initialize variables for cleanup
+    pbar = None
+    
+    try:
+        # Parameter validation
+        if model is None:
+            raise ValueError("Model is required for validation")
+        if loader is None:
+            raise ValueError("DataLoader is required for validation")
+        if criterion is None:
+            raise ValueError("Loss criterion is required for validation")
+        
+        # Device configuration
+        if device is None:
+            device = next(model.parameters()).device if hasattr(model, 'parameters') else torch.device('cpu')
+        
+        # Initialize validation statistics
+        validation_stats = {
+            'start_time': start_time.isoformat(),
+            'epoch': epoch,
+            'validation_type': validation_type,
+            'config_applied': final_config,
+            'device': str(device),
+            'mixed_precision_enabled': mixed_precision,
+            'total_batches': len(loader),
+            'batch_size': getattr(loader, 'batch_size', 'unknown'),
+            'custom_functions': custom_functions,
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_dirs_available': list(run_specific_dirs.keys()) if run_specific_dirs else []
+            } if use_run_tracking else None
+        }
+        
+        # Set model to appropriate mode
+        if eval_mode:
+            model.eval()
+            logger.debug("Set model to eval mode")
+        
+        # Initialize metrics tracking
+        metrics_tracker = {
+            'losses': [],
+            'batch_times': [],
+            'memory_usage': [],
+            'reconstruction_errors': [],
+            'per_sample_mse': [],
+            'per_sample_mae': [],
+            'detailed_metrics': defaultdict(list) if detailed_metrics else None
+        }
+        
+        # Initialize validation variables
+        total_loss = 0.0
+        num_batches = 0
+        num_samples = 0
+        all_reconstruction_errors = []
+        all_predictions = []
+        all_targets = []
+        
+        # Initialize batch processing variables
+        validation_time = 0
+        forward_time = 0
+        metrics_time = 0
+        
+        # Set up alive-progress bar
+        if progress_bar:
+            try:
+                pbar_context = alive_bar(
+                    total=len(loader),
+                    title=f'{progress_bar_desc}\t',
+                    unit='batches',
+                    bar='smooth',
+                    spinner='dots',
+                    stats=False,
+                    monitor=True,
+                    elapsed=True,
+                    stats_end=False
+                )
+                pbar = pbar_context.__enter__()
+            except ImportError:
+                logger.warning("alive-progress not available, progress bar disabled")
+                pbar = None
+                pbar_context = None
+            except Exception as e:
+                logger.warning(f"Failed to initialize alive-progress bar: {e}")
+                pbar = None
+                pbar_context = None
+        else:
+            pbar = None
+            pbar_context = None
+        
+        # Ensure run-specific directories exist when saving
+        if use_run_tracking and run_specific_dirs:
+            for dir_type, dir_path in run_specific_dirs.items():
+                try:
+                    dir_path.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
+        
+        # Validation callbacks setup
+        validation_callbacks = custom_config.get('validation_callbacks', [])
+        
+        logger.info(f"Starting validation with {len(loader)} batches")
+        
+        # Determine validation context
+        if inference_mode and hasattr(torch, 'inference_mode'):
+            validation_context = torch.inference_mode()
+        elif no_grad:
+            validation_context = torch.no_grad()
+        else:
+            validation_context = nullcontext()
+        
+        # Main validation loop
+        with validation_context:
+            for batch_idx, batch in enumerate(loader):
+                batch_start_time = time.time()
+                
+                try:
+                    # Update progress bar with current batch processing status
+                    if pbar:
+                        pbar.text = f"Processing batch {batch_idx+1}/{len(loader)}"
+                    
+                    # Move data to device
+                    if isinstance(batch, (list, tuple)):
+                        inputs = batch[0].to(device, non_blocking=True)
+                        targets = batch[1].to(device, non_blocking=True) if len(batch) > 1 else inputs
+                    else:
+                        inputs = batch.to(device, non_blocking=True)
+                        targets = inputs
+                    
+                    # Input validation
+                    if validate_inputs:
+                        if check_finite:
+                            if not torch.isfinite(inputs).all():
+                                if error_handling == 'strict':
+                                    raise ValueError(f"Non-finite input values detected in batch {batch_idx}")
+                                else:
+                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite inputs")
+                                    continue
+                    
+                    # Apply input transforms if specified
+                    if input_transforms:
+                        for transform in input_transforms:
+                            inputs = transform(inputs)
+                    
+                    current_batch_size = inputs.size(0)
+                    num_samples += current_batch_size
+                    
+                    # Update progress bar with data loading status
+                    if pbar:
+                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Data loaded | Processing..."
+                    
+                    # Forward pass with mixed precision and timing
+                    forward_start_time = time.time()
+                    
+                    autocast_context = get_autocast_context(device, mixed_precision, autocast_enabled)
+                    with autocast_context:
+                        outputs = model(inputs)
+                        
+                        # CRITICAL: Ensure targets match outputs for loss calculation
+                        if targets.shape != outputs.shape:
+                            if hasattr(model, '__class__') and 'autoencoder' in model.__class__.__name__.lower():
+                                # For autoencoder, target should be input
+                                targets = inputs
+                                logger.debug("Set targets = inputs for autoencoder validation")
+                            else:
+                                # Try to reshape targets to match outputs
+                                if outputs.numel() == targets.numel():
+                                    targets = targets.view_as(outputs)
+                                    logger.debug(f"Reshaped targets from {targets.shape} to {outputs.shape}")
+                                else:
+                                    # Try to match batch size and feature dimensions
+                                    batch_size = outputs.size(0)
+                                    if len(outputs.shape) == 2:  # [batch_size, features]
+                                        if targets.size(0) == batch_size:
+                                            # Try to extract the correct number of features
+                                            target_features = outputs.size(1)
+                                            if targets.size(1) >= target_features:
+                                                targets = targets[:, :target_features]
+                                            else:
+                                                # Pad or repeat features if needed
+                                                targets = torch.cat([targets, targets[:, :target_features - targets.size(1)]], dim=1)
+                                        else:
+                                            # As last resort, use inputs as targets
+                                            targets = inputs
+                                            logger.warning(f"Using inputs as targets due to irreconcilable shape mismatch")
+                                    else:
+                                        # For other shapes, try to use inputs
+                                        targets = inputs
+                                        logger.warning(f"Complex shape mismatch, using inputs as targets")
+                            
+                            logger.debug(f"Fixed shape mismatch: outputs {outputs.shape}, targets {targets.shape}")
+                        
+                        # Calculate loss with proper error handling
+                        try:
+                            loss = criterion(outputs, targets)
+                        except RuntimeError as loss_error:
+                            logger.error(f"Loss calculation failed even after shape fixing: {loss_error}")
+                            logger.error(f"Final shapes - outputs: {outputs.shape}, targets: {targets.shape}")
+                            
+                            # Final attempt: force targets to match outputs exactly
+                            if 'autoencoder' in str(type(model)).lower():
+                                targets = inputs
+                            else:
+                                targets = outputs.detach().clone()  # Use model output as target (will give 0 loss)
+                            
+                            try:
+                                loss = criterion(outputs, targets)
+                                logger.warning("Used fallback target matching for loss calculation")
+                            except Exception as final_error:
+                                logger.error(f"Final loss calculation attempt failed: {final_error}")
+                                if handle_nan_outputs == 'skip':
+                                    logger.warning(f"Skipping batch {batch_idx} due to unresolvable loss calculation")
+                                    continue
+                                elif graceful_degradation:
+                                    # Create a dummy loss to continue
+                                    loss = torch.tensor(0.0, device=device, requires_grad=True)
+                                    logger.warning(f"Using dummy loss for batch {batch_idx}")
+                                else:
+                                    raise
+                    
+                    forward_end_time = time.time()
+                    forward_time += (forward_end_time - forward_start_time)
+                    
+                    # Output validation
+                    if output_validation:
+                        if check_finite:
+                            if not torch.isfinite(outputs).all():
+                                if handle_nan_outputs == 'error':
+                                    raise ValueError(f"Non-finite output values detected in batch {batch_idx}")
+                                elif handle_nan_outputs == 'skip':
+                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite outputs")
+                                    continue
+                                elif handle_nan_outputs == 'replace':
+                                    outputs = torch.nan_to_num(outputs, nan=0.0, posinf=1.0, neginf=0.0)
+                    
+                    # Update progress bar with forward pass completion
+                    if pbar:
+                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Forward pass completed | Calculating metrics..."
+                    
+                    # Calculate metrics with timing
+                    metrics_start_time = time.time()
+                    
+                    # Basic metrics
+                    total_loss += loss.item()
+                    num_batches += 1
+                    
+                    if per_sample_metrics:
+                        # Calculate per-sample reconstruction error (MSE)
+                        per_sample_mse = torch.mean((inputs - outputs)**2, dim=tuple(range(1, inputs.dim()))).cpu().numpy()
+                        metrics_tracker['per_sample_mse'].extend(per_sample_mse)
+                        all_reconstruction_errors.extend(per_sample_mse)
+                        
+                        # Calculate per-sample MAE
+                        if 'mae' in metrics_to_calculate:
+                            per_sample_mae = torch.mean(torch.abs(inputs - outputs), dim=tuple(range(1, inputs.dim()))).cpu().numpy()
+                            metrics_tracker['per_sample_mae'].extend(per_sample_mae)
+                    
+                    # Store predictions and targets for advanced analysis
+                    if feature_importance or save_predictions:
+                        all_predictions.append(outputs.cpu().numpy())
+                        all_targets.append(targets.cpu().numpy())
+                    
+                    # Custom metric calculation
+                    if custom_metric_fn:
+                        try:
+                            custom_metrics = custom_metric_fn(inputs, outputs, targets, loss)
+                            if detailed_metrics and metrics_tracker['detailed_metrics'] is not None:
+                                for metric_name, metric_value in custom_metrics.items():
+                                    metrics_tracker['detailed_metrics'][metric_name].append(metric_value)
+                            
+                            # Log custom metrics periodically
+                            if batch_idx % (log_frequency * 10) == 0 and verbose:
+                                logger.debug(f"Custom metrics @ batch {batch_idx}: {list(custom_metrics.keys())[:5]}")
+                        
+                        except Exception as e:
+                            logger.warning(f"Custom metric calculation failed at batch {batch_idx}: {e}")
+                            if error_handling == 'strict':
+                                raise RuntimeError(f"Custom metric function failed: {e}") from e
+                    
+                    # Detailed metrics calculation
+                    if detailed_metrics and batch_idx % 10 == 0:
+                        # Statistical metrics
+                        if statistical_metrics:
+                            reconstruction_error = torch.mean((inputs - outputs)**2)
+                            reconstruction_std = torch.std((inputs - outputs)**2)
+                            
+                            if metrics_tracker['detailed_metrics'] is not None:
+                                metrics_tracker['detailed_metrics']['reconstruction_mean'].append(reconstruction_error.item())
+                                metrics_tracker['detailed_metrics']['reconstruction_std'].append(reconstruction_std.item())
+                        
+                        # Distribution analysis
+                        if distribution_analysis:
+                            input_mean = torch.mean(inputs).item()
+                            output_mean = torch.mean(outputs).item()
+                            input_std = torch.std(inputs).item()
+                            output_std = torch.std(outputs).item()
+                            
+                            if metrics_tracker['detailed_metrics'] is not None:
+                                metrics_tracker['detailed_metrics']['input_mean'].append(input_mean)
+                                metrics_tracker['detailed_metrics']['output_mean'].append(output_mean)
+                                metrics_tracker['detailed_metrics']['input_std'].append(input_std)
+                                metrics_tracker['detailed_metrics']['output_std'].append(output_std)
+                    
+                    metrics_end_time = time.time()
+                    metrics_time += (metrics_end_time - metrics_start_time)
+                    
+                    # Store batch metrics
+                    if calculate_metrics:
+                        batch_time = time.time() - batch_start_time
+                        metrics_tracker['losses'].append(loss.item())
+                        metrics_tracker['batch_times'].append(batch_time)
+                        
+                        # Memory usage tracking
+                        if memory_monitoring and torch.cuda.is_available():
+                            memory_allocated = torch.cuda.memory_allocated(device) / 1024**2  # MB
+                            metrics_tracker['memory_usage'].append(memory_allocated)
+                    
+                    # Memory management
+                    if memory_efficient:
+                        if batch_idx % empty_cache_frequency == 0 and torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        
+                        if batch_idx % gc_collection_frequency == 0:
+                            gc.collect()
+                    
+                    # Update progress bar with metrics
+                    if pbar:
+                        current_loss_display = loss.item()
+                        avg_loss_display = total_loss / num_batches
+                        
+                        # Format the text for the progress bar with detailed status
+                        progress_text = (f"Batch {batch_idx+1}/{len(loader)} | Loss: {current_loss_display:.4f} | Avg: {avg_loss_display:.4f} | Samples: {num_samples:,} | Memory: {torch.cuda.memory_allocated(device)/1024**2:.0f}MB")
+                        
+                        # Update the progress bar text
+                        pbar.text = progress_text
+                        
+                        # Update the progress
+                        pbar()
+                    
+                    # Logging
+                    if batch_idx % log_frequency == 0 and batch_idx > 0:
+                        avg_loss = total_loss / num_batches
+                        
+                        if timing_analysis:
+                            logger.info(f"Validation batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f} | Forward: {forward_time/batch_idx:.3f}s | Metrics: {metrics_time/batch_idx:.3f}s")
+                        else:
+                            logger.info(f"Validation batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f}")
+                    
+                    # Execute validation callbacks
+                    for callback in validation_callbacks:
+                        try:
+                            callback(
+                                batch_idx=batch_idx,
+                                inputs=inputs,
+                                outputs=outputs,
+                                loss=loss.item(),
+                                model=model,
+                                metrics=metrics_tracker
+                            )
+                        except Exception as e:
+                            logger.warning(f"Validation callback execution failed: {e}")
+                    
+                except Exception as e:
+                    if continue_on_error:
+                        logger.error(f"Error in validation batch {batch_idx}: {e}")
+                        if error_handling == 'skip':
+                            continue
+                        elif error_handling == 'retry':
+                            retry_count = 0
+                            while retry_count < max_retries:
+                                try:
+                                    logger.info(f"Retrying validation batch {batch_idx}, attempt {retry_count + 1}")
+                                    # Re-process the batch (simplified retry logic)
+                                    break
+                                except Exception as retry_e:
+                                    retry_count += 1
+                                    logger.warning(f"Retry {retry_count} failed: {retry_e}")
+                            
+                            if retry_count >= max_retries:
+                                logger.error(f"Max retries exceeded for batch {batch_idx}")
+                                if graceful_degradation:
+                                    continue
+                                else:
+                                    raise
+                    else:
+                        raise RuntimeError(f"Validation failed on batch {batch_idx}: {e}") from e
+        
+        # Update progress bar for post-processing phase
+        if pbar:
+            pbar.text = "Validation completed | Calculating final metrics..."
+        
+        # Calculate final metrics
+        validation_end_time = time.time()
+        total_validation_time = validation_end_time - validation_start_time
+        avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
+        
+        # Convert reconstruction errors to numpy array
+        reconstruction_errors_array = np.array(all_reconstruction_errors)
+        
+        # Update progress bar for anomaly detection
+        if pbar and (anomaly_detection or threshold_analysis):
+            pbar.text = "Validation completed | Performing anomaly detection..."
+        
+        # Anomaly detection and threshold analysis
+        anomaly_results = {}
+        if anomaly_detection or threshold_analysis:
+            logger.info("Performing anomaly detection and threshold analysis")
+            
+            if len(reconstruction_errors_array) > 0:
+                # Calculate threshold based on method or custom function
+                if custom_threshold_fn:
+                    try:
+                        logger.debug(f"Using custom threshold function: {custom_threshold_fn.__name__}")
+                        threshold = custom_threshold_fn(reconstruction_errors_array)
+                        threshold_method_used = f'custom_{custom_threshold_fn.__name__}'
+                        threshold_method = threshold_method_used
+                        logger.info(f"Custom threshold calculated: {threshold:.6f}")
+                    except Exception as e:
+                        logger.warning(f"Custom threshold function failed: {e}, falling back to configured method")
+                        # Fallback to standard threshold calculation
+                        if threshold_method == 'percentile':
+                            threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
+                            threshold_method_used = 'percentile'
+                            logger.info(f"Falling back to configured method: {threshold_method_used}")
+                        elif threshold_method == 'mean_std':
+                            mean_error = np.mean(reconstruction_errors_array)
+                            std_error = np.std(reconstruction_errors_array)
+                            threshold = mean_error + 2 * std_error
+                            threshold_method_used = 'mean_std'
+                            logger.info(f"Falling back to configured method: {threshold_method_used}")
+                        else:
+                            threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
+                            threshold_method_used = 'percentile'
+                            logger.info(f"Falling back to configured method: {threshold_method_used}")
+                else:
+                    # Standard threshold calculation
+                    if threshold_method == 'percentile':
+                        threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
+                        threshold_method_used = 'percentile'
+                    elif threshold_method == 'mean_std':
+                        mean_error = np.mean(reconstruction_errors_array)
+                        std_error = np.std(reconstruction_errors_array)
+                        threshold = mean_error + 2 * std_error
+                        threshold_method_used = 'mean_std'
+                    elif threshold_method == 'iqr':
+                        Q1 = np.percentile(reconstruction_errors_array, 25)
+                        Q3 = np.percentile(reconstruction_errors_array, 75)
+                        IQR = Q3 - Q1
+                        threshold = Q3 + 1.5 * IQR
+                        threshold_method_used = 'iqr'
+                    else:
+                        threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
+                        #threshold_method_used = 'percentile_default'
+                        threshold_method_used = 'fixed_percentile'
+                
+                # Anomaly detection results
+                anomalies = reconstruction_errors_array > threshold
+                n_anomalies = np.sum(anomalies)
+                anomaly_rate = n_anomalies / len(reconstruction_errors_array) if len(reconstruction_errors_array) > 0 else 0
+                
+                anomaly_results = {
+                    'threshold': float(threshold),
+                    'threshold_method': threshold_method if threshold_method else threshold_method_used,
+                    'custom_threshold_used': custom_threshold_fn is not None,
+                    'n_anomalies': int(n_anomalies),
+                    'anomaly_rate': float(anomaly_rate),
+                    'anomaly_indices': np.where(anomalies)[0].tolist() if save_predictions else []
+                }
+            else:
+                logger.warning("No reconstruction errors available for anomaly detection")
+        
+        # Update progress bar for statistical analysis
+        if pbar and statistical_metrics:
+            pbar.text = "Validation completed | Performing statistical analysis..."
+        
+        # Statistical analysis
+        statistical_results = {}
+        if statistical_metrics and len(reconstruction_errors_array) > 0:
+            logger.info("Performing statistical analysis")
+            
+            # Basic statistics
+            statistical_results.update({
+                'mean_reconstruction_error': float(np.mean(reconstruction_errors_array)),
+                'std_reconstruction_error': float(np.std(reconstruction_errors_array)),
+                'min_reconstruction_error': float(np.min(reconstruction_errors_array)),
+                'max_reconstruction_error': float(np.max(reconstruction_errors_array)),
+                'median_reconstruction_error': float(np.median(reconstruction_errors_array)),
+                'q25_reconstruction_error': float(np.percentile(reconstruction_errors_array, 25)),
+                'q75_reconstruction_error': float(np.percentile(reconstruction_errors_array, 75))
+            })
+            
+            # Advanced statistical analysis
+            if statistical_tests and len(reconstruction_errors_array) > 10:
+                try:
+                    # Normality test
+                    normality_stat, normality_p = stats.normaltest(reconstruction_errors_array)
+                    statistical_results.update({
+                        'normality_test_statistic': float(normality_stat),
+                        'normality_test_pvalue': float(normality_p),
+                        'is_normal': normality_p > significance_level
+                    })
+                    
+                    # Skewness and kurtosis
+                    statistical_results.update({
+                        'skewness': float(stats.skew(reconstruction_errors_array)),
+                        'kurtosis': float(stats.kurtosis(reconstruction_errors_array))
+                    })
+                    
+                except Exception as e:
+                    logger.warning(f"Statistical tests failed: {e}")
+            
+            # Confidence interval
+            if confidence_interval < 1.0:
+                alpha = 1 - confidence_interval
+                ci_lower = np.percentile(reconstruction_errors_array, 100 * alpha / 2)
+                ci_upper = np.percentile(reconstruction_errors_array, 100 * (1 - alpha / 2))
+                statistical_results.update({
+                    f'ci_{confidence_interval}_lower': float(ci_lower),
+                    f'ci_{confidence_interval}_upper': float(ci_upper)
+                })
+        
+        # Outlier analysis
+        outlier_results = {}
+        if outlier_analysis and len(reconstruction_errors_array) > 0:
+            logger.info("Performing outlier analysis")
+            
+            # IQR-based outliers
+            Q1 = np.percentile(reconstruction_errors_array, 25)
+            Q3 = np.percentile(reconstruction_errors_array, 75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            
+            iqr_outliers = (reconstruction_errors_array < lower_bound) | (reconstruction_errors_array > upper_bound)
+            n_iqr_outliers = np.sum(iqr_outliers)
+            
+            outlier_results.update({
+                'iqr_outliers': int(n_iqr_outliers),
+                'iqr_outlier_rate': float(n_iqr_outliers / len(reconstruction_errors_array)),
+                'iqr_lower_bound': float(lower_bound),
+                'iqr_upper_bound': float(upper_bound)
+            })
+        
+        # Distributed metrics reduction
+        if distributed and reduce_metrics:
+            try:
+                # Reduce loss across processes
+                loss_tensor = torch.tensor(avg_loss, device=device)
+                dist.all_reduce(loss_tensor, op=dist.ReduceOp.SUM)
+                avg_loss = (loss_tensor / world_size).item()
+                
+                # Reduce sample count
+                samples_tensor = torch.tensor(num_samples, device=device)
+                dist.all_reduce(samples_tensor, op=dist.ReduceOp.SUM)
+                num_samples = samples_tensor.item()
+                
+                logger.info("Reduced metrics across distributed processes")
+                
+            except Exception as e:
+                logger.warning(f"Failed to reduce distributed metrics: {e}")
+        
+        # Update progress bar for custom analysis
+        if pbar and custom_analysis_fn:
+            pbar.text = "Validation completed | Performing custom analysis..."
+        
+        # Custom analysis
+        custom_analysis_results = {}
+        if custom_analysis_fn:
+            try:
+                logger.info(f"Performing custom analysis using: {custom_analysis_fn.__name__}")
+                
+                # Prepare data for analysis
+                predictions_array = np.concatenate(all_predictions) if all_predictions else None
+                targets_array = np.concatenate(all_targets) if all_targets else None
+                
+                # Execute custom analysis
+                custom_analysis_results = custom_analysis_fn(
+                    model=model,
+                    predictions=predictions_array,
+                    targets=targets_array,
+                    reconstruction_errors=reconstruction_errors_array,
+                    metrics_tracker=metrics_tracker
+                )
+                
+                # Log analysis summary
+                logger.info(f"Custom analysis completed: {len(custom_analysis_results)} result categories")
+                
+                # Log key findings if available
+                if 'model_health_score' in custom_analysis_results:
+                    logger.info(f"Model Health Score: {custom_analysis_results['model_health_score']:.2%}")
+                
+                if 'security_assessment' in custom_analysis_results:
+                    security = custom_analysis_results['security_assessment']
+                    logger.info(f"Security Readiness: {security.get('readiness', 'unknown')}")
+                    if security.get('risks'):
+                        logger.warning(f"Security Risks Detected: {len(security['risks'])}")
+                
+                # Store in comprehensive metrics
+                #comprehensive_metrics['custom_analysis_detailed'] = custom_analysis_results
+                custom_analysis_detailed = custom_analysis_results
+                
+            except Exception as e:
+                logger.error(f"Custom analysis failed: {e}")
+                logger.debug(traceback.format_exc())
+                custom_analysis_results = {
+                    'error': str(e),
+                    'error_type': type(e).__name__,
+                    'analysis_failed': True
+                }
+                
+                if error_handling == 'strict':
+                    raise RuntimeError(f"Custom analysis function failed: {e}") from e
+        
+        # Update progress bar for finalization
+        if pbar:
+            pbar.text = "Validation completed | Finalizing results..."
+        
+        # Comprehensive metrics dictionary
+        comprehensive_metrics = {
+            # Core metrics
+            'loss': avg_loss,
+            'epoch': epoch,
+            'validation_type': validation_type,
+            'num_batches': num_batches,
+            'num_samples': num_samples,
+            'total_validation_time': total_validation_time,
+            'avg_batch_time': total_validation_time / num_batches if num_batches > 0 else 0,
+            
+            # Basic reconstruction metrics
+            'mean_mse': float(np.mean(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
+            'std_mse': float(np.std(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
+            'min_mse': float(np.min(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
+            'max_mse': float(np.max(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
+            'samples_validated': len(reconstruction_errors_array),
+            
+            # Mixed precision information
+            'mixed_precision_enabled': mixed_precision,
+            'autocast_enabled': autocast_enabled,
+            
+            # Memory information
+            'memory_allocated_mb': torch.cuda.memory_allocated(device) / 1024**2 if torch.cuda.is_available() else 0,
+            'memory_reserved_mb': torch.cuda.memory_reserved(device) / 1024**2 if torch.cuda.is_available() else 0,
+            
+            # Performance metrics
+            'samples_per_second': num_samples / total_validation_time if total_validation_time > 0 else 0,
+            'batches_per_second': num_batches / total_validation_time if total_validation_time > 0 else 0,
+            
+            # Timing breakdown
+            'timing': {
+                'forward_time': forward_time,
+                'metrics_time': metrics_time,
+                'total_time': total_validation_time,
+                'avg_forward_time': forward_time / num_batches if num_batches > 0 else 0,
+                'avg_metrics_time': metrics_time / num_batches if num_batches > 0 else 0
+            },
+            
+            # Configuration info
+            'config_applied': final_config,
+            'device': str(device),
+            'distributed_validation': distributed,
+            
+            # Quality metrics
+            'validation_stable': not any(loss > 1000 for loss in metrics_tracker['losses'][-10:]) if metrics_tracker['losses'] else True,
+
+            # Custom analysis results
+            'custom_analysis_detailed': custom_analysis_detailed if custom_analysis_results else None,
+
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_directories': {
+                    k: str(v) for k, v in run_specific_dirs.items()
+                } if run_specific_dirs else None,
+                'validation_performed_for_run': run_id if use_run_tracking else None,
+                'is_run_specific_output': use_run_tracking and run_id is not None,
+                'epoch': epoch
+            } if use_run_tracking else None
+        }
+        
+        # Add tracked metrics
+        if calculate_metrics:
+            if metrics_tracker['losses']:
+                comprehensive_metrics.update({
+                    'loss_std': float(np.std(metrics_tracker['losses'])),
+                    'min_batch_loss': float(np.min(metrics_tracker['losses'])),
+                    'max_batch_loss': float(np.max(metrics_tracker['losses']))
+                })
+            
+            if metrics_tracker['batch_times']:
+                comprehensive_metrics.update({
+                    'avg_batch_time': float(np.mean(metrics_tracker['batch_times'])),
+                    'batch_time_std': float(np.std(metrics_tracker['batch_times']))
+                })
+            
+            if metrics_tracker['memory_usage']:
+                comprehensive_metrics.update({
+                    'avg_memory_usage_mb': float(np.mean(metrics_tracker['memory_usage'])),
+                    'max_memory_usage_mb': float(np.max(metrics_tracker['memory_usage']))
+                })
+        
+        # Add detailed metrics
+        if detailed_metrics and metrics_tracker['detailed_metrics']:
+            comprehensive_metrics['detailed_metrics'] = {}
+            for metric_name, values in metrics_tracker['detailed_metrics'].items():
+                if values:
+                    comprehensive_metrics['detailed_metrics'][metric_name] = {
+                        'mean': float(np.mean(values)),
+                        'std': float(np.std(values)),
+                        'min': float(np.min(values)),
+                        'max': float(np.max(values))
+                    }
+        
+        # Add anomaly detection results
+        if anomaly_results:
+            comprehensive_metrics['anomaly_detection'] = anomaly_results
+        
+        # Add statistical results
+        if statistical_results:
+            comprehensive_metrics['statistics'] = statistical_results
+        
+        # Add outlier results
+        if outlier_results:
+            comprehensive_metrics['outliers'] = outlier_results
+        
+        # Add custom analysis results
+        if custom_analysis_results:
+            comprehensive_metrics['custom_analysis'] = custom_analysis_results
+            
+            # Extract key metrics for top-level visibility
+            if 'model_health_score' in custom_analysis_results:
+                comprehensive_metrics['model_health_score'] = custom_analysis_results['model_health_score']
+            
+            if 'security_assessment' in custom_analysis_results:
+                comprehensive_metrics['security_readiness'] = custom_analysis_results['security_assessment'].get('readiness', 'unknown')
+        
+        # Save results if requested
+        if save_results:
+            # Determine results path with run tracking support
+            if use_run_tracking and run_id is not None:
+                # Use run-specific results directory if available
+                if 'results' in run_specific_dirs:
+                    results_dir = run_specific_dirs['results']
+                    # Ensure directory exists
+                    results_dir.mkdir(parents=True, exist_ok=True)
+                    results_path = results_dir / f"validation_results_epoch_{epoch}_{run_id}.json"
+                else:
+                    # Fallback to default location with run_id suffix
+                    results_dir = Path(__file__).resolve().parent / "results"
+                    results_dir.mkdir(parents=True, exist_ok=True)
+                    results_path = results_dir / f"validation_results_epoch_{epoch}_{run_id}.json"
+            else:
+                # Default behavior for standalone usage
+                results_dir = Path(results_path)
+                # Ensure directory exists
+                results_dir.mkdir(parents=True, exist_ok=True)
+                results_path = results_dir / f"validation_results_epoch_{epoch}.json"
+            
+            # Save JSON
+            try:
+                # Make metrics JSON serializable
+                serializable_metrics = {}
+                for key, value in comprehensive_metrics.items():
+                    try:
+                        json.dumps(value)
+                        serializable_metrics[key] = value
+                    except TypeError:
+                        serializable_metrics[key] = str(value)
+                
+                with open(results_path, 'w') as f:
+                    json.dump(serializable_metrics, f, indent=2)
+                logger.info(f"Saved validation results to {results_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save validation results: {e}")
+        
+        # Save predictions if requested
+        if save_predictions and all_predictions:
+            # Determine predictions path with run tracking support
+            if use_run_tracking and run_id is not None:
+                if 'results' in run_specific_dirs:
+                    predictions_dir = run_specific_dirs['results']
+                    # Ensure directory exists
+                    predictions_dir.mkdir(parents=True, exist_ok=True)
+                    predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}_{run_id}.npy"
+                else:
+                    # Fallback to default location with run_id suffix
+                    predictions_dir = Path(__file__).resolve().parent / "results"
+                    predictions_dir.mkdir(parents=True, exist_ok=True)
+                    predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}_{run_id}.npy"
+            else:
+                # Default behavior for standalone usage
+                predictions_dir = Path(results_path).parent
+                # Ensure directory exists
+                predictions_dir.mkdir(parents=True, exist_ok=True)
+                predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}.npy"
+            
+            try:
+                np.save(predictions_path, np.concatenate(all_predictions))
+                logger.info(f"Saved predictions to {predictions_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save predictions: {e}")
+        
+        # Log summary
+        logger.info("=" * 80)
+        logger.info(f"VALIDATION EPOCH {epoch if epoch is not None else 'N/A'} SUMMARY")
+        logger.info("=" * 80)
+        logger.info(f"Validation Type: {validation_type}")
+        logger.info(f"Average Loss: {avg_loss:.6f}")
+        logger.info(f"Batches Processed: {num_batches:,}")
+        logger.info(f"Samples Processed: {num_samples:,}")
+        logger.info(f"Total Time: {total_validation_time:.2f}s")
+        logger.info(f"Throughput: {comprehensive_metrics['samples_per_second']:.1f} samples/sec")
+        
+        if len(reconstruction_errors_array) > 0:
+            logger.info(f"Mean Reconstruction Error: {comprehensive_metrics['mean_mse']:.6f}")
+            logger.info(f"Std Reconstruction Error: {comprehensive_metrics['std_mse']:.6f}")
+        
+        if mixed_precision:
+            logger.info(f"Mixed Precision: Enabled")
+        
+        if torch.cuda.is_available():
+            logger.info(f"Memory: {comprehensive_metrics['memory_allocated_mb']:.1f}MB allocated")
+        
+        if anomaly_results:
+            logger.info(f"Anomalies Detected: {anomaly_results['n_anomalies']} ({anomaly_results['anomaly_rate']*100:.1f}%)")
+            logger.info(f"Anomaly Threshold: {anomaly_results['threshold']:.6f}")
+        
+        if timing_analysis:
+            timing = comprehensive_metrics['timing']
+            logger.info(f"Timing - Forward: {timing['forward_time']:.2f}s")
+            logger.info(f"Timing - Metrics: {timing['metrics_time']:.2f}s")
+        
+        logger.info("=" * 80)
+        
+        # Final progress bar update
+        if pbar:
+            pbar.text = f"Validation completed | Loss: {avg_loss:.4f} | Time: {total_validation_time:.1f}s"
+        
+        # Restore original logging level
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        return avg_loss, reconstruction_errors_array, comprehensive_metrics
+        
+    except Exception as e:
+        # Restore original logging level on error
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        error_msg = f"Validation failed: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        # Provide helpful error context
+        logger.error(f"Error occurred at epoch {epoch}, batch {batch_idx if 'batch_idx' in locals() else 'N/A'}")
+        logger.error(f"Configuration used: {final_config}")
+        
+        # Attempt graceful recovery if enabled
+        if graceful_degradation and 'num_batches' in locals() and num_batches > 0:
+            logger.warning("Attempting graceful recovery with partial results")
+            try:
+                # Return partial results
+                avg_loss = total_loss / num_batches if num_batches > 0 else float('inf')
+                partial_errors = np.array(all_reconstruction_errors)
+                partial_metrics = {
+                    'loss': avg_loss,
+                    'epoch': epoch,
+                    'num_batches': num_batches,
+                    'num_samples': num_samples,
+                    'error': str(e),
+                    'partial_results': True,
+                    'run_tracking': {
+                        'run_id': run_id,
+                        'run_number': run_number,
+                        'use_run_tracking': use_run_tracking
+                    } if use_run_tracking else None
+                }
+                
+                logger.warning(f"Returning partial results from {num_batches} processed batches")
+                return avg_loss, partial_errors, partial_metrics
+                
+            except Exception as recovery_e:
+                logger.error(f"Graceful recovery also failed: {recovery_e}")
+        
+        raise RuntimeError(error_msg) from e
+    
+    finally:
+        # Final cleanup
+        try:
+            if pbar_context:
+                pbar_context.__exit__(None, None, None)
+            
+            if memory_efficient:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+            
+            # Restore model to original training state if it was changed
+            if eval_mode and hasattr(model, 'training') and not model.training:
+                # Don't automatically restore to training mode - let caller decide
+                pass
+        except:
+            pass
+
+def calculate_threshold(
+    # Core Threshold Calculation Parameters
+    model: Optional[nn.Module] = None,
+    loader: Optional[DataLoader] = None,
+    data: Optional[Union[np.ndarray, torch.Tensor]] = None,
+    reconstruction_errors: Optional[np.ndarray] = None,
+    percentile: Optional[float] = None,
+    device: Optional[torch.device] = None,
+    
+    # Threshold Method Parameters
+    threshold_method: Optional[str] = None,
+    threshold_strategy: Optional[str] = None,
+    threshold_type: Optional[str] = None,
+    adaptive_threshold: Optional[bool] = None,
+    dynamic_threshold: Optional[bool] = None,
+    multi_threshold: Optional[bool] = None,
+    hierarchical_threshold: Optional[bool] = None,
+    
+    # Statistical Threshold Parameters
+    statistical_method: Optional[str] = None,
+    confidence_level: Optional[float] = None,
+    significance_level: Optional[float] = None,
+    z_score_threshold: Optional[float] = None,
+    iqr_multiplier: Optional[float] = None,
+    mad_multiplier: Optional[float] = None,
+    std_multiplier: Optional[float] = None,
+    contamination_rate: Optional[float] = None,
+    
+    # Percentile-based Parameters
+    percentile_method: Optional[str] = None,
+    percentile_range: Optional[Tuple[float, float]] = None,
+    multi_percentile: Optional[List[float]] = None,
+    percentile_interpolation: Optional[str] = None,
+    robust_percentile: Optional[bool] = None,
+    
+    # Distribution-based Parameters
+    distribution_type: Optional[str] = None,
+    distribution_params: Optional[Dict[str, float]] = None,
+    distribution_fit_method: Optional[str] = None,
+    use_empirical_distribution: Optional[bool] = None,
+    kernel_density_estimation: Optional[bool] = None,
+    kde_bandwidth: Optional[Union[str, float]] = None,
+    
+    # Machine Learning Threshold Parameters
+    ml_threshold_method: Optional[str] = None,
+    isolation_forest_contamination: Optional[float] = None,
+    local_outlier_factor_neighbors: Optional[int] = None,
+    one_class_svm_nu: Optional[float] = None,
+    one_class_svm_kernel: Optional[str] = None,
+    elliptic_envelope_contamination: Optional[float] = None,
+    
+    # Cross-validation Parameters
+    cross_validation_threshold: Optional[bool] = None,
+    cv_folds: Optional[int] = None,
+    cv_strategy: Optional[str] = None,
+    threshold_stability_analysis: Optional[bool] = None,
+    bootstrap_threshold: Optional[bool] = None,
+    bootstrap_samples: Optional[int] = None,
+    
+    # Time Series Threshold Parameters
+    temporal_threshold: Optional[bool] = None,
+    window_size: Optional[int] = None,
+    sliding_window: Optional[bool] = None,
+    seasonal_adjustment: Optional[bool] = None,
+    trend_adjustment: Optional[bool] = None,
+    change_point_detection: Optional[bool] = None,
+    
+    # Multi-modal Threshold Parameters
+    mixture_model_threshold: Optional[bool] = None,
+    n_components: Optional[int] = None,
+    mixture_type: Optional[str] = None,
+    component_weights: Optional[List[float]] = None,
+    
+    # Validation and Quality Parameters
+    validate_threshold: Optional[bool] = None,
+    threshold_validation_data: Optional[np.ndarray] = None,
+    quality_metrics: Optional[List[str]] = None,
+    stability_check: Optional[bool] = None,
+    sensitivity_analysis: Optional[bool] = None,
+    robustness_test: Optional[bool] = None,
+    
+    # Performance Parameters
+    performance_mode: Optional[str] = None,
+    batch_processing: Optional[bool] = None,
+    parallel_processing: Optional[bool] = None,
+    n_jobs: Optional[int] = None,
+    memory_efficient: Optional[bool] = None,
+    cache_results: Optional[bool] = None,
+    
+    # Data Processing Parameters
+    data_preprocessing: Optional[bool] = None,
+    outlier_removal: Optional[bool] = None,
+    outlier_method: Optional[str] = None,
+    data_transformation: Optional[str] = None,
+    normalization: Optional[str] = None,
+    scaling_method: Optional[str] = None,
+    
+    # Model Evaluation Parameters
+    eval_mode: Optional[bool] = None,
+    no_grad: Optional[bool] = None,
+    mixed_precision: Optional[bool] = None,
+    batch_size: Optional[int] = None,
+    model_ensemble: Optional[bool] = None,
+    ensemble_method: Optional[str] = None,
+    
+    # Advanced Analysis Parameters
+    feature_importance: Optional[bool] = None,
+    feature_weights: Optional[np.ndarray] = None,
+    weighted_threshold: Optional[bool] = None,
+    dimension_reduction: Optional[bool] = None,
+    dimension_reduction_method: Optional[str] = None,
+    n_components_pca: Optional[int] = None,
+    
+    # Uncertainty Quantification Parameters
+    uncertainty_estimation: Optional[bool] = None,
+    confidence_intervals: Optional[bool] = None,
+    prediction_intervals: Optional[bool] = None,
+    bayesian_threshold: Optional[bool] = None,
+    mcmc_samples: Optional[int] = None,
+    
+    # Multi-class Threshold Parameters
+    multi_class_threshold: Optional[bool] = None,
+    class_specific_thresholds: Optional[bool] = None,
+    class_weights: Optional[Dict[str, float]] = None,
+    threshold_per_class: Optional[Dict[str, float]] = None,
+    
+    # Cost-sensitive Parameters
+    cost_sensitive_threshold: Optional[bool] = None,
+    false_positive_cost: Optional[float] = None,
+    false_negative_cost: Optional[float] = None,
+    cost_matrix: Optional[np.ndarray] = None,
+    business_objective: Optional[str] = None,
+    
+    # Monitoring and Logging Parameters
+    verbose: Optional[bool] = None,
+    debug_mode: Optional[bool] = None,
+    log_level: Optional[str] = None,
+    progress_bar: Optional[bool] = None,
+    timing_analysis: Optional[bool] = None,
+    memory_profiling: Optional[bool] = None,
+    
+    # Export and Visualization Parameters
+    save_results: Optional[bool] = None,
+    results_path: Optional[str] = None,
+    save_threshold_analysis: Optional[bool] = None,
+    visualization: Optional[bool] = None,
+    plot_distribution: Optional[bool] = None,
+    plot_threshold: Optional[bool] = None,
+    plot_roc_curve: Optional[bool] = None,
+    
+    # Error Handling Parameters
+    error_handling: Optional[str] = None,
+    handle_edge_cases: Optional[bool] = None,
+    min_samples_required: Optional[int] = None,
+    fallback_threshold: Optional[float] = None,
+    graceful_degradation: Optional[bool] = None,
+    
+    # Experimental Parameters
+    experimental_methods: Optional[bool] = None,
+    deep_learning_threshold: Optional[bool] = None,
+    autoencoder_threshold: Optional[bool] = None,
+    gan_threshold: Optional[bool] = None,
+    
+    # System Parameters
+    random_state: Optional[int] = None,
+    reproducible: Optional[bool] = None,
+    deterministic: Optional[bool] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
+    
+    # Direct Configuration Override
+    config: Optional[Dict[str, Any]] = None,
+    threshold_config: Optional[Dict[str, Any]] = None,
+    
+    **kwargs
+) -> Tuple[Union[float, Dict[str, float]], Dict[str, Any]]:
+    
+    # Start timing
+    start_time = datetime.now()
+    
+    # Initialize configuration
+    if config is None:
+        try:
+            config = get_current_config() if 'get_current_config' in globals() else {}
+        except Exception:
+            config = {}
+    
+    # Apply threshold-specific configuration
+    if threshold_config:
+        config.setdefault('threshold', {}).update(threshold_config)
+    
+    # Apply all parameters to configuration
+    final_config = {}
+    
+    # Merge with existing config
+    final_config.update(config)
+    
+    # Apply individual parameters
+    params = locals().copy()
+    params.update(kwargs)
+    
+    # Remove non-parameter items
+    params_to_remove = {
+        'config', 'threshold_config', 'kwargs', 'start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
+        'nullcontext', 'nn', 'optim', 'DataLoader', 'stats', 'IsolationForest', 'LocalOutlierFactor', 'OneClassSVM', 'EllipticEnvelope', 'GaussianMixture'
+    }
+    
+    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
+    
+    # Organize parameters into logical sections
+    param_sections = {
+        'core_threshold': [
+            'percentile', 'threshold_method', 'threshold_strategy', 'threshold_type', 'adaptive_threshold', 'dynamic_threshold', 'multi_threshold', 'hierarchical_threshold'
+        ],
+        'statistical_methods': [
+            'statistical_method', 'confidence_level', 'significance_level', 'z_score_threshold', 'iqr_multiplier', 'mad_multiplier', 'std_multiplier', 'contamination_rate'
+        ],
+        'percentile_methods': [
+            'percentile_method', 'percentile_range', 'multi_percentile', 'percentile_interpolation', 'robust_percentile'
+        ],
+        'distribution_methods': [
+            'distribution_type', 'distribution_params', 'distribution_fit_method', 'use_empirical_distribution', 'kernel_density_estimation', 'kde_bandwidth'
+        ],
+        'ml_methods': [
+            'ml_threshold_method', 'isolation_forest_contamination', 'local_outlier_factor_neighbors', 'one_class_svm_nu', 'one_class_svm_kernel', 'elliptic_envelope_contamination'
+        ],
+        'cross_validation': [
+            'cross_validation_threshold', 'cv_folds', 'cv_strategy', 'threshold_stability_analysis', 'bootstrap_threshold', 'bootstrap_samples'
+        ],
+        'temporal': [
+            'temporal_threshold', 'window_size', 'sliding_window', 'seasonal_adjustment', 'trend_adjustment', 'change_point_detection'
+        ],
+        'multi_modal': [
+            'mixture_model_threshold', 'n_components', 'mixture_type', 'component_weights'
+        ],
+        'validation': [
+            'validate_threshold', 'threshold_validation_data', 'quality_metrics', 'stability_check', 'sensitivity_analysis', 'robustness_test'
+        ],
+        'performance': [
+            'performance_mode', 'batch_processing', 'parallel_processing', 'n_jobs', 'memory_efficient', 'cache_results'
+        ],
+        'data_processing': [
+            'data_preprocessing', 'outlier_removal', 'outlier_method', 'data_transformation', 'normalization', 'scaling_method'
+        ],
+        'model_evaluation': [
+            'eval_mode', 'no_grad', 'mixed_precision', 'batch_size', 'model_ensemble', 'ensemble_method'
+        ],
+        'advanced_analysis': [
+            'feature_importance', 'feature_weights', 'weighted_threshold', 'dimension_reduction', 'dimension_reduction_method', 'n_components_pca'
+        ],
+        'uncertainty': [
+            'uncertainty_estimation', 'confidence_intervals', 'prediction_intervals', 'bayesian_threshold', 'mcmc_samples'
+        ],
+        'multi_class': [
+            'multi_class_threshold', 'class_specific_thresholds', 'class_weights', 'threshold_per_class'
+        ],
+        'cost_sensitive': [
+            'cost_sensitive_threshold', 'false_positive_cost', 'false_negative_cost', 'cost_matrix', 'business_objective'
+        ],
+        'monitoring': [
+            'verbose', 'debug_mode', 'log_level', 'progress_bar', 'timing_analysis', 'memory_profiling'
+        ],
+        'export': [
+            'save_results', 'results_path', 'save_threshold_analysis', 'visualization', 'plot_distribution', 'plot_threshold', 'plot_roc_curve'
+        ],
+        'error_handling': [
+            'error_handling', 'handle_edge_cases', 'min_samples_required', 'fallback_threshold', 'graceful_degradation'
+        ],
+        'experimental': [
+            'experimental_methods', 'deep_learning_threshold', 'autoencoder_threshold', 'gan_threshold'
+        ],
+        'system': [
+            'random_state', 'reproducible', 'deterministic'
+        ],
+        'run_tracking': [
+            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
+        ]
+    }
+    
+    # Apply parameters to appropriate sections
+    for section, param_list in param_sections.items():
+        section_config = final_config.setdefault(section, {})
+        for param in param_list:
+            if param in cleaned_params:
+                section_config[param] = cleaned_params[param]
+    
+    # Core threshold parameters
+    core_config = final_config.setdefault('core_threshold', {})
+    percentile = core_config.setdefault('percentile', DEFAULT_PERCENTILE)
+    threshold_method = core_config.setdefault('threshold_method', 'percentile')
+    threshold_strategy = core_config.get('threshold_strategy')
+    threshold_type = core_config.get('threshold_type')
+    adaptive_threshold = core_config.setdefault('adaptive_threshold', True)
+    dynamic_threshold = core_config.setdefault('dynamic_threshold', False)
+    multi_threshold = core_config.setdefault('multi_threshold', False)
+    hierarchical_threshold = core_config.setdefault('hierarchical_threshold', False)
+    
+    # Statistical parameters
+    statistical_config = final_config.setdefault('statistical_methods', {})
+    statistical_method = statistical_config.setdefault('statistical_method', 'mean_std')
+    confidence_level = statistical_config.setdefault('confidence_level', 0.95)
+    significance_level = statistical_config.setdefault('significance_level', 0.05)
+    z_score_threshold = statistical_config.setdefault('z_score_threshold', 2.0)
+    iqr_multiplier = statistical_config.setdefault('iqr_multiplier', 1.5)
+    mad_multiplier = statistical_config.setdefault('mad_multiplier', 2.0)
+    std_multiplier = statistical_config.setdefault('std_multiplier', 2.0)
+    contamination_rate = statistical_config.setdefault('contamination_rate', 0.1)
+    
+    # Percentile parameters
+    percentile_config = final_config.setdefault('percentile_methods', {})
+    percentile_method = percentile_config.get('percentile_method')
+    percentile_range = percentile_config.get('percentile_range')
+    multi_percentile = percentile_config.get('multi_percentile')
+    percentile_interpolation = percentile_config.setdefault('percentile_interpolation', 'linear')
+    robust_percentile = percentile_config.setdefault('robust_percentile', False)
+    
+    # Distribution parameters
+    distribution_config = final_config.setdefault('distribution_methods', {})
+    distribution_type = distribution_config.setdefault('distribution_type', 'normal')
+    distribution_params = distribution_config.get('distribution_params')
+    distribution_fit_method = distribution_config.get('distribution_fit_method')
+    use_empirical_distribution = distribution_config.setdefault('use_empirical_distribution', False)
+    kernel_density_estimation = distribution_config.setdefault('kernel_density_estimation', False)
+    kde_bandwidth = distribution_config.setdefault('kde_bandwidth', 'scott')
+    
+    # ML parameters
+    ml_config = final_config.setdefault('ml_methods', {})
+    ml_threshold_method = ml_config.setdefault('ml_threshold_method', 'isolation_forest')
+    isolation_forest_contamination = ml_config.setdefault('isolation_forest_contamination', contamination_rate)
+    local_outlier_factor_neighbors = ml_config.setdefault('local_outlier_factor_neighbors', 20)
+    one_class_svm_nu = ml_config.setdefault('one_class_svm_nu', contamination_rate)
+    one_class_svm_kernel = ml_config.setdefault('one_class_svm_kernel', 'rbf')
+    elliptic_envelope_contamination = ml_config.setdefault('elliptic_envelope_contamination', contamination_rate)
+    
+    # Cross-validation parameters
+    cv_config = final_config.setdefault('cross_validation', {})
+    cross_validation_threshold = cv_config.setdefault('cross_validation_threshold', False)
+    cv_folds = cv_config.setdefault('cv_folds', 5)
+    cv_strategy = cv_config.get('cv_strategy')
+    threshold_stability_analysis = cv_config.setdefault('threshold_stability_analysis', False)
+    bootstrap_threshold = cv_config.setdefault('bootstrap_threshold', False)
+    bootstrap_samples = cv_config.setdefault('bootstrap_samples', 1000)
+    
+    # Temporal parameters
+    temporal_config = final_config.setdefault('temporal', {})
+    temporal_threshold = temporal_config.setdefault('temporal_threshold', False)
+    window_size = temporal_config.setdefault('window_size', 100)
+    sliding_window = temporal_config.setdefault('sliding_window', True)
+    seasonal_adjustment = temporal_config.setdefault('seasonal_adjustment', False)
+    trend_adjustment = temporal_config.setdefault('trend_adjustment', False)
+    change_point_detection = temporal_config.setdefault('change_point_detection', False)
+    
+    # Multi-modal parameters
+    multi_modal_config = final_config.setdefault('multi_modal', {})
+    mixture_model_threshold = multi_modal_config.setdefault('mixture_model_threshold', False)
+    n_components = multi_modal_config.setdefault('n_components', 2)
+    mixture_type = multi_modal_config.setdefault('mixture_type', 'gaussian')
+    component_weights = multi_modal_config.get('component_weights')
+    
+    # Validation parameters
+    validation_config = final_config.setdefault('validation', {})
+    validate_threshold = validation_config.setdefault('validate_threshold', False)
+    threshold_validation_data = validation_config.get('threshold_validation_data')
+    quality_metrics = validation_config.get('quality_metrics', [])
+    stability_check = validation_config.setdefault('stability_check', False)
+    sensitivity_analysis = validation_config.setdefault('sensitivity_analysis', False)
+    robustness_test = validation_config.setdefault('robustness_test', False)
+    
+    # Performance parameters
+    performance_config = final_config.setdefault('performance', {})
+    performance_mode = performance_config.setdefault('performance_mode', 'standard')
+    batch_processing = performance_config.setdefault('batch_processing', True)
+    parallel_processing = performance_config.setdefault('parallel_processing', False)
+    n_jobs = performance_config.setdefault('n_jobs', -1)
+    memory_efficient = performance_config.setdefault('memory_efficient', True)
+    cache_results = performance_config.setdefault('cache_results', False)
+    
+    # Data processing parameters
+    data_processing_config = final_config.setdefault('data_processing', {})
+    data_preprocessing = data_processing_config.setdefault('data_preprocessing', False)
+    outlier_removal = data_processing_config.setdefault('outlier_removal', False)
+    outlier_method = data_processing_config.setdefault('outlier_method', 'iqr')
+    data_transformation = data_processing_config.get('data_transformation')
+    normalization = data_processing_config.get('normalization')
+    scaling_method = data_processing_config.get('scaling_method')
+    
+    # Model evaluation parameters
+    model_config = final_config.setdefault('model_evaluation', {})
+    eval_mode = model_config.setdefault('eval_mode', True)
+    no_grad = model_config.setdefault('no_grad', True)
+    mixed_precision = model_config.setdefault('mixed_precision', torch.cuda.is_available())
+    batch_size = model_config.setdefault('batch_size', 32)
+    model_ensemble = model_config.setdefault('model_ensemble', False)
+    ensemble_method = model_config.get('ensemble_method')
+    
+    # Advanced analysis parameters
+    advanced_config = final_config.setdefault('advanced_analysis', {})
+    feature_importance = advanced_config.setdefault('feature_importance', False)
+    feature_weights = advanced_config.get('feature_weights')
+    weighted_threshold = advanced_config.setdefault('weighted_threshold', False)
+    dimension_reduction = advanced_config.setdefault('dimension_reduction', False)
+    dimension_reduction_method = advanced_config.get('dimension_reduction_method')
+    n_components_pca = advanced_config.setdefault('n_components_pca', 2)
+    
+    # Uncertainty parameters
+    uncertainty_config = final_config.setdefault('uncertainty', {})
+    uncertainty_estimation = uncertainty_config.setdefault('uncertainty_estimation', False)
+    confidence_intervals = uncertainty_config.setdefault('confidence_intervals', False)
+    prediction_intervals = uncertainty_config.setdefault('prediction_intervals', False)
+    bayesian_threshold = uncertainty_config.setdefault('bayesian_threshold', False)
+    mcmc_samples = uncertainty_config.setdefault('mcmc_samples', 1000)
+    
+    # Multi-class parameters
+    multi_class_config = final_config.setdefault('multi_class', {})
+    multi_class_threshold = multi_class_config.setdefault('multi_class_threshold', False)
+    class_specific_thresholds = multi_class_config.setdefault('class_specific_thresholds', False)
+    class_weights = multi_class_config.get('class_weights')
+    threshold_per_class = multi_class_config.get('threshold_per_class')
+    
+    # Cost-sensitive parameters
+    cost_config = final_config.setdefault('cost_sensitive', {})
+    cost_sensitive_threshold = cost_config.setdefault('cost_sensitive_threshold', False)
+    false_positive_cost = cost_config.setdefault('false_positive_cost', 1.0)
+    false_negative_cost = cost_config.setdefault('false_negative_cost', 1.0)
+    cost_matrix = cost_config.get('cost_matrix')
+    business_objective = cost_config.get('business_objective')
+    
+    # Monitoring parameters
+    monitoring_config = final_config.setdefault('monitoring', {})
+    verbose = monitoring_config.setdefault('verbose', False)
+    debug_mode = monitoring_config.setdefault('debug_mode', False)
+    log_level = monitoring_config.get('log_level')
+    progress_bar = monitoring_config.setdefault('progress_bar', True)
+    timing_analysis = monitoring_config.setdefault('timing_analysis', False)
+    memory_profiling = monitoring_config.setdefault('memory_profiling', False)
+    
+    # Export parameters
+    export_config = final_config.setdefault('export', {})
+    save_results = export_config.setdefault('save_results', False)
+    results_path = export_config.setdefault('results_path', './threshold_results')
+    save_threshold_analysis = export_config.setdefault('save_threshold_analysis', True)
+    visualization = export_config.setdefault('visualization', False)
+    plot_distribution = export_config.setdefault('plot_distribution', True)
+    plot_threshold = export_config.setdefault('plot_threshold', True)
+    plot_roc_curve = export_config.setdefault('plot_roc_curve', False)
+    
+    # Error handling parameters
+    error_config = final_config.setdefault('error_handling', {})
+    error_handling = error_config.setdefault('error_handling', 'strict')
+    handle_edge_cases = error_config.setdefault('handle_edge_cases', True)
+    min_samples_required = error_config.setdefault('min_samples_required', 10)
+    fallback_threshold = error_config.setdefault('fallback_threshold', 0.1)
+    graceful_degradation = error_config.setdefault('graceful_degradation', True)
+    
+    # Experimental parameters
+    experimental_config = final_config.setdefault('experimental', {})
+    experimental_methods = experimental_config.setdefault('experimental_methods', False)
+    deep_learning_threshold = experimental_config.setdefault('deep_learning_threshold', False)
+    autoencoder_threshold = experimental_config.setdefault('autoencoder_threshold', False)
+    gan_threshold = experimental_config.setdefault('gan_threshold', False)
+    
+    # System parameters
+    system_config = final_config.setdefault('system', {})
+    random_state = system_config.setdefault('random_state', 42)
+    reproducible = system_config.setdefault('reproducible', True)
+    deterministic = system_config.setdefault('deterministic', False)
+    
+    # Run tracking parameters
+    run_tracking_config = final_config.setdefault('run_tracking', {})
+    run_id = run_tracking_config.get('run_id', run_id)
+    run_number = run_tracking_config.get('run_number', run_number)
+    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+
+    # Set up logging level
+    if verbose:
+        original_level = logger.level
+        logger.setLevel(logging.INFO)
+    
+    logger.info(f"Starting threshold calculation using method: {threshold_method}")
+    
+    # Initialize variables for cleanup
+    pbar = None
+    
+    try:
+        # Initialize calculation statistics
+        calculation_stats = {
+            'start_time': start_time.isoformat(),
+            'threshold_method': threshold_method,
+            'config_applied': final_config,
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_dirs_available': list(run_specific_dirs.keys()) if run_specific_dirs else []
+            } if use_run_tracking else None
+        }
+        
+        # Set random seed for reproducibility
+        if reproducible:
+            np.random.seed(random_state)
+            if torch.cuda.is_available():
+                torch.manual_seed(random_state)
+        
+        # Device configuration
+        if device is None:
+            if model is not None:
+                device = next(model.parameters()).device
+            else:
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        # Set up main progress bar for the entire threshold calculation process
+        if progress_bar:
+            try:
+                pbar_context = alive_bar(
+                    title='Threshold Calculation\t',
+                    bar='smooth',
+                    spinner='dots',
+                    stats=False,
+                    monitor=True,
+                    elapsed=True,
+                    stats_end=False
+                )
+                pbar = pbar_context.__enter__()  # Get the actual progress bar iterator
+            except ImportError:
+                logger.warning("alive-progress not available, progress bar disabled")
+                pbar = None
+                pbar_context = None
+            except Exception as e:
+                logger.warning(f"Failed to initialize alive-progress bar: {e}")
+                pbar = None
+                pbar_context = None
+        
+        # Ensure run-specific directories exist when saving
+        if use_run_tracking and run_specific_dirs:
+            for dir_type, dir_path in run_specific_dirs.items():
+                try:
+                    dir_path.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
+        
+        # Data preparation and validation
+        if pbar:
+            pbar.text = "Preparing and validating input data..."
+        logger.info("Preparing and validating input data")
+        
+        mse_values = None
+        data_source = None
+        
+        # Extract reconstruction errors from various sources
+        if reconstruction_errors is not None:
+            mse_values = np.array(reconstruction_errors)
+            data_source = "provided_reconstruction_errors"
+            logger.debug(f"Using provided reconstruction errors: {len(mse_values)} samples")
+            
+        elif data is not None and model is not None:
+            # Calculate reconstruction errors from data and model
+            if pbar:
+                pbar.text = "Calculating reconstruction errors from model and data..."
+            logger.info("Calculating reconstruction errors from model and data")
+            data_source = "calculated_from_model"
+            
+            if eval_mode:
+                model.eval()
+            
+            mse_list = []
+            
+            # Convert data to tensor if needed
+            if isinstance(data, np.ndarray):
+                data_tensor = torch.tensor(data, dtype=torch.float32)
+            else:
+                data_tensor = data
+            
+            # Batch processing for memory efficiency
+            if batch_processing:
+                batch_size = model_config.get('batch_size', 32)
+                n_samples = len(data_tensor)
+                total_batches = n_samples // batch_size + 1
+                
+                context = torch.no_grad() if no_grad else nullcontext()
+                
+                with context:
+                    for i in range(0, n_samples, batch_size):
+                        current_batch = i // batch_size + 1
+                        
+                        # Update progress bar with batch processing status
+                        if pbar:
+                            progress_text = (f"Processing batch {current_batch}/{total_batches} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}")
+                            pbar.text = progress_text
+                        
+                        batch_data = data_tensor[i:i+batch_size].to(device)
+                        
+                        # Mixed precision inference
+                        autocast_context = get_autocast_context(device, mixed_precision, True)
+                        with autocast_context:
+                            outputs = model(batch_data)
+                        
+                        # Calculate MSE per sample with proper shape handling
+                        if outputs.shape != batch_data.shape:
+                            if outputs.numel() == batch_data.numel():
+                                outputs = outputs.view_as(batch_data)
+                            else:
+                                # For autoencoders, ensure output matches input
+                                min_features = min(outputs.size(-1), batch_data.size(-1))
+                                batch_data_adjusted = batch_data[..., :min_features]
+                                outputs_adjusted = outputs[..., :min_features]
+                                outputs = outputs_adjusted
+                                batch_data = batch_data_adjusted
+                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
+                            if 'batch_mse' not in locals():
+                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
+                        else:
+                            batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
+                        mse_list.extend(batch_mse)
+                        
+                        # Memory management
+                        if memory_efficient and torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                
+                mse_values = np.array(mse_list)
+                
+            else:
+                # Process all data at once
+                data_tensor = data_tensor.to(device)
+                
+                context = torch.no_grad() if no_grad else nullcontext()
+                
+                with context:
+                    autocast_context = get_autocast_context(device, mixed_precision, True)
+                    with autocast_context:
+                        outputs = model(data_tensor)
+                    
+                    # Calculate MSE per sample with proper shape handling
+                    if data_tensor.shape != outputs.shape:
+                        if outputs.numel() == data_tensor.numel():
+                            outputs = outputs.view_as(data_tensor)
+                        else:
+                            min_features = min(outputs.size(-1), data_tensor.size(-1))
+                            outputs_adjusted = outputs[..., :min_features]
+                            outputs = outputs_adjusted
+                            data_tensor_adjusted = data_tensor[..., :min_features]
+                            data_tensor = data_tensor_adjusted
+                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
+                        if 'batch_mse' not in locals():
+                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
+                    else:
+                        batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
+                    mse_list.extend(batch_mse)
+                    
+                    if memory_efficient and torch.cuda.is_available():
+                        torch.cuda.empty_cache
+                    
+                    if 'mse_list' in locals():
+                        mse_values = np.array(mse_list)
+                    else:
+                        mse_values = batch_mse
+            
+        elif loader is not None and model is not None:
+            # Calculate reconstruction errors from DataLoader
+            if pbar:
+                pbar.text = "Calculating reconstruction errors from DataLoader..."
+            logger.info("Calculating reconstruction errors from DataLoader")
+            data_source = "calculated_from_dataloader"
+            
+            if eval_mode:
+                model.eval()
+            
+            mse_list = []
+            context = torch.no_grad() if no_grad else nullcontext()
+            
+            with context:
+                for batch_idx, batch in enumerate(loader):
+                    # Update progress bar with DataLoader processing status
+                    if pbar:
+                        progress_text = (f"Processing batch {batch_idx+1}/{len(loader)} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}")
+                        pbar.text = progress_text
+                    
+                    if isinstance(batch, (list, tuple)):
+                        inputs = batch[0].to(device)
+                    else:
+                        inputs = batch.to(device)
+                    
+                    autocast_context = get_autocast_context(device, mixed_precision, True)
+                    with autocast_context:
+                        outputs = model(inputs)
+                    
+                    batch_mse = torch.mean((inputs - outputs)**2, dim=tuple(range(1, inputs.dim()))).cpu().numpy()
+                    mse_list.extend(batch_mse)
+                    
+                    # Memory management
+                    if memory_efficient and torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+            
+            mse_values = np.array(mse_list)
+            
+        else:
+            raise ValueError("Must provide either reconstruction_errors, or (model and data), or (model and loader)")
+        
+        # Validate data
+        if mse_values is None or len(mse_values) == 0:
+            raise ValueError("No reconstruction errors available for threshold calculation")
+        
+        if len(mse_values) < min_samples_required:
+            if graceful_degradation:
+                logger.warning(f"Only {len(mse_values)} samples available, less than minimum {min_samples_required}")
+                logger.warning(f"Using fallback threshold: {fallback_threshold}")
+                return fallback_threshold, {'method': 'fallback', 'samples': len(mse_values)}
+            else:
+                raise ValueError(f"Insufficient samples: {len(mse_values)}, minimum required: {min_samples_required}")
+        
+        calculation_stats['n_samples'] = len(mse_values)
+        calculation_stats['data_source'] = data_source
+        
+        # Data preprocessing if requested
+        if data_preprocessing:
+            if pbar:
+                pbar.text = "Applying data preprocessing..."
+            logger.info("Applying data preprocessing")
+            
+            # Remove outliers if requested
+            if outlier_removal:
+                original_size = len(mse_values)
+                
+                if outlier_method == 'iqr':
+                    Q1 = np.percentile(mse_values, 25)
+                    Q3 = np.percentile(mse_values, 75)
+                    IQR = Q3 - Q1
+                    lower_bound = Q1 - 1.5 * IQR
+                    upper_bound = Q3 + 1.5 * IQR
+                    mse_values = mse_values[(mse_values >= lower_bound) & (mse_values <= upper_bound)]
+                elif outlier_method == 'zscore':
+                    z_scores = np.abs(stats.zscore(mse_values))
+                    mse_values = mse_values[z_scores < 3]
+                
+                logger.info(f"Outlier removal: {original_size} -> {len(mse_values)} samples")
+            
+            # Apply data transformation
+            if data_transformation == 'log':
+                mse_values = np.log(mse_values + 1e-8)
+            elif data_transformation == 'sqrt':
+                mse_values = np.sqrt(mse_values)
+            elif data_transformation == 'box_cox':
+                try:
+                    mse_values, lambda_param = stats.boxcox(mse_values + 1e-8)
+                    calculation_stats['box_cox_lambda'] = lambda_param
+                except Exception as e:
+                    logger.warning(f"Box-Cox transformation failed: {e}")
+        
+        # Calculate basic statistics
+        if pbar:
+            pbar.text = "Calculating basic statistics..."
+        
+        basic_stats = {
+            'mean': float(np.mean(mse_values)),
+            'std': float(np.std(mse_values)),
+            'min': float(np.min(mse_values)),
+            'max': float(np.max(mse_values)),
+            'median': float(np.median(mse_values)),
+            'q25': float(np.percentile(mse_values, 25)),
+            'q75': float(np.percentile(mse_values, 75)),
+            'skewness': float(stats.skew(mse_values)),
+            'kurtosis': float(stats.kurtosis(mse_values))
+        }
+        
+        calculation_stats['basic_statistics'] = basic_stats
+        
+        # Main threshold calculation based on method
+        threshold_results = {}
+        
+        if threshold_method == 'percentile':
+            if pbar:
+                pbar.text = f"Calculating percentile-based threshold: P{percentile}..."
+            logger.info(f"Calculating percentile-based threshold: P{percentile}")
+            
+            threshold = np.percentile(mse_values, percentile, interpolation=percentile_interpolation)
+            
+            # Multi-percentile analysis if requested
+            if multi_percentile:
+                multi_thresholds = {}
+                for p in multi_percentile:
+                    multi_thresholds[f'P{p}'] = float(np.percentile(mse_values, p, interpolation=percentile_interpolation))
+                threshold_results['multi_percentile_thresholds'] = multi_thresholds
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'percentile',
+                'percentile_used': percentile,
+                'interpolation': percentile_interpolation
+            })
+            
+        elif threshold_method == 'statistical':
+            if pbar:
+                pbar.text = f"Calculating statistical threshold using: {statistical_method}..."
+            logger.info(f"Calculating statistical threshold using: {statistical_method}")
+            
+            if statistical_method == 'mean_std':
+                threshold = basic_stats['mean'] + std_multiplier * basic_stats['std']
+            elif statistical_method == 'median_mad':
+                mad = np.median(np.abs(mse_values - basic_stats['median']))
+                threshold = basic_stats['median'] + mad_multiplier * mad
+                threshold_results['mad'] = float(mad)
+            elif statistical_method == 'iqr':
+                IQR = basic_stats['q75'] - basic_stats['q25']
+                threshold = basic_stats['q75'] + iqr_multiplier * IQR
+                threshold_results['iqr'] = float(IQR)
+            elif statistical_method == 'z_score':
+                threshold = basic_stats['mean'] + z_score_threshold * basic_stats['std']
+            elif statistical_method == 'modified_z_score':
+                mad = np.median(np.abs(mse_values - basic_stats['median']))
+                modified_z_scores = 0.6745 * (mse_values - basic_stats['median']) / mad
+                threshold = basic_stats['median'] + z_score_threshold * mad / 0.6745
+                threshold_results['modified_z_mad'] = float(mad)
+            else:
+                threshold = basic_stats['mean'] + 2 * basic_stats['std']
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'statistical',
+                'statistical_method': statistical_method,
+                'multiplier_used': std_multiplier if statistical_method == 'mean_std' else iqr_multiplier
+            })
+            
+        elif threshold_method == 'distribution':
+            if pbar:
+                pbar.text = f"Calculating distribution-based threshold using: {distribution_type}..."
+            logger.info(f"Calculating distribution-based threshold using: {distribution_type}")
+            
+            if distribution_type == 'normal':
+                # Fit normal distribution
+                mu, sigma = stats.norm.fit(mse_values)
+                threshold = stats.norm.ppf(confidence_level, mu, sigma)
+                threshold_results.update({
+                    'mu': float(mu),
+                    'sigma': float(sigma),
+                    'distribution_params': {'mu': mu, 'sigma': sigma}
+                })
+                
+            elif distribution_type == 'gamma':
+                # Fit gamma distribution
+                shape, loc, scale = stats.gamma.fit(mse_values)
+                threshold = stats.gamma.ppf(confidence_level, shape, loc, scale)
+                threshold_results.update({
+                    'shape': float(shape),
+                    'loc': float(loc),
+                    'scale': float(scale),
+                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
+                })
+                
+            elif distribution_type == 'lognorm':
+                # Fit lognormal distribution
+                shape, loc, scale = stats.lognorm.fit(mse_values)
+                threshold = stats.lognorm.ppf(confidence_level, shape, loc, scale)
+                threshold_results.update({
+                    'shape': float(shape),
+                    'loc': float(loc),
+                    'scale': float(scale),
+                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
+                })
+                
+            elif distribution_type == 'exponential':
+                # Fit exponential distribution
+                loc, scale = stats.expon.fit(mse_values)
+                threshold = stats.expon.ppf(confidence_level, loc, scale)
+                threshold_results.update({
+                    'loc': float(loc),
+                    'scale': float(scale),
+                    'distribution_params': {'loc': loc, 'scale': scale}
+                })
+                
+            else:
+                # Default to normal distribution
+                mu, sigma = stats.norm.fit(mse_values)
+                threshold = stats.norm.ppf(confidence_level, mu, sigma)
+                threshold_results['distribution_params'] = {'mu': mu, 'sigma': sigma}
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'distribution',
+                'distribution_type': distribution_type,
+                'confidence_level': confidence_level
+            })
+            
+        elif threshold_method == 'ml':
+            if pbar:
+                pbar.text = f"Calculating ML-based threshold using: {ml_threshold_method}..."
+            logger.info(f"Calculating ML-based threshold using: {ml_threshold_method}")
+            
+            # Reshape data for sklearn
+            X = mse_values.reshape(-1, 1)
+            
+            if ml_threshold_method == 'isolation_forest':
+                clf = IsolationForest(contamination=isolation_forest_contamination, random_state=random_state)
+                clf.fit(X)
+                
+                # Get decision scores
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, (1 - isolation_forest_contamination) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'contamination': isolation_forest_contamination,
+                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
+                })
+                
+            elif ml_threshold_method == 'local_outlier_factor':
+                clf = LocalOutlierFactor(n_neighbors=local_outlier_factor_neighbors, contamination=contamination_rate)
+                outlier_labels = clf.fit_predict(X)
+                
+                # Get LOF scores
+                lof_scores = -clf.negative_outlier_factor_
+                threshold = np.percentile(lof_scores, (1 - contamination_rate) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'n_neighbors': local_outlier_factor_neighbors,
+                    'contamination': contamination_rate,
+                    'lof_scores_range': [float(np.min(lof_scores)), float(np.max(lof_scores))]
+                })
+                
+            elif ml_threshold_method == 'one_class_svm':
+                clf = OneClassSVM(nu=one_class_svm_nu, kernel=one_class_svm_kernel)
+                clf.fit(X)
+                
+                # Get decision scores
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, one_class_svm_nu * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'nu': one_class_svm_nu,
+                    'kernel': one_class_svm_kernel,
+                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
+                })
+                
+            elif ml_threshold_method == 'elliptic_envelope':
+                clf = EllipticEnvelope(contamination=elliptic_envelope_contamination, random_state=random_state)
+                clf.fit(X)
+                
+                # Get Mahalanobis distances
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, (1 - elliptic_envelope_contamination) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'contamination': elliptic_envelope_contamination,
+                    'mahalanobis_distances_range': [float(np.min(scores)), float(np.max(scores))]
+                })
+                
+            else:
+                # Fallback to isolation forest
+                clf = IsolationForest(contamination=contamination_rate, random_state=random_state)
+                clf.fit(X)
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, (1 - contamination_rate) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': 'isolation_forest_fallback',
+                    'contamination': contamination_rate
+                })
+                
+        elif threshold_method == 'mixture':
+            if pbar:
+                pbar.text = "Calculating mixture model threshold..."
+            logger.info("Calculating mixture model threshold")
+            
+            if mixture_type == 'gaussian':
+                # Fit Gaussian Mixture Model
+                gmm = GaussianMixture(n_components=n_components, random_state=random_state)
+                gmm.fit(mse_values.reshape(-1, 1))
+                
+                # Get component with highest mean (anomaly component)
+                component_means = gmm.means_.flatten()
+                anomaly_component = np.argmax(component_means)
+                
+                # Calculate threshold based on anomaly component
+                anomaly_mean = component_means[anomaly_component]
+                anomaly_std = np.sqrt(gmm.covariances_[anomaly_component].flatten()[0])
+                
+                threshold = anomaly_mean - 2 * anomaly_std  # Conservative threshold
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'mixture',
+                    'mixture_type': mixture_type,
+                    'n_components': n_components,
+                    'component_means': component_means.tolist(),
+                    'component_weights': gmm.weights_.tolist(),
+                    'anomaly_component': int(anomaly_component)
+                })
+            else:
+                # Fallback to percentile method
+                threshold = np.percentile(mse_values, percentile)
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'mixture_fallback_percentile',
+                    'percentile_used': percentile
+                })
+                
+        elif threshold_method == 'adaptive':
+            if pbar:
+                pbar.text = "Calculating adaptive threshold..."
+            logger.info("Calculating adaptive threshold")
+            
+            # Calculate multiple thresholds and select based on data characteristics
+            percentile_thresh = np.percentile(mse_values, percentile)
+            statistical_thresh = basic_stats['mean'] + 2 * basic_stats['std']
+            iqr_thresh = basic_stats['q75'] + 1.5 * (basic_stats['q75'] - basic_stats['q25'])
+            
+            # Selection based on distribution characteristics
+            if basic_stats['skewness'] > 1:  # Right-skewed
+                threshold = percentile_thresh
+                method_used = 'percentile_skewed'
+            elif basic_stats['kurtosis'] > 3:  # Heavy-tailed
+                threshold = iqr_thresh
+                method_used = 'iqr_heavy_tailed'
+            else:  # Approximately normal
+                threshold = statistical_thresh
+                method_used = 'statistical_normal'
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'adaptive',
+                'adaptive_method_used': method_used,
+                'candidate_thresholds': {
+                    'percentile': float(percentile_thresh),
+                    'statistical': float(statistical_thresh),
+                    'iqr': float(iqr_thresh)
+                },
+                'selection_criteria': {
+                    'skewness': basic_stats['skewness'],
+                    'kurtosis': basic_stats['kurtosis']
+                }
+            })
+            
+        else:
+            # Default to percentile method
+            logger.warning(f"Unknown threshold method '{threshold_method}', using percentile")
+            threshold = np.percentile(mse_values, percentile)
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'percentile_default',
+                'percentile_used': percentile
+            })
+        
+        # Cross-validation if requested
+        cv_results = {}
+        if cross_validation_threshold:
+            if pbar:
+                pbar.text = "Performing cross-validation threshold analysis..."
+            logger.info("Performing cross-validation threshold analysis")
+            
+            fold_thresholds = []
+            
+            # Simple k-fold validation
+            fold_size = len(mse_values) // cv_folds
+            for fold in range(cv_folds):
+                start_idx = fold * fold_size
+                end_idx = start_idx + fold_size if fold < cv_folds - 1 else len(mse_values)
+                fold_data = mse_values[start_idx:end_idx]
+                
+                # Calculate threshold for this fold
+                fold_threshold = np.percentile(fold_data, percentile)
+                fold_thresholds.append(fold_threshold)
+                
+                # Update progress bar with CV status
+                if pbar:
+                    progress_text = (f"Cross-validation: Fold {fold+1}/{cv_folds} | Threshold: {fold_threshold:.4f} | Samples: {len(fold_data):,}")
+                    pbar.text = progress_text
+            
+            cv_results = {
+                'cv_folds': cv_folds,
+                'fold_thresholds': [float(t) for t in fold_thresholds],
+                'cv_mean_threshold': float(np.mean(fold_thresholds)),
+                'cv_std_threshold': float(np.std(fold_thresholds)),
+                'cv_min_threshold': float(np.min(fold_thresholds)),
+                'cv_max_threshold': float(np.max(fold_thresholds))
+            }
+        
+        # Bootstrap confidence intervals if requested
+        bootstrap_results = {}
+        if bootstrap_threshold:
+            if pbar:
+                pbar.text = "Performing bootstrap confidence interval analysis..."
+            logger.info("Performing bootstrap confidence interval analysis")
+            
+            bootstrap_thresholds = []
+            
+            for i in range(bootstrap_samples):
+                # Bootstrap sample
+                bootstrap_data = np.random.choice(mse_values, size=len(mse_values), replace=True)
+                bootstrap_threshold = np.percentile(bootstrap_data, percentile)
+                bootstrap_thresholds.append(bootstrap_threshold)
+                
+                # Update progress bar every 100 samples to avoid performance hit
+                if pbar and i % 100 == 0:
+                    progress_text = (f"Bootstrap: {i+1}/{bootstrap_samples} | Current CI: [{np.percentile(bootstrap_thresholds, 2.5):.4f}, {np.percentile(bootstrap_thresholds, 97.5):.4f}]")
+                    pbar.text = progress_text
+            
+            bootstrap_results = {
+                'bootstrap_samples': bootstrap_samples,
+                'bootstrap_mean': float(np.mean(bootstrap_thresholds)),
+                'bootstrap_std': float(np.std(bootstrap_thresholds)),
+                'bootstrap_ci_lower': float(np.percentile(bootstrap_thresholds, 2.5)),
+                'bootstrap_ci_upper': float(np.percentile(bootstrap_thresholds, 97.5))
+            }
+        
+        # Validation if requested
+        validation_results = {}
+        if validate_threshold:
+            if pbar:
+                pbar.text = "Performing threshold validation..."
+            logger.info("Performing threshold validation")
+            
+            # Calculate some validation metrics
+            threshold_value = threshold_results['threshold']
+            anomalies = mse_values > threshold_value
+            
+            validation_results = {
+                'anomaly_rate': float(np.mean(anomalies)),
+                'n_anomalies': int(np.sum(anomalies)),
+                'n_normal': int(np.sum(~anomalies)),
+                'threshold_percentile_actual': float(stats.percentileofscore(mse_values, threshold_value)),
+                'validation_passed': True
+            }
+            
+            # Additional validation checks
+            for metric in quality_metrics:
+                if metric == 'stability':
+                    # Simple stability check
+                    validation_results['stability_score'] = 1.0 - (np.std(mse_values) / np.mean(mse_values))
+                elif metric == 'sensitivity':
+                    # Sensitivity to threshold changes
+                    thresh_variations = [threshold_value * 0.9, threshold_value * 1.1]
+                    anomaly_rates = []
+                    for tv in thresh_variations:
+                        anomaly_rates.append(np.mean(mse_values > tv))
+                    validation_results['sensitivity_score'] = float(np.std(anomaly_rates))
+        
+        # Calculate final timing
+        calculation_time = (datetime.now() - start_time).total_seconds()
+        
+        # Prepare comprehensive results
+        final_threshold = threshold_results.get('threshold', fallback_threshold)
+        
+        comprehensive_results = {
+            # Core results
+            'threshold': final_threshold,
+            'method': threshold_results.get('method', threshold_method),
+            'calculation_time_seconds': calculation_time,
+            
+            # Data information
+            'n_samples': len(mse_values),
+            'data_source': data_source,
+            'basic_statistics': basic_stats,
+            
+            # Method-specific results
+            'method_details': threshold_results,
+            
+            # Configuration applied
+            'config_applied': final_config,
+            
+            # Additional analyses
+            'cross_validation': cv_results if cv_results else None,
+            'bootstrap_analysis': bootstrap_results if bootstrap_results else None,
+            'validation_results': validation_results if validation_results else None,
+            
+            # System information
+            'device': str(device),
+            'random_state': random_state,
+            'reproducible': reproducible,
+            
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_directories': {
+                    k: str(v) for k, v in run_specific_dirs.items()
+                } if run_specific_dirs else None,
+                'threshold_calculated_for_run': run_id if use_run_tracking else None,
+                'is_run_specific_output': use_run_tracking and run_id is not None
+            } if use_run_tracking else None
+        }
+        
+        # Add calculation statistics
+        comprehensive_results.update(calculation_stats)
+        
+        # Save results if requested
+        if save_results:
+            if pbar:
+                pbar.text = "Saving results..."
+            
+            # Determine results path with run tracking support
+            if use_run_tracking and run_id is not None:
+                # Use run-specific results directory if available
+                if 'results' in run_specific_dirs:
+                    results_path = run_specific_dirs['results'] / f"threshold_results_{run_id}.json"
+                else:
+                    # Fallback to default location with run_id suffix
+                    # Ensure the directory exists before saving
+                    results_dir = Path(__file__).resolve().parent / "results"
+                    results_dir.mkdir(parents=True, exist_ok=True)
+                    results_path = results_dir / f"threshold_results_{run_id}.json"
+            else:
+                # Default behavior for standalone usage
+                # Ensure the default results directory exists
+                results_dir = Path(results_path)
+                results_dir.mkdir(parents=True, exist_ok=True)
+                results_path = results_dir / "threshold_results.json"
+            
+            # Save JSON
+            try:
+                # Make results JSON serializable
+                serializable_results = {}
+                for key, value in comprehensive_results.items():
+                    try:
+                        json.dumps(value)
+                        serializable_results[key] = value
+                    except TypeError:
+                        serializable_results[key] = str(value)
+                
+                with open(results_path, 'w') as f:
+                    json.dump(serializable_results, f, indent=2)
+                logger.info(f"Saved threshold results to {results_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save results: {e}")
+        
+        # Visualization if requested
+        if visualization:
+            try:
+                if plot_distribution:
+                    if pbar:
+                        pbar.text = "Generating visualization..."
+                    plt.figure(figsize=(10, 6))
+                    plt.hist(mse_values, bins=50, alpha=0.7, density=True, label='Reconstruction Errors')
+                    plt.axvline(final_threshold, color='red', linestyle='--', label=f'Threshold ({threshold_method}): {final_threshold:.4f}')
+                    plt.xlabel('Reconstruction Error (MSE)')
+                    plt.ylabel('Density')
+                    plt.title('Reconstruction Error Distribution and Threshold')
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+                    
+                    # Determine plot path with run tracking support
+                    if use_run_tracking and run_id is not None:
+                        if 'figures' in run_specific_dirs:
+                            plot_path = run_specific_dirs['figures'] / f"threshold_distribution_{run_id}.png"
+                        else:
+                            # Ensure the figures directory exists
+                            figures_dir = Path(__file__).resolve().parent / "figures"
+                            figures_dir.mkdir(parents=True, exist_ok=True)
+                            plot_path = figures_dir / f"threshold_distribution_{run_id}.png"
+                    else:
+                        # Ensure the figures directory exists
+                        figures_dir = Path(results_path).parent / "figures"
+                        figures_dir.mkdir(parents=True, exist_ok=True)
+                        plot_path = figures_dir / "threshold_distribution.png"
+                    
+                    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+                    plt.close()
+                    logger.info(f"Saved distribution plot to {plot_path}")
+                    
+            except ImportError:
+                logger.warning("Matplotlib not available, skipping visualization")
+            except Exception as e:
+                logger.warning(f"Visualization failed: {e}")
+        
+        # Final progress bar update
+        if pbar:
+            pbar.text = f"Threshold calculation completed: {final_threshold:.4f}"
+        
+        # Log comprehensive summary
+        logger.info("=" * 80)
+        logger.info("THRESHOLD CALCULATION SUMMARY")
+        logger.info("=" * 80)
+        logger.info(f"Method: {threshold_results.get('method', threshold_method)}")
+        logger.info(f"Threshold: {final_threshold:.6f}")
+        logger.info(f"Samples Used: {len(mse_values):,}")
+        logger.info(f"Data Source: {data_source}")
+        logger.info(f"Calculation Time: {calculation_time:.3f} seconds")
+        
+        if 'anomaly_rate' in validation_results:
+            logger.info(f"Expected Anomaly Rate: {validation_results['anomaly_rate']*100:.2f}%")
+        
+        logger.info(f"Data Statistics:")
+        logger.info(f"  Mean: {basic_stats['mean']:.6f}")
+        logger.info(f"  Std: {basic_stats['std']:.6f}")
+        logger.info(f"  Min: {basic_stats['min']:.6f}")
+        logger.info(f"  Max: {basic_stats['max']:.6f}")
+        logger.info(f"  Skewness: {basic_stats['skewness']:.3f}")
+        
+        if cv_results:
+            logger.info(f"Cross-validation: {cv_results['cv_mean_threshold']:.6f} ± {cv_results['cv_std_threshold']:.6f}")
+        
+        if bootstrap_results:
+            logger.info(f"Bootstrap CI: [{bootstrap_results['bootstrap_ci_lower']:.6f}, {bootstrap_results['bootstrap_ci_upper']:.6f}]")
+        
+        logger.info("=" * 80)
+        
+        # Restore original logging level
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        # Return threshold and comprehensive results
+        return final_threshold, comprehensive_results
+    
+    except (EOFError, KeyboardInterrupt):
+        logger.warning("Threshold calculation interrupted by user")
+
+    except Exception as e:
+        # Restore original logging level on error
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        error_msg = f"Threshold calculation failed: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        # Provide helpful error context
+        logger.error(f"Method used: {threshold_method}")
+        logger.error(f"Configuration: {final_config}")
+        
+        # Attempt graceful recovery if enabled
+        if graceful_degradation:
+            logger.warning(f"Using fallback threshold: {fallback_threshold}")
+            
+            fallback_results = {
+                'threshold': fallback_threshold,
+                'method': 'fallback',
+                'error': str(e),
+                'graceful_degradation': True,
+                'config_applied': final_config,
+                # Include run tracking in fallback
+                'run_tracking': {
+                    'run_id': run_id,
+                    'run_number': run_number,
+                    'use_run_tracking': use_run_tracking
+                } if use_run_tracking else None
+            }
+            
+            return fallback_threshold, fallback_results
+        
+        raise RuntimeError(error_msg) from e
+    
+    finally:
+        # Final cleanup
+        try:
+            if pbar_context:
+                # Properly exit the context manager
+                pbar_context.__exit__(None, None, None)
+            
+            if memory_efficient:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+        except:
+            pass
+
 def train_model(
     # Core Training Parameters
     model_type: Optional[str] = None,
@@ -49517,6 +52044,8 @@ def train_model(
     percentile = security_config.setdefault('percentile', DEFAULT_PERCENTILE)
     threshold_method = security_config.setdefault('threshold_method', 'percentile')
     enable_security_metrics = security_config.setdefault('enable_security_metrics', SECURITY_METRICS)
+    adaptive_threshold = security_config.setdefault('adaptive_threshold', True)
+    real_time_monitoring = security_config.setdefault('real_time_monitoring', True)
     
     # Extract default directories
     config_dir = Path(system_config.setdefault('config_dir', CONFIG_DIR))
@@ -50123,12 +52652,14 @@ def train_model(
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         model_size_mb = total_params * 4 / 1024 / 1024
+        model_size_kb = model_size_mb * 1024
         
         training_stats.update({
             'model_class': type(model).__name__,
             'total_parameters': total_params,
             'trainable_parameters': trainable_params,
             'model_size_mb': model_size_mb,
+            'model_size_kb': model_size_kb,
             'factory_pattern_used': True,
             'centralized_config_used': True
         })
@@ -50136,7 +52667,12 @@ def train_model(
         logger.info(f"Model: {type(model).__name__}")
         logger.info(f"Total parameters: {total_params:,}")
         logger.info(f"Trainable parameters: {trainable_params:,}")
-        logger.info(f"Model size: {model_size_mb:.2f} MB")
+
+        if model_size_mb > 1:  # 1024 KB = 1 MB
+            logger.info(f"Model size: {model_size_mb:.3f} MB")
+        else:
+            logger.info(f"Model size: {model_size_kb:.3f} KB")
+
         logger.info(f"Factory Pattern: Enabled")
         logger.info(f"Centralized Config: Enabled")
         
@@ -50301,11 +52837,33 @@ def train_model(
                     epoch=epoch,
                     mixed_precision=mixed_precision,
                     calculate_metrics=True,
-                    detailed_metrics=validation_config.get('detailed_metrics', False),
+                    detailed_metrics=validation_config.get('detailed_metrics', True),
+                    
+                    # Enable IDS-specific features
+                    anomaly_detection=security_config.get('enable_security_metrics', True),
+                    threshold_analysis=security_config.get('adaptive_threshold', True),
+                    
+                    # Custom functions for IDS validation
+                    custom_metric_fn=_default_security_metrics if security_config.get('enable_security_metrics', True) else None,
+                    custom_threshold_fn=_default_adaptive_threshold if security_config.get('adaptive_threshold', True) else None,
+                    custom_analysis_fn=_default_validation_analysis if validation_config.get('detailed_metrics', True) else None,
+                    validation_callbacks=_default_validation_callbacks() if monitoring_config.get('real_time_monitoring', True) else [],
+                    
                     progress_bar=progress_bar and not epoch_pbar,
-                    progress_bar_desc=f"{epoch+1}/{epochs}",
+                    # Update progress bar description
+                    progress_bar_desc=f"Validating Epoch {epoch+1}/{epochs}",
                     verbose=debug_mode,
-                    config=config
+                    config=config,
+                    # Run tracking parameters
+                    run_id=run_id,
+                    run_number=run_number,
+                    run_specific_dirs={
+                        'results': run_results_dir,
+                        'metrics': run_metrics_dir,
+                        'artifacts': run_artifacts_dir,
+                        'checkpoints': run_checkpoint_dir
+                    },
+                    use_run_tracking=True
                 )
                 
                 # Update training history
@@ -50337,6 +52895,36 @@ def train_model(
                     for key, value in val_metrics.items():
                         if isinstance(value, (int, float)):
                             training_history['detailed_metrics'].setdefault(f'val_{key}', []).append(value)
+                
+                # Log custom analysis results if available
+                if val_metrics and 'custom_analysis' in val_metrics:
+                    analysis = val_metrics['custom_analysis']
+                    
+                    # Log model health
+                    if 'model_health_score' in analysis:
+                        health_score = analysis['model_health_score']
+                        health_rating = analysis.get('health_rating', 'unknown')
+                        logger.debug(f"Validation Health: {health_score:.2%} ({health_rating})")
+                        
+                        # Add to TensorBoard if enabled
+                        if tensorboard_logging and writer:
+                            writer.add_scalar("Validation/Health_Score", health_score, epoch)
+                    
+                    # Log security assessment
+                    if 'security_assessment' in analysis:
+                        security = analysis['security_assessment']
+                        readiness = security.get('readiness', 'unknown')
+                        risk_count = security.get('risk_count', 0)
+                        
+                        if risk_count > 0:
+                            logger.warning(f"Security risks detected: {risk_count}")
+                            for risk in security.get('risks', [])[:3]:  # Log first 3 risks
+                                logger.warning(f"  - {risk}")
+                        
+                        # Add to TensorBoard
+                        if tensorboard_logging and writer:
+                            readiness_score = {'ready': 1.0, 'ready_with_warnings': 0.75, 'caution_advised': 0.5, 'not_recommended': 0.0}.get(readiness, 0.0)
+                            writer.add_scalar("Validation/Security_Readiness", readiness_score, epoch)
                 
                 # Learning rate scheduling
                 if scheduler:
@@ -50467,7 +53055,17 @@ def train_model(
                 device=device,
                 threshold_method=threshold_method,
                 adaptive_threshold=security_config.get('adaptive_threshold', True),
-                config=config
+                config=config,
+                # Pass run tracking information
+                run_id=run_id,
+                run_number=run_number,
+                run_specific_dirs={
+                    'results': run_results_dir,
+                    'figures': run_figures_dir,
+                    'metrics': run_metrics_dir,
+                    'artifacts': run_artifacts_dir
+                },
+                use_run_tracking=True
             )
             
             logger.info(f"Anomaly threshold calculated: {threshold:.6f} (method: {threshold_method})")
@@ -50506,10 +53104,31 @@ def train_model(
                 calculate_metrics=True,
                 detailed_metrics=True,
                 statistical_metrics=True,
+
+                # Enable IDS analysis for final evaluation
                 anomaly_detection=True,
                 anomaly_threshold=threshold,
+                threshold_analysis=True,
+                
+                # Custom IDS functions for final evaluation
+                custom_metric_fn=_default_security_metrics,
+                custom_threshold_fn=_default_adaptive_threshold,
+                custom_analysis_fn=_default_validation_analysis,
+                validation_callbacks=_default_validation_callbacks(),
+                
                 progress_bar=progress_bar,
-                config=config
+                progress_bar_desc="Final Validation",
+                config=config,
+                # Run tracking parameters
+                run_id=run_id,
+                run_number=run_number,
+                run_specific_dirs={
+                    'results': run_results_dir,
+                    'metrics': run_metrics_dir,
+                    'artifacts': run_artifacts_dir,
+                    'checkpoints': run_checkpoint_dir
+                },
+                use_run_tracking=True
             )
             
             # Calculate detection metrics
@@ -50531,21 +53150,61 @@ def train_model(
                 anomaly_rate = 0.0
                 mse_stats = {}
             
+            # Extract custom analysis results
+            custom_analysis_summary = {}
+            if test_metrics and 'custom_analysis' in test_metrics:
+                analysis = test_metrics['custom_analysis']
+                
+                custom_analysis_summary = {
+                    'model_health': {
+                        'score': analysis.get('model_health_score', 0.0),
+                        'rating': analysis.get('health_rating', 'unknown')
+                    },
+                    'security_assessment': analysis.get('security_assessment', {}),
+                    'error_distribution': analysis.get('error_distribution', {}),
+                    'anomaly_clusters': analysis.get('anomaly_clusters', {}),
+                    'vulnerable_features': analysis.get('vulnerable_features', {})
+                }
+                
+                # Log key findings
+                if 'model_health_score' in analysis:
+                    logger.info(f"Final Model Health Score: {analysis['model_health_score']:.2%} ({analysis.get('health_rating', 'unknown')})")
+                
+                if 'security_assessment' in analysis:
+                    security = analysis['security_assessment']
+                    logger.info(f"Security Readiness: {security.get('readiness', 'unknown')}")
+                    logger.info(f"Recommendation: {security.get('recommendation', 'N/A')}")
+            
             training_stats['final_evaluation'] = {
                 'test_loss': test_loss,
                 'test_metrics': test_metrics,
                 'anomaly_rate': anomaly_rate,
                 'mse_statistics': mse_stats,
-                'reconstruction_errors_count': len(test_reconstruction_errors)
+                'reconstruction_errors_count': len(test_reconstruction_errors),
+                'custom_analysis': custom_analysis_summary,
+                # Include run tracking reference
+                'run_id': run_id,
+                'run_number': run_number,
+                'validation_output_dir': str(run_results_dir) if 'run_results_dir' in locals() else None
             }
             
             logger.info(f"Test Loss: {test_loss:.6f}")
             logger.info(f"Anomaly Detection Rate: {anomaly_rate:.2%}")
             logger.info(f"MSE Statistics: mean={mse_stats.get('mean', 0):.6f}, std={mse_stats.get('std', 0):.6f}")
             
+            # Log run tracking information
+            if 'run_id' in locals() and 'run_number' in locals() and 'run_results_dir' in locals():
+                logger.info(f"Final evaluation results saved with run_id: {run_id}")
+                logger.info(f"Results directory: {run_results_dir}")
+            
         except Exception as e:
             logger.error(f"Final evaluation failed: {e}")
-            training_stats['final_evaluation'] = {'error': str(e)}
+            training_stats['final_evaluation'] = {
+                'error': str(e),
+                # Include run tracking
+                'run_id': run_id if 'run_id' in locals() else None,
+                'run_number': run_number if 'run_number' in locals() else None
+            }
             if not graceful_degradation:
                 raise RuntimeError(f"Final evaluation failed: {e}") from e
         
@@ -50676,7 +53335,8 @@ def train_model(
             if isinstance(save_dir, str):
                 save_dir = Path(save_dir)
             
-            config_path = save_dir / "training_config.json"
+            #config_path = save_dir / "training_config.json"
+            config_path = save_dir / f"training_config_{run_id}.json"
             
             # Create a serializable copy of config to avoid circular references
             serializable_config = {}
@@ -50725,6 +53385,7 @@ def train_model(
                 "parameters": total_params,
                 "trainable_parameters": trainable_params,
                 "size_mb": model_size_mb,
+                'size_kb': model_size_kb,
                 "input_dim": input_dim,
                 "encoding_dim": encoding_dim,
                 "factory_pattern_used": True,
@@ -50845,7 +53506,12 @@ def train_model(
         logger.info(f"Anomaly Threshold: {threshold:.6f}")
         logger.info(f"Anomaly Detection Rate: {training_stats.get('final_evaluation', {}).get('anomaly_rate', 0)*100:.1f}%")
         logger.info(f"Model Parameters: {total_params:,}")
-        logger.info(f"Model Size: {model_size_mb:.3f} MB")
+
+        if model_size_mb > 1:  # 1024 KB = 1 MB
+            logger.info(f"Model size: {model_size_mb:.3f} MB")
+        else:
+            logger.info(f"Model size: {model_size_kb:.3f} KB")
+
         logger.info(f"Device: {device}")
         logger.info(f"Mixed Precision: {mixed_precision}")
         logger.info(f"Factory Pattern: Enabled")
@@ -50854,6 +53520,20 @@ def train_model(
         logger.info("Saved Artifacts:")
         for artifact_type, artifact_path in saved_artifacts.items():
             logger.info(f"  {artifact_type}: {artifact_path}")
+        
+        if 'custom_analysis' in training_stats.get('final_evaluation', {}):
+            analysis = training_stats['final_evaluation']['custom_analysis']
+            
+            if 'model_health' in analysis:
+                logger.info(f"Model Health: {analysis['model_health']['score']:.2%} ({analysis['model_health']['rating']})")
+            
+            if 'security_assessment' in analysis:
+                security = analysis['security_assessment']
+                logger.info(f"Security Readiness: {security.get('readiness', 'unknown')}")
+                
+                if security.get('risk_count', 0) > 0:
+                    logger.warning(f"Security Risks: {security['risk_count']}")
+        
         logger.info("-"*40)
         
         return final_results
@@ -50904,10 +53584,13 @@ def train_model(
         if 'model' in locals() and hasattr(locals()['model'], 'parameters'):
             try:
                 total_params = sum(p.numel() for p in locals()['model'].parameters())
+                model_size_mb = total_params * 4 / 1024 / 1024
+                model_size_kb = total_params * 4 / 1024
                 error_info["model_info"] = {
                     "class_name": type(locals()['model']).__name__,
                     "total_parameters": total_params,
-                    "model_size_mb": total_params * 4 / 1024 / 1024,
+                    "model_size_mb": model_size_mb,
+                    "model_size_kb": model_size_kb,
                     "factory_pattern_used": True,
                     "centralized_config_used": True
                 }
@@ -52205,7 +54888,7 @@ def _interactive_preset_setup(
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if training_config.get('mixed_precision', False) else 'Disabled'}")
         print(Fore.CYAN + Style.BRIGHT + f"  └─ Validation Split: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('validation_split', 'Default')}")
         
-        # Customization options with enhanced descriptions
+        # Customization options
         print(Fore.YELLOW + Style.BRIGHT + "\nCustomization Options:")
         print(Fore.WHITE + Style.BRIGHT + "1. Use preset as-is " + Fore.GREEN + Style.BRIGHT + "(recommended for first use)")
         print(Fore.WHITE + Style.BRIGHT + "2. Customize data source only " + Fore.GREEN + Style.BRIGHT + "(keep preset, change data)")
@@ -52232,32 +54915,251 @@ def _interactive_preset_setup(
         final_config = _merge_configs(base_config, preset_config)
         
         # Data source customization
-        if custom_choice in ['2', '3', '4', '5'] or use_real_data is None:
-            if use_real_data is None:
-                print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SOURCE SELECTION")
-                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-                print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(production use)")
-                print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(testing/development)")
-                print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
-                
-                while True:
-                    try:
-                        data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): " + Style.RESET_ALL).strip()
-                        if data_choice in ['1', '2', '0']:
-                            break
-                        print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
-                    except (EOFError, KeyboardInterrupt):
-                        print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
-                        return None
-                
-                if data_choice == '0':
+        if custom_choice in ['2', '3', '4', '5']:
+            print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SOURCE SELECTION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(production use)")
+            print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(testing/development)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+            
+            while True:
+                try:
+                    data_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data source (0-2): " + Style.RESET_ALL).strip()
+                    if data_choice in ['1', '2', '0']:
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                except (EOFError, KeyboardInterrupt):
                     print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
                     return None
-                    
-                use_real_data = data_choice == '1'
-                print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if use_real_data else 'Synthetic Data'}")
             
-            final_config.setdefault('data', {})['use_real_data'] = use_real_data
+            if data_choice == '0':
+                print(Fore.RED + Style.BRIGHT + "\nData selection cancelled")
+                return None
+                
+            use_real_data = data_choice == '1'
+            print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if use_real_data else 'Synthetic Data'}")
+            #data_mode = 'real' if data_choice == '1' else 'synthetic'
+            #print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if data_mode == 'real' else 'Synthetic Data'}")
+            
+            # Data configuration based on selection
+            if use_real_data:
+                final_config.setdefault('data', {})['use_real_data'] = True
+                print(Fore.MAGENTA + Style.BRIGHT + "\nREAL DATA CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                # Data file path configuration
+                default_data_path = final_config.get('data', {}).get('data_path', 'data/network_data.csv')
+                print(Fore.YELLOW + Style.BRIGHT + f"Selected: Real Network Data")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Using actual network traffic data for realistic optimization")
+                print(Fore.YELLOW + Style.BRIGHT + f"\nData file path (default): " + Fore.GREEN + Style.BRIGHT + f"{default_data_path}")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Path to your network traffic data file")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default or provide custom path")
+                
+                user_data_path = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter data file path or 0 to cancel: " + Style.RESET_ALL).strip()
+
+                if user_data_path == '0':
+                    return None
+
+                data_path = user_data_path if user_data_path else default_data_path
+                final_config.setdefault('data', {})['data_path'] = data_path
+                
+                # Validate path exists
+                if not Path(data_path).exists():
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nWarning: Path '{data_path}' does not exist.")
+                    create_confirm = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N): " + Style.RESET_ALL).strip().lower()
+                    if create_confirm not in ('y', 'yes'):
+                        data_path = default_data_path
+                        Path(data_path).parent.mkdir(parents=True, exist_ok=True)
+                        final_config.setdefault('data', {})['data_path'] = data_path
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing default data path: {data_path}")
+
+                # Artifacts file path configuration
+                default_artifacts_path = final_config.get('data', {}).get('artifacts_path', 'data/artifacts.pkl')
+                print(Fore.YELLOW + Style.BRIGHT + f"\nArtifacts path (default): " + Fore.GREEN + Style.BRIGHT + f"{default_artifacts_path}")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Path to your preprocessing artifacts data file")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Directory for storing preprocessing artifacts")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default or provide custom path")
+                
+                user_artifacts_path = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter artifacts file path or 0 to cancel: " + Style.RESET_ALL).strip()
+
+                if user_artifacts_path == '0':
+                    return None
+                
+                artifacts_path = user_artifacts_path if user_artifacts_path else default_artifacts_path
+                final_config.setdefault('data', {})['artifacts_path'] = artifacts_path
+                
+                # Validate artifacts path exists
+                if not Path(artifacts_path).exists():
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nWarning: Path '{artifacts_path}' does not exist.")
+                    create_confirm = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N): " + Style.RESET_ALL).strip().lower()
+                    if create_confirm not in ('y', 'yes'):
+                        artifacts_path = default_data_path
+                        Path(artifacts_path).parent.mkdir(parents=True, exist_ok=True)
+                        final_config.setdefault('data', {})['artifacts_path'] = artifacts_path
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing default artifacts path: {artifacts_path}")
+                
+                # Feature configuration
+                preset_features = final_config.get('data', {}).get('features', 20)
+                print(Fore.YELLOW + Style.BRIGHT + f"\nNumber of features (default): " + Fore.GREEN + Style.BRIGHT + f"{preset_features}")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Number of input features or 'auto' to detect")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Preset recommends {preset_features} features")
+
+                # Use preset features or allow customization
+                user_features = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of features or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                if user_features == 'c':
+                    return None
+                
+                if user_features and user_features.lower() != 'auto':
+                    try:
+                        features = int(user_features)
+                        final_config.setdefault('data', {})['features'] = features
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing {features} features")
+                    except ValueError:
+                        features = preset_features
+                        final_config.setdefault('data', {})['features'] = features
+                        print(Fore.YELLOW + Style.BRIGHT + "\nInvalid input, using preset recommended features")
+                else:
+                    features = preset_features if user_features != 'auto' else 'auto'
+                    final_config.setdefault('data', {})['features'] = features
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing {'auto feature detection' if features == 'auto' else 'preset recommended features'}")
+
+                print(Fore.GREEN + Style.BRIGHT + f"\nReal network data configured:")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data file path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Artifacts path: " + Fore.YELLOW + Style.BRIGHT + f"{artifacts_path}")
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                
+            else:  # Synthetic data
+                final_config.setdefault('data', {})['use_real_data'] = False
+                print(Fore.MAGENTA + Style.BRIGHT + "\nSYNTHETIC DATA CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                # Use preset synthetic data configuration as baseline
+                preset_normal_samples = final_config.get('data', {}).get('normal_samples', 8000)
+                preset_attack_samples = final_config.get('data', {}).get('attack_samples', 2000)
+                preset_features = final_config.get('data', {}).get('features', 20)
+                preset_noise_factor = final_config.get('data', {}).get('synthetic_generation', {}).get('noise_factor', 0.05)
+                
+                print(Fore.GREEN + Style.BRIGHT + f"Selected: Synthetic Data")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Using generated data for faster iteration cycles")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Preset defaults: {preset_normal_samples} normal, {preset_attack_samples} attack samples, {preset_features} features")
+                
+                # Data complexity level
+                print(Fore.YELLOW + Style.BRIGHT + "\nData complexity level:")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Controls the realism and complexity of generated data")
+                print(Fore.WHITE + Style.BRIGHT + "1. Simple " + Fore.GREEN + Style.BRIGHT + "(Basic patterns, fast generation)")
+                print(Fore.WHITE + Style.BRIGHT + "2. Moderate " + Fore.GREEN + Style.BRIGHT + "(Balanced complexity - preset default)")
+                print(Fore.WHITE + Style.BRIGHT + "3. Complex " + Fore.GREEN + Style.BRIGHT + "(Realistic patterns, slower generation)")
+                print(Fore.WHITE + Style.BRIGHT + "4. Custom " + Fore.GREEN + Style.BRIGHT + "(Configure all parameters manually)")
+                print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+                
+                complexity_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect complexity level (0-4): " + Style.RESET_ALL).strip()
+
+                if complexity_choice == '0':
+                    return None
+                
+                if complexity_choice == '4':
+                    # Custom synthetic data configuration
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM SYNTHETIC DATA CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                    
+                    # Normal samples configuration
+                    print(Fore.CYAN + Style.BRIGHT + "Number of normal samples to generate:")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_normal_samples}")
+                    user_normal = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of normal samples or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_normal == 'c':
+                        return None
+
+                    normal_samples = int(user_normal) if user_normal else preset_normal_samples
+                    final_config.setdefault('data', {})['normal_samples'] = normal_samples
+                    
+                    # Attack samples configuration
+                    print(Fore.CYAN + Style.BRIGHT + "\nNumber of attack samples to generate:")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_attack_samples}")
+                    user_attack = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of attack samples or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_attack == 'c':
+                        return None
+
+                    attack_samples = int(user_attack) if user_attack else preset_attack_samples
+                    final_config.setdefault('data', {})['attack_samples'] = attack_samples
+                    
+                    # Features configuration
+                    print(Fore.CYAN + Style.BRIGHT + "\nNumber of features to generate:")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_features}")
+                    user_features = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of features or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_features == 'c':
+                        return None
+
+                    features = int(user_features) if user_features else preset_features
+                    final_config.setdefault('data', {})['features'] = features
+                    
+                    # Noise level configuration
+                    print(Fore.CYAN + Style.BRIGHT + "\nNoise level for data generation (0.0-1.0):")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_noise_factor}")
+                    user_noise = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter noise level or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_noise == 'c':
+                        return None
+
+                    noise_factor = float(user_noise) if user_noise else preset_noise_factor
+                    final_config.setdefault('data', {}).setdefault('synthetic_generation', {})['noise_factor'] = noise_factor
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nCustom synthetic data configured:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Noise Factor: " + Fore.YELLOW + Style.BRIGHT + f"{noise_factor}")
+                    
+                else:
+                    # Predefined complexity levels
+                    complexity_configs = {
+                        '1': {
+                            'normal_samples': max(1000, preset_normal_samples // 2),
+                            'attack_samples': max(200, preset_attack_samples // 2),
+                            'features': max(10, preset_features // 2),
+                            'noise_factor': preset_noise_factor * 0.5,
+                            'name': 'Simple'
+                        },
+                        '2': {
+                            'normal_samples': preset_normal_samples,
+                            'attack_samples': preset_attack_samples,
+                            'features': preset_features,
+                            'noise_factor': preset_noise_factor,
+                            'name': 'Moderate'
+                        },
+                        '3': {
+                            'normal_samples': preset_normal_samples * 2,
+                            'attack_samples': preset_attack_samples * 2,
+                            'features': min(100, preset_features * 2),
+                            'noise_factor': preset_noise_factor * 1.5,
+                            'name': 'Complex'
+                        }
+                    }
+                    
+                    config = complexity_configs.get(complexity_choice, complexity_configs['2'])
+                    normal_samples = config['normal_samples']
+                    attack_samples = config['attack_samples']
+                    features = config['features']
+                    noise_factor = config['noise_factor']
+                    config_name = config['name']
+
+                    final_config.setdefault('data', {})['normal_samples'] = normal_samples
+                    final_config.setdefault('data', {})['attack_samples'] = attack_samples
+                    final_config.setdefault('data', {})['features'] = features
+                    final_config.setdefault('data', {}).setdefault('synthetic_generation', {})['noise_factor'] = noise_factor
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nCustom synthetic data configured:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Config name: " + Fore.YELLOW + Style.BRIGHT + f"{config_name}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Noise level: " + Fore.YELLOW + Style.BRIGHT + f"{noise_factor}")
+            
+            final_config.setdefault('data', {})['use_real_data'] = use_real_data == True
+            #final_config.setdefault('data', {})['use_real_data'] = data_mode == 'real'
         
         # Training duration customization
         if custom_choice in ['3', '4', '5']:
@@ -52364,14 +55266,22 @@ def _interactive_preset_setup(
         
         if custom_choice != '1':
             print(Fore.YELLOW + Style.BRIGHT + f"\nCustomizations Applied:")
+            customizations = []
             if custom_choice in ['2', '3', '4', '5']:
-                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data source customized")
+                #print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data source customized")
+                customizations.append("Data source")
             if custom_choice in ['3', '4', '5']:
-                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training duration adjusted")
+                #print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training duration adjusted")
+                customizations.append("Training duration")
             if custom_choice in ['4', '5']:
-                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model architecture modified")
+                #print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model architecture modified")
+                customizations.append("Model architecture")
+            
+            for i, customization in enumerate(customizations):
+                prefix = "  └─" if i == len(customizations) - 1 else "  ├─"
+                print(Fore.CYAN + Style.BRIGHT + f"{prefix} {customization}")
         
-        # Enhanced confirmation with fallback options
+        # Confirmation with fallback options
         try:
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with this configuration? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -54411,13 +57321,21 @@ def _display_training_results(results: Dict[str, Any]) -> None:
             model_class = model_info.get('class_name', 'N/A')
             total_params = model_info.get('parameters', 0)
             trainable_params = model_info.get('trainable_parameters', 0)
-            model_size = model_info.get('size_mb', 0)
+            
+            #model_size = model_info.get('size_mb', 0)
+            model_size_mb = model_info.get('size_mb', 0)
+            model_size_kb = model_info.get('size_kb', 0)
+            if model_size_mb >= 1:
+                model_size = f"{model_size_mb:.3f} MB"
+            else:
+                model_size = f"{model_size_kb:.3f} KB"
+            
             input_dim = model_info.get('input_dim', 'N/A')
             encoding_dim = model_info.get('encoding_dim', 'N/A')
             
             print(f"Class: {model_class}")
             print(f"Parameters: {total_params:,} total, {trainable_params:,} trainable")
-            print(f"Model Size: {model_size:.2f} MB")
+            print(f"Model Size: {model_size}")
             print(f"Input Dimension: {input_dim}")
             print(f"Encoding Dimension: {encoding_dim}")
             
@@ -54764,10 +57682,13 @@ def _display_training_results(results: Dict[str, Any]) -> None:
                         additional_info.append("Large model")
                 
                 model_size = model_info.get('size_mb', 0)
-                if model_size > 0:
-                    if model_size < 1:
+                model_size_mb = model_info.get('size_mb', 0)
+                model_size_kb = model_info.get('size_kb', 0)
+
+                if model_size_mb > 0:
+                    if model_size_mb < 1:
                         additional_info.append("Very compact model")
-                    elif model_size > 100:
+                    elif model_size_mb > 100:
                         additional_info.append("Large model file")
         
         if additional_info:
@@ -55438,6 +58359,7 @@ def train_model_quick(
                         'parameters': model_info.get('parameters', 0),
                         'trainable_parameters': model_info.get('trainable_parameters', 0),
                         'size_mb': model_info.get('size_mb', 0),
+                        'size_kb': model_info.get('size_kb', 0),
                         'input_dim': quick_features,
                         'encoding_dim': quick_encoding_dim
                     },
@@ -55473,6 +58395,12 @@ def train_model_quick(
                     # Original results for reference
                     'comprehensive_results': training_results
                 }
+                model_size_mb = model_info.get('size_mb', 0)
+                model_size_kb = model_info.get('size_kb', 0)
+                if model_size_mb >= 1:
+                    model_size = f"{model_size_mb:.3f} MB"
+                else:
+                    model_size = f"{model_size_kb:.3f} KB"
                 
                 # Calculate overall rating
                 speed_score = 1.0 if training_time < 2 else 0.8 if training_time < 5 else 0.6 if training_time < 10 else 0.4
@@ -55537,16 +58465,20 @@ def train_model_quick(
                     
                     print(Fore.YELLOW + Style.BRIGHT + "\nModel Information:")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parameters: " + Fore.YELLOW + Style.BRIGHT + f"{model_info.get('parameters', 0):,}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Size: " + Fore.YELLOW + Style.BRIGHT + f"{model_info.get('size_mb', 0):.1f} MB")
+                    #print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Size: " + Fore.YELLOW + Style.BRIGHT + f"{model_info.get('size_mb', 0):.1f} MB")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Size: " + Fore.YELLOW + Style.BRIGHT + f"{model_size}")
                     print(Fore.GREEN + Style.BRIGHT + f"  └─ Architecture: " + Fore.YELLOW + Style.BRIGHT + f"{quick_features} → {quick_encoding_dim}")
                     
                     # Artifacts
                     artifacts = training_results.get('artifacts', {})
                     if artifacts:
                         print(Fore.YELLOW + Style.BRIGHT + "\nSaved Artifacts:")
-                        for artifact_type, path in artifacts.items():
-                            if artifact_type in ['model_path', 'threshold_path', 'metadata_path']:
-                                print(Fore.GREEN + Style.BRIGHT + f"  ├─ {artifact_type.replace('_', ' ').title()}: " + Fore.YELLOW + Style.BRIGHT + f"{path}")
+                        # Get only the artifacts we care about
+                        relevant_artifacts = [(k, v) for k, v in artifacts.items() if k in ['model_path', 'threshold_path', 'metadata_path']]
+                        
+                        for i, (artifact_type, path) in enumerate(relevant_artifacts):
+                            prefix = "  └─ " if i == len(relevant_artifacts) - 1 else "  ├─ "
+                            print(Fore.GREEN + Style.BRIGHT + f"{prefix}{artifact_type.replace('_', ' ').title()}: " + Fore.YELLOW + Style.BRIGHT + f"{path}")
                     
                     # Recommendations
                     if recommendations:
@@ -56728,6 +59660,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
 
 def run_stability_test(
     # Test Configuration Parameters
+    test_preset: Optional[str] = None,
     test_epochs: Optional[int] = None,
     test_batch_size: Optional[int] = None,
     test_learning_rate: Optional[float] = None,
@@ -56744,6 +59677,8 @@ def run_stability_test(
     minimal_test: Optional[bool] = None,
     
     # System Parameters
+    hardware_data: Optional[Dict[str, Any]] = None,
+    performance_baseline: Optional[Dict[str, Any]] = None,
     test_device: Optional[str] = None,
     test_mixed_precision: Optional[bool] = None,
     test_num_workers: Optional[int] = None,
@@ -56777,31 +59712,78 @@ def run_stability_test(
         print("\033c", end="")
         banner_config = show_banner(return_config=True)
         
+        # Initialize configuration
         if config is None and banner_config is not None:
-            config = banner_config
-        else:
-            config = get_current_config()
+            try:
+                config = banner_config
+            except Exception as e:
+                logger.warning(f"Failed to load current config: {e}, using default configuration")
+                config = get_current_config()
         
-        # Extract configuration context with error handling
+        # Get hardware context for system-aware configuration if not provided
+        if hardware_data is None:
+            try:
+                hardware_data = check_hardware(include_memory_usage=True)
+            except Exception as e:
+                logger.debug(f"Hardware detection failed: {e}")
+                hardware_data = {}
+        
+        # Hardware context extraction
+        cuda_available = hardware_data.get('cuda', {}).get('available', False)
+        gpu_count = hardware_data.get('cuda', {}).get('gpu_count', 0)
+        memory_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+        cpu_cores = hardware_data.get('cpu_cores', {}).get('logical_cores', 4)
+        
+        # Extract configuration context
+        data_config = config.get('data', {}) if config else {}
+        model_config = config.get('model', {}) if config else {}
+        training_config = config.get('training', {}) if config else {}
+        presets_section = config.get('presets', {}) if config else {}
+        runtime_config = config.get('runtime', {}) if config else {}
+        metadata_config = config.get('metadata', {}) if config else {}
+        metadata_system_config = metadata_config.get('system', {}) if metadata_config else {}
+        
+        # Context extraction
         preset_name = "Custom/Default"
         model_type = "Unknown"
         config_source = "Unknown"
         
-        # Extract preset name with multiple fallbacks
-        presets_section = config.get("presets", {})
-        if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "Custom/Default")
-        
-        # Extract model type
-        model_section = config.get("model", {})
-        if isinstance(model_section, dict):
-            model_type = model_section.get("model_type", "Unknown")
-        
-        # Extract config source
-        if "runtime" in config and isinstance(config["runtime"], dict):
-            config_source = config["runtime"].get("config_source", "Unknown")
-        elif "metadata" in config and isinstance(config["metadata"], dict):
-            config_source = config["metadata"].get("config_source", "Unknown")
+        if config:
+            # Preset detection
+            if isinstance(presets_section, dict):
+                preset_name = presets_section.get("current_preset", "Custom/Default")
+            
+            # Check metadata for preset_used
+            if preset_name in ["Custom/Default", None, ""]:
+                if isinstance(metadata_config, dict):
+                    preset_name = metadata_config.get("preset_used", "Custom/Default")
+            
+            # Check legacy _preset_name field
+            if preset_name in ["Custom/Default", None, ""]:
+                preset_name = config.get("_preset_name", "Custom/Default")
+            
+            # Check runtime information
+            if preset_name in ["Custom/Default", None, ""]:
+                if isinstance(runtime_config, dict):
+                    preset_name = runtime_config.get("active_preset", "Custom/Default")
+            
+            # Clean up preset name display
+            if preset_name in ["Custom/Default", None, "", "none"]:
+                preset_name = "Custom/Default"
+            elif isinstance(preset_name, str):
+                preset_name = preset_name.title()
+            
+            # Extract model type with error handling
+            if isinstance(model_config, dict):
+                model_type = model_config.get('model_type', 'Unknown')
+            
+            # Extract config source with fallbacks
+            if "runtime" in config and isinstance(config["runtime"], dict):
+                config_source = config["runtime"].get("config_source", "Unknown")
+            elif "metadata" in config and isinstance(config["metadata"], dict):
+                config_source = config["metadata"].get("config_source", "Unknown")
+            else:
+                config_source = "Unknown"
         
         # Menu header with context
         print(Fore.MAGENTA + Style.BRIGHT + "SYSTEM STABILITY TEST")
@@ -56814,24 +59796,6 @@ def run_stability_test(
         # Start timing
         start_time = datetime.now()
         test_start_time = time.time()
-        
-        # Initialize configuration
-        if config is None:
-            try:
-                config = get_current_config() if 'get_current_config' in globals() else {}
-            except Exception as e:
-                logger.warning(f"Failed to load current config: {e}")
-                console.print(
-                    Panel.fit(
-                        f"Failed to load current config, using defaults: {str(e)}",
-                        title="WARNING",
-                        style="bold red",
-                        border_style="red",
-                        padding=(1, 1),
-                        box=box.ROUNDED
-                    )
-                )
-                config = {}
         
         # Apply test-specific configuration
         if test_config:
@@ -56891,6 +59855,17 @@ def run_stability_test(
         test_data_sources = stability_config.setdefault('test_data_sources', cleaned_params.get('test_data_sources', False))
         test_hardware_configs = stability_config.setdefault('test_hardware_configs', cleaned_params.get('test_hardware_configs', False))
         performance_benchmarking = stability_config.setdefault('performance_benchmarking', cleaned_params.get('performance_benchmarking', False))
+
+        # Metadata System Information
+        python_config = metadata_system_config.get('python_version', sys.version)
+        pytorch_config = metadata_system_config.get('pytorch_version', torch.__version__)
+        platform_config = metadata_system_config.get('platform', sys.platform)
+        architecture_config = metadata_system_config.get('architecture', platform.architecture())
+        processor_config = metadata_system_config.get('processor', platform.processor())
+        machine_config = metadata_system_config.get('machine', platform.machine())
+        hostname_config = metadata_system_config.get('hostname', platform.node())
+        system_platform_config = metadata_system_config.get('system', platform.system())
+        device_config = metadata_system_config.get('device', test_device if test_device != 'auto' else ('CUDA' if cuda_available else 'MPS' if (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()) else 'CPU'))
 
         # Set up logging
         if verbose:
@@ -56958,48 +59933,126 @@ def run_stability_test(
             # System Information Collection
             try:
                 system_info = {
-                    'python_version': sys.version,
-                    'pytorch_version': torch.__version__,
-                    'platform': sys.platform,
-                    'architecture': platform.architecture(),
-                    'processor': platform.processor(),
-                    'machine': platform.machine(),
-                    'node': platform.node(),
-                    'system': platform.system(),
-                    'device': test_device if test_device != 'auto' else ('CUDA' if torch.cuda.is_available() else 'MPS' if (hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()) else 'CPU'),
+                    'python_version': python_config,
+                    'pytorch_version': pytorch_config,
+                    'platform': platform_config,
+                    'architecture': architecture_config,
+                    'processor': processor_config,
+                    'machine': machine_config,
+                    'hostname': hostname_config,
+                    'system': system_platform_config,
+                    'device': device_config,
                     'timestamp': test_timestamp
                 }
                 
                 # Hardware information
                 try:
-                    hw_info = check_hardware()
-                    system_info.update(hw_info)
+                    # Ensure we have hardware_data
+                    hw_info = hardware_data if hardware_data else check_hardware(include_memory_usage=True)
+                    
+                    # Extract CPU information
+                    cpu_info = hw_info.get('cpu_cores', {})
+                    if cpu_info.get('available'):
+                        system_info['cpu_logical_cores'] = cpu_info.get('logical_cores')
+                        system_info['cpu_physical_cores'] = cpu_info.get('physical_cores')
+                        system_info['cpu_hyperthreading'] = cpu_info.get('hyperthreading')
+                        
+                        # Add CPU capacity info if available
+                        cpu_capacity = cpu_info.get('capacity', {})
+                        if cpu_capacity:
+                            system_info['cpu_frequency_ghz'] = cpu_capacity.get('frequency_ghz')
+                            system_info['cpu_max_frequency_ghz'] = cpu_capacity.get('max_frequency_ghz')
+                    
+                    # Extract Memory information
+                    ram_info = hw_info.get('system_ram', {})
+                    if ram_info.get('available'):
+                        system_info['total_memory_gb'] = ram_info.get('ram_total_gb')
+                        system_info['available_memory_gb'] = ram_info.get('ram_available_gb')
+                        system_info['memory_percent_used'] = ram_info.get('ram_percent')
+                        system_info['swap_total_gb'] = ram_info.get('swap_total_gb')
+                        system_info['swap_used_gb'] = ram_info.get('swap_used_gb')
+                        system_info['swap_percent'] = ram_info.get('swap_percent')
+                        
+                        # Add current usage data
+                        if 'current_usage' in ram_info:
+                            current_usage = ram_info['current_usage']
+                            system_info['memory_current_usage'] = {
+                                'timestamp': current_usage.get('timestamp'),
+                                'used_gb': current_usage.get('used_gb'),
+                                'percent_used': current_usage.get('percent_used')
+                            }
+                    
+                    # Extract CUDA information
+                    cuda_info = hw_info.get('cuda', {})
+                    if cuda_info.get('available'):
+                        system_info['cuda_available'] = True
+                        system_info['cuda_version'] = cuda_info.get('cuda_version')
+                        system_info['cudnn_version'] = cuda_info.get('cudnn_version')
+                        system_info['gpu_count'] = cuda_info.get('gpu_count', 0)
+                        
+                        # Extract GPU information
+                        gpus = cuda_info.get('gpus', [])
+                        if gpus:
+                            system_info['gpu_names'] = [gpu.get('name') for gpu in gpus]
+                            system_info['gpu_memory'] = [gpu.get('memory_gb') for gpu in gpus]
+                            system_info['gpu_compute_capabilities'] = [gpu.get('compute_capability') for gpu in gpus]
+                            
+                            # Add current GPU memory usage
+                            gpu_memory_usage = []
+                            for gpu in gpus:
+                                if 'current_usage' in gpu:
+                                    usage = gpu['current_usage']
+                                    gpu_memory_usage.append({
+                                        'allocated_mb': usage.get('allocated_mb'),
+                                        'reserved_mb': usage.get('reserved_mb'),
+                                        'percent_allocated': usage.get('percent_allocated')
+                                    })
+                            
+                            if gpu_memory_usage:
+                                system_info['gpu_memory_usage'] = gpu_memory_usage
+                    else:
+                        system_info['cuda_available'] = False
+                        system_info['cuda_details'] = cuda_info.get('details', 'CUDA not available')
+                    
+                    # Extract disk space information
+                    disk_info = hw_info.get('disk_space', {})
+                    if disk_info.get('available'):
+                        system_info['disk_free_gb'] = disk_info.get('free_gb')
+                        system_info['disk_total_gb'] = disk_info.get('total_gb')
+                        system_info['disk_used_gb'] = disk_info.get('used_gb')
+                    
+                    # Extract system architecture information
+                    arch_info = hw_info.get('system_architecture', {})
+                    if arch_info.get('available'):
+                        # Override with more detailed architecture info if available
+                        system_info['architecture_detailed'] = arch_info.get('architecture')
+                        system_info['word_size'] = arch_info.get('word_size')
+                        system_info['python_build'] = arch_info.get('python_build')
+                    
+                    # Extract process memory information if available
+                    if 'process_memory' in hw_info:
+                        process_mem = hw_info['process_memory']
+                        if process_mem.get('status') == 'INFO':
+                            system_info['process_memory'] = {
+                                'rss_mb': process_mem.get('rss_mb'),
+                                'vms_mb': process_mem.get('vms_mb'),
+                                'percent': process_mem.get('percent')
+                            }
+                    
+                    # Store the complete hardware_data for reference
+                    system_info['hardware_data_complete'] = hw_info
+                    
                 except Exception as e:
-                    logger.warning(f"Failed to get hardware info: {e}")
+                    logger.warning(f"Failed to extract hardware info from hardware_data: {e}")
                     system_info['hardware_error'] = str(e)
-                
-                # Memory information
-                try:
-                    memory = psutil.virtual_memory()
-                    system_info.update({
-                        'total_memory_gb': memory.total / (1024**3),
-                        'available_memory_gb': memory.available / (1024**3),
-                        'memory_percent_used': memory.percent
-                    })
-                except ImportError:
-                    logger.warning("psutil not available for memory monitoring")
-                except Exception as e:
-                    logger.warning(f"Memory info collection failed: {e}")
-                
-                # CUDA information
-                if torch.cuda.is_available():
-                    system_info.update({
-                        'cuda_version': torch.version.cuda,
-                        'cudnn_version': torch.backends.cudnn.version(),
-                        'gpu_count': torch.cuda.device_count(),
-                        'gpu_names': [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())],
-                        'gpu_memory': [torch.cuda.get_device_properties(i).total_memory / (1024**3) for i in range(torch.cuda.device_count())]
-                    })
+                    
+                    # Fallback: try to get minimal info directly
+                    try:
+                        if torch.cuda.is_available():
+                            system_info['cuda_available'] = True
+                            system_info['gpu_count'] = torch.cuda.device_count()
+                    except Exception:
+                        pass
                 
                 test_results['system_info'] = system_info
                 
@@ -57009,10 +60062,81 @@ def run_stability_test(
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Python: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('python_version', '').split()[0]}")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('pytorch_version', 'Unknown')}")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('device', 'Unknown')}")
-                    if torch.cuda.is_available():
+                    
+                    # CPU Information
+                    if 'cpu_logical_cores' in system_info:
+                        cpu_cores = system_info.get('cpu_logical_cores', 'Unknown')
+                        cpu_physical = system_info.get('cpu_physical_cores', 'Unknown')
+                        cpu_ht = system_info.get('cpu_hyperthreading', False)
+                        ht_status = "HT" if cpu_ht else "No HT"
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ CPU: " + Fore.YELLOW + Style.BRIGHT + f"{cpu_cores} logical, {cpu_physical} physical ({ht_status})")
+                        
+                        # CPU frequency if available
+                        if 'cpu_frequency_ghz' in system_info and system_info['cpu_frequency_ghz']:
+                            freq = system_info['cpu_frequency_ghz']
+                            max_freq = system_info.get('cpu_max_frequency_ghz', 'N/A')
+                            print(Fore.GREEN + Style.BRIGHT + f"  ├─ CPU Frequency: " + Fore.YELLOW + Style.BRIGHT + f"{freq:.2f} GHz (max: {max_freq if isinstance(max_freq, str) else f'{max_freq:.2f} GHz'})")
+                    
+                    # Memory Information
+                    if 'total_memory_gb' in system_info:
+                        total_mem = system_info.get('total_memory_gb', 0)
+                        available_mem = system_info.get('available_memory_gb', 0)
+                        mem_percent = system_info.get('memory_percent_used', 0)
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ RAM: " + Fore.YELLOW + Style.BRIGHT + f"{total_mem:.1f} GB total, {available_mem:.1f} GB available ({mem_percent:.1f}% used)")
+                        
+                        # Swap information if available
+                        swap_total = system_info.get('swap_total_gb', 0)
+                        if swap_total > 0:
+                            swap_used = system_info.get('swap_used_gb', 0)
+                            swap_percent = system_info.get('swap_percent', 0)
+                            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Swap: " + Fore.YELLOW + Style.BRIGHT + f"{swap_total:.1f} GB total, {swap_used:.1f} GB used ({swap_percent:.1f}%)")
+                    
+                    # CUDA/GPU Information
+                    if system_info.get('cuda_available', False):
                         print(Fore.GREEN + Style.BRIGHT + f"  ├─ CUDA: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('cuda_version', 'Unknown')}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  └─ GPUs: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('gpu_count', 0)}")
-                    print()
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ cuDNN: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('cudnn_version', 'Unknown')}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPUs: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('gpu_count', 0)}")
+                        
+                        # Individual GPU details
+                        gpu_names = system_info.get('gpu_names', [])
+                        gpu_memory = system_info.get('gpu_memory', [])
+                        gpu_compute = system_info.get('gpu_compute_capabilities', [])
+                        
+                        for i, (name, memory, compute) in enumerate(zip(gpu_names, gpu_memory, gpu_compute)):
+                            gpu_label = "  │  ├─" if i < len(gpu_names) - 1 else "  │  └─"
+                            print(Fore.GREEN + Style.BRIGHT + f"{gpu_label} GPU {i}: " + Fore.YELLOW + Style.BRIGHT + f"{name} ({memory:.1f} GB, Compute {compute})")
+                            
+                            # GPU memory usage if available
+                            gpu_memory_usage = system_info.get('gpu_memory_usage', [])
+                            if i < len(gpu_memory_usage):
+                                usage = gpu_memory_usage[i]
+                                allocated = usage.get('allocated_mb', 0)
+                                reserved = usage.get('reserved_mb', 0)
+                                percent = usage.get('percent_allocated', 0)
+                                indent = "  │     " if i < len(gpu_names) - 1 else "       "
+                                print(Fore.GREEN + Style.BRIGHT + f"{indent}└─ Memory: " + Fore.YELLOW + Style.BRIGHT + f"{allocated:.0f} MB allocated, {reserved:.0f} MB reserved ({percent:.1f}%)")
+                    else:
+                        cuda_details = system_info.get('cuda_details', 'CUDA not available')
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ CUDA: " + Fore.YELLOW + Style.BRIGHT + f"{cuda_details}")
+                    
+                    # Disk space information
+                    if 'disk_free_gb' in system_info:
+                        disk_free = system_info.get('disk_free_gb', 0)
+                        disk_total = system_info.get('disk_total_gb', 0)
+                        disk_used = system_info.get('disk_used_gb', 0)
+                        disk_percent = (disk_used / disk_total * 100) if disk_total > 0 else 0
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Disk: " + Fore.YELLOW + Style.BRIGHT + f"{disk_free:.1f} GB free of {disk_total:.1f} GB ({disk_percent:.1f}% used)")
+                    
+                    # Process memory if available
+                    if 'process_memory' in system_info:
+                        process_mem = system_info['process_memory']
+                        rss_mb = process_mem.get('rss_mb', 0)
+                        vms_mb = process_mem.get('vms_mb', 0)
+                        percent = process_mem.get('percent', 0)
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Process: " + Fore.YELLOW + Style.BRIGHT + f"{rss_mb:.1f} MB RSS, {vms_mb:.1f} MB VMS ({percent:.2f}%)")
+                    else:
+                        # Close the tree structure if no process memory
+                        print()
                 
             except Exception as e:
                 error_msg = f"System information collection failed: {e}"
@@ -57023,7 +60147,7 @@ def run_stability_test(
             # Test 1: Basic Hardware Compatibility
             logger.info("Test 1: Hardware Compatibility")
             test_results['tests_run'].append('hardware_compatibility')
-            
+
             try:
                 hw_test_results = {
                     'test_name': 'hardware_compatibility',
@@ -57035,11 +60159,13 @@ def run_stability_test(
                 
                 hw_start_time = time.time()
                 
-                # Device detection and validation
+                # Device detection and validation using cached hardware_data
                 if test_device == 'auto':
-                    if torch.cuda.is_available():
+                    # Use already-fetched hardware information instead of re-querying
+                    if cuda_available:
                         device = torch.device('cuda')
                         hw_test_results['details']['cuda_available'] = True
+                        hw_test_results['details']['gpu_count'] = gpu_count
                     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
                         device = torch.device('mps')
                         hw_test_results['details']['mps_available'] = True
@@ -57049,6 +60175,18 @@ def run_stability_test(
                 else:
                     device = torch.device(test_device)
                     hw_test_results['details']['specified_device'] = str(device)
+                    
+                    # Validate specified device against hardware_data
+                    if test_device == 'cuda' and not cuda_available:
+                        hw_test_results['warnings'] = ['CUDA device specified but not available, may cause errors']
+                
+                # Add hardware context to test results
+                hw_test_results['details']['hardware_context'] = {
+                    'cuda_available': cuda_available,
+                    'gpu_count': gpu_count,
+                    'total_ram_gb': memory_gb,
+                    'cpu_cores': cpu_cores
+                }
                 
                 # Test basic tensor operations
                 test_tensor = torch.randn(100, test_features, device=device)
@@ -57123,6 +60261,7 @@ def run_stability_test(
                     random_state=42,
                     output_format='dict',
                     verbose=False,
+                    silent=False,
                     config=final_config
                 )
                 
@@ -57154,6 +60293,7 @@ def run_stability_test(
                     batch_size=test_batch_size,
                     num_workers=test_num_workers,
                     pin_memory=False,  # Disable for stability test
+                    silent=False,
                     config=final_config
                 )
                 
@@ -57364,17 +60504,18 @@ def run_stability_test(
                         'reproducible': True
                     },
                     'monitoring': {
-                        'verbose': False,
+                        'verbose': True,
                         'debug_mode': False,
-                        'tensorboard_logging': False,
-                        'save_checkpoints': False,
-                        'progress_bar': False
+                        'tensorboard_logging': True,
+                        'save_checkpoints': True,
+                        'silent': False,
+                        'progress_bar': True
                     },
                     'export': {
                         'export_onnx': False,
-                        'save_model': False,
-                        'save_metadata': False,
-                        'save_training_history': False
+                        'save_model': True,
+                        'save_metadata': True,
+                        'save_training_history': True
                     },
                     'advanced_training': {
                         'num_workers': test_num_workers,
@@ -57453,7 +60594,7 @@ def run_stability_test(
             
             test_results['test_results']['training_stability'] = training_test_results
             
-            # Test 5: Performance Benchmarking (if enabled)
+            # Test 5: Performance Benchmarking
             if performance_benchmarking or comprehensive_test:
                 logger.info("Test 5: Performance Benchmarking")
                 test_results['tests_run'].append('performance_benchmarking')
@@ -57464,70 +60605,215 @@ def run_stability_test(
                         'status': 'UNKNOWN',
                         'details': {},
                         'duration_seconds': 0,
-                        'error': None
+                        'error': None,
+                        'baseline_comparison': {},
+                        'performance_metrics': {}
                     }
                     
                     perf_start_time = time.time()
                     
-                    # Memory usage monitoring
+                    # Establish performance baseline
+                    logger.debug("Establishing performance baseline with hardware awareness")
+                    baseline_metrics = establish_performance_baseline(hardware_data=hardware_data)
+                    
+                    if 'error' not in baseline_metrics:
+                        perf_test_results['details']['baseline_established'] = True
+                        perf_test_results['details']['baseline_metrics'] = {
+                            'cpu_gflops': baseline_metrics.get('baselines', {}).get('cpu', {}).get('gflops', 0),
+                            'memory_performance': baseline_metrics.get('summary', {}).get('memory_performance', 'unknown'),
+                            'io_performance': baseline_metrics.get('summary', {}).get('io_performance', 'unknown'),
+                            'system_capability': baseline_metrics.get('summary', {}).get('overall_capability', 'unknown')
+                        }
+                        
+                        # Add GPU baseline if available
+                        if cuda_available and 'gpu' in baseline_metrics.get('baselines', {}):
+                            gpu_baselines = baseline_metrics['baselines']['gpu']
+                            perf_test_results['details']['baseline_metrics']['gpu_gflops'] = max(
+                                [gpu.get('gflops', 0) for gpu in gpu_baselines.values() if isinstance(gpu, dict)],
+                                default=0
+                            )
+                    else:
+                        perf_test_results['warnings'] = [f"Baseline establishment failed: {baseline_metrics.get('error')}"]
+                    
+                    # Wrap model inference test with performance monitoring
+                    @enhanced_monitor_performance(include_memory=True, log_level=logging.DEBUG, hardware_data=hardware_data)
+                    def run_throughput_test(model, test_data, device, warmup_iterations=10):
+                        """Monitored throughput test with automatic performance tracking."""
+                        model.eval()
+                        
+                        # Warmup phase
+                        with torch.no_grad():
+                            for _ in range(warmup_iterations):
+                                _ = model(test_data[:32])
+                        
+                        # Synchronize for accurate timing
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize(device)
+                        
+                        # Actual throughput measurement
+                        throughput_start = time.time()
+                        with torch.no_grad():
+                            output = model(test_data)
+                        
+                        if torch.cuda.is_available():
+                            torch.cuda.synchronize(device)
+                        
+                        throughput_time = time.time() - throughput_start
+                        
+                        return {
+                            'output': output,
+                            'throughput_time': throughput_time,
+                            'samples_processed': test_data.shape[0]
+                        }
+                    
+                    # Memory usage monitoring (initial state)
+                    initial_memory_state = {}
                     if torch.cuda.is_available():
                         torch.cuda.reset_peak_memory_stats(device)
-                        initial_memory = torch.cuda.memory_allocated(device)
+                        initial_memory_state['gpu_allocated'] = torch.cuda.memory_allocated(device)
+                        initial_memory_state['gpu_reserved'] = torch.cuda.memory_reserved(device)
                     
-                    # Throughput testing
-                    model.eval()
+                    # CPU memory tracking
+                    try:
+                        proc = psutil.Process()
+                        initial_memory_state['cpu_rss'] = proc.memory_info().rss
+                        initial_memory_state['cpu_vms'] = proc.memory_info().vms
+                    except Exception as e:
+                        logger.debug(f"Could not track CPU memory: {e}")
+                    
+                    # Run monitored throughput test
                     throughput_samples = 1000
                     throughput_data = torch.randn(throughput_samples, test_features, device=device)
                     
-                    # Warmup
-                    with torch.no_grad():
-                        for _ in range(10):
-                            _ = model(throughput_data[:32])
+                    logger.debug(f"Running throughput test with {throughput_samples} samples")
+                    throughput_results = run_throughput_test(model, throughput_data, device)
                     
-                    # Actual throughput test
-                    torch.cuda.synchronize() if torch.cuda.is_available() else None
-                    throughput_start = time.time()
+                    # Extract performance metrics from the monitored function
+                    if hasattr(run_throughput_test, '_performance_metrics') and run_throughput_test._performance_metrics:
+                        latest_metrics = run_throughput_test._performance_metrics[-1]
+                        
+                        perf_test_results['performance_metrics'] = {
+                            'function_duration': latest_metrics.get('duration', 0),
+                            'memory_delta_mb': latest_metrics.get('memory_usage', {}).get('rss_delta_mb', 0),
+                            'system_memory_delta_gb': latest_metrics.get('memory_usage', {}).get('system_delta_gb', 0),
+                            'gpu_memory_delta_mb': latest_metrics.get('gpu_memory', {}).get('total_delta_mb', 0),
+                            'hardware_context': latest_metrics.get('hardware_context', {})
+                        }
                     
-                    with torch.no_grad():
-                        throughput_output = model(throughput_data)
-                    
-                    torch.cuda.synchronize() if torch.cuda.is_available() else None
-                    throughput_time = time.time() - throughput_start
-                    
-                    samples_per_second = throughput_samples / throughput_time
+                    # Calculate throughput metrics
+                    throughput_time = throughput_results['throughput_time']
+                    samples_per_second = throughput_samples / throughput_time if throughput_time > 0 else 0
                     
                     perf_test_results['details'].update({
                         'throughput_test': 'SUCCESS',
                         'samples_per_second': samples_per_second,
                         'inference_time_ms': throughput_time * 1000,
-                        'throughput_samples': throughput_samples
+                        'throughput_samples': throughput_samples,
+                        'warmup_iterations': 10
                     })
                     
-                    # Memory usage
+                    # Final memory usage measurement
+                    final_memory_state = {}
                     if torch.cuda.is_available():
-                        peak_memory = torch.cuda.max_memory_allocated(device)
-                        memory_usage_mb = (peak_memory - initial_memory) / (1024 * 1024)
+                        final_memory_state['gpu_allocated'] = torch.cuda.memory_allocated(device)
+                        final_memory_state['gpu_reserved'] = torch.cuda.memory_reserved(device)
+                        final_memory_state['gpu_peak'] = torch.cuda.max_memory_allocated(device)
+                        
+                        memory_delta = final_memory_state['gpu_allocated'] - initial_memory_state.get('gpu_allocated', 0)
+                        memory_usage_mb = memory_delta / (1024 * 1024)
+                        peak_memory_mb = final_memory_state['gpu_peak'] / (1024 * 1024)
+                        
                         perf_test_results['details'].update({
-                            'memory_usage_mb': memory_usage_mb,
-                            'peak_memory_mb': peak_memory / (1024 * 1024)
+                            'gpu_memory_usage_mb': memory_usage_mb,
+                            'gpu_peak_memory_mb': peak_memory_mb,
+                            'gpu_memory_efficiency': (memory_usage_mb / peak_memory_mb * 100) if peak_memory_mb > 0 else 0
                         })
+                    
+                    # CPU memory delta
+                    try:
+                        proc = psutil.Process()
+                        final_memory_state['cpu_rss'] = proc.memory_info().rss
+                        cpu_memory_delta_mb = (final_memory_state['cpu_rss'] - initial_memory_state.get('cpu_rss', 0)) / (1024 * 1024)
+                        perf_test_results['details']['cpu_memory_delta_mb'] = cpu_memory_delta_mb
+                    except Exception as e:
+                        logger.debug(f"Could not calculate CPU memory delta: {e}")
+                    
+                    # Compare against baseline if available
+                    if 'error' not in baseline_metrics:
+                        baseline_comparison = {}
+                        
+                        # CPU comparison
+                        cpu_baseline = baseline_metrics.get('baselines', {}).get('cpu', {})
+                        if cpu_baseline:
+                            baseline_comparison['cpu_performance_ratio'] = samples_per_second / cpu_baseline.get('operations_per_second', 1)
+                        
+                        # Memory comparison
+                        memory_baselines = baseline_metrics.get('baselines', {}).get('memory', {})
+                        if memory_baselines and perf_test_results['performance_metrics'].get('memory_delta_mb'):
+                            avg_baseline_speed = np.mean([
+                                b.get('allocation_speed_mbs', 0) 
+                                for b in memory_baselines.values() 
+                                if isinstance(b, dict)
+                            ])
+                            if avg_baseline_speed > 0:
+                                baseline_comparison['memory_efficiency'] = 'good' if avg_baseline_speed > 100 else 'fair'
+                        
+                        # GPU comparison if available
+                        if cuda_available:
+                            gpu_baselines = baseline_metrics.get('baselines', {}).get('gpu', {})
+                            if gpu_baselines:
+                                max_baseline_gflops = max([
+                                    gpu.get('gflops', 0) 
+                                    for gpu in gpu_baselines.values() 
+                                    if isinstance(gpu, dict)
+                                ], default=0)
+                                if max_baseline_gflops > 0:
+                                    # Estimate model GFLOPS (rough approximation)
+                                    model_params = sum(p.numel() for p in model.parameters())
+                                    estimated_gflops = (2 * model_params * throughput_samples) / (throughput_time * 1e9)
+                                    baseline_comparison['gpu_utilization'] = (estimated_gflops / max_baseline_gflops) * 100
+                        
+                        perf_test_results['baseline_comparison'] = baseline_comparison
                     
                     perf_test_results['duration_seconds'] = time.time() - perf_start_time
                     perf_test_results['status'] = 'PASSED'
                     
-                    # Store performance metrics
+                    # Store performance metrics in test results
                     test_results['performance_metrics'] = {
                         'samples_per_second': samples_per_second,
                         'inference_time_ms': throughput_time * 1000,
-                        'memory_usage_mb': perf_test_results['details'].get('memory_usage_mb', 0)
+                        'memory_usage_mb': perf_test_results['details'].get('gpu_memory_usage_mb', perf_test_results['details'].get('cpu_memory_delta_mb', 0)),
+                        'baseline_metrics': perf_test_results['details'].get('baseline_metrics', {}),
+                        'baseline_comparison': baseline_comparison if 'baseline_comparison' in locals() else {},
+                        'performance_monitoring': perf_test_results.get('performance_metrics', {})
                     }
                     
                     if verbose:
                         print(Fore.YELLOW + Style.BRIGHT + f"\nPerformance benchmarking passed:")
                         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Throughput: " + Fore.YELLOW + Style.BRIGHT + f"{samples_per_second:.1f} samples/sec")
                         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Inference time: " + Fore.YELLOW + Style.BRIGHT + f"{throughput_time * 1000:.2f} ms")
+                        
                         if torch.cuda.is_available():
-                            print(Fore.GREEN + Style.BRIGHT + f"  └─ Memory usage: " + Fore.YELLOW + Style.BRIGHT + f"{memory_usage_mb:.3f} MB")
+                            print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU memory usage: " + Fore.YELLOW + Style.BRIGHT + f"{memory_usage_mb:.3f} MB")
+                            print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU peak memory: " + Fore.YELLOW + Style.BRIGHT + f"{peak_memory_mb:.3f} MB")
+                        
+                        if perf_test_results['details'].get('cpu_memory_delta_mb'):
+                            print(Fore.GREEN + Style.BRIGHT + f"  ├─ CPU memory delta: " + Fore.YELLOW + Style.BRIGHT + f"{cpu_memory_delta_mb:.3f} MB")
+                        
+                        # Display baseline comparison
+                        if baseline_comparison:
+                            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Baseline Comparison:")
+                            if 'cpu_performance_ratio' in baseline_comparison:
+                                print(Fore.GREEN + Style.BRIGHT + f"  │  ├─ CPU ratio: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_comparison['cpu_performance_ratio']:.2f}x")
+                            if 'gpu_utilization' in baseline_comparison:
+                                print(Fore.GREEN + Style.BRIGHT + f"  │  ├─ GPU utilization: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_comparison['gpu_utilization']:.1f}%")
+                            if 'memory_efficiency' in baseline_comparison:
+                                print(Fore.GREEN + Style.BRIGHT + f"  │  └─ Memory efficiency: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_comparison['memory_efficiency']}")
+                        
+                        # Display system capability
+                        if 'baseline_metrics' in perf_test_results['details']:
+                            system_cap = perf_test_results['details']['baseline_metrics'].get('system_capability', 'unknown')
+                            print(Fore.GREEN + Style.BRIGHT + f"  └─ System capability: " + Fore.YELLOW + Style.BRIGHT + f"{system_cap}")
                 
                 except Exception as e:
                     perf_test_results['status'] = 'FAILED'
@@ -57717,22 +61003,70 @@ def run_stability_test(
                 'system_stable': overall_status in ['PASSED', 'PARTIAL'] and len(test_results['errors']) == 0
             }
             
-            # Save test results if requested
+            # Save serializable test results
             if save_test_results:
                 try:
                     results_file = test_results_dir / f"stability_test_results_{test_timestamp}.json"
-                    with open(results_file, 'w') as f:
-                        json.dump(test_results, f, indent=2, default=str)
+
+                    # Ensure parent directory exists
+                    results_file.parent.mkdir(parents=True, exist_ok=True)
+
+                    # Deep serialization function to handle nested structures
+                    def make_serializable(obj):
+                        """Recursively convert objects to JSON-serializable format."""
+                        if isinstance(obj, (str, int, float, bool, type(None))):
+                            return obj
+                        elif isinstance(obj, Path):
+                            return str(obj)
+                        elif isinstance(obj, datetime):
+                            return obj.isoformat()
+                        elif isinstance(obj, (set, tuple)):
+                            return [make_serializable(item) for item in obj]
+                        elif isinstance(obj, list):
+                            return [make_serializable(item) for item in obj]
+                        elif isinstance(obj, dict):
+                            return {key: make_serializable(value) for key, value in obj.items()}
+                        elif hasattr(obj, '__dict__'):
+                            # Handle objects with __dict__ (convert to dictionary representation)
+                            try:
+                                return {
+                                    '__type__': type(obj).__name__,
+                                    '__module__': type(obj).__module__,
+                                    'data': str(obj)
+                                }
+                            except Exception:
+                                return str(obj)
+                        else:
+                            # Fallback to string representation for any other type
+                            return str(obj)
+                    
+                    # Prepare results for JSON serialization with recursive handling
+                    serializable_stats = make_serializable(test_results)
+                    
+                    # Write to file with error handling
+                    with open(results_file, 'w', encoding='utf-8') as f:
+                        json.dump(serializable_stats, f, indent=2, ensure_ascii=False)
+                    
                     test_results['results_file'] = str(results_file)
+                    logger.info(f"Test results saved to: {results_file}")
                     
                     if verbose:
                         print(Fore.GREEN + Style.BRIGHT + f"\nTest results saved to: {results_file}")
                 
+                except PermissionError as perm_error:
+                    logger.error(f"Permission denied when saving test results: {perm_error}")
+                    test_results['warnings'].append(f"Permission denied when saving results: {str(perm_error)}")
+                except OSError as os_error:
+                    logger.error(f"OS error when saving test results: {os_error}")
+                    test_results['warnings'].append(f"OS error when saving results: {str(os_error)}")
+                except TypeError as type_error:
+                    logger.error(f"Serialization error when saving test results: {type_error}", exc_info=True)
+                    test_results['warnings'].append(f"Serialization error: {str(type_error)}")
                 except Exception as e:
-                    logger.warning(f"Failed to save test results: {e}")
-                    test_results['warnings'].append(f"Failed to save results: {e}")
+                    logger.error(f"Failed to save test results: {e}", exc_info=True)
+                    test_results['warnings'].append(f"Failed to save results: {str(e)}")
             
-            # Display comprehensive results
+            # Display results
             if verbose:
                 print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
                 print(Fore.MAGENTA + Style.BRIGHT + "STABILITY TEST RESULTS")
@@ -57745,49 +61079,104 @@ def run_stability_test(
                 
                 # Summary
                 summary = test_results['summary']
-                print(Fore.YELLOW + Style.BRIGHT + f"Test Summary:")
-                print(Fore.CYAN + Style.BRIGHT + f"- Total Tests: " + Fore.GREEN + Style.BRIGHT + f"{summary['total_tests_run']}")
-                print(Fore.CYAN + Style.BRIGHT + f"- Passed: " + Fore.GREEN + Style.BRIGHT + f"{summary['tests_passed']}")
-                print(Fore.CYAN + Style.BRIGHT + f"- Failed: " + Fore.GREEN + Style.BRIGHT + f"{summary['tests_failed']}")
-                print(Fore.CYAN + Style.BRIGHT + f"- Partial: " + Fore.GREEN + Style.BRIGHT + f"{summary['tests_partial']}")
-                print(Fore.CYAN + Style.BRIGHT + f"- Duration: " + Fore.GREEN + Style.BRIGHT + f"{summary['total_duration_minutes']:.1f} minutes")
+                print(Fore.YELLOW + Style.BRIGHT + f"\nTest Summary:")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Total Tests: " + Fore.GREEN + Style.BRIGHT + f"{summary['total_tests_run']}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Passed: " + Fore.GREEN + Style.BRIGHT + f"{summary['tests_passed']}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Failed: " + Fore.RED + Style.BRIGHT + f"{summary['tests_failed']}")
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ Partial: " + Fore.YELLOW + Style.BRIGHT + f"{summary['tests_partial']}")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Duration: " + Fore.GREEN + Style.BRIGHT + f"{summary['total_duration_minutes']:.1f} minutes")
                 
                 # System information
                 if test_results['system_info']:
                     si = test_results['system_info']
                     print(Fore.YELLOW + Style.BRIGHT + f"\nSystem Information:")
-                    print(Fore.CYAN + Style.BRIGHT + f"- Platform: " + Fore.GREEN + Style.BRIGHT + f"{si.get('system', 'Unknown')} {si.get('machine', '')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"- Python: " + Fore.GREEN + Style.BRIGHT + f"{si.get('python_version', '').split()[0]}")
-                    print(Fore.CYAN + Style.BRIGHT + f"- PyTorch: " + Fore.GREEN + Style.BRIGHT + f"{si.get('pytorch_version', 'Unknown')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"- Device: " + Fore.GREEN + Style.BRIGHT + f"{si.get('device', 'Unknown')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Platform: " + Fore.GREEN + Style.BRIGHT + f"{si.get('system', 'Unknown')} {si.get('machine', '')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Python: " + Fore.GREEN + Style.BRIGHT + f"{si.get('python_version', '').split()[0]}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.GREEN + Style.BRIGHT + f"{si.get('pytorch_version', 'Unknown')}")
+                    
+                    # Device info with conditional GPU display
                     if si.get('gpu_count', 0) > 0:
-                        print(Fore.CYAN + Style.BRIGHT + f"- GPUs: " + Fore.GREEN + Style.BRIGHT + f"{si.get('gpu_count', 0)}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + Style.BRIGHT + f"{si.get('device', 'Unknown')}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ GPUs: " + Fore.GREEN + Style.BRIGHT + f"{si.get('gpu_count', 0)}")
+                    else:
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Device: " + Fore.GREEN + Style.BRIGHT + f"{si.get('device', 'Unknown')}")
                 
                 # Performance metrics
                 if test_results.get('performance_metrics'):
                     pm = test_results['performance_metrics']
                     print(Fore.YELLOW + Style.BRIGHT + f"\nPerformance Metrics:")
-                    print(Fore.CYAN + Style.BRIGHT + f"- Throughput: " + Fore.GREEN + Style.BRIGHT + f"{pm.get('samples_per_second', 0):.1f} samples/sec")
-                    print(Fore.CYAN + Style.BRIGHT + f"- Inference Time: " + Fore.GREEN + Style.BRIGHT + f"{pm.get('inference_time_ms', 0):.2f} ms")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Throughput: " + Fore.GREEN + Style.BRIGHT + f"{pm.get('samples_per_second', 0):.1f} samples/sec")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Inference Time: " + Fore.GREEN + Style.BRIGHT + f"{pm.get('inference_time_ms', 0):.2f} ms")
+                    
                     if pm.get('memory_usage_mb'):
-                        print(Fore.CYAN + Style.BRIGHT + f"- Memory Usage: " + Fore.GREEN + Style.BRIGHT + f"{pm.get('memory_usage_mb', 0):.1f} MB")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Memory Usage: " + Fore.GREEN + Style.BRIGHT + f"{pm.get('memory_usage_mb', 0):.1f} MB")
+                    
+                    # Display baseline metrics if available
+                    baseline_metrics = pm.get('baseline_metrics', {})
+                    if baseline_metrics:
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ System Capability: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_metrics.get('system_capability', 'unknown')}")
+                        
+                        if baseline_metrics.get('cpu_gflops'):
+                            print(Fore.CYAN + Style.BRIGHT + f"  │  ├─ CPU GFLOPS: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_metrics['cpu_gflops']:.2f}")
+                        
+                        if baseline_metrics.get('gpu_gflops'):
+                            print(Fore.CYAN + Style.BRIGHT + f"  │  ├─ GPU GFLOPS: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_metrics['gpu_gflops']:.2f}")
+                        
+                        if baseline_metrics.get('memory_performance'):
+                            print(Fore.CYAN + Style.BRIGHT + f"  │  ├─ Memory: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_metrics['memory_performance']}")
+                        
+                        if baseline_metrics.get('io_performance'):
+                            print(Fore.CYAN + Style.BRIGHT + f"  │  └─ I/O: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_metrics['io_performance']}")
+                    
+                    # Display baseline comparison if available
+                    baseline_comparison = pm.get('baseline_comparison', {})
+                    if baseline_comparison:
+                        has_items = False
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Baseline Comparison:")
+                        
+                        if 'cpu_performance_ratio' in baseline_comparison:
+                            has_items = True
+                            print(Fore.CYAN + Style.BRIGHT + f"  │  ├─ CPU ratio: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_comparison['cpu_performance_ratio']:.2f}x")
+                        
+                        if 'gpu_utilization' in baseline_comparison:
+                            if has_items:
+                                print(Fore.CYAN + Style.BRIGHT + f"  │  ├─ GPU utilization: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_comparison['gpu_utilization']:.1f}%")
+                            else:
+                                has_items = True
+                                print(Fore.CYAN + Style.BRIGHT + f"  │  ├─ GPU utilization: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_comparison['gpu_utilization']:.1f}%")
+                        
+                        if 'memory_efficiency' in baseline_comparison:
+                            print(Fore.CYAN + Style.BRIGHT + f"  │  └─ Memory efficiency: " + Fore.YELLOW + Style.BRIGHT + f"{baseline_comparison['memory_efficiency']}")
+                    
+                    # Close performance metrics tree
+                    if not baseline_metrics and not baseline_comparison:
+                        # Change last branch to terminal
+                        pass
+                    else:
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Performance monitoring: " + Fore.GREEN + Style.BRIGHT + f"{len(pm.get('performance_monitoring', {})) or 'N/A'} metrics tracked")
                 
                 # Recommendations
                 if test_results['recommendations']:
                     print(Fore.YELLOW + Style.BRIGHT + f"\nRecommendations:")
+                    rec_count = len(test_results['recommendations'])
                     for i, rec in enumerate(test_results['recommendations'], 1):
-                        print(Fore.CYAN + Style.BRIGHT + f"{i}. " + Fore.GREEN + Style.BRIGHT + f"{rec}")
+                        prefix = "  ├─" if i < rec_count else "  └─"
+                        print(Fore.CYAN + Style.BRIGHT + f"{prefix} " + Fore.GREEN + Style.BRIGHT + f"{rec}")
                 
                 # Errors and warnings
                 if test_results['errors']:
                     print(Fore.YELLOW + Style.BRIGHT + f"\nErrors ({len(test_results['errors'])}):")
+                    error_count = len(test_results['errors'])
                     for i, error in enumerate(test_results['errors'], 1):
-                        print(Fore.YELLOW + Style.BRIGHT + f"{i}. " + Fore.RED + Style.BRIGHT + f"{error}")
+                        prefix = "  ├─" if i < error_count else "  └─"
+                        print(Fore.RED + Style.BRIGHT + f"{prefix} {error}")
                 
                 if test_results['warnings']:
                     print(Fore.YELLOW + Style.BRIGHT + f"\nWarnings ({len(test_results['warnings'])}):")
+                    warning_count = len(test_results['warnings'])
                     for i, warning in enumerate(test_results['warnings'], 1):
-                        print(Fore.WHITE + Style.BRIGHT + f"{i}. " + Fore.YELLOW + Style.BRIGHT + f"{warning}")
+                        prefix = "  ├─" if i < warning_count else "  └─"
+                        print(Fore.YELLOW + Style.BRIGHT + f"{prefix} {warning}")
                 
                 # Final recommendation
                 if overall_status == 'PASSED':
@@ -57825,18 +61214,68 @@ def run_stability_test(
             logger.error(f"Traceback: {traceback.format_exc()}")
             
             if verbose:
-                print(Fore.RED + Style.BRIGHT + f"\nSTABILITY TEST ERROR: {e}")
+                print(Fore.RED + Style.BRIGHT + f"\nSTABILITY TEST ERROR: " + Fore.YELLOW + Style.BRIGHT + f"{e}")
                 print(Fore.YELLOW + Style.BRIGHT + "Please check system configuration and dependencies.")
             
             # Save error results if possible
             if save_test_results:
                 try:
                     error_file = test_results_dir / f"stability_test_error_{test_timestamp}.json"
-                    with open(error_file, 'w') as f:
-                        json.dump(test_results, f, indent=2, default=str)
+                    
+                    # Ensure parent directory exists
+                    error_file.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Deep serialization function to handle nested structures
+                    def make_serializable(obj):
+                        """Recursively convert objects to JSON-serializable format."""
+                        if isinstance(obj, (str, int, float, bool, type(None))):
+                            return obj
+                        elif isinstance(obj, Path):
+                            return str(obj)
+                        elif isinstance(obj, datetime):
+                            return obj.isoformat()
+                        elif isinstance(obj, (set, tuple)):
+                            return [make_serializable(item) for item in obj]
+                        elif isinstance(obj, list):
+                            return [make_serializable(item) for item in obj]
+                        elif isinstance(obj, dict):
+                            return {key: make_serializable(value) for key, value in obj.items()}
+                        elif hasattr(obj, '__dict__'):
+                            # Handle objects with __dict__ (convert to dictionary representation)
+                            try:
+                                return {
+                                    '__type__': type(obj).__name__,
+                                    '__module__': type(obj).__module__,
+                                    'data': str(obj)
+                                }
+                            except Exception:
+                                return str(obj)
+                        else:
+                            # Fallback to string representation for any other type
+                            return str(obj)
+                    
+                    # Prepare error results for JSON serialization
+                    serializable_error_results = make_serializable(test_results)
+                    
+                    # Write to file
+                    with open(error_file, 'w', encoding='utf-8') as f:
+                        json.dump(serializable_error_results, f, indent=2, ensure_ascii=False)
+                    
                     test_results['error_file'] = str(error_file)
+                    logger.info(f"Error results saved to: {error_file}")
+                    
+                except PermissionError as perm_error:
+                    logger.error(f"Permission denied when saving error results: {perm_error}")
+                    test_results['error_file_save_error'] = f"Permission denied: {str(perm_error)}"
+                except OSError as os_error:
+                    logger.error(f"OS error when saving error results: {os_error}")
+                    test_results['error_file_save_error'] = f"OS error: {str(os_error)}"
+                except TypeError as type_error:
+                    logger.error(f"Serialization error when saving error results: {type_error}", exc_info=True)
+                    test_results['error_file_save_error'] = f"Serialization error: {str(type_error)}"
                 except Exception as save_error:
-                    logger.error(f"Failed to save error results: {save_error}")
+                    logger.error(f"Failed to save error results: {save_error}", exc_info=True)
+                    test_results['error_file_save_error'] = str(save_error)
             
             return test_results
         
@@ -57861,17 +61300,7 @@ def run_stability_test(
         # Top-level error handling
         error_msg = f"Stability test initialization failed: {e}"
         logger.error(error_msg, exc_info=True)
-        
-        console.print(
-            Panel.fit(
-                f"{error_msg}",
-                title="STABILITY TEST INITIALIZATION ERROR",
-                style="bold red",
-                border_style="red",
-                padding=(1, 2),
-                box=box.ROUNDED
-            )
-        )
+        print(Fore.RED + Style.BRIGHT + f"\nStability test initialization failed: " + Fore.YELLOW + Style.BRIGHT + f"{error_msg}")
         
         return {
             'overall_status': 'FAILED',
