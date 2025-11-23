@@ -8854,9 +8854,364 @@ def update_global_config(config: Dict[str, Any]) -> None:
     except Exception as e:
         logger.debug(f"Failed to save configuration change log: {e}")
 
-
-
 def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
+    """Load config file with enhanced validation, error recovery, migration support,
+    integrated named configuration functionality, and intelligent memory management 
+    for optimal performance during large file processing.
+    
+    Args:
+        config_path: Path to the configuration file or name of saved/named configuration
+        
+    Returns:
+        Dictionary containing the loaded configuration
+        
+    Raises:
+        ValueError: If configuration format is invalid
+        FileNotFoundError: If configuration file not found
+    """
+    try:
+        # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
+        hardware_data = None
+        total_ram_gb = 8.0  # Conservative default
+        
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+        except Exception as e:
+            logger.debug(f"Hardware detection failed during load_config: {e}")
+        
+        # Handle named configuration loading
+        if isinstance(config_path, str) or (isinstance(config_path, Path) and not config_path.exists()):
+            config_name = str(config_path)
+            
+            # First check if it's a named configuration
+            registry_path = CONFIG_DIR / "named_configs_registry.json"
+            if registry_path.exists():
+                try:
+                    with open(registry_path, 'r', encoding='utf-8') as f:
+                        registry = json.load(f)
+                    named_configs = registry.get("configs", {})
+                    
+                    if config_name in named_configs:
+                        actual_config_path = Path(named_configs[config_name]["path"])
+                        
+                        if not actual_config_path.exists():
+                            logger.warning(f"Named configuration file not found: {actual_config_path}")
+                            return {}
+                        
+                        # MEMORY OPTIMIZATION - Clear memory before recursive call
+                        if total_ram_gb < 8:
+                            try:
+                                pre_recursive_clear = enhanced_clear_memory(
+                                    aggressive=True,
+                                    hardware_data=hardware_data
+                                )
+                                if pre_recursive_clear.get('success'):
+                                    logger.debug("Memory optimized before named config recursive load")
+                            except Exception as e:
+                                logger.debug(f"Pre-recursive memory optimization failed: {e}")
+                        
+                        # Update last accessed time in registry
+                        try:
+                            update_named_config_registry(config_name, actual_config_path, {
+                                "created": named_configs[config_name].get("created"),
+                                "modified": named_configs[config_name].get("modified"),
+                                "config": {
+                                    "preset_used": named_configs[config_name].get("preset_used"),
+                                    "model_type": named_configs[config_name].get("model_type"),
+                                    "checksum": named_configs[config_name].get("checksum")
+                                }
+                            })
+                        except Exception as e:
+                            logger.debug(f"Failed to update access time for {config_name}: {e}")
+                        
+                        # Load the actual config file
+                        return load_config(actual_config_path)
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to check named config registry: {e}")
+            
+            # If not a named config, try regular saved config
+            regular_config_path = CONFIG_DIR / f"{config_name}.json"
+            if regular_config_path.exists():
+                return load_config(regular_config_path)
+            
+            # Return empty dict instead of raising FileNotFoundError
+            logger.info(f"Configuration '{config_name}' not found, returning empty configuration")
+            return {}
+        
+        # Standard file loading logic with memory optimization
+        try:
+            if not config_path.exists():
+                logger.info(f"No configuration file found at {config_path}")
+                return {}
+            
+            # Check file size and basic validity with memory considerations
+            file_size = config_path.stat().st_size
+            if file_size == 0:
+                logger.warning(f"Configuration file {config_path} is empty")
+                return {}
+            
+            # 10MB limit
+            if file_size > 10 * 1024 * 1024:
+                logger.warning(f"Configuration file {config_path} is unusually large ({file_size} bytes)")
+            
+            # MEMORY OPTIMIZATION - Clear memory before loading large files
+            large_file_threshold = 1024 * 1024  # 1MB
+            if file_size > large_file_threshold or total_ram_gb < 8:
+                try:
+                    pre_load_clear = enhanced_clear_memory(
+                        aggressive=file_size > large_file_threshold * 5 or total_ram_gb < 4,
+                        hardware_data=hardware_data
+                    )
+                    if pre_load_clear.get('success'):
+                        logger.debug(f"Memory optimized before loading {file_size} byte config file")
+                except Exception as e:
+                    logger.debug(f"Pre-load memory optimization failed: {e}")
+            
+            # Load with enhanced error handling
+            logger.debug(f"Loading configuration from {config_path} ({file_size} bytes)")
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                try:
+                    config_data = json.load(f)
+                except json.JSONDecodeError as e:
+                    # Try to recover from common JSON errors
+                    logger.error(f"JSON decode error in {config_path}: {e}")
+                    
+                    # MEMORY OPTIMIZATION - Clear memory before intensive recovery operations
+                    try:
+                        recovery_clear = enhanced_clear_memory(
+                            aggressive=total_ram_gb < 8,
+                            hardware_data=hardware_data
+                        )
+                        if recovery_clear.get('success'):
+                            logger.debug("Memory optimized before JSON recovery")
+                    except Exception as e:
+                        logger.debug(f"Pre-recovery memory optimization failed: {e}")
+                    
+                    # Attempt basic recovery
+                    f.seek(0)
+                    content = f.read()
+                    
+                    # Try to fix common issues
+                    recovered_config = attempt_json_recovery(content, config_path)
+                    if recovered_config:
+                        config_data = recovered_config
+                        logger.warning("Configuration recovered from JSON errors")
+                    else:
+                        raise ValueError(f"Cannot parse configuration file: {e}")
+            
+            # MEMORY OPTIMIZATION - Clear memory after file loading for large configs
+            if file_size > large_file_threshold and total_ram_gb < 16:
+                try:
+                    post_load_clear = enhanced_clear_memory(
+                        aggressive=file_size > large_file_threshold * 10,
+                        hardware_data=hardware_data
+                    )
+                    if post_load_clear.get('success'):
+                        logger.debug("Memory optimized after config file loading")
+                except Exception as e:
+                    logger.debug(f"Post-load memory optimization failed: {e}")
+            
+            # Validate basic structure
+            if not isinstance(config_data, dict):
+                raise ValueError("Configuration file must contain a JSON object")
+            
+            # Handle different configuration formats with memory optimization for large configs
+            if 'config' in config_data and 'metadata' in config_data:
+                # New format with metadata
+                loaded_config = config_data['config']
+                metadata = config_data['metadata']
+                
+                # MEMORY OPTIMIZATION - Clear memory before intensive metadata processing
+                if len(str(metadata)) > 10000 and total_ram_gb < 16:
+                    try:
+                        metadata_clear = enhanced_clear_memory(
+                            aggressive=False,
+                            hardware_data=hardware_data
+                        )
+                        if metadata_clear.get('success'):
+                            logger.debug("Memory optimized before metadata processing")
+                    except Exception as e:
+                        logger.debug(f"Metadata memory optimization failed: {e}")
+                
+                logger.debug(f"Loaded configuration with metadata: version={metadata.get('version', 'unknown')}")
+                
+                # Check version compatibility
+                file_version = metadata.get('version', '1.0')
+                if file_version != '2.1':
+                    logger.info(f"Configuration version {file_version} detected, may need migration")
+                    # The migration will be handled by the caller if needed
+                
+                # Verify checksum if present
+                expected_checksum = metadata.get('config', {}).get('checksum')
+                if expected_checksum:
+                    actual_checksum = generate_config_checksum(loaded_config)
+                    if actual_checksum != expected_checksum:
+                        logger.warning("Configuration checksum mismatch - file may have been modified externally")
+                
+                # MEMORY OPTIMIZATION - Clear memory before preset information update
+                if len(str(loaded_config)) > 50000 and total_ram_gb < 16:
+                    try:
+                        preset_clear = enhanced_clear_memory(
+                            aggressive=False,
+                            hardware_data=hardware_data
+                        )
+                        if preset_clear.get('success'):
+                            logger.debug("Memory optimized before preset information update")
+                    except Exception as e:
+                        logger.debug(f"Preset memory optimization failed: {e}")
+                
+                # Ensure preset information is current
+                if 'presets' in loaded_config:
+                    try:
+                        loaded_config['presets']['available_presets'] = get_available_presets()
+                        loaded_config['presets']['preset_configs'] = get_preset_descriptions()
+                        loaded_config['presets']['custom_presets_available'] = get_safe_custom_presets()
+                    except Exception as e:
+                        logger.debug(f"Failed to update preset information: {e}")
+                
+            else:
+                # Legacy format - assume it's the configuration directly
+                loaded_config = config_data
+                logger.info("Loaded legacy configuration format")
+                
+                # MEMORY OPTIMIZATION - Clear memory before legacy format processing
+                if len(str(loaded_config)) > 25000 and total_ram_gb < 16:
+                    try:
+                        legacy_clear = enhanced_clear_memory(
+                            aggressive=len(str(loaded_config)) > 50000,
+                            hardware_data=hardware_data
+                        )
+                        if legacy_clear.get('success'):
+                            logger.debug("Memory optimized before legacy format processing")
+                    except Exception as e:
+                        logger.debug(f"Legacy format memory optimization failed: {e}")
+                
+                # Attempt to add current preset information to legacy configs
+                try:
+                    if 'presets' not in loaded_config:
+                        loaded_config['presets'] = {}
+                    loaded_config['presets']['available_presets'] = get_available_presets()
+                    loaded_config['presets']['preset_configs'] = get_preset_descriptions()
+                    loaded_config['presets']['custom_presets_available'] = get_safe_custom_presets()
+                except Exception as e:
+                    logger.debug(f"Failed to add preset information to legacy config: {e}")
+            
+            # Validate loaded configuration structure
+            if not isinstance(loaded_config, dict):
+                raise ValueError("Invalid configuration structure")
+            
+            # Basic sanity checks
+            if not loaded_config:
+                logger.warning("Configuration is empty")
+                return {}
+            
+            # Enhanced validation for critical sections
+            required_sections = ['training', 'model', 'security', 'data']
+            missing_sections = [section for section in required_sections if section not in loaded_config]
+            if missing_sections:
+                logger.warning(f"Missing required sections: {missing_sections}")
+                # Don't fail loading, but warn - these will be filled by defaults
+            
+            # Validate model type compatibility with current MODEL_VARIANTS
+            model_config = loaded_config.get('model', {})
+            model_type = model_config.get('model_type')
+            if model_type and MODEL_VARIANTS and model_type not in MODEL_VARIANTS:
+                logger.warning(f"Model type '{model_type}' not available in current MODEL_VARIANTS")
+                # Don't modify the loaded config, let the caller handle this
+            
+            # MEMORY OPTIMIZATION - Clear memory before final processing steps
+            if len(str(loaded_config)) > 75000 and total_ram_gb < 16:
+                try:
+                    final_processing_clear = enhanced_clear_memory(
+                        aggressive=len(str(loaded_config)) > 150000,
+                        hardware_data=hardware_data
+                    )
+                    if final_processing_clear.get('success'):
+                        logger.debug("Memory optimized before final config processing")
+                except Exception as e:
+                    logger.debug(f"Final processing memory optimization failed: {e}")
+            
+            # Log loading statistics
+            section_count = len([k for k, v in loaded_config.items() if isinstance(v, dict)])
+            total_params = sum(len(v) if isinstance(v, dict) else 1 for v in loaded_config.values())
+            
+            logger.debug(f"Successfully loaded configuration: {section_count} sections, {total_params} parameters")
+            logger.debug(f"Configuration sections: {list(loaded_config.keys())}")
+            
+            # Add load metadata
+            if 'metadata' not in loaded_config:
+                loaded_config['metadata'] = {}
+            loaded_config['metadata']['last_loaded'] = datetime.now().isoformat()
+            loaded_config['metadata']['loaded_from'] = str(config_path)
+            
+            # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
+            # Aggressive cleanup after configuration loading completion
+            try:
+                final_clear_results = enhanced_clear_memory(
+                    aggressive=True,  # Aggressive final cleanup
+                    hardware_data=hardware_data
+                )
+                
+                if final_clear_results.get('success'):
+                    logger.debug(f"Final load memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
+                    
+            except Exception as e:
+                logger.debug(f"Final load memory optimization failed: {e}")
+            
+            return loaded_config
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON in config file {config_path}: {str(e)}")
+            raise ValueError(f"Configuration file contains invalid JSON: {e}")
+        except FileNotFoundError:
+            logger.info(f"Configuration file not found: {config_path}")
+            return {}
+        except PermissionError as e:
+            logger.error(f"Permission denied reading config file {config_path}: {e}")
+            raise ValueError(f"Cannot read configuration file: permission denied")
+        except Exception as e:
+            logger.error(f"Error loading config from {config_path}: {str(e)}", exc_info=True)
+            
+            # MEMORY OPTIMIZATION - Clear memory before backup loading attempt
+            try:
+                backup_clear = enhanced_clear_memory(
+                    aggressive=total_ram_gb < 8,
+                    hardware_data=hardware_data
+                )
+                if backup_clear.get('success'):
+                    logger.debug("Memory optimized before backup loading attempt")
+            except Exception as cleanup_error:
+                logger.debug(f"Pre-backup memory optimization failed: {cleanup_error}")
+            
+            # Try to load from backup if available
+            backup_config = try_load_from_backup(config_path)
+            if backup_config:
+                logger.warning("Loaded configuration from backup due to primary file error")
+                return backup_config
+            
+            raise ValueError(f"Failed to load configuration: {str(e)}")
+            
+    except Exception as e:
+        logger.error(f"Critical error in load_config: {e}", exc_info=True)
+        
+        # Emergency memory cleanup on error
+        try:
+            emergency_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
+            logger.debug("Emergency memory cleanup performed after load_config error")
+        except Exception as cleanup_error:
+            logger.debug(f"Emergency cleanup failed: {cleanup_error}")
+        
+        if isinstance(e, FileNotFoundError):
+            logger.info(f"Configuration file not found: {config_path}, returning empty configuration")
+            return {}
+        
+        # Re-raise the original exception
+        raise
+
+def load_configs(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
     """Load config file with enhanced validation, error recovery, migration support,
     integrated named configuration functionality, and intelligent memory management 
     for optimal performance during large file processing.
@@ -17682,8 +18037,10 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                 logger.debug(f"Pre-template memory optimization failed: {e}")
         
         try:
-            default_config = get_current_config()
-            template_source = "get_current_config"
+            #default_config = get_current_config()
+            #template_source = "get_current_config"
+            default_config = get_default_config()
+            template_source = "get_default_config"
             logger.debug("Successfully obtained current configuration template")
             
             # Clear memory after large template generation
@@ -42770,17 +43127,19 @@ def load_and_validate_data(
             loading_stats['label_distribution'] = label_counts
             
             # Check for class balance issues
-            if class_balance_config.get('min_class_samples', 10):
+            if class_balance_config.setdefault('min_class_samples', 10):
                 min_class_size = min(label_counts.values())
+                min_class_samples_threshold = class_balance_config.setdefault('min_class_samples', 10)
                 if min_class_size < class_balance_config['min_class_samples']:
                     warning_msg = f"Smallest class has only {min_class_size} samples"
                     if not silent_mode:
                         logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
             
-            if class_balance_config.get('max_class_ratio', 10):
+            if class_balance_config.setdefault('max_class_ratio', 10):
                 max_class_size = max(label_counts.values())
                 min_class_size = min(label_counts.values())
+                max_class_ratio_threshold = class_balance_config.setdefault('max_class_ratio', 10)
                 class_ratio = max_class_size / min_class_size if min_class_size > 0 else float('inf')
                 if class_ratio > class_balance_config['max_class_ratio']:
                     warning_msg = f"Class imbalance ratio: {class_ratio:.2f}"
@@ -54238,40 +54597,242 @@ def _interactive_express_setup(
         print("\033c", end="")
         banner_config = show_banner(return_config=True)
         
-        # Use the config returned from show_banner or fallback
+        # Use the config returned from show_banner for context if available
         if base_config is None and banner_config is not None:
             base_config = banner_config
         else:
-            base_config = base_config or {}
+            base_config = get_current_config()
         
-        # Extract context for display
+        # Extract ALL configuration sections with proper defaults
+        data_config = base_config.get('data', {})
+        model_config = base_config.get('model', {})
+        training_config = base_config.get('training', {})
+        security_config = base_config.get('security', {})
+        monitoring_config = base_config.get('monitoring', {})
+        hardware_config = base_config.get('hardware', {})
+        system_config = base_config.get('system', {})
+        presets_config = base_config.get('presets', {})
+        metadata_config = base_config.get('metadata', {})
+        runtime_config = base_config.get('runtime', {})
+        validation_config = base_config.get('validation', {})
+        experimental_config = base_config.get('experimental', {})
+        hpo_config = base_config.get('hyperparameter_optimization', {})
+
+        # Context extraction with comprehensive fallback chain
         preset_name = "Custom/Default"
         model_type = "Unknown"
+        config_source = "Unknown"
         
-        # Extract preset name with multiple fallbacks
-        presets_section = base_config.get("presets", {})
-        if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "Custom/Default")
+        if base_config:
+            # Preset detection with multiple fallback methods
+            if isinstance(presets_config, dict):
+                preset_name = presets_config.get("current_preset", "Custom/Default")
+            
+            # Check metadata for preset_used
+            if preset_name in ["Custom/Default", None, ""]:
+                if isinstance(metadata_config, dict):
+                    preset_name = metadata_config.get("preset_used", "Custom/Default")
+            
+            # Check legacy _preset_name field
+            if preset_name in ["Custom/Default", None, ""]:
+                preset_name = base_config.get("_preset_name", "Custom/Default")
+            
+            # Check runtime information
+            if preset_name in ["Custom/Default", None, ""]:
+                if isinstance(runtime_config, dict):
+                    preset_name = runtime_config.get("active_preset", "Custom/Default")
+            
+            # Clean up preset name display
+            if preset_name in ["Custom/Default", None, "", "none"]:
+                preset_name = "Custom/Default"
+            elif isinstance(preset_name, str):
+                preset_name = preset_name.title()
+            
+            # Extract model type with error handling
+            if isinstance(model_config, dict):
+                model_type = model_config.get('model_type', 'Unknown')
+                current_model_type = model_type
+            
+            # Extract config source with fallbacks
+            if "runtime" in base_config and isinstance(base_config["runtime"], dict):
+                config_source = base_config["runtime"].get("config_source", "Unknown")
+            elif "metadata" in base_config and isinstance(base_config["metadata"], dict):
+                config_source = base_config["metadata"].get("config_source", "Unknown")
+            else:
+                config_source = "Unknown"
         
-        # Extract model type
-        model_section = base_config.get("model", {})
-        if isinstance(model_section, dict):
-            model_type = model_section.get("model_type", "Unknown")
-            current_model_type = model_type
+        # Get hardware context for system-aware configuration
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+        except Exception as e:
+            logger.debug(f"Hardware detection failed: {e}")
+            hardware_data = {}
         
-        # Clear screen and show context
+        # Hardware-aware system class detection
+        cuda_available = hardware_data.get('cuda', {}).get('available', False)
+        memory_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+        cpu_cores = hardware_data.get('cpu_cores', {}).get('logical_cores', 4)
+        
+        # Determine system performance class for resource optimization
+        if cuda_available and memory_gb >= 32 and cpu_cores >= 16:
+            system_class = "enterprise"
+            recommended_preset = "advanced"
+        elif cuda_available and memory_gb >= 16 and cpu_cores >= 8:
+            system_class = "high-end"
+            recommended_preset = "performance"
+        elif cuda_available and memory_gb >= 8:
+            system_class = "performance"
+            recommended_preset = "performance"
+        elif memory_gb >= 8:
+            system_class = "standard"
+            recommended_preset = "baseline"
+        elif memory_gb >= 4:
+            system_class = "balanced"
+            recommended_preset = "default"
+        else:
+            system_class = "limited"
+            recommended_preset = "lightweight"
+        
+        # Extract current configuration summary
+        current_epochs = training_config.get('epochs', 100)
+        current_batch_size = training_config.get('batch_size', 64)
+        current_learning_rate = training_config.get('learning_rate', 0.001)
+        current_use_real_data = data_config.get('use_real_data', False)
+        current_normal_samples = data_config.get('normal_samples', 8000)
+        current_attack_samples = data_config.get('attack_samples', 2000)
+        current_features = data_config.get('features', 20)
+        
+        # Display context
         print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS SETUP - QUICK CONFIGURATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
-        print(Fore.YELLOW + Style.BRIGHT + f"Base Context:")
+        print(Fore.YELLOW + Style.BRIGHT + "Base Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
-        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + f"Express Setup")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Class: " + Fore.CYAN + Style.BRIGHT + f"{system_class.upper()}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.CYAN + Style.BRIGHT + "Express Setup")
+        
+        # Hardware Context Display
+        print(Fore.YELLOW + Style.BRIGHT + "\nHardware Context:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ CUDA Available: " + Fore.YELLOW + Style.BRIGHT + f"{cuda_available}")
+        if cuda_available:
+            gpu_count = hardware_data.get('cuda', {}).get('gpu_count', 0)
+            gpu_memory = hardware_data.get('cuda', {}).get('gpu_memory_gb', 0)
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU Count: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_count}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU Memory: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_memory}GB")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Memory: " + Fore.YELLOW + Style.BRIGHT + f"{memory_gb:.1f}GB")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ CPU Cores: " + Fore.YELLOW + Style.BRIGHT + f"{cpu_cores}")
+        
+        # Show detailed summary if use_current_config or current configuration exists
+        kwargs_use_current = kwargs.get('use_current_config', False)
+        non_interactive = kwargs.get('non_interactive', False)
+        skip_prompt = kwargs.get('skip_prompt', False)
+        
+        if base_config:
+            print(Fore.MAGENTA + Style.BRIGHT + "\nCURRENT CONFIGURATION SUMMARY")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
+            print(Fore.YELLOW + Style.BRIGHT + "Core Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{current_model_type}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Source: " + Fore.YELLOW + Style.BRIGHT + f"{'Real Data' if current_use_real_data else 'Synthetic Data'}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{current_epochs}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.YELLOW + Style.BRIGHT + f"{current_batch_size}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Learning Rate: " + Fore.YELLOW + Style.BRIGHT + f"{current_learning_rate}")
+            
+            # Training configuration
+            print(Fore.YELLOW + Style.BRIGHT + "\nTraining Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimizer: " + Fore.YELLOW + Style.BRIGHT + f"{training_config.get('optimizer', 'AdamW')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Scheduler: " + Fore.YELLOW + Style.BRIGHT + f"{training_config.get('scheduler', 'ReduceLROnPlateau')}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Patience: " + Fore.YELLOW + Style.BRIGHT + f"{training_config.get('patience', 15)}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Weight Decay: " + Fore.YELLOW + Style.BRIGHT + f"{training_config.get('weight_decay', 1e-4)}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Validation Split: " + Fore.YELLOW + Style.BRIGHT + f"{training_config.get('validation_split', 0.2)}")
+            
+            # Data configuration
+            if current_use_real_data:
+                data_path = data_config.get('data_path', 'Default')
+                print(Fore.YELLOW + Style.BRIGHT + "\nData Configuration:")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{data_config.get('features', 'Auto')}")
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "\nData Configuration:")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.YELLOW + Style.BRIGHT + f"{current_normal_samples}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.YELLOW + Style.BRIGHT + f"{current_attack_samples}")
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{current_features}")
+            
+            # System configuration
+            print(Fore.YELLOW + Style.BRIGHT + "\nSystem Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ CUDA Available: " + Fore.YELLOW + Style.BRIGHT + f"{cuda_available}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Mixed Precision: " + Fore.YELLOW + Style.BRIGHT + f"{training_config.get('mixed_precision', cuda_available)}")
+            
+            # Initial menu options
+            print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration Options:")
+            print(Fore.WHITE + Style.BRIGHT + "1. Run with current settings")
+            print(Fore.WHITE + Style.BRIGHT + "2. Modify configurations")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+            
+            while True:
+                try:
+                    initial_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): " + Style.RESET_ALL).strip()
+                    if initial_choice in ['0', '1', '2']:
+                        break
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-2.")
+                except (EOFError, KeyboardInterrupt):
+                    return None
+            
+            if initial_choice == '0':
+                return None
+            
+            elif initial_choice == '1':
+                # Confirmation prompt to run with current settings
+                try:
+                    confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with these current settings? (Y/n): " + Style.RESET_ALL).lower().strip()
+                except (EOFError, KeyboardInterrupt):
+                    return None
+                
+                if confirm not in ('', 'y', 'yes'):
+                    return None
+                
+                # Use current configuration as-is
+                print(Fore.GREEN + Style.BRIGHT + "\nLaunching training with current configuration...")
+                return _launch_training_with_config(config=base_config, **kwargs)
+            
+            elif initial_choice == '2':
+                # Continue with full configuration process
+                print(Fore.GREEN + Style.BRIGHT + "\nProceeding to full configuration...")
+                print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS SETUP - CUSTOM CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        
+        # Initialize variables that may not be set in all code paths with preset-based defaults
+        current_preset_data = PRESET_CONFIGS.get(preset_name.lower(), {}).get('data', {}) if preset_name.lower() in PRESET_CONFIGS else {}
+        preset_training_config = PRESET_CONFIGS.get(preset_name.lower(), {}).get('training', {}) if preset_name.lower() in PRESET_CONFIGS else {}
+        
+        # Data configuration variables with fallbacks
+        data_path = current_preset_data.get('data_path', data_config.get('data_path', 'data/network_data.csv'))
+        data_format = current_preset_data.get('data_format', 'csv')
+        artifacts_path = current_preset_data.get('artifacts_path', data_config.get('artifacts_path', 'data/artifacts.pkl'))
+        features = current_preset_data.get('features', data_config.get('features', 20))
+        normal_samples = current_preset_data.get('normal_samples', data_config.get('normal_samples', 8000))
+        attack_samples = current_preset_data.get('attack_samples', data_config.get('attack_samples', 2000))
+        noise_factor = current_preset_data.get('synthetic_generation', {}).get('noise_factor', 0.05)
+        
+        # Model architecture variables with fallbacks
+        model_type = model_config.get('model_type', 'EnhancedAutoencoder')
+        
+        # Training duration variables with fallbacks
+        epochs = preset_training_config.get('epochs', training_config.get('epochs', 100))
+        preset_epochs = preset_training_config.get('epochs', 100)
         
         # Data Source Selection
-        if use_real_data is None:
+        if use_real_data or use_real_data is None:
             print(Fore.MAGENTA + Style.BRIGHT + "\nDATA SOURCE SELECTION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
+            # Check current preset's data configuration
+            preset_use_real_data = current_preset_data.get('use_real_data', False)
+            
+            print(Fore.GREEN + Style.BRIGHT + f"Current preset recommends: " + Fore.YELLOW + Style.BRIGHT + f"{'Real Data' if preset_use_real_data else 'Synthetic Data'}")
+            
             print(Fore.WHITE + Style.BRIGHT + "1. Real network data " + Fore.GREEN + Style.BRIGHT + "(recommended for production)")
             print(Fore.WHITE + Style.BRIGHT + "2. Synthetic data " + Fore.GREEN + Style.BRIGHT + "(good for testing and development)")
             print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
@@ -54292,21 +54853,335 @@ def _interactive_express_setup(
                 
             use_real_data = data_choice == '1'
             print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if use_real_data else 'Synthetic Data'}")
+            
+            # Data configuration based on selection
+            if use_real_data:
+                print(Fore.MAGENTA + Style.BRIGHT + "\nREAL DATA CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                # Data file path configuration
+                default_data_path = current_preset_data.get('data_path', 'data/network_data.csv')
+                print(Fore.YELLOW + Style.BRIGHT + f"Selected: Real Network Data")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Using actual network traffic data for realistic training")
+                print(Fore.YELLOW + Style.BRIGHT + f"\nData file path (default): " + Fore.GREEN + Style.BRIGHT + f"{default_data_path}")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Path to your network traffic data file")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default or provide custom path")
+                
+                user_data_path = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter data file path or 0 to cancel: " + Style.RESET_ALL).strip()
+
+                if user_data_path == '0':
+                    return None
+
+                data_path = Path(user_data_path) if user_data_path else Path(default_data_path)
+                
+                # Validate path exists
+                if not Path(data_path).exists():
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nWarning: Path '{data_path}' does not exist.")
+                    create_confirm = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N): " + Style.RESET_ALL).strip().lower()
+                    if create_confirm not in ('y', 'yes'):
+                        data_path = default_data_path
+                        Path(data_path).parent.mkdir(parents=True, exist_ok=True)
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing default data path: {data_path}")
+
+                # Data format selection
+                print(Fore.YELLOW + Style.BRIGHT + f"\nData format (default): " + Fore.GREEN + Style.BRIGHT + "auto")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Format of your data file")
+                print(Fore.WHITE + Style.BRIGHT + "1. CSV " + Fore.GREEN + Style.BRIGHT + "(Comma-separated values)")
+                print(Fore.WHITE + Style.BRIGHT + "2. Parquet " + Fore.GREEN + Style.BRIGHT + "(Columnar storage)")
+                print(Fore.WHITE + Style.BRIGHT + "3. JSON " + Fore.GREEN + Style.BRIGHT + "(JavaScript Object Notation)")
+                print(Fore.WHITE + Style.BRIGHT + "4. Auto-detect " + Fore.GREEN + Style.BRIGHT + "(Detect from file extension)")
+                print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+                
+                format_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect data format (0-4): " + Style.RESET_ALL).strip()
+                format_map = {'1': 'csv', '2': 'parquet', '3': 'json', '4': 'auto'}
+
+                if format_choice == '0':
+                    return None
+
+                data_format = format_map.get(format_choice, 'auto')
+
+                # Artifacts file path configuration
+                default_artifacts_path = current_preset_data.get('artifacts_path', 'data/artifacts.pkl')
+                print(Fore.YELLOW + Style.BRIGHT + f"\nArtifacts path (default): " + Fore.GREEN + Style.BRIGHT + f"{default_artifacts_path}")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Path to your preprocessing artifacts data file")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default or provide custom path")
+                
+                user_artifacts_path = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter artifacts file path or 0 to cancel: " + Style.RESET_ALL).strip()
+
+                if user_artifacts_path == '0':
+                    return None
+                
+                artifacts_path = Path(user_artifacts_path) if user_artifacts_path else Path(default_artifacts_path)
+                
+                # Validate artifacts path
+                if not Path(artifacts_path).exists():
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nWarning: Path '{artifacts_path}' does not exist.")
+                    create_confirm = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N): " + Style.RESET_ALL).strip().lower()
+                    if create_confirm not in ('y', 'yes'):
+                        artifacts_path = default_artifacts_path
+                        Path(artifacts_path).parent.mkdir(parents=True, exist_ok=True)
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing default artifacts path: {artifacts_path}")
+                
+                # Feature configuration
+                preset_features = current_preset_data.get('features', 20)
+                print(Fore.YELLOW + Style.BRIGHT + f"\nNumber of features (default): " + Fore.GREEN + Style.BRIGHT + f"{preset_features}")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Number of input features or 'auto' to detect")
+                print(Fore.CYAN + Style.BRIGHT + f"  └─ Preset recommends {preset_features} features")
+
+                user_features = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of features or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                if user_features == 'c':
+                    return None
+                
+                if user_features and user_features.lower() != 'auto':
+                    try:
+                        features = int(user_features)
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing {features} features")
+                    except ValueError:
+                        features = preset_features
+                        print(Fore.YELLOW + Style.BRIGHT + "\nInvalid input, using preset recommended features")
+                else:
+                    features = preset_features if user_features != 'auto' else 'auto'
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing {'auto feature detection' if features == 'auto' else 'preset recommended features'}")
+
+                print(Fore.GREEN + Style.BRIGHT + f"\nReal network data configured:")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data file path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data format: " + Fore.YELLOW + Style.BRIGHT + f"{data_format}")
+                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Artifacts path: " + Fore.YELLOW + Style.BRIGHT + f"{artifacts_path}")
+                print(Fore.GREEN + Style.BRIGHT + f"  └─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                
+            else:  # Synthetic data
+                print(Fore.MAGENTA + Style.BRIGHT + "\nSYNTHETIC DATA CONFIGURATION")
+                print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                
+                # Use preset synthetic data configuration as baseline
+                preset_normal_samples = current_preset_data.get('normal_samples', 8000)
+                preset_attack_samples = current_preset_data.get('attack_samples', 2000)
+                preset_features = current_preset_data.get('features', 20)
+                preset_noise_factor = current_preset_data.get('synthetic_generation', {}).get('noise_factor', 0.05)
+                
+                print(Fore.GREEN + Style.BRIGHT + "Selected: " + Fore.YELLOW + Style.BRIGHT + "Synthetic Data")
+                print(Fore.CYAN + Style.BRIGHT + "  ├─ Using generated data for faster development")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Preset defaults: " + Fore.YELLOW + Style.BRIGHT + f"{preset_normal_samples} normal, {preset_attack_samples} attack samples, {preset_features} features")
+                
+                print(Fore.YELLOW + Style.BRIGHT + "\nData complexity level:")
+                print(Fore.CYAN + Style.BRIGHT + "  └─ Controls the realism and complexity of generated data\n")
+                print(Fore.WHITE + Style.BRIGHT + "1. Simple " + Fore.GREEN + Style.BRIGHT + "(Basic patterns, fast generation)")
+                print(Fore.WHITE + Style.BRIGHT + "2. Moderate " + Fore.GREEN + Style.BRIGHT + "(Balanced complexity - preset default)")
+                print(Fore.WHITE + Style.BRIGHT + "3. Complex " + Fore.GREEN + Style.BRIGHT + "(Realistic patterns, slower generation)")
+                print(Fore.WHITE + Style.BRIGHT + "4. Custom " + Fore.GREEN + Style.BRIGHT + "(Configure all parameters manually)")
+                print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+                
+                complexity_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect complexity level (0-4): " + Style.RESET_ALL).strip()
+
+                if complexity_choice == '0':
+                    return None
+                
+                if complexity_choice == '4':
+                    # Custom synthetic data configuration
+                    print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM SYNTHETIC DATA CONFIGURATION")
+                    print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                    
+                    # Normal samples
+                    print(Fore.CYAN + Style.BRIGHT + "Number of normal samples to generate:")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_normal_samples}")
+                    user_normal = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of normal samples or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_normal == 'c':
+                        return None
+
+                    normal_samples = int(user_normal) if user_normal else preset_normal_samples
+                    
+                    # Attack samples
+                    print(Fore.CYAN + Style.BRIGHT + "\nNumber of attack samples to generate:")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_attack_samples}")
+                    user_attack = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of attack samples or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_attack == 'c':
+                        return None
+
+                    attack_samples = int(user_attack) if user_attack else preset_attack_samples
+                    
+                    # Features
+                    print(Fore.CYAN + Style.BRIGHT + "\nNumber of features to generate:")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_features}")
+                    user_features = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of features or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_features == 'c':
+                        return None
+
+                    features = int(user_features) if user_features else preset_features
+                    
+                    # Noise level
+                    print(Fore.CYAN + Style.BRIGHT + "\nNoise level for data generation (0.0-1.0):")
+                    print(Fore.CYAN + Style.BRIGHT + f"  └─ Default: " + Fore.GREEN + Style.BRIGHT + f"{preset_noise_factor}")
+                    user_noise = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter noise level or 'c' to cancel: " + Style.RESET_ALL).strip()
+
+                    if user_noise == 'c':
+                        return None
+
+                    noise_factor = float(user_noise) if user_noise else preset_noise_factor
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nCustom synthetic data configured:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Noise Factor: " + Fore.YELLOW + Style.BRIGHT + f"{noise_factor}")
+                    
+                else:
+                    # Predefined complexity levels
+                    complexity_configs = {
+                        '1': {
+                            'normal_samples': max(1000, preset_normal_samples // 2),
+                            'attack_samples': max(200, preset_attack_samples // 2),
+                            'features': max(10, preset_features // 2),
+                            'noise_factor': preset_noise_factor * 0.5,
+                            'name': 'Simple'
+                        },
+                        '2': {
+                            'normal_samples': preset_normal_samples,
+                            'attack_samples': preset_attack_samples,
+                            'features': preset_features,
+                            'noise_factor': preset_noise_factor,
+                            'name': 'Moderate'
+                        },
+                        '3': {
+                            'normal_samples': preset_normal_samples * 2,
+                            'attack_samples': preset_attack_samples * 2,
+                            'features': min(100, preset_features * 2),
+                            'noise_factor': preset_noise_factor * 1.5,
+                            'name': 'Complex'
+                        }
+                    }
+                    
+                    config = complexity_configs.get(complexity_choice, complexity_configs['2'])
+                    normal_samples = config['normal_samples']
+                    attack_samples = config['attack_samples']
+                    features = config['features']
+                    noise_factor = config['noise_factor']
+                    config_name = config['name']
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"\nSynthetic data configured:")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Complexity: " + Fore.YELLOW + Style.BRIGHT + f"{config_name}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normal samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Attack samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Noise level: " + Fore.YELLOW + Style.BRIGHT + f"{noise_factor}")
+            
+            base_config.setdefault('data', {})['use_real_data'] = use_real_data
         
         # Model Architecture Selection
         print(Fore.MAGENTA + Style.BRIGHT + "\nMODEL ARCHITECTURE SELECTION")
         print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-        print(Fore.WHITE + Style.BRIGHT + "1. EnhancedAutoencoder " + Fore.GREEN + Style.BRIGHT + "(recommended - advanced features, good balance)")
-        print(Fore.WHITE + Style.BRIGHT + "2. SimpleAutoencoder " + Fore.GREEN + Style.BRIGHT + "(fast and lightweight, minimal resources)")  
-        print(Fore.WHITE + Style.BRIGHT + "3. AutoencoderEnsemble " + Fore.GREEN + Style.BRIGHT + "(best accuracy, slower, more resources)")
+        
+        # Get preset model compatibility and current model type
+        current_preset_data = PRESET_CONFIGS.get(preset_name.lower(), {})
+        preset_compatibility = current_preset_data.get('metadata', {}).get('compatibility', [])
+        preset_model_type = model_config.get('model_type', 'EnhancedAutoencoder')
+        
+        # Determine available models based on preset compatibility
+        if preset_compatibility:
+            available_models = [m for m in preset_compatibility if m in MODEL_VARIANTS.keys()]
+        else:
+            available_models = list(MODEL_VARIANTS.keys())
+        
+        # System-aware model recommendation
+        if system_class in ["limited", "standard"]:
+            recommended_model = 'SimpleAutoencoder' if 'SimpleAutoencoder' in available_models else available_models[0]
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ System recommendation: SimpleAutoencoder - for limited/standard systems")
+        elif system_class in ["performance", "high-end"]:
+            recommended_model = 'EnhancedAutoencoder' if 'EnhancedAutoencoder' in available_models else available_models[0]
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ System recommendation: EnhancedAutoencoder - for performance/high-end systems")
+        elif system_class == "enterprise":
+            recommended_model = 'AutoencoderEnsemble' if 'AutoencoderEnsemble' in available_models else available_models[0]
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ System recommendation: AutoencoderEnsemble - for enterprise systems")
+        else:
+            recommended_model = preset_model_type if preset_model_type in available_models else available_models[0]
+            print(Fore.YELLOW + Style.BRIGHT + f"  └─ Preset recommendation: {preset_model_type}")
+        
+        # Display current model type
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.YELLOW + Style.BRIGHT + f"{current_model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Preset Compatible: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(available_models) if available_models else 'All models'}")
+        
+        # Model type configurations
+        model_configs = {
+            'EnhancedAutoencoder': {
+                'index': '1',
+                'name': 'EnhancedAutoencoder',
+                'description': 'Advanced features with good balance',
+                'strengths': ['Advanced architecture', 'Good performance', 'Balanced resource usage'],
+                'weaknesses': ['More complex', 'Moderate training time'],
+                'best_for': 'Most use cases, production systems, balanced optimization',
+                'aligned_system_classes': ['standard', 'performance', 'high-end', 'enterprise'],
+                'complexity': 'Medium',
+                'training_time': 'Moderate',
+                'resource_usage': 'Balanced'
+            },
+            'SimpleAutoencoder': {
+                'index': '2',
+                'name': 'SimpleAutoencoder',
+                'description': 'Fast and lightweight architecture',
+                'strengths': ['Very fast training', 'Minimal resources', 'Easy to tune'],
+                'weaknesses': ['Basic features', 'Lower accuracy potential'],
+                'best_for': 'Quick experiments, limited resources, baseline establishment',
+                'aligned_system_classes': ['limited', 'balanced', 'standard'],
+                'complexity': 'Low',
+                'training_time': 'Fast',
+                'resource_usage': 'Minimal'
+            },
+            'AutoencoderEnsemble': {
+                'index': '3',
+                'name': 'AutoencoderEnsemble',
+                'description': 'Best accuracy with ensemble approach',
+                'strengths': ['Highest accuracy', 'Robust performance', 'Multiple model perspectives'],
+                'weaknesses': ['Slower training', 'More resources', 'Complex tuning'],
+                'best_for': 'Critical applications, maximum accuracy, production deployments',
+                'aligned_system_classes': ['high-end', 'enterprise'],
+                'complexity': 'High',
+                'training_time': 'Slow',
+                'resource_usage': 'High'
+            }
+        }
+        
+        # Filter and display available models
+        available_model_configs = {k: v for k, v in model_configs.items() if k in available_models}
+        
+        if not available_model_configs:
+            print(Fore.RED + Style.BRIGHT + "\nNo compatible models available for current preset!")
+            return None
+        
+        print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Model Architectures:\n")
+        
+        for model_name, config in available_model_configs.items():
+            recommendation_indicator = " " + Fore.GREEN + Style.BRIGHT + "*Recommended" + Style.RESET_ALL if model_name == recommended_model else ""
+            system_alignment = f" [Compatible: {', '.join(config['aligned_system_classes'])}]" if config['aligned_system_classes'] else ""
+            
+            print(Fore.WHITE + Style.BRIGHT + f"{config['index']}. {config['name']}{recommendation_indicator}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{config['description']}{system_alignment}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Strengths: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(config['strengths'])}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Weaknesses: " + Fore.MAGENTA + Style.BRIGHT + f"{', '.join(config['weaknesses'])}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Best for: " + Fore.GREEN + Style.BRIGHT + f"{config['best_for']}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Complexity: " + Fore.YELLOW + Style.BRIGHT + f"{config['complexity']}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Training Time: " + Fore.YELLOW + Style.BRIGHT + f"{config['training_time']}")
+            print(Fore.CYAN + Style.BRIGHT + f"   └─ Resource Usage: " + Fore.YELLOW + Style.BRIGHT + f"{config['resource_usage']}")
+            print()
+        
         print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
         while True:
             try:
-                model_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect model type (0-3): " + Style.RESET_ALL).strip()
-                if model_choice in ['1', '2', '3', '0']:
+                model_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect model type (0-{len(available_model_configs)}): " + Style.RESET_ALL).strip()
+                
+                # Allow empty input to use recommended model
+                if not model_choice:
+                    model_choice = next((v['index'] for k, v in available_model_configs.items() if k == recommended_model), None)
+                    if model_choice:
+                        print(Fore.GREEN + Style.BRIGHT + f"\nUsing recommended model: {model_choice}")
+                
+                valid_choices = [v['index'] for v in available_model_configs.values()] + ['0']
+                if model_choice in valid_choices:
                     break
-                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Please select 0-{len(available_model_configs)}.")
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
                 return None
@@ -54314,25 +55189,111 @@ def _interactive_express_setup(
         if model_choice == '0':
             print(Fore.RED + Style.BRIGHT + "\nModel selection cancelled")
             return None
-            
-        model_types = ['EnhancedAutoencoder', 'SimpleAutoencoder', 'AutoencoderEnsemble']
-        model_type = model_types[int(model_choice)-1]
-        print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {model_type}")
         
+        # Map choice to model type
+        model_type = next((k for k, v in available_model_configs.items() if v['index'] == model_choice), recommended_model)
+        base_config.setdefault('model', {})['model_type'] = model_type
+        
+        selected_config = available_model_configs[model_type]
+        print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{selected_config['description']}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Complexity: " + Fore.YELLOW + Style.BRIGHT + f"{selected_config['complexity']}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Best for: " + Fore.YELLOW + Style.BRIGHT + f"{selected_config['best_for']}")
+
         # Training Duration Selection
         print(Fore.MAGENTA + Style.BRIGHT + "\nTRAINING DURATION SELECTION")
         print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-        print(Fore.WHITE + Style.BRIGHT + "1. Quick Test " + Fore.GREEN + Style.BRIGHT + "(10 epochs - 1-3 minutes)")
-        print(Fore.WHITE + Style.BRIGHT + "2. Standard " + Fore.GREEN + Style.BRIGHT + "(50 epochs - 5-15 minutes)")
-        print(Fore.WHITE + Style.BRIGHT + "3. Thorough " + Fore.GREEN + Style.BRIGHT + "(100 epochs - 15-30 minutes)")
+        
+        # Get preset training configuration
+        preset_training_config = PRESET_CONFIGS.get(preset_name.lower(), {}).get('training', {})
+        preset_epochs = preset_training_config.get('epochs', 100)
+        
+        # System-aware duration recommendation
+        if system_class in ["limited", "standard"]:
+            recommended_duration = '1'  # Quick Test for limited systems
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ System recommendation: Quick Test - for limited/standard systems")
+        elif system_class in ["performance", "high-end"]:
+            recommended_duration = '2'  # Standard for performance systems
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ System recommendation: Standard - for performance/high-end systems")
+        elif system_class == "enterprise":
+            recommended_duration = '3'  # Thorough for enterprise systems
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ System recommendation: Thorough - for enterprise systems")
+        else:
+            recommended_duration = '2'  # Default to Standard
+            print(Fore.YELLOW + Style.BRIGHT + "  └─ Default recommendation: Standard - balanced approach")
+        
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{preset_epochs}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Current Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{current_epochs}")
+        
+        # Duration configurations
+        duration_configs = {
+            '1': {
+                'epochs': 10,
+                'name': 'Quick Test',
+                'description': 'Fast iteration for testing and development',
+                'estimated_time': '1-3 minutes' if cuda_available else '3-8 minutes',
+                'best_for': 'Quick experiments, testing configurations, debugging',
+                'aligned_system_classes': ['limited', 'balanced', 'standard'],
+                'training_quality': 'Basic'
+            },
+            '2': {
+                'epochs': 50,
+                'name': 'Standard',
+                'description': 'Balanced training for most use cases',
+                'estimated_time': '5-15 minutes' if cuda_available else '15-40 minutes',
+                'best_for': 'General training, production models, balanced optimization',
+                'aligned_system_classes': ['standard', 'performance', 'high-end'],
+                'training_quality': 'Good'
+            },
+            '3': {
+                'epochs': 100,
+                'name': 'Thorough',
+                'description': 'Comprehensive training for best results',
+                'estimated_time': '15-30 minutes' if cuda_available else '40-90 minutes',
+                'best_for': 'Final training, production deployment, maximum accuracy',
+                'aligned_system_classes': ['performance', 'high-end', 'enterprise'],
+                'training_quality': 'Excellent'
+            },
+            '4': {
+                'epochs': preset_epochs,
+                'name': f'Preset Default ({preset_epochs} epochs)',
+                'description': 'Use preset-recommended epoch count',
+                'estimated_time': 'Varies based on preset configuration',
+                'best_for': 'Following preset guidelines, preset-optimized training',
+                'aligned_system_classes': ['all'],
+                'training_quality': 'Preset-optimized'
+            }
+        }
+        
+        print(Fore.YELLOW + Style.BRIGHT + "\nTraining Duration Options:\n")
+        
+        for key, config in duration_configs.items():
+            recommendation_indicator = " " + Fore.GREEN + Style.BRIGHT + "*Recommended" + Style.RESET_ALL if key == recommended_duration else ""
+            system_alignment = f" [Compatible: {', '.join(config['aligned_system_classes'])}]" if config['aligned_system_classes'] != ['all'] else ""
+            
+            print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']}{recommendation_indicator}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{config['description']}{system_alignment}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Epochs: " + Fore.GREEN + Style.BRIGHT + f"{config['epochs']}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Estimated Time: " + Fore.MAGENTA + Style.BRIGHT + f"{config['estimated_time']}")
+            print(Fore.CYAN + Style.BRIGHT + f"   ├─ Training Quality: " + Fore.GREEN + Style.BRIGHT + f"{config['training_quality']}")
+            print(Fore.CYAN + Style.BRIGHT + f"   └─ Best for: " + Fore.GREEN + Style.BRIGHT + f"{config['best_for']}")
+            print()
+        
+        print(Fore.WHITE + Style.BRIGHT + "5. Custom " + Fore.GREEN + Style.BRIGHT + "(Specify exact epoch count)")
         print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
         
         while True:
             try:
-                duration_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect training duration (0-3): " + Style.RESET_ALL).strip()
-                if duration_choice in ['1', '2', '3', '0']:
+                duration_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect training duration (0-5): " + Style.RESET_ALL).strip()
+                
+                # Allow empty input to use recommended duration
+                if not duration_choice:
+                    duration_choice = recommended_duration
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing recommended duration: {duration_choice}")
+                
+                if duration_choice in ['1', '2', '3', '4', '5', '0']:
                     break
-                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-3.")
+                print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nDuration selection cancelled")
                 return None
@@ -54340,317 +55301,613 @@ def _interactive_express_setup(
         if duration_choice == '0':
             print(Fore.RED + Style.BRIGHT + "\nDuration selection cancelled")
             return None
-            
-        epochs_map = {'1': 10, '2': 50, '3': 100}
-        epochs = epochs_map.get(duration_choice, 50)
-        print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {epochs} epochs")
         
+        if duration_choice == '5':
+            # Custom epoch configuration
+            print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM EPOCH CONFIGURATION")
+            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ Preset default: " + Fore.GREEN + Style.BRIGHT + f"{preset_epochs} epochs")
+            
+            user_epochs = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of epochs (1-1000) or 'c' to cancel: " + Style.RESET_ALL).strip()
+            
+            if user_epochs.lower() == 'c':
+                return None
+            
+            try:
+                epochs = int(user_epochs) if user_epochs else preset_epochs
+                if epochs < 1 or epochs > 1000:
+                    print(Fore.YELLOW + Style.BRIGHT + "\nInvalid epoch count. Using preset default.")
+                    epochs = preset_epochs
+                else:
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing custom epoch count: {epochs}")
+            except ValueError:
+                print(Fore.YELLOW + Style.BRIGHT + "\nInvalid input. Using preset default.")
+                epochs = preset_epochs
+        else:
+            epochs = duration_configs[duration_choice]['epochs']
+        
+        base_config.setdefault('training', {})['epochs'] = epochs
+        
+        selected_duration = next((v for k, v in duration_configs.items() if v['epochs'] == epochs), duration_configs['2'])
+        print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{selected_duration['name']}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{epochs}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Quality: " + Fore.YELLOW + Style.BRIGHT + f"{selected_duration['training_quality']}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Estimated Time: " + Fore.YELLOW + Style.BRIGHT + f"{selected_duration['estimated_time']}")
+
         # Performance Configuration
         print(Fore.MAGENTA + Style.BRIGHT + "\nPERFORMANCE CONFIGURATION")
-        (Fore.CYAN + Style.BRIGHT + "-" * 40)
+        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+
+        # Determine mixed precision support
         mixed_precision = torch.cuda.is_available()
+
+        # Display hardware-specific performance configuration
         if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name() if torch.cuda.is_available() else "Unknown"
-            print(Fore.GREEN + Style.BRIGHT + f"GPU detected: {gpu_name}")
-            print(Fore.GREEN + Style.BRIGHT + "  Using mixed precision for faster training")
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1e9
+            
+            print(Fore.GREEN + Style.BRIGHT + "GPU Configuration:")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU Detected: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_name}")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU Memory: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_memory:.1f}GB")
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.YELLOW + Style.BRIGHT + f"Enabled")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Performance: " + Fore.YELLOW + Style.BRIGHT + f"Optimized for faster training")
+            
+            # Performance optimizations
+            performance_tips = [
+                "Using CUDA acceleration for faster training",
+                "Mixed precision (FP16) enabled for 2-3x speedup",
+                "Automatic memory optimization active"
+            ]
+            
+            print(Fore.CYAN + Style.BRIGHT + "\nPerformance Optimizations:")
+            for i, tip in enumerate(performance_tips):
+                prefix = "  └─" if i == len(performance_tips) - 1 else "  ├─"
+                print(Fore.GREEN + Style.BRIGHT + f"{prefix} {tip}")
         else:
-            print(Fore.MAGENTA + Style.BRIGHT + "CPU mode: Standard precision")
-            print(Fore.MAGENTA + Style.BRIGHT + "  └─ Consider using GPU for better performance")
+            print(Fore.MAGENTA + Style.BRIGHT + "CPU Configuration:")
+            print(Fore.MAGENTA + Style.BRIGHT + f"  ├─ Mode: " + Fore.YELLOW + Style.BRIGHT + f"CPU-only")
+            print(Fore.MAGENTA + Style.BRIGHT + f"  ├─ Precision: " + Fore.YELLOW + Style.BRIGHT + f"Standard (FP32)")
+            print(Fore.MAGENTA + Style.BRIGHT + f"  └─ Performance: " + Fore.YELLOW + Style.BRIGHT + f"Standard speed")
+            
+            # CPU performance notes
+            print(Fore.YELLOW + Style.BRIGHT + "\nPerformance Notes:")
+            print(Fore.YELLOW + Style.BRIGHT + "  ├─ Training will be slower on CPU")
+            print(Fore.YELLOW + Style.BRIGHT + "  ├─ Consider using GPU for better performance")
+            print(Fore.YELLOW + Style.BRIGHT + f"  └─ Estimated training time: {_estimate_training_time(epochs, model_type, current_batch_size)}")
+
+        # Apply performance configuration to base_config
+        base_config.setdefault('training', {})['mixed_precision'] = mixed_precision
+        base_config.setdefault('hardware', {})['cuda_optimizations'] = torch.cuda.is_available()
         
-        # Build final configuration with smart defaults
-        final_config = base_config.copy()
-        
-        # Model Configuration - using same structure as centralized config
-        model_config = final_config.setdefault('model', {})
-        model_config.update({
-            'model_type': model_type,
-            'activation': 'leaky_relu',
-            'activation_param': 0.2,
-            'normalization': 'batch',
-            'use_batch_norm': True,
-            'use_layer_norm': False,
-            'bias': True,
-            'weight_init': 'xavier_uniform',
-            'skip_connection': True,
-            # Enhanced features for better performance
-            'use_attention': model_type != 'SimpleAutoencoder',
-            'residual_blocks': model_type != 'SimpleAutoencoder',
-            'legacy_mode': False
-        })
-        
-        # Model-specific optimizations
-        if model_type == 'SimpleAutoencoder':
-            model_config.update({
-                'encoding_dim': 16,
-                'hidden_dims': [128, 64],
-                'dropout_rates': [0.2, 0.15],
-            })
-        elif model_type == 'EnhancedAutoencoder':
-            model_config.update({
-                'encoding_dim': 32,
-                'hidden_dims': [256, 128, 64],
-                'dropout_rates': [0.2, 0.15, 0.1],
-            })
-        elif model_type == 'AutoencoderEnsemble':
-            model_config.update({
-                'encoding_dim': 24,
-                'hidden_dims': [192, 96, 48],
-                'dropout_rates': [0.25, 0.2, 0.15],
-                'num_models': 3,
-                'diversity_factor': 0.3,
-            })
-        
-        # Training Configuration - aligned with train_model parameters
-        training_config = final_config.setdefault('training', {})
-        training_config.update({
-            'epochs': epochs,
-            'batch_size': 64,
-            'learning_rate': 0.001,
-            'patience': min(15, max(5, epochs // 3)),  # Adaptive patience
+        # Initialize variables that may not be set in all code paths
+        # Validate all required variables are set
+        required_vars = {
+            'use_real_data': use_real_data if 'use_real_data' in locals() else current_use_real_data,
+            'model_type': model_type if 'model_type' in locals() else current_model_type,
+            'epochs': epochs if 'epochs' in locals() else current_epochs,
             'mixed_precision': mixed_precision,
-            'optimizer': 'AdamW',
-            'scheduler': 'ReduceLROnPlateau',
-            'early_stopping': True,
-            'validation_split': 0.2,
-            'weight_decay': 1e-4,
-            'adam_betas': (0.9, 0.999),
-            'adam_eps': 1e-8,
-            'gradient_clip': 1.0,
-            'gradient_accumulation_steps': 1,
-            'num_workers': 4 if torch.cuda.is_available() else 2,
-            'shuffle': True,
-            'pin_memory': torch.cuda.is_available(),
-            'persistent_workers': True,
-            'lr_patience': 5,
-            'lr_factor': 0.5,
-            'min_lr': 1e-6
+            'data_path': data_path if 'data_path' in locals() else current_preset_data.get('data_path', 'data/network_data.csv'),
+            'artifacts_path': artifacts_path if 'artifacts_path' in locals() else current_preset_data.get('artifacts_path', 'data/artifacts.pkl'),
+            'features': features if 'features' in locals() else current_features,
+            'normal_samples': normal_samples if 'normal_samples' in locals() else current_normal_samples,
+            'attack_samples': attack_samples if 'attack_samples' in locals() else current_attack_samples,
+            'noise_factor': noise_factor if 'noise_factor' in locals() else 0.05
+        }
+        
+        # Log any missing variables for debugging
+        for var_name, var_value in required_vars.items():
+            if var_value is None:
+                logger.warning(f"Required variable '{var_name}' is None, using fallback")
+        
+        # Build final configuration
+        final_config = base_config.copy() if base_config else {}
+        
+        # If no base_config was provided, use appropriate preset as foundation
+        if not base_config or not final_config:
+            if recommended_preset in PRESET_CONFIGS:
+                final_config = deepcopy(PRESET_CONFIGS[recommended_preset])
+                print(Fore.GREEN + Style.BRIGHT + f"\nUsing {recommended_preset} preset as foundation for express setup")
+            elif 'default' in PRESET_CONFIGS:
+                final_config = deepcopy(PRESET_CONFIGS['default'])
+                print(Fore.GREEN + Style.BRIGHT + f"\nUsing default preset as foundation for express setup")
+            else:
+                logger.warning("No suitable preset available, creating minimal config")
+                final_config = {}
+
+        # Apply final parameter values using the validated variables
+        final_model_type = required_vars['model_type']
+        final_epochs = required_vars['epochs']
+        final_use_real_data = required_vars['use_real_data']
+        final_mixed_precision = required_vars['mixed_precision']
+        
+        # Model Configuration
+        model_config_update = final_config.setdefault('model', {})
+        
+        # Preserve existing model configuration values or use defaults
+        model_config_update.update({
+            'model_type': final_model_type,
+            'input_dim': model_config.get('input_dim', 20),
+            'encoding_dim': model_config.get('encoding_dim', 16 if final_model_type == 'SimpleAutoencoder' else 32 if final_model_type == 'EnhancedAutoencoder' else 24),
+            'hidden_dims': model_config.get('hidden_dims', [128, 64] if final_model_type == 'SimpleAutoencoder' else [256, 128, 64] if final_model_type == 'EnhancedAutoencoder' else [192, 96, 48]),
+            'dropout_rates': model_config.get('dropout_rates', [0.2, 0.15] if final_model_type == 'SimpleAutoencoder' else [0.2, 0.15, 0.1] if final_model_type == 'EnhancedAutoencoder' else [0.25, 0.2, 0.15]),
+            'activation': model_config.get('activation', 'leaky_relu'),
+            'activation_param': model_config.get('activation_param', 0.2),
+            'normalization': model_config.get('normalization', 'batch'),
+            'use_batch_norm': model_config.get('use_batch_norm', True),
+            'use_layer_norm': model_config.get('use_layer_norm', False),
+            'diversity_factor': model_config.get('diversity_factor', 0.3 if final_model_type == 'AutoencoderEnsemble' else 0.1),
+            'min_features': model_config.get('min_features', 5),
+            'num_models': model_config.get('num_models', 3 if final_model_type == 'AutoencoderEnsemble' else 1),
+            'skip_connection': model_config.get('skip_connection', True),
+            'residual_blocks': model_config.get('residual_blocks', final_model_type != 'SimpleAutoencoder'),
+            'bias': model_config.get('bias', True),
+            'weight_init': model_config.get('weight_init', 'xavier_uniform'),
+            'use_attention': model_config.get('use_attention', final_model_type != 'SimpleAutoencoder'),
+            'legacy_mode': model_config.get('legacy_mode', False),
+            'model_types': model_config.get('model_types', list(MODEL_VARIANTS.keys())),
+            'available_activations': model_config.get('available_activations', ['relu', 'leaky_relu', 'gelu', 'tanh']),
+            'available_normalizations': model_config.get('available_normalizations', ['batch', 'layer', 'instance', None]),
+            'available_initializers': model_config.get('available_initializers', ['xavier_uniform', 'xavier_normal', 'kaiming_uniform'])
         })
         
-        # Data Configuration - consistent with interactive_main context
-        data_config = final_config.setdefault('data', {})
-        data_config.update({
-            'use_real_data': use_real_data,
-            'features': 20 if not use_real_data else None,
-            'normal_samples': 8000 if not use_real_data else None,
-            'attack_samples': 2000 if not use_real_data else None,
-            'test_split': 0.2,
-            'random_state': 42,
-            'stratified_split': True,
-            'data_normalization': 'standard',
-            'anomaly_factor': 0.1,
-            'data_preprocessing': True,
-            'synthetic_generation': {
-                'complexity': 'medium',
-                'noise_level': 0.05,
+        # Training Configuration
+        training_config_update = final_config.setdefault('training', {})
+        training_config_update.update({
+            'epochs': final_epochs,
+            'batch_size': training_config.get('batch_size', 64),
+            'learning_rate': training_config.get('learning_rate', 0.001),
+            'patience': training_config.get('patience', min(15, max(5, final_epochs // 3))),
+            'weight_decay': training_config.get('weight_decay', 1e-4),
+            'gradient_clip': training_config.get('gradient_clip', 1.0),
+            'gradient_accumulation_steps': training_config.get('gradient_accumulation_steps', 1),
+            'mixed_precision': final_mixed_precision,
+            'num_workers': training_config.get('num_workers', 4 if torch.cuda.is_available() else 2),
+            'optimizer': training_config.get('optimizer', 'AdamW'),
+            'scheduler': training_config.get('scheduler', 'ReduceLROnPlateau'),
+            'scheduler_params': training_config.get('scheduler_params', {'mode': 'min', 'factor': 0.5, 'patience': 5, 'min_lr': 1e-6}),
+            'early_stopping': training_config.get('early_stopping', True),
+            'validation_split': training_config.get('validation_split', 0.2),
+            'shuffle': training_config.get('shuffle', True),
+            'pin_memory': training_config.get('pin_memory', torch.cuda.is_available()),
+            'persistent_workers': training_config.get('persistent_workers', True),
+            'adam_betas': training_config.get('adam_betas', (0.9, 0.999)),
+            'adam_eps': training_config.get('adam_eps', 1e-8),
+            'lr_patience': training_config.get('lr_patience', 5),
+            'lr_factor': training_config.get('lr_factor', 0.5),
+            'min_lr': training_config.get('min_lr', 1e-6)
+        })
+        
+        # Data Configuration
+        data_config_update = final_config.setdefault('data', {})
+        data_config_update.update({
+            'use_real_data': final_use_real_data,
+            'features': required_vars['features'] if final_use_real_data or required_vars['features'] != 'auto' else 20,
+            'normal_samples': required_vars['normal_samples'] if not final_use_real_data else None,
+            'attack_samples': required_vars['attack_samples'] if not final_use_real_data else None,
+            'test_split': data_config.get('test_split', 0.2),
+            'random_state': data_config.get('random_state', 42),
+            'stratified_split': data_config.get('stratified_split', True),
+            'data_normalization': data_config.get('data_normalization', 'standard'),
+            'anomaly_factor': data_config.get('anomaly_factor', 1.5),
+            'validation_split': data_config.get('validation_split', 0.2),
+            'data_path': str(required_vars['data_path']) if final_use_real_data else str(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"),
+            'artifacts_path': str(required_vars['artifacts_path']) if final_use_real_data else str(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"),
+            'synthetic_generation': data_config.get('synthetic_generation', {
+                'cluster_variance': 0.1,
+                'anomaly_sparsity': 0.3,
+                'noise_factor': required_vars['noise_factor'],
                 'correlation_strength': 0.3
-            } if not use_real_data else {},
-            'preprocessing': {
+            } if not final_use_real_data else {}),
+            'preprocessing': data_config.get('preprocessing', {
+                'remove_outliers': True,
+                'outlier_threshold': 3.0,
+                'impute_missing': True,
+                'imputation_strategy': 'mean',
+                'feature_scaling': 'standard',
+                'data_cleaning': True
+            }),
+            'shuffle': data_config.get('shuffle', True),
+            'pin_memory': data_config.get('pin_memory', torch.cuda.is_available())
+        })
+        
+        # Security Configuration
+        security_config_update = final_config.setdefault('security', {})
+        security_config_update.update({
+            'percentile': security_config.get('percentile', 95.0),
+            'attack_threshold': security_config.get('attack_threshold', 0.3),
+            'false_negative_cost': security_config.get('false_negative_cost', 2.0),
+            'enable_security_metrics': security_config.get('enable_security_metrics', True),
+            'anomaly_threshold_strategy': security_config.get('anomaly_threshold_strategy', 'fixed_percentile'),
+            'early_warning_threshold': security_config.get('early_warning_threshold', 0.25),
+            'adaptive_threshold': security_config.get('adaptive_threshold', True),
+            'confidence_interval': security_config.get('confidence_interval', 0.95),
+            'detection_methods': security_config.get('detection_methods', ['reconstruction_error', 'statistical_analysis']),
+            'alert_levels': security_config.get('alert_levels', ['low', 'medium', 'high', 'critical']),
+            'threshold_validation': security_config.get('threshold_validation', True),
+            'robust_detection': security_config.get('robust_detection', True),
+            'false_positive_tolerance': security_config.get('false_positive_tolerance', 0.01),
+            'performance_optimized_detection': security_config.get('performance_optimized_detection', True),
+            'real_time_monitoring': security_config.get('real_time_monitoring', False),
+            'ensemble_voting': security_config.get('ensemble_voting', 'average' if final_model_type == 'AutoencoderEnsemble' else 'single'),
+            'uncertainty_threshold': security_config.get('uncertainty_threshold', 0.2)
+        })
+        
+        # Monitoring Configuration
+        monitoring_config_update = final_config.setdefault('monitoring', {})
+        monitoring_config_update.update({
+            'verbose': monitoring_config.get('verbose', True),
+            'debug_mode': monitoring_config.get('debug_mode', False),
+            'tensorboard_logging': monitoring_config.get('tensorboard_logging', True),
+            'save_checkpoints': monitoring_config.get('save_checkpoints', True),
+            'save_best_model': monitoring_config.get('save_best_model', True),
+            'save_model_history': monitoring_config.get('save_model_history', True),
+            'metrics_to_track': monitoring_config.get('metrics_to_track', ['loss', 'reconstruction_error', 'validation_loss', 'learning_rate', 'epoch_time', 'memory_usage']),
+            'checkpoint_frequency': monitoring_config.get('checkpoint_frequency', max(10, final_epochs // 5)),
+            'log_frequency': monitoring_config.get('log_frequency', 1),
+            'metrics_frequency': monitoring_config.get('metrics_frequency', 10),
+            'console_logging_level': monitoring_config.get('console_logging_level', 'INFO'),
+            'early_stopping_metric': monitoring_config.get('early_stopping_metric', 'validation_loss'),
+            'checkpoint_format': monitoring_config.get('checkpoint_format', 'pytorch'),
+            'log_model_summary': monitoring_config.get('log_model_summary', True),
+            'tensorboard_dir': monitoring_config.get('tensorboard_dir', str(TB_DIR)),
+            'tensorboard': monitoring_config.get('tensorboard', {
+                'export_formats': ['json', 'csv'],
+                'include_histograms': False,
+                'include_images': False,
+                'max_scalars': 1000,
+                'max_histograms': 100,
+                'max_images': 10,
+                'save_summary': True
+            }),
+            'stability_metrics': monitoring_config.get('stability_metrics', True),
+            'performance_metrics': monitoring_config.get('performance_metrics', True),
+            'profiling_enabled': monitoring_config.get('profiling_enabled', False),
+            'progress_bar': monitoring_config.get('progress_bar', True)
+        })
+        
+        # System Configuration
+        system_config_update = final_config.setdefault('system', {})
+        system_config_update.update({
+            'reproducible': system_config.get('reproducible', True),
+            'random_seed': system_config.get('random_seed', 42),
+            'non_interactive': system_config.get('non_interactive', False),
+            'debug': system_config.get('debug', False),
+            'verbose': system_config.get('verbose', True),
+            'parallel_processing': system_config.get('parallel_processing', False),
+            'max_workers': system_config.get('max_workers', 4),
+            'export_onnx': system_config.get('export_onnx', False),
+            'cuda_optimizations': system_config.get('cuda_optimizations', torch.cuda.is_available()),
+            'distributed_training': system_config.get('distributed_training', False),
+            'model_dir': system_config.get('model_dir', str(DEFAULT_MODEL_DIR)),
+            'log_dir': system_config.get('log_dir', str(LOG_DIR)),
+            'config_dir': system_config.get('config_dir', str(CONFIG_DIR)),
+            'data_dir': system_config.get('data_dir', str(DATA_DIR)),
+            'checkpoint_dir': system_config.get('checkpoint_dir', str(CHECKPOINTS_DIR)),
+            'results_dir': system_config.get('results_dir', str(RESULTS_DIR)),
+            'reports_dir': system_config.get('reports_dir', str(REPORTS_DIR)),
+            'metrics_dir': system_config.get('metrics_dir', str(METRICS_DIR)),
+            'tensorboard_dir': system_config.get('tensorboard_dir', str(TB_DIR)),
+            'datasets_dir': system_config.get('datasets_dir', str(DATASETS_DIR)),
+            'artifacts_dir': system_config.get('artifacts_dir', str(ARTIFACTS_DIR)),
+            'figures_dir': system_config.get('figures_dir', str(FIGURES_DIR)),
+            'info_dir': system_config.get('info_dir', str(INFO_DIR)),
+            'python_executable': system_config.get('python_executable', sys.executable),
+            'working_directory': system_config.get('working_directory', os.getcwd()),
+            'environment_health': system_config.get('environment_health', 'auto'),
+            'onnx_export': system_config.get('onnx_export', {
+                'opset_version': 14,
+                'dynamic_axes': True,
+                'constant_folding': True,
+                'optimize_for_mobile': False,
+                'runtime_validation': True,
+                'validation_tolerance': 1e-5,
+                'verbose': False
+            })
+        })
+        
+        # Hardware Configuration
+        hardware_config_update = final_config.setdefault('hardware', {})
+        hardware_config_update.update({
+            'device': hardware_config.get('device', 'auto'),
+            'cuda_optimizations': hardware_config.get('cuda_optimizations', torch.cuda.is_available()),
+            'recommended_gpu_memory': hardware_config.get('recommended_gpu_memory', 4.0),
+            'detected_gpu_memory': hardware_config.get('detected_gpu_memory', torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else None),
+            'detected_system_memory': hardware_config.get('detected_system_memory'),
+            'system_performance_class': hardware_config.get('system_performance_class', 'auto'),
+            'minimum_system_requirements': hardware_config.get('minimum_system_requirements', {
+                'cpu_cores': 2,
+                'ram_gb': 4,
+                'disk_space': 5
+            }),
+            'optimal_system_requirements': hardware_config.get('optimal_system_requirements', {
+                'cpu_cores': 4,
+                'ram_gb': 8,
+                'disk_space': 10,
+                'gpu_memory': 4
+            }),
+            'memory_management': hardware_config.get('memory_management', {
+                'max_memory_fraction': 0.8,
+                'allow_memory_growth': True,
+                'memory_limit': None,
+                'enable_memory_efficient': True
+            }),
+            'performance_optimization': hardware_config.get('performance_optimization', {
+                'use_cuda': torch.cuda.is_available(),
+                'use_amp': torch.cuda.is_available(),
+                'benchmark_mode': True,
+                'deterministic': False
+            }),
+            'optimization_recommendations': hardware_config.get('optimization_recommendations', [])
+        })
+        
+        # Presets Configuration
+        presets_config_update = final_config.setdefault('presets', {})
+        presets_config_update.update({
+            'available_presets': presets_config.get('available_presets', list(PRESET_CONFIGS.keys())),
+            'current_preset': presets_config.get('current_preset', 'express_setup'),
+            'current_override': presets_config.get('current_override'),
+            'override_rules': presets_config.get('override_rules', {}),
+            'preset_configs': presets_config.get('preset_configs', {}),
+            'custom_presets_available': presets_config.get('custom_presets_available', []),
+            'auto_apply': presets_config.get('auto_apply', False),
+            'validate_compatibility': presets_config.get('validate_compatibility', True),
+            'system_recommended_preset': presets_config.get('system_recommended_preset'),
+            'preset_compatibility': presets_config.get('preset_compatibility', {})
+        })
+        
+        # Validation Configuration
+        validation_config_update = final_config.setdefault('validation', {})
+        validation_config_update.update({
+            'cross_validation': validation_config.get('cross_validation', {
+                'enabled': False,
+                'folds': 5,
+                'stratified': True,
+                'random_state': 42
+            }),
+            'metrics': validation_config.get('metrics', ['mse', 'mae', 'r2_score', 'explained_variance', 'precision', 'recall', 'f1_score', 'auc_roc']),
+            'validation_frequency': validation_config.get('validation_frequency', 1),
+            'save_validation_results': validation_config.get('save_validation_results', True),
+            'detailed_metrics': validation_config.get('detailed_metrics', False)
+        })
+        
+        # Experimental Configuration
+        experimental_config_update = final_config.setdefault('experimental', {})
+        experimental_config_update.update({
+            'features': experimental_config.get('features', {
+                'advanced_logging': False,
+                'model_interpretability': False,
+                'federated_learning': False,
+                'active_learning': False
+            }),
+            'settings': experimental_config.get('settings', {
+                'experimental_mode': False,
+                'beta_features': False,
+                'research_mode': False
+            })
+        })
+        
+        # HPO Configuration
+        hpo_config_update = final_config.setdefault('hyperparameter_optimization', {})
+        hpo_config_update.update({
+            'enabled': hpo_config.get('enabled', False),
+            'strategy': hpo_config.get('strategy', 'optuna'),
+            'study_name': hpo_config.get('study_name', 'autoencoder_hpo'),
+            'direction': hpo_config.get('direction', 'minimize'),
+            'n_trials': hpo_config.get('n_trials', 50),
+            'timeout': hpo_config.get('timeout', 3600),
+            'sampler': hpo_config.get('sampler', 'TPESampler'),
+            'pruner': hpo_config.get('pruner', 'MedianPruner'),
+            'objective_metric': hpo_config.get('objective_metric', 'validation_loss'),
+            'optimization_space': hpo_config.get('optimization_space', {}),
+            'early_stopping': hpo_config.get('early_stopping', {
                 'enabled': True,
-                'feature_scaling': True,
-                'outlier_handling': 'clip'
-            }
+                'patience': 10,
+                'min_improvement': 1e-4
+            }),
+            'timeout_seconds': hpo_config.get('timeout_seconds', 3600),
+            'trial_epochs': hpo_config.get('trial_epochs', 30),
+            'trial_patience': hpo_config.get('trial_patience', 5),
+            'cleanup_trials': hpo_config.get('cleanup_trials', True),
+            'generate_plots': hpo_config.get('generate_plots', True),
+            'search_space': hpo_config.get('search_space', {}),
+            'hpo_sampler': hpo_config.get('hpo_sampler', {}),
+            'hpo_pruner': hpo_config.get('hpo_pruner', {}),
+            'scoring': hpo_config.get('scoring', {}),
+            'storage': hpo_config.get('storage', {
+                'enabled': False,
+                'url': f"sqlite:///{DEFAULT_MODEL_DIR}/hpo_studies/study.db",
+                'load_if_exists': False,
+                'heartbeat_interval': 60,
+                'grace_period': 120
+            })
         })
         
-        # System Configuration - using same defaults as train_model_interactive
-        system_config = final_config.setdefault('system', {})
-        system_config.update({
-            'reproducible': True,
-            'random_seed': 42,
-            'non_interactive': False,
-            'model_dir': DEFAULT_MODEL_DIR,
-            'log_dir': LOG_DIR,
-            'config_dir': CONFIG_DIR,
-            'data_dir': DATA_DIR,
-            'checkpoint_dir': CHECKPOINTS_DIR,
-            'results_dir': RESULTS_DIR,
-            'debug': False,
-            'parallel_processing': False,
-            'max_workers': 4,
-            'export_onnx': False,
-            'cuda_optimizations': torch.cuda.is_available(),
-            'onnx_export': {},
-            'distributed_training': False,
-            'python_executable': sys.executable,
-            'working_directory': os.getcwd(),
-            'environment_health': 'auto'
-        })
-        
-        # Hardware Configuration - enhanced detection
-        hardware_config = final_config.setdefault('hardware', {})
-        hardware_config.update({
-            'device': 'auto',
-            'cuda_optimizations': torch.cuda.is_available(),
-            'memory_management': {'enable_memory_efficient': True},
-            'recommended_gpu_memory': 4.0,
-            'minimum_system_requirements': {},
-            'optimal_system_requirements': {},
-            'performance_optimization': {},
-            'detected_gpu_memory': torch.cuda.get_device_properties(0).total_memory / 1e9 if torch.cuda.is_available() else None,
-            'detected_system_memory': psutil.virtual_memory().total / 1e9 if 'psutil' in sys.modules else None,
-            'system_performance_class': 'auto',
-            'optimization_recommendations': []
-        })
-        
-        # Monitoring Configuration - comprehensive logging
-        monitoring_config = final_config.setdefault('monitoring', {})
-        monitoring_config.update({
-            'verbose': True,
-            'debug_mode': False,
-            'tensorboard_logging': True,
-            'save_checkpoints': True,
-            'save_best_model': True,
-            'metrics_to_track': ['loss', 'reconstruction_error', 'learning_rate'],
-            'checkpoint_frequency': max(10, epochs // 5),
-            'log_frequency': 1,
-            'metrics_frequency': 1,
-            'console_logging_level': 'INFO',
-            'save_model_history': True,
-            'early_stopping_metric': 'val_loss',
-            'checkpoint_format': 'pth',
-            'log_model_summary': True,
-            'tensorboard_dir': TB_DIR,
-            'tensorboard': {},
-            'stability_metrics': True,
-            'performance_metrics': True,
-            'profiling_enabled': False,
-            'progress_bar': True
-        })
-        
-        # Export Configuration
-        export_config = final_config.setdefault('export', {})
-        export_config.update({
-            'save_model': True,
-            'save_metadata': True,
-            'save_training_history': True,
-            'export_onnx': False
-        })
-        
-        # Security Configuration - using same structure as main functions
-        security_config = final_config.setdefault('security', {})
-        security_config.update({
-            'percentile': 95.0,
-            'enable_security_metrics': True,
-            'anomaly_threshold_strategy': 'percentile',
-            'adaptive_threshold': True,
-            'attack_threshold': None,
-            'false_negative_cost': None,
-            'early_warning_threshold': None,
-            'confidence_interval': None,
-            'detection_methods': ['reconstruction_error'],
-            'alert_levels': ['low', 'medium', 'high'],
-            'threshold_validation': True,
-            'robust_detection': True,
-            'false_positive_tolerance': None,
-            'performance_optimized_detection': True,
-            'real_time_monitoring': False,
-            'ensemble_voting': 'average' if model_type == 'AutoencoderEnsemble' else 'single',
-            'uncertainty_threshold': None
-        })
-        
-        # Advanced Training Configuration
-        advanced_config = final_config.setdefault('advanced_training', {})
-        advanced_config.update({
-            'memory_efficient': True,
-            'compile_model': False,
-            'benchmark_mode': False,
-            'gradient_checkpointing': False
-        })
-        
-        # Presets Configuration - maintain context
-        presets_config = final_config.setdefault('presets', {})
-        presets_config.update({
-            'available_presets': list(globals().get('PRESET_CONFIGS', {}).keys()),
-            'current_preset': 'express_setup',
-            'current_override': None,
-            'override_rules': {},
-            'preset_configs': {},
-            'custom_presets_available': [],
-            'auto_apply': False,
-            'validate_compatibility': True,
-            'system_recommended_preset': None,
-            'preset_compatibility': {}
-        })
-        
-        # Runtime Configuration - track express setup
-        runtime_config = final_config.setdefault('runtime', {})
-        runtime_config.update({
-            'config_loaded_at': datetime.now().isoformat(),
-            'config_source': 'interactive_express_setup',
-            'runtime_id': f"express_{int(time.time())}",
-            'process_id': os.getpid(),
-            'system_analysis_completed': True,
-            'system_performance_score': None,
-            'system_class': 'express',
-            'optimizations_applied': {
-                'mixed_precision': mixed_precision,
+        # Runtime Configuration
+        runtime_config_update = final_config.setdefault('runtime', {})
+        runtime_config_update.update({
+            'config_loaded_at': runtime_config.get('config_loaded_at', datetime.now().isoformat()),
+            'config_source': runtime_config.get('config_source', 'interactive_express_setup'),
+            'runtime_id': runtime_config.get('runtime_id', f"express_{int(time.time())}"),
+            'process_id': runtime_config.get('process_id', os.getpid()),
+            'system_analysis_completed': runtime_config.get('system_analysis_completed', True),
+            'system_performance_score': runtime_config.get('system_performance_score'),
+            'system_class': runtime_config.get('system_class', 'express'),
+            'optimizations_applied': runtime_config.get('optimizations_applied', {
+                'mixed_precision': final_mixed_precision,
                 'memory_efficient': True,
                 'adaptive_patience': True
-            },
-            'resource_status': {
+            }),
+            'resource_status': runtime_config.get('resource_status', {
                 'gpu_available': torch.cuda.is_available(),
-                'mixed_precision_enabled': mixed_precision
-            },
-            'system_warnings': [],
-            'recommendations': [
+                'mixed_precision_enabled': final_mixed_precision
+            }),
+            'system_warnings': runtime_config.get('system_warnings', []),
+            'recommendations': runtime_config.get('recommendations', [
                 "Express setup optimized for quick results",
-                f"Using {model_type} with {epochs} epochs",
+                f"Using {final_model_type} with {final_epochs} epochs",
                 "Monitor training progress in TensorBoard"
-            ],
-            'configuration_health': {
+            ]),
+            'configuration_health': runtime_config.get('configuration_health', {
                 'status': 'healthy',
                 'checks_passed': True,
                 'express_optimized': True
-            }
+            })
         })
         
-        # Display comprehensive configuration summary
-        print(Fore.MAGENTA + Style.BRIGHT + "EXPRESS SETUP - CONFIGURATION SUMMARY")
-        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+        # Metadata Configuration
+        metadata_config_update = final_config.setdefault('metadata', {})
+        metadata_config_update.update({
+            'description': metadata_config.get('description', 'Express setup configuration for quick model training'),
+            'version': metadata_config.get('version', '2.1'),
+            'config_version': metadata_config.get('config_version', '2.1'),
+            'config_type': metadata_config.get('config_type', 'autoencoder'),
+            'created': metadata_config.get('created', datetime.now().isoformat()),
+            'last_modified': metadata_config.get('last_modified', datetime.now().isoformat()),
+            'preset_used': metadata_config.get('preset_used', 'express_setup'),
+            'recommended_hardware': metadata_config.get('recommended_hardware', {
+                'gpu_memory_gb': 4,
+                'cpu_cores': 4,
+                'ram_gb': 8
+            }),
+            'compatibility': metadata_config.get('compatibility', ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']),
+            'system': metadata_config.get('system', {
+                'python_version': platform.python_version(),
+                'platform': platform.platform(),
+                'architecture': platform.architecture(),
+                'machine': platform.machine(),
+                'processor': platform.processor() or 'unknown',
+                'pytorch_version': torch.__version__,
+                'cuda_available': torch.cuda.is_available(),
+                'cuda_version': torch.version.cuda if hasattr(torch.version, 'cuda') else 'unknown',
+                'cuda_devices': torch.cuda.device_count() if torch.cuda.is_available() else 0,
+                'hostname': platform.node(),
+                'os': platform.system(),
+                'os_release': platform.release(),
+                'cpu_count': os.cpu_count() or 1
+            }),
+            'validation': metadata_config.get('validation', {
+                'schema_version': '2.1',
+                'required_sections': ['training', 'model', 'security', 'data'],
+                'optional_sections': ['monitoring', 'hardware', 'presets', 'hyperparameter_optimization']
+            })
+        })
         
+        # Display configuration summary
+        print(Fore.MAGENTA + Style.BRIGHT + "\nEXPRESS SETUP - CONFIGURATION SUMMARY")
+        print(Fore.CYAN + Style.BRIGHT + "-"*40)
+
         # Core configuration display
         print(Fore.YELLOW + Style.BRIGHT + "Core Configuration:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Source: " + Fore.GREEN + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + f"{model_type}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Duration: " + Fore.GREEN + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + f"64")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + f"0.001")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + f"{'Enabled' if mixed_precision else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Source: " + Fore.GREEN + f"{'Real Data' if final_use_real_data else 'Synthetic Data'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + f"{final_model_type}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Duration: " + Fore.GREEN + f"{final_epochs} epochs")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + f"{training_config_update['batch_size']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + f"{training_config_update['learning_rate']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + f"{'Enabled' if final_mixed_precision else 'Disabled'}")
         print(Fore.WHITE + Style.BRIGHT + f"  └─ Device: " + Fore.GREEN + f"{'GPU' if torch.cuda.is_available() else 'CPU'}")
-        
-        # Architecture details
-        print(Fore.YELLOW + Style.BRIGHT + "\nArchitecture Details:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Encoding Dimension: " + Fore.GREEN + f"{model_config['encoding_dim']}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Hidden Layers: " + Fore.GREEN + f"{model_config['hidden_dims']}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Dropout Rates: " + Fore.GREEN + f"{model_config['dropout_rates']}")
-        if model_type == 'AutoencoderEnsemble':
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Ensemble Size: " + Fore.GREEN + f"{model_config['num_models']}")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Diversity Factor: " + Fore.GREEN + f"{model_config['diversity_factor']}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Attention Mechanism: " + Fore.GREEN + f"{'Enabled' if model_config.get('use_attention', False) else 'Disabled'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Residual Blocks: " + Fore.GREEN + f"{'Enabled' if model_config.get('residual_blocks', False) else 'Disabled'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Skip Connections: " + Fore.GREEN + f"{'Enabled' if model_config.get('skip_connection', False) else 'Disabled'}")
-        
-        # Data configuration
-        if use_real_data:
-            data_path = data_config.get('data_path', 'Default')
-            print(Fore.YELLOW + Style.BRIGHT + "\nReal Data Configuration:")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Path: " + Fore.GREEN + f"{data_path}")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preprocessing: " + Fore.GREEN + f"Enabled")
-            print(Fore.WHITE + Style.BRIGHT + f"  └─ Normalization: " + Fore.GREEN + f"Standard")
+
+        # Model Architecture Details
+        print(Fore.YELLOW + Style.BRIGHT + "\nModel Architecture:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Input Dimension: " + Fore.GREEN + f"{model_config_update['input_dim']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Encoding Dimension: " + Fore.GREEN + f"{model_config_update['encoding_dim']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Hidden Layers: " + Fore.GREEN + f"{model_config_update['hidden_dims']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Dropout Rates: " + Fore.GREEN + f"{model_config_update['dropout_rates']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Activation: " + Fore.GREEN + f"{model_config_update['activation']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Normalization: " + Fore.GREEN + f"{model_config_update['normalization']}")
+        if final_model_type == 'AutoencoderEnsemble':
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Ensemble Size: " + Fore.GREEN + f"{model_config_update['num_models']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Diversity Factor: " + Fore.GREEN + f"{model_config_update['diversity_factor']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Attention Mechanism: " + Fore.GREEN + f"{'Enabled' if model_config_update.get('use_attention', False) else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Residual Blocks: " + Fore.GREEN + f"{'Enabled' if model_config_update.get('residual_blocks', False) else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Skip Connections: " + Fore.GREEN + f"{'Enabled' if model_config_update.get('skip_connection', False) else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Weight Initialization: " + Fore.GREEN + f"{model_config_update['weight_init']}")
+
+        # Training Configuration Details
+        print(Fore.YELLOW + Style.BRIGHT + "\nTraining Configuration:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Optimizer: " + Fore.GREEN + f"{training_config_update['optimizer']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + f"{training_config_update['learning_rate']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Weight Decay: " + Fore.GREEN + f"{training_config_update['weight_decay']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Scheduler: " + Fore.GREEN + f"{training_config_update['scheduler']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Patience: " + Fore.GREEN + f"{training_config_update['patience']} epochs")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Gradient Clipping: " + Fore.GREEN + f"{training_config_update['gradient_clip']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Validation Split: " + Fore.GREEN + f"{training_config_update['validation_split']:.1%}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Early Stopping: " + Fore.GREEN + f"{'Enabled' if training_config_update['early_stopping'] else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + f"{'Enabled' if training_config_update['mixed_precision'] else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Workers: " + Fore.GREEN + f"{training_config_update['num_workers']}")
+
+        # Data Configuration Details
+        print(Fore.YELLOW + Style.BRIGHT + "\nData Configuration:")
+        if final_use_real_data:
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.GREEN + f"Real Network Data")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Data Path: " + Fore.GREEN + f"{data_config_update['data_path']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Artifacts Path: " + Fore.GREEN + f"{data_config_update['artifacts_path']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Features: " + Fore.GREEN + f"{data_config_update['features']}")
         else:
-            print(Fore.YELLOW + Style.BRIGHT + "\nSynthetic Data Configuration:")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.GREEN + f"{data_config.get('normal_samples', 0):,}")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.GREEN + f"{data_config.get('attack_samples', 0):,}")
-            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Features: " + Fore.GREEN + f"{data_config.get('features', 0)}")
-            print(Fore.WHITE + Style.BRIGHT + f"  └─ Anomaly Factor: " + Fore.GREEN + f"{data_config.get('anomaly_factor', 0)}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Source: " + Fore.GREEN + f"Synthetic Data")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.GREEN + f"{data_config_update['normal_samples']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.GREEN + f"{data_config_update['attack_samples']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Features: " + Fore.GREEN + f"{data_config_update['features']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ Noise Factor: " + Fore.GREEN + f"{data_config_update['synthetic_generation']['noise_factor']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Test Split: " + Fore.GREEN + f"{data_config_update['test_split']:.1%}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Stratified Split: " + Fore.GREEN + f"{'Yes' if data_config_update['stratified_split'] else 'No'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Normalization: " + Fore.GREEN + f"{data_config_update['data_normalization']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Random State: " + Fore.GREEN + f"{data_config_update['random_state']}")
+
+        # Security Configuration Details
+        print(Fore.YELLOW + Style.BRIGHT + "\nSecurity Configuration:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Threshold Percentile: " + Fore.GREEN + f"{security_config_update['percentile']}%")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Adaptive Threshold: " + Fore.GREEN + f"{'Enabled' if security_config_update['adaptive_threshold'] else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Detection Methods: " + Fore.GREEN + f"{', '.join(security_config_update['detection_methods'])}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Threshold Validation: " + Fore.GREEN + f"{'Enabled' if security_config_update['threshold_validation'] else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Robust Detection: " + Fore.GREEN + f"{'Enabled' if security_config_update['robust_detection'] else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Security Metrics: " + Fore.GREEN + f"{'Enabled' if security_config_update['enable_security_metrics'] else 'Disabled'}")
+
+        # Hardware & System Configuration
+        print(Fore.YELLOW + Style.BRIGHT + "\nHardware & System:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + f"{hardware_config_update['device']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ CUDA Available: " + Fore.GREEN + f"{torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ GPU Memory: " + Fore.GREEN + f"{hardware_config_update.get('detected_gpu_memory', 0):.1f}GB")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ System Class: " + Fore.GREEN + f"{hardware_config_update.get('system_performance_class', 'auto')}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Reproducible: " + Fore.GREEN + f"{'Yes' if system_config_update['reproducible'] else 'No'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Random Seed: " + Fore.GREEN + f"{system_config_update['random_seed']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ CUDA Optimizations: " + Fore.GREEN + f"{'Enabled' if system_config_update['cuda_optimizations'] else 'Disabled'}")
+
+        # Monitoring Configuration
+        print(Fore.YELLOW + Style.BRIGHT + "\nMonitoring & Logging:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Verbose: " + Fore.GREEN + f"{'Yes' if monitoring_config_update['verbose'] else 'No'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ TensorBoard: " + Fore.GREEN + f"{'Enabled' if monitoring_config_update['tensorboard_logging'] else 'Disabled'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Save Checkpoints: " + Fore.GREEN + f"{'Yes' if monitoring_config_update['save_checkpoints'] else 'No'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Save Best Model: " + Fore.GREEN + f"{'Yes' if monitoring_config_update['save_best_model'] else 'No'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Checkpoint Freq: " + Fore.GREEN + f"Every {monitoring_config_update['checkpoint_frequency']} epochs")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Metrics to Track: " + Fore.GREEN + f"{len(monitoring_config_update['metrics_to_track'])} metrics")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Progress Bar: " + Fore.GREEN + f"{'Enabled' if monitoring_config_update['progress_bar'] else 'Disabled'}")
+
+        # Preset & Runtime Information
+        print(Fore.YELLOW + Style.BRIGHT + "\nPreset & Runtime:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.GREEN + f"{preset_name}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Preset Compatible: " + Fore.GREEN + f"{'Yes' if preset_name.lower() in PRESET_CONFIGS else 'Custom'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Runtime ID: " + Fore.GREEN + f"{runtime_config_update['runtime_id']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Config Source: " + Fore.GREEN + f"{runtime_config_update['config_source']}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ System Class: " + Fore.GREEN + f"{runtime_config_update['system_class']}")
+
+        # Performance Estimation
+        estimated_time = _estimate_training_time(final_epochs, final_model_type, training_config_update['batch_size'])
+        print(Fore.YELLOW + Style.BRIGHT + "\nPerformance Estimates:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Estimated Training Time: " + Fore.GREEN + f"{estimated_time}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Total Iterations: " + Fore.GREEN + f"{final_epochs * (data_config_update.get('normal_samples', 8000) + data_config_update.get('attack_samples', 2000)) // training_config_update['batch_size'] if not final_use_real_data else 'Variable'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Resource Level: " + Fore.GREEN + f"{system_class.upper()}")
+
+        # Validation Configuration
+        print(Fore.YELLOW + Style.BRIGHT + "\nValidation:")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Cross-Validation: " + Fore.GREEN + f"{'Enabled' if validation_config_update['cross_validation']['enabled'] else 'Disabled'}")
+        if validation_config_update['cross_validation']['enabled']:
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ CV Folds: " + Fore.GREEN + f"{validation_config_update['cross_validation']['folds']}")
+            print(Fore.WHITE + Style.BRIGHT + f"  ├─ CV Stratified: " + Fore.GREEN + f"{'Yes' if validation_config_update['cross_validation']['stratified'] else 'No'}")
+        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Metrics: " + Fore.GREEN + f"{', '.join(validation_config_update['metrics'][:3])}{'...' if len(validation_config_update['metrics']) > 3 else ''}")
+        print(Fore.WHITE + Style.BRIGHT + f"  └─ Validation Frequency: " + Fore.GREEN + f"Every {validation_config_update['validation_frequency']} epoch(s)")
         
-        # System configuration
-        print(Fore.YELLOW + Style.BRIGHT + "\nSystem Configuration:")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Reproducible: " + Fore.GREEN + f"{system_config.get('reproducible', True)}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ Workers: " + Fore.GREEN + f"{training_config.get('num_workers', 0)}")
-        print(Fore.WHITE + Style.BRIGHT + f"  ├─ TensorBoard: " + Fore.GREEN + f"{'Enabled' if monitoring_config.get('tensorboard_logging', False) else 'Disabled'}")
-        print(Fore.WHITE + Style.BRIGHT + f"  └─ Checkpoints: " + Fore.GREEN + f"{'Enabled' if monitoring_config.get('save_checkpoints', False) else 'Disabled'}")
-        
-        # Confirmation with enhanced styling
+        # Confirmation
         try:
             confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with these express settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -54659,12 +55916,12 @@ def _interactive_express_setup(
         
         if confirm in ('', 'y', 'yes'):
             print(Fore.GREEN + Style.BRIGHT + "\nLaunching training with express configuration...")
-            return _launch_training_with_config(final_config, **kwargs)
+            return _launch_training_with_config(config=final_config, **kwargs)
         elif confirm in ('c', 'cancel'):
             print(Fore.RED + Style.BRIGHT + "\nTraining cancelled")
             return None
         else:
-            # Enhanced fallback options with styling
+            # Fallback options
             print(Fore.YELLOW + Style.BRIGHT + "\nWould you like to?")
             print(Fore.WHITE + Style.BRIGHT + "1. Try express setup again with different settings")
             print(Fore.WHITE + Style.BRIGHT + "2. Switch to custom configuration for full control")
@@ -56804,21 +58061,24 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
         metadata_config = config.get('metadata', {})
         runtime_config = config.get('runtime', {})
         
+        # Model configuration parameters
         for key, value in model_config.items():
             if key in ['model_type', 'encoding_dim', 'hidden_dims', 'dropout_rates',
                       'activation', 'normalization', 'skip_connection', 'residual_blocks',
                       'use_attention', 'legacy_mode', 'num_models', 'diversity_factor',
                       'activation_param', 'use_batch_norm', 'use_layer_norm', 'bias',
                       'weight_init', 'available_activations', 'available_normalizations',
-                      'available_initializers', 'model_types', 'min_features']:
+                      'available_initializers', 'model_types', 'min_features', 'input_dim']:
                 training_params[key] = value
         
+        # Training configuration parameters
         for key, value in training_config.items():
             if key in ['batch_size', 'epochs', 'learning_rate', 'patience', 'weight_decay',
                       'gradient_clip', 'gradient_accumulation_steps', 'mixed_precision',
                       'optimizer', 'scheduler', 'scheduler_params', 'early_stopping',
                       'validation_split', 'shuffle', 'pin_memory', 'persistent_workers',
-                      'adam_betas', 'adam_eps', 'lr_patience', 'lr_factor', 'min_lr']:
+                      'adam_betas', 'adam_eps', 'lr_patience', 'lr_factor', 'min_lr',
+                      'num_workers']:
                 if key == 'optimizer':
                     training_params['optimizer_type'] = value
                 elif key == 'scheduler':
@@ -56826,15 +58086,19 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
                 else:
                     training_params[key] = value
         
+        # Data configuration parameters
         for key, value in data_config.items():
             if key in ['normal_samples', 'attack_samples', 'features', 'use_real_data',
                       'data_path', 'artifacts_path', 'synthetic_generation', 'preprocessing',
                       'anomaly_factor', 'random_state', 'test_split', 'stratified_split',
-                      'data_preprocessing']:
-                training_params[key] = value
-            elif key == 'normalization':
-                training_params['normalization_method'] = value
+                      'data_preprocessing', 'normalization', 'data_normalization',
+                      'validation_split', 'shuffle', 'pin_memory']:
+                if key == 'normalization':
+                    training_params['normalization_method'] = value
+                else:
+                    training_params[key] = value
         
+        # Security configuration parameters
         for key, value in security_config.items():
             if key in ['percentile', 'attack_threshold', 'false_negative_cost',
                       'enable_security_metrics', 'adaptive_threshold', 'confidence_interval',
@@ -56842,36 +58106,44 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
                       'robust_detection', 'false_positive_tolerance',
                       'performance_optimized_detection', 'real_time_monitoring',
                       'ensemble_voting', 'uncertainty_threshold',
-                      'early_warning_threshold']:
-                training_params[key] = value
-            elif key == 'anomaly_threshold_strategy':
-                training_params['threshold_method'] = value
+                      'early_warning_threshold', 'anomaly_threshold_strategy']:
+                if key == 'anomaly_threshold_strategy':
+                    training_params['threshold_method'] = value
+                else:
+                    training_params[key] = value
         
+        # System configuration parameters
         for key, value in system_config.items():
             if key in ['model_dir', 'log_dir', 'config_dir', 'random_seed',
                       'reproducible', 'data_dir', 'checkpoint_dir', 'debug',
                       'verbose', 'parallel_processing', 'max_workers', 'export_onnx',
                       'non_interactive', 'cuda_optimizations', 'onnx_export',
                       'distributed_training', 'python_executable', 'working_directory',
-                      'environment_health']:
+                      'environment_health', 'results_dir', 'reports_dir', 'metrics_dir',
+                      'tensorboard_dir', 'datasets_dir', 'artifacts_dir', 'figures_dir',
+                      'info_dir', 'tb_dir', 'random_state']:
                 training_params[key] = value
         
+        # Monitoring configuration parameters
         for key, value in monitoring_config.items():
             if key in ['verbose', 'tensorboard_logging', 'save_checkpoints',
                       'checkpoint_frequency', 'log_frequency', 'metrics_frequency',
                       'console_logging_level', 'save_best_model', 'save_model_history',
                       'metrics_to_track', 'early_stopping_metric', 'checkpoint_format',
                       'log_model_summary', 'tensorboard_dir', 'tensorboard',
-                      'stability_metrics', 'performance_metrics', 'profiling_enabled']:
+                      'stability_metrics', 'performance_metrics', 'profiling_enabled',
+                      'debug_mode', 'progress_bar']:
+                if key == 'verbose' and 'debug_mode' not in training_params:
+                    training_params['debug_mode'] = value
                 training_params[key] = value
-            elif key == 'verbose':
-                training_params['debug_mode'] = value
         
+        # Export configuration parameters
         for key, value in export_config.items():
             if key in ['export_onnx', 'save_model', 'save_metadata',
                       'save_training_history']:
                 training_params[key] = value
         
+        # Hardware configuration parameters
         for key, value in hardware_config.items():
             if key in ['device', 'recommended_gpu_memory', 'minimum_system_requirements',
                       'optimal_system_requirements', 'memory_management',
@@ -56880,12 +58152,14 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
                       'optimization_recommendations', 'cuda_optimizations']:
                 training_params[key] = value
         
+        # Advanced training configuration parameters
         for key, value in advanced_config.items():
             if key in ['num_workers', 'pin_memory', 'persistent_workers',
                       'memory_efficient', 'compile_model', 'benchmark_mode',
                       'gradient_checkpointing']:
                 training_params[key] = value
         
+        # Validation configuration parameters
         for key, value in validation_config.items():
             if key in ['cross_validation', 'metrics', 'validation_frequency',
                       'save_validation_results', 'detailed_metrics', 'robustness_testing',
@@ -56901,6 +58175,7 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
                 else:
                     training_params[key] = value
         
+        # HPO configuration parameters
         for key, value in hpo_config.items():
             if key in ['enabled', 'strategy', 'study_name', 'direction', 'n_trials',
                       'timeout', 'sampler', 'pruner', 'objective_metric',
@@ -56909,30 +58184,42 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
                 hpo_key = f'hpo_{key}' if key != 'enabled' else 'hpo_enabled'
                 training_params[hpo_key] = value
         
+        # Experimental configuration parameters
         for key, value in experimental_config.items():
             if key in ['experimental_features', 'auto_optimize']:
                 training_params[key] = value
         
+        # Apply kwargs overrides
         training_params.update(kwargs)
+        
+        # Add full config reference
         training_params['config'] = config
         
-        training_params.setdefault('model_dir', DEFAULT_MODEL_DIR)
-        training_params.setdefault('log_dir', LOG_DIR)
-        training_params.setdefault('tensorboard_dir', TB_DIR)
+        # Set default directories if not provided
+        training_params.setdefault('model_dir', str(DEFAULT_MODEL_DIR))
+        training_params.setdefault('log_dir', str(LOG_DIR))
+        training_params.setdefault('tensorboard_dir', str(TB_DIR))
+        training_params.setdefault('checkpoint_dir', str(CHECKPOINTS_DIR))
+        training_params.setdefault('data_dir', str(DATA_DIR))
+        training_params.setdefault('config_dir', str(CONFIG_DIR))
+        training_params.setdefault('results_dir', str(RESULTS_DIR))
         
-        training_params.setdefault('checkpoint_dir', CHECKPOINTS_DIR)
-        training_params.setdefault('data_dir', DATA_DIR)
-        training_params.setdefault('config_dir', CONFIG_DIR)
-        training_params.setdefault('results_dir', RESULTS_DIR)
-        
+        # Handle tensorboard directory with fallbacks
         if monitoring_config.get('tensorboard_dir'):
-            training_params['tensorboard_dir'] = monitoring_config['tensorboard_dir']
+            training_params['tensorboard_dir'] = str(monitoring_config['tensorboard_dir'])
         elif system_config.get('log_dir'):
-            training_params['tensorboard_dir'] = system_config['log_dir']
+            training_params['tensorboard_dir'] = str(system_config['log_dir'])
         
+        # Handle legacy tb_dir parameter
         if 'tb_dir' in system_config:
-            training_params['tb_dir'] = system_config['tb_dir']
+            training_params['tb_dir'] = str(system_config['tb_dir'])
         
+        # Convert all Path objects to strings to avoid comparison issues
+        for key, value in training_params.items():
+            if isinstance(value, Path):
+                training_params[key] = str(value)
+        
+        # Launch training
         results = train_model(**training_params)
         
         if results and results.get('success', False):
@@ -56958,7 +58245,7 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
         return results
         
     except Exception as e:
-        logger.error(f"Training launch failed: {e}")
+        logger.error(f"Training launch failed: {e}", exc_info=True)
         print(f"\nFailed to launch training: {str(e)}")
         return None
 
@@ -62934,13 +64221,13 @@ def setup_hyperparameter_optimization(
     hpo_section['use_real_data'] = use_real_data
 
     data_path = _extract_with_preset_fallback(
-        'data_path', data_config.get('data_path', None), ['data', 'data_path'],
+        'data_path', data_config.get('data_path', Path(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")), ['data', 'data_path'],
         None
     )
     hpo_section['data_path'] = data_path
 
     artifacts_path = _extract_with_preset_fallback(
-        'artifacts_path', data_config.get('artifacts_path', None), ['data', 'artifacts_path'],
+        'artifacts_path', data_config.get('artifacts_path', Path(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")), ['data', 'artifacts_path'],
         None
     )
     hpo_section['artifacts_path'] = artifacts_path
@@ -64680,14 +65967,32 @@ def setup_hyperparameter_optimization(
                     mean_score = float('inf')
                     std_score = 0.0
                     logger.warning(f"Trial {trial.number}: No valid scores obtained from any fold")
-                
-                # Store trial results
+
+                # Store trial results with serialization
+                def make_json_serializable(obj):
+                    """Recursively convert Path objects and other non-serializable types to strings."""
+                    if isinstance(obj, Path):
+                        return str(obj)
+                    elif isinstance(obj, dict):
+                        return {k: make_json_serializable(v) for k, v in obj.items()}
+                    elif isinstance(obj, (list, tuple)):
+                        return [make_json_serializable(item) for item in obj]
+                    elif isinstance(obj, (str, int, float, bool, type(None))):
+                        return obj
+                    else:
+                        # Convert any other non-serializable type to string
+                        return str(obj)
+
+                # Create serializable versions
+                serializable_trial_params = make_json_serializable(trial_params)
+                serializable_fold_config = make_json_serializable(fold_config)
+
                 trial.set_user_attr('mean_cv_score', mean_score)
                 trial.set_user_attr('std_cv_score', std_score)
                 trial.set_user_attr('individual_fold_scores', fold_scores)
                 trial.set_user_attr('valid_folds', len([s for s in fold_scores if s != float('inf') and not np.isnan(s)]))
-                trial.set_user_attr('trial_parameters', trial_params)
-                trial.set_user_attr('complete_config', fold_config)
+                trial.set_user_attr('trial_parameters', serializable_trial_params)
+                trial.set_user_attr('complete_config', serializable_fold_config)
                 
                 return mean_score
             
@@ -66736,8 +68041,8 @@ def run_hyperparameter_optimization(
     
     # Data parameters with None checks
     use_real_data = hpo_section.setdefault('use_real_data', cleaned_params.get('use_real_data', None))
-    data_path = hpo_section.setdefault('data_path', cleaned_params.get('data_path', None))
-    artifacts_path = hpo_section.setdefault('artifacts_path', cleaned_params.get('artifacts_path', None))
+    data_path = hpo_section.setdefault('data_path', cleaned_params.get('data_path', Path(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")))
+    artifacts_path = hpo_section.setdefault('artifacts_path', cleaned_params.get('artifacts_path', Path(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")))
     
     # Ensure numeric parameters are properly handled
     normal_samples = cleaned_params.get('normal_samples')
@@ -67690,8 +68995,8 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         use_synthetic = data_config.get('use_synthetic', not use_real_data)
         
         # Real data paths
-        data_path = data_config.get('data_path', 'data/network_data.csv')
-        artifacts_path = data_config.get('artifacts_path', 'data/artifacts.pkl')
+        data_path = data_config.get('data_path', Path(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"))
+        artifacts_path = data_config.get('artifacts_path', Path(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"))
         data_format = data_config.get('data_format', 'auto')
         
         # Synthetic data parameters
@@ -72209,7 +73514,7 @@ def _interactive_hpo_express_setup(
                 if user_data_path == '0':
                     return None
 
-                data_path = user_data_path if user_data_path else default_data_path
+                data_path = Path(user_data_path) if user_data_path else Path(default_data_path)
                 
                 # Validate path exists
                 if not Path(data_path).exists():
@@ -72249,7 +73554,7 @@ def _interactive_hpo_express_setup(
                 if user_artifacts_path == '0':
                     return None
                 
-                artifacts_path = user_artifacts_path if user_artifacts_path else default_artifacts_path
+                artifacts_path = Path(user_artifacts_path) if user_artifacts_path else Path(default_artifacts_path)
                 
                 # Validate artifacts path exists
                 if not Path(artifacts_path).exists():
