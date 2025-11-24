@@ -31,6 +31,7 @@ from alive_progress import alive_bar
 import msvcrt
 import math
 import importlib.util
+import textwrap
 
 # Scientific computing and data manipulation
 import numpy as np
@@ -24547,7 +24548,7 @@ def initialize_model_variants(silent: bool = False) -> None:
 
 def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dict[str, str]:
     """
-    Comprehensive validation of all registered model variants with enhanced testing.
+    Validation of all registered model variants with testing.
     
     This function has been updated to fully leverage the existing helper functions while
     preserving ALL original validation capabilities including advanced scenario testing,
@@ -55976,84 +55977,413 @@ def _interactive_preset_setup(
     **kwargs
 ) -> Optional[Dict[str, Any]]:
     """
-    Interactive preset configuration setup with comprehensive context integration.
+    Interactive preset configuration setup with context integration.
     
     Provides a streamlined preset selection experience while maintaining full
     compatibility with the centralized configuration system.
     """
     try:
-        # Clear screen and show banner for consistency
+        # Clear screen and show banner
         print("\033c", end="")
         banner_config = show_banner(return_config=True)
         
-        # Use the config returned from show_banner or fallback
+        # Use the config returned from show_banner for context if available
         if base_config is None and banner_config is not None:
             base_config = banner_config
         else:
-            base_config = base_config or {}
+            base_config = get_current_config()
         
-        # Extract context for display
+        # Extract ALL configuration sections
+        data_config = base_config.get('data', {})
+        model_config = base_config.get('model', {})
+        training_config = base_config.get('training', {})
+        security_config = base_config.get('security', {})
+        monitoring_config = base_config.get('monitoring', {})
+        hardware_config = base_config.get('hardware', {})
+        system_config = base_config.get('system', {})
+        presets_config = base_config.get('presets', {})
+        metadata_config = base_config.get('metadata', {})
+        runtime_config = base_config.get('runtime', {})
+        validation_config = base_config.get('validation', {})
+        experimental_config = base_config.get('experimental', {})
+        hpo_config = base_config.get('hyperparameter_optimization', {})
+
+        # Context extraction
         preset_name = "Custom/Default"
         model_type = "Unknown"
+        config_source = "Unknown"
         
-        # Extract preset name with multiple fallbacks
-        presets_section = base_config.get("presets", {})
-        if isinstance(presets_section, dict):
-            preset_name = presets_section.get("current_preset", "Custom/Default")
+        if base_config:
+            # Preset detection with multiple fallback methods
+            if isinstance(presets_config, dict):
+                preset_name = presets_config.get("current_preset", "Custom/Default")
+            
+            # Check metadata for preset_used
+            if preset_name in ["Custom/Default", None, ""]:
+                if isinstance(metadata_config, dict):
+                    preset_name = metadata_config.get("preset_used", "Custom/Default")
+            
+            # Check legacy _preset_name field
+            if preset_name in ["Custom/Default", None, ""]:
+                preset_name = base_config.get("_preset_name", "Custom/Default")
+            
+            # Check runtime information
+            if preset_name in ["Custom/Default", None, ""]:
+                if isinstance(runtime_config, dict):
+                    preset_name = runtime_config.get("active_preset", "Custom/Default")
+            
+            # Clean up preset name display
+            if preset_name in ["Custom/Default", None, "", "none"]:
+                preset_name = "Custom/Default"
+            elif isinstance(preset_name, str):
+                preset_name = preset_name.title()
+            
             current_preset = preset_name
+            
+            # Extract model type with error handling
+            if isinstance(model_config, dict):
+                model_type = model_config.get('model_type', 'Unknown')
+                current_model_type = model_type
+            
+            # Extract config source with fallbacks
+            if "runtime" in base_config and isinstance(base_config["runtime"], dict):
+                config_source = base_config["runtime"].get("config_source", "Unknown")
+            elif "metadata" in base_config and isinstance(base_config["metadata"], dict):
+                config_source = base_config["metadata"].get("config_source", "Unknown")
+            else:
+                config_source = "Unknown"
         
-        # Extract model type
-        model_section = base_config.get("model", {})
-        if isinstance(model_section, dict):
-            model_type = model_section.get("model_type", "Unknown")
-            current_model_type = model_type
+        # Get hardware context for system-aware configuration
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+        except Exception as e:
+            logger.debug(f"Hardware detection failed: {e}")
+            hardware_data = {}
         
-        # Clear screen and show context
+        # Hardware-aware system class detection
+        cuda_available = hardware_data.get('cuda', {}).get('available', False)
+        memory_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+        cpu_cores = hardware_data.get('cpu_cores', {}).get('logical_cores', 4)
+        
+        # Determine system performance class for resource optimization
+        if cuda_available and memory_gb >= 32 and cpu_cores >= 16:
+            system_class = "enterprise"
+            recommended_preset = "advanced"
+        elif cuda_available and memory_gb >= 16 and cpu_cores >= 8:
+            system_class = "high-end"
+            recommended_preset = "performance"
+        elif cuda_available and memory_gb >= 8:
+            system_class = "performance"
+            recommended_preset = "performance"
+        elif memory_gb >= 8:
+            system_class = "standard"
+            recommended_preset = "baseline"
+        elif memory_gb >= 4:
+            system_class = "balanced"
+            recommended_preset = "default"
+        else:
+            system_class = "limited"
+            recommended_preset = "lightweight"
+        
+        # Extract current configuration summary
+        current_epochs = training_config.get('epochs', 100)
+        current_batch_size = training_config.get('batch_size', 64)
+        current_learning_rate = training_config.get('learning_rate', 0.001)
+        current_use_real_data = data_config.get('use_real_data', False)
+        current_normal_samples = data_config.get('normal_samples', 8000)
+        current_attack_samples = data_config.get('attack_samples', 2000)
+        current_features = data_config.get('features', 20)
+        
+        # Display context
         print(Fore.MAGENTA + Style.BRIGHT + "PRESET CONFIGURATION SETUP")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        
+
         print(Fore.YELLOW + Style.BRIGHT + f"Base Context:")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset}")
-        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.YELLOW + Style.BRIGHT + f"{current_model_type}")
-        print(Fore.GREEN + Style.BRIGHT + f"  └─ Mode: " + Fore.YELLOW + Style.BRIGHT + f"Preset Selection")
-        
-        print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Preset Configurations:\n")
-        
-        available_presets = list(globals().get('PRESET_CONFIGS', {}).keys())
-        
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ Current Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset}")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ Current Model: " + Fore.YELLOW + Style.BRIGHT + f"{current_model_type}")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class}")
+        print(Fore.GREEN + Style.BRIGHT + "  └─ Mode: " + Fore.YELLOW + Style.BRIGHT + "Preset Selection")
+
+        # Hardware Context Display
+        print(Fore.YELLOW + Style.BRIGHT + "\nHardware Context:")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ CUDA Available: " + Fore.YELLOW + Style.BRIGHT + f"{cuda_available}")
+        if cuda_available:
+            gpu_count = hardware_data.get('cuda', {}).get('gpu_count', 0)
+            print(Fore.GREEN + Style.BRIGHT + "  ├─ GPU Count: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_count}")
+        print(Fore.GREEN + Style.BRIGHT + "  ├─ System Memory: " + Fore.YELLOW + Style.BRIGHT + f"{memory_gb:.1f}GB")
+        print(Fore.GREEN + Style.BRIGHT + "  └─ CPU Cores: " + Fore.YELLOW + Style.BRIGHT + f"{cpu_cores}")
+
+        # Get available presets and validate their configurations
+        available_presets = []
+        preset_valid_count = 0
+        system_optimized_count = 0
+
+        for preset_name, preset_config in PRESET_CONFIGS.items():
+            # Validate preset configuration first
+            required_sections = ['training', 'model', 'data']
+            missing_sections = []
+            
+            for section in required_sections:
+                if section not in preset_config:
+                    missing_sections.append(section)
+            
+            is_valid = len(missing_sections) == 0
+            if not is_valid:
+                logger.warning(f"Preset '{preset_name}' is missing sections: {missing_sections}")
+                continue
+            
+            metadata = preset_config.get('metadata', {})
+            model_config = preset_config.get('model', {})
+            training_config = preset_config.get('training', {})
+            
+            # Check system compatibility
+            hw_req = metadata.get('recommended_hardware', {})
+            preset_ram_gb = hw_req.get('ram_gb', 0)
+            preset_cpu_cores = hw_req.get('cpu_cores', 0)
+            
+            # Determine system compatibility
+            system_compatible = True
+            if preset_ram_gb > 0 and memory_gb < preset_ram_gb:
+                system_compatible = False
+            if preset_cpu_cores > 0 and cpu_cores < preset_cpu_cores:
+                system_compatible = False
+            
+            # Model compatibility
+            compatibility = metadata.get('compatibility', [])
+            model_compatible = not compatibility or current_model_type in compatibility
+            
+            # System optimization level
+            system_optimized = system_compatible and model_compatible
+            
+            preset_info = {
+                'name': preset_name,
+                'description': metadata.get('description', f'{preset_name.title()} preset'),
+                'recommended_use': metadata.get('recommended_use', 'General purpose'),
+                'model_type': model_config.get('model_type', 'Unknown'),
+                'epochs': training_config.get('epochs', 'Default'),
+                'batch_size': training_config.get('batch_size', 'Default'),
+                'learning_rate': training_config.get('learning_rate', 'Default'),
+                'optimizer': training_config.get('optimizer', 'Default'),
+                'scheduler': training_config.get('scheduler', 'Default'),
+                'early_stopping': training_config.get('early_stopping', True),
+                'mixed_precision': training_config.get('mixed_precision', False),
+                'validation_split': training_config.get('validation_split', 'Default'),
+                'encoding_dim': model_config.get('encoding_dim', 'N/A'),
+                'hidden_dims': model_config.get('hidden_dims', 'N/A'),
+                'num_models': model_config.get('num_models', 'N/A'),
+                'diversity_factor': model_config.get('diversity_factor', 'N/A'),
+                'use_attention': model_config.get('use_attention', False),
+                'residual_blocks': model_config.get('residual_blocks', False),
+                'skip_connection': model_config.get('skip_connection', False),
+                'normalization': model_config.get('normalization', 'Default'),
+                'recommended_hardware': hw_req,
+                'compatibility': compatibility,
+                'preset_data': preset_config,
+                'system_compatible': system_compatible,
+                'model_compatible': model_compatible,
+                'system_optimized': system_optimized,
+                'config_valid': is_valid,
+                'missing_sections': missing_sections
+            }
+            
+            available_presets.append(preset_info)
+            if is_valid:
+                preset_valid_count += 1
+            if system_optimized:
+                system_optimized_count += 1
+
         if not available_presets:
             print(Fore.RED + Style.BRIGHT + "\nNo presets available! Using express setup instead.")
             return _interactive_express_setup(base_config, use_real_data, **kwargs)
+
+        # Preset availability summary
+        print(Fore.YELLOW + Style.BRIGHT + f"Preset Availability Summary:")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Presets: " + Fore.YELLOW + Style.BRIGHT + f"{len(available_presets)}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Valid Presets: " + Fore.YELLOW + Style.BRIGHT + f"{preset_valid_count}")
+        print(Fore.GREEN + Style.BRIGHT + f"  ├─ System-optimized Presets: " + Fore.YELLOW + Style.BRIGHT + f"{system_optimized_count}")
+        print(Fore.GREEN + Style.BRIGHT + f"  └─ Current System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}\n")
+
+        # Create main table for preset display
+        preset_table = Table(
+            box=box.ROUNDED,
+            header_style="bold white",
+            border_style="blue",
+            show_header=True,
+            show_lines=True,
+            width=min(150, console.width - 4),
+            title="Available Preset Configurations",
+            title_justify="left",
+            title_style="bold magenta"
+        )
+
+        # Define columns with appropriate widths
+        preset_table.add_column("#", style="bold white", width=3, justify="center")
+        preset_table.add_column("Preset Name", style="bold green", width=17, justify="left")
+        preset_table.add_column("Model Type(s)", style="bold cyan", width=26, justify="left")
+        preset_table.add_column("Description", style="bold", width=32, justify="left")
+        preset_table.add_column("Config Details", style="bold yellow", width=30, justify="left")
+        preset_table.add_column("Hardware", style="bold cyan", width=10, justify="left")
+        preset_table.add_column("Optimization", style="bold", width=15, justify="left")
+
+        # Populate table with preset data
+        for i, preset in enumerate(available_presets, 1):
+            if preset['system_optimized'] and preset['config_valid']:
+                status_icon = "✓"
+                status_style = "bold green"
+            elif preset['config_valid']:
+                status_icon = "⚠"
+                status_style = "bold yellow"
+            else:
+                status_icon = "✗"
+                status_style = "bold red"
+            
+            # Preset name
+            preset_name = preset['name']
+            active_preset_name = current_preset if isinstance(current_preset, str) else ""
+            name_style = "bold green" if preset_name.lower() == active_preset_name.lower() else "bold white"
+            name_text = Text()
+            name_text.append(preset_name.upper(), style=name_style)
+            name_text.append(f" {status_icon}", style=status_style)
+            
+            # Preset Model type
+            model_type_text = Text()
+            model_type_text.append(preset['model_type'])
+            
+            # Add compatibility information
+            model_type_text.append("\n")
+            
+            # Validation status
+            if preset['config_valid']:
+                model_type_text.append("✓ ", style="green")
+                model_type_text.append("Valid", style="green")
+            else:
+                model_type_text.append("✗ ", style="red")
+                model_type_text.append("Invalid", style="red")
+            
+            model_type_text.append(" | ")
+            
+            # Model compatibility
+            if preset['model_compatible']:
+                model_type_text.append("✓ ", style="green")
+                model_type_text.append("Compatible", style="green")
+            else:
+                model_type_text.append("✗ ", style="red")
+                model_type_text.append("Incompatible", style="red")
+            
+            # Show compatible models if specified
+            if preset['compatibility']:
+                compat_models = ", ".join(preset['compatibility'])
+                model_type_text.append(f"\n({compat_models})", style="magenta")
+            else:
+                model_type_text.append("\n(All models)", style="magenta")
+            
+            # Preset Description with truncation and validation issues
+            description = preset['description']
+            description_text = Text()
+
+            # Wrap the description text to fit within the column width
+            wrapped_description = textwrap.fill(description, width=30)  # Slightly less than column width for padding
+            
+            description_text.append(wrapped_description, style="white")
+            
+            # Add validation warning if invalid
+            if not preset['config_valid']:
+                description_text.append("\n", style="")
+                description_text.append(f"⚠ Missing: {', '.join(preset['missing_sections'])}", style="red")
+                if len(preset['missing_sections']) > 2:
+                    description_text.append("...", style="red")
+            
+            # Preset Configuration details
+            optimizer = preset.get('optimizer', 'AdamW')
+            optimizer_style = "bold green" if optimizer is not None else "bold red"
+            preset_scheduler = preset.get('scheduler', 'ReduceLROnPlateau')
+            if isinstance(preset_scheduler, str):
+                scheduler = preset_scheduler[:20] + ('...' if len(preset_scheduler) > 18 else '')
+            else:
+                scheduler = str(preset_scheduler)
+            scheduler_style = "bold green" if scheduler is not None else "bold red"
+
+            # data source with color coding
+            data_source = 'Real' if use_real_data else 'Synthetic'
+            data_source_style = "bold green" if data_source is not None else "bold red"
+            val_split = preset.get('validation_split', 0.2)
+            val_split_style = "bold green" if val_split is not None else "bold red"
+            encoding_dim = preset.get('encoding_dim', 'N/A')
+            encoding_dim_style = "bold green" if encoding_dim is not None else "bold red"
+            hidden_dims = preset.get('hidden_dims', 'N/A')
+            hidden_dims_style = "bold green" if hidden_dims is not None else "bold red"
+            num_models = preset.get('num_models', 'N/A')
+            num_models_style = "bold green" if num_models is not None else "bold red"
+
+            config_text = Text()
+            config_text.append(f"Data source: ", style="yellow")
+            config_text.append(f"{data_source}\n", style=data_source_style)
+            config_text.append(f"Num models: ", style="yellow")
+            config_text.append(f"{num_models} ", style=num_models_style)
+            config_text.append(f"Encoding dim: ", style="yellow")
+            config_text.append(f"{encoding_dim}\n", style=encoding_dim_style)
+            config_text.append(f"Hidden dims: ", style="yellow")
+            config_text.append(f"{hidden_dims} ", style=hidden_dims_style)
+            config_text.append(f"Epochs: {preset['epochs']}\n", style="yellow")
+            config_text.append(f"Batch: {preset['batch_size']} ", style="yellow")
+            config_text.append(f"LR: {preset['learning_rate']}\n", style="yellow")
+            config_text.append(f"Val split: ", style="yellow")
+            config_text.append(f"{val_split} ", style=val_split_style)
+            config_text.append(f"Scheduler: ", style="yellow")
+            config_text.append(f"{scheduler}\n", style=scheduler_style)
+            config_text.append(f"Optimizer: ", style="yellow")
+            config_text.append(f"{optimizer}", style=optimizer_style)
+            
+            # Preset Hardware requirements
+            hw_req = preset['recommended_hardware']
+            if hw_req:
+                cpu_req = hw_req.get('cpu_cores', 0)
+                ram_req = hw_req.get('ram_gb', 0)
+                
+                # Color code based on system compatibility
+                cpu_style = "green" if cpu_req <= cpu_cores else "red"
+                ram_style = "green" if ram_req <= memory_gb else "red"
+                
+                hw_text = Text()
+                hw_text.append(f"{cpu_req}", style=cpu_style)
+                hw_text.append(" cores\n")
+                hw_text.append(f"{ram_req}", style=ram_style)
+                hw_text.append(" GB RAM")
+            else:
+                hw_text = Text("N/A", style="red")
+            
+            # Preset System optimization status
+            if preset['system_optimized']:
+                system_text = Text("OPTIMIZED", style="bold green")
+            else:
+                system_text = Text("SUBOPTIMAL", style="bold red")
+            
+            # Preset Best for / recommended use - add only if there's space after wrapping
+            wrapped_lines = wrapped_description.split('\n')
+            if len(wrapped_lines) <= 2 and len(preset['description']) <= 60:  # Only add if description is relatively short
+                description_text.append(f"\n{preset['recommended_use'][:30]}", style="dim cyan")
+            
+            # Add row to table
+            preset_table.add_row(
+                str(i),
+                name_text,
+                model_type_text,
+                description_text,
+                config_text,
+                hw_text,
+                system_text
+            )
         
-        # Display available presets with enhanced formatting
-        for i, preset_name in enumerate(available_presets, 1):
-            preset_config = globals()['PRESET_CONFIGS'][preset_name]
-            metadata = preset_config.get('metadata', {})
-            description = metadata.get('description', 'No description available')
-            recommended_use = metadata.get('recommended_use', 'General purpose')
-            model_type = preset_config.get('model', {}).get('model_type', 'Unknown')
-            
-            print(Fore.WHITE + Style.BRIGHT + f"{i}. {preset_name}\n")
-            print(Fore.CYAN + Style.BRIGHT + f"   Model: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
-            print(Fore.CYAN + Style.BRIGHT + f"   Description: " + Fore.MAGENTA + Style.BRIGHT + f"{description}")
-            print(Fore.CYAN + Style.BRIGHT + f"   Best for: " + Fore.YELLOW + Style.BRIGHT + f"{recommended_use}")
-            
-            # Show key configuration highlights
-            training_config = preset_config.get('training', {})
-            epochs = training_config.get('epochs', 'Default')
-            batch_size = training_config.get('batch_size', 'Default')
-            learning_rate = training_config.get('learning_rate', 'Default')
-            
-            print(Fore.CYAN + Style.BRIGHT + f"   Configuration: " + Fore.GREEN + Style.BRIGHT + f"{epochs} epochs, " + Fore.GREEN + Style.BRIGHT + f"batch {batch_size}, " + Fore.GREEN + Style.BRIGHT + f"LR {learning_rate}")
-            print()  # Empty line for spacing
+        # Display available presets
+        console.print(preset_table)
         
-        # Enhanced navigation options
+        # Navigation options
         print(Fore.YELLOW + Style.BRIGHT + "\nNavigation Options:")
         print(Fore.WHITE + Style.BRIGHT + f"{len(available_presets)+1}. " + Fore.GREEN + Style.BRIGHT + "Switch to Express Setup")
         print(Fore.WHITE + Style.BRIGHT + f"{len(available_presets)+2}. " + Fore.GREEN + Style.BRIGHT + "Switch to Custom Configuration")
         print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
-        
-        # Preset selection with robust error handling
+
+        # Preset selection
         while True:
             try:
                 choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect preset (1-{len(available_presets)}) or navigation option: " + Style.RESET_ALL).strip()
@@ -56064,7 +56394,16 @@ def _interactive_preset_setup(
                 choice_num = int(choice)
                 
                 if 1 <= choice_num <= len(available_presets):
-                    selected_preset = available_presets[choice_num-1]
+                    selected_preset_info = available_presets[choice_num-1]
+                    selected_preset = selected_preset_info['name']
+                    
+                    # Validate selected preset configuration
+                    if not selected_preset_info['config_valid']:
+                        print(Fore.RED + Style.BRIGHT + f"\nWarning: Selected preset '{selected_preset}' has configuration issues!")
+                        print(Fore.YELLOW + Style.BRIGHT + f"Missing sections: {', '.join(selected_preset_info['missing_sections'])}")
+                        confirm_invalid = input(Fore.YELLOW + Style.BRIGHT + "Continue anyway? (y/N): " + Style.RESET_ALL).strip().lower()
+                        if confirm_invalid not in ('y', 'yes'):
+                            continue
                     break
                 elif choice_num == 0:
                     print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled")
@@ -56085,34 +56424,52 @@ def _interactive_preset_setup(
                 return None
         
         # Load and display selected preset details
-        preset_config = globals()['PRESET_CONFIGS'][selected_preset].copy()
+        preset_config = PRESET_CONFIGS[selected_preset].copy()
+
+        # Validate preset configuration
+        required_sections = ['training', 'model', 'data']
+        missing_sections = []
+
+        for section in required_sections:
+            if section not in preset_config:
+                missing_sections.append(section)
+        
+        is_valid = len(missing_sections) == 0
+
+        if not is_valid:
+            print(Fore.RED + Style.BRIGHT + f"\nError: Preset '{selected_preset}' has invalid configuration!")
+            print(Fore.YELLOW + Style.BRIGHT + f"Missing sections: {', '.join(missing_sections)}")
+            print(Fore.RED + Style.BRIGHT + "Cannot proceed with invalid preset configuration.")
+            return None
         
         print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.MAGENTA + Style.BRIGHT + f"SELECTED PRESET: {selected_preset}")
+        print(Fore.MAGENTA + Style.BRIGHT + f"SELECTED PRESET: {selected_preset.upper()}")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        
+
         # Extract preset details for display
         model_config = preset_config.get('model', {})
         training_config = preset_config.get('training', {})
         data_config = preset_config.get('data', {})
         metadata = preset_config.get('metadata', {})
-        
+
         model_type = model_config.get('model_type', 'Unknown')
         epochs = training_config.get('epochs', 'Default')
         batch_size = training_config.get('batch_size', 'Default')
         learning_rate = training_config.get('learning_rate', 'Default')
         description = metadata.get('description', 'No description available')
         recommended_use = metadata.get('recommended_use', 'General purpose')
-        
+
         # Display preset overview
         print(Fore.YELLOW + Style.BRIGHT + "Preset Overview:")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Description: " + Fore.GREEN + Style.BRIGHT + f"{description}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Recommended Use: " + Fore.GREEN + Style.BRIGHT + f"{recommended_use}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.GREEN + Style.BRIGHT + f"{model_type}")
-        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + Style.BRIGHT + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type)} min)")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training: " + Fore.GREEN + Style.BRIGHT + f"{epochs} epochs (~{_estimate_training_time(epochs, model_type, batch_size)} min)")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Batch Size: " + Fore.GREEN + Style.BRIGHT + f"{batch_size}")
-        print(Fore.CYAN + Style.BRIGHT + f"  └─ Learning Rate: " + Fore.GREEN + Style.BRIGHT + f"{learning_rate}")
-        
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.GREEN + Style.BRIGHT + f"{learning_rate}")
+        print(Fore.CYAN + Style.BRIGHT + f"  ├─ System Compatibility: " + Fore.YELLOW + Style.BRIGHT + f"{'OPTIMAL' if selected_preset_info['system_optimized'] else 'SUBOPTIMAL'}")
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Config Validation: " + Fore.YELLOW + Style.BRIGHT + f"{'PASS' if is_valid else 'FAIL'}")
+
         # Architecture details
         if 'encoding_dim' in model_config:
             print(Fore.YELLOW + Style.BRIGHT + "\nArchitecture Details:")
@@ -56136,7 +56493,7 @@ def _interactive_preset_setup(
                 print(Fore.CYAN + Style.BRIGHT + f"  ├─ Enhanced Features: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(enhanced_features)}")
             
             print(Fore.CYAN + Style.BRIGHT + f"  └─ Normalization: " + Fore.GREEN + Style.BRIGHT + f"{model_config.get('normalization', 'Default')}")
-        
+
         # Training configuration details
         print(Fore.YELLOW + Style.BRIGHT + "\nTraining Configuration:")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Optimizer: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('optimizer', 'Default')}")
@@ -56144,16 +56501,27 @@ def _interactive_preset_setup(
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Early Stopping: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if training_config.get('early_stopping', True) else 'Disabled'}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.GREEN + Style.BRIGHT + f"{'Enabled' if training_config.get('mixed_precision', False) else 'Disabled'}")
         print(Fore.CYAN + Style.BRIGHT + f"  └─ Validation Split: " + Fore.GREEN + Style.BRIGHT + f"{training_config.get('validation_split', 'Default')}")
+
+        # Show hardware recommendations
+        hw_req = selected_preset_info['recommended_hardware']
+        if hw_req:
+            hw_color = Fore.GREEN if hw_req.get('ram_gb', 0) <= memory_gb else Fore.RED
+            cpu_color = Fore.GREEN if hw_req.get('cpu_cores', 0) <= cpu_cores else Fore.RED
+            print(Fore.YELLOW + Style.BRIGHT + "\nHardware Compatibility:")
+            if hw_req.get('gpu_memory_gb'):
+                print(Fore.CYAN + Style.BRIGHT + f"  ├─ GPU Memory: " + Fore.YELLOW + Style.BRIGHT + f"{hw_req.get('gpu_memory_gb', 'N/A')}GB")
+            print(Fore.CYAN + Style.BRIGHT + f"  ├─ CPU Cores: " + cpu_color + Style.BRIGHT + f"{hw_req.get('cpu_cores', 'N/A')} (available: {cpu_cores})")
+            print(Fore.CYAN + Style.BRIGHT + f"  └─ RAM: " + hw_color + Style.BRIGHT + f"{hw_req.get('ram_gb', 'N/A')}GB (available: {memory_gb:.1f}GB)")
         
         # Customization options
         print(Fore.YELLOW + Style.BRIGHT + "\nCustomization Options:")
-        print(Fore.WHITE + Style.BRIGHT + "1. Use preset as-is " + Fore.GREEN + Style.BRIGHT + "(recommended for first use)")
+        print(Fore.WHITE + Style.BRIGHT + "1. Use preset as-is " + Fore.GREEN + Style.BRIGHT + "(Recommended)")
         print(Fore.WHITE + Style.BRIGHT + "2. Customize data source only " + Fore.GREEN + Style.BRIGHT + "(keep preset, change data)")
         print(Fore.WHITE + Style.BRIGHT + "3. Customize training duration " + Fore.GREEN + Style.BRIGHT + "(adjust epochs and patience)")
         print(Fore.WHITE + Style.BRIGHT + "4. Customize model architecture " + Fore.GREEN + Style.BRIGHT + "(change model type or layers)")
         print(Fore.WHITE + Style.BRIGHT + "5. Full customization " + Fore.GREEN + Style.BRIGHT + "(complete control)")
         print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
-        
+
         while True:
             try:
                 custom_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect customization option (0-5): " + Style.RESET_ALL).strip()
@@ -56163,13 +56531,46 @@ def _interactive_preset_setup(
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nCustomization selection cancelled")
                 return None
-        
+
         if custom_choice == '0':
             print(Fore.RED + Style.BRIGHT + "\nPreset selection cancelled")
             return None
         
-        # Merge configurations using the same pattern as train_model_interactive
-        final_config = _merge_configs(base_config, preset_config)
+        # Merge configurations
+        if not base_config:
+            final_config = deepcopy(preset_config)
+        else:
+            # Create a deep copy of the preset config as the foundation
+            final_config = deepcopy(preset_config)
+            
+            # Only merge safe sections that shouldn't override preset configuration
+            safe_sections = ['metadata', 'runtime', 'system', 'presets']
+            
+            for section in safe_sections:
+                if section in base_config and base_config[section]:
+                    if section not in final_config:
+                        final_config[section] = {}
+                    final_config[section] = deep_update(
+                        final_config[section],
+                        base_config[section]
+                    )
+        
+        # Update metadata to reflect preset usage
+        metadata = final_config.setdefault('metadata', {})
+        metadata.update({
+            'last_modified': datetime.now().isoformat(),
+            'setup_method': 'preset',
+            'preset_used': selected_preset,
+            'preset_config_valid': is_valid,
+            'system_class_used': system_class,
+            'config_source': f'preset_{selected_preset}',
+            'base_config_merged': bool(base_config)
+        })
+
+        # Update presets section
+        presets_section = final_config.setdefault('presets', {})
+        presets_section['current_preset'] = selected_preset
+        presets_section['previous_preset'] = current_preset
         
         # Data source customization
         if custom_choice in ['2', '3', '4', '5']:
@@ -56195,8 +56596,6 @@ def _interactive_preset_setup(
                 
             use_real_data = data_choice == '1'
             print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if use_real_data else 'Synthetic Data'}")
-            #data_mode = 'real' if data_choice == '1' else 'synthetic'
-            #print(Fore.GREEN + Style.BRIGHT + f"\nSelected: {'Real Data' if data_mode == 'real' else 'Synthetic Data'}")
             
             # Data configuration based on selection
             if use_real_data:
@@ -56416,26 +56815,128 @@ def _interactive_preset_setup(
                     print(Fore.GREEN + Style.BRIGHT + f"  └─ Noise level: " + Fore.YELLOW + Style.BRIGHT + f"{noise_factor}")
             
             final_config.setdefault('data', {})['use_real_data'] = use_real_data == True
-            #final_config.setdefault('data', {})['use_real_data'] = data_mode == 'real'
         
         # Training duration customization
         if custom_choice in ['3', '4', '5']:
             print(Fore.MAGENTA + Style.BRIGHT + "\nTRAINING DURATION CUSTOMIZATION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-            current_epochs = training_config.get('epochs', 50)
-            estimated_time = _estimate_training_time(current_epochs, model_type)
             
-            print(Fore.CYAN + Style.BRIGHT + f"Current: " + Fore.GREEN + Style.BRIGHT + f"{current_epochs} epochs (~{estimated_time} min)")
-            print(Fore.CYAN + Style.BRIGHT + "Quick: 10 epochs | Standard: 50 epochs | Thorough: 100+ epochs")
+            # Get current configuration
+            current_epochs = training_config.get('epochs', 50)
+            current_batch_size = training_config.get('batch_size', 64)
+            
+            # Get preset training configuration for context
+            preset_training_config = PRESET_CONFIGS.get(selected_preset.lower(), {}).get('training', {})
+            preset_epochs = preset_training_config.get('epochs', 50)
+            
+            # Determine recommended duration based on system class
+            if system_class == "enterprise":
+                recommended_duration = '3'  # Thorough
+            elif system_class in ["high-end", "performance"]:
+                recommended_duration = '2'  # Standard
+            elif system_class == "standard":
+                recommended_duration = '2'  # Standard
+            else:  # limited or balanced
+                recommended_duration = '1'  # Quick Test
+            
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{preset_epochs}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Current Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{current_epochs}")
+            
+            # Duration configurations
+            duration_configs = {
+                '1': {
+                    'epochs': 10,
+                    'name': 'Quick Test',
+                    'description': 'Fast iteration for testing and development',
+                    'estimated_time': '1-3 minutes' if cuda_available else '3-8 minutes',
+                    'best_for': 'Quick experiments, testing configurations, debugging',
+                    'aligned_system_classes': ['limited', 'balanced', 'standard'],
+                    'training_quality': 'Basic'
+                },
+                '2': {
+                    'epochs': 50,
+                    'name': 'Standard',
+                    'description': 'Balanced training for most use cases',
+                    'estimated_time': '5-15 minutes' if cuda_available else '15-40 minutes',
+                    'best_for': 'General training, production models, balanced optimization',
+                    'aligned_system_classes': ['standard', 'performance', 'high-end'],
+                    'training_quality': 'Good'
+                },
+                '3': {
+                    'epochs': 100,
+                    'name': 'Thorough',
+                    'description': 'Comprehensive training for best results',
+                    'estimated_time': '15-30 minutes' if cuda_available else '40-90 minutes',
+                    'best_for': 'Final training, production deployment, maximum accuracy',
+                    'aligned_system_classes': ['performance', 'high-end', 'enterprise'],
+                    'training_quality': 'Excellent'
+                },
+                '4': {
+                    'epochs': preset_epochs,
+                    'name': f'Preset Default ({preset_epochs} epochs)',
+                    'description': 'Use preset-recommended epoch count',
+                    'estimated_time': 'Varies based on preset configuration',
+                    'best_for': 'Following preset guidelines, preset-optimized training',
+                    'aligned_system_classes': ['all'],
+                    'training_quality': 'Preset-optimized'
+                }
+            }
+            
+            print(Fore.YELLOW + Style.BRIGHT + "\nTraining Duration Options:\n")
+            
+            for key, config in duration_configs.items():
+                recommendation_indicator = " " + Fore.GREEN + Style.BRIGHT + "*Recommended" + Style.RESET_ALL if key == recommended_duration else ""
+                system_alignment = f" [Compatible: {', '.join(config['aligned_system_classes'])}]" if config['aligned_system_classes'] != ['all'] else ""
+                
+                print(Fore.WHITE + Style.BRIGHT + f"{key}. {config['name']}{recommendation_indicator}")
+                print(Fore.CYAN + Style.BRIGHT + f"   ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{config['description']}{system_alignment}")
+                print(Fore.CYAN + Style.BRIGHT + f"   ├─ Epochs: " + Fore.GREEN + Style.BRIGHT + f"{config['epochs']}")
+                print(Fore.CYAN + Style.BRIGHT + f"   ├─ Estimated Time: " + Fore.MAGENTA + Style.BRIGHT + f"{config['estimated_time']}")
+                print(Fore.CYAN + Style.BRIGHT + f"   ├─ Training Quality: " + Fore.GREEN + Style.BRIGHT + f"{config['training_quality']}")
+                print(Fore.CYAN + Style.BRIGHT + f"   └─ Best for: " + Fore.GREEN + Style.BRIGHT + f"{config['best_for']}")
+                print()
+            
+            print(Fore.WHITE + Style.BRIGHT + "5. Custom " + Fore.GREEN + Style.BRIGHT + "(Specify exact epoch count)")
+            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
             
             try:
-                new_epochs = input(Fore.YELLOW + Style.BRIGHT + f"\nNew epochs (Enter for {current_epochs}, 'c' to cancel): " + Style.RESET_ALL).strip()
+                duration_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect training duration (0-5): " + Style.RESET_ALL).strip()
                 
-                if new_epochs.lower() == 'c':
+                # Allow empty input to use recommended duration
+                if not duration_choice:
+                    duration_choice = recommended_duration
+                    print(Fore.GREEN + Style.BRIGHT + f"\nUsing recommended duration: {duration_choice}")
+                
+                if duration_choice == '0':
                     print(Fore.RED + Style.BRIGHT + "\nDuration customization cancelled")
                     return None
-                elif new_epochs:
-                    new_epochs_int = int(new_epochs)
+                elif duration_choice in ['1', '2', '3', '4', '5']:
+                    if duration_choice == '5':
+                        # Custom epoch configuration
+                        print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM EPOCH CONFIGURATION")
+                        print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Preset default: " + Fore.GREEN + Style.BRIGHT + f"{preset_epochs} epochs")
+                        
+                        user_epochs = input(Fore.YELLOW + Style.BRIGHT + f"\nEnter number of epochs (1-1000) or 'c' to cancel: " + Style.RESET_ALL).strip()
+                        
+                        if user_epochs.lower() == 'c':
+                            print(Fore.RED + Style.BRIGHT + "\nDuration customization cancelled")
+                            return None
+                        
+                        try:
+                            new_epochs_int = int(user_epochs) if user_epochs else preset_epochs
+                            if new_epochs_int < 1 or new_epochs_int > 1000:
+                                print(Fore.YELLOW + Style.BRIGHT + "\nInvalid epoch count. Using preset default.")
+                                new_epochs_int = preset_epochs
+                            else:
+                                print(Fore.GREEN + Style.BRIGHT + f"\nUsing custom epoch count: {new_epochs_int}")
+                        except ValueError:
+                            print(Fore.YELLOW + Style.BRIGHT + "\nInvalid input. Using preset default.")
+                            new_epochs_int = preset_epochs
+                    else:
+                        new_epochs_int = duration_configs[duration_choice]['epochs']
+                    
+                    # Update configuration
                     final_config.setdefault('training', {})['epochs'] = new_epochs_int
                     # Adaptive patience based on epochs
                     final_config['training']['patience'] = min(20, max(5, new_epochs_int // 3))
@@ -56443,9 +56944,14 @@ def _interactive_preset_setup(
                     # Store the user-configured epochs to preserve it
                     final_config['training']['user_configured_epochs'] = new_epochs_int
                     
-                    print(Fore.GREEN + Style.BRIGHT + f"\nUpdated: {new_epochs_int} epochs (~{_estimate_training_time(new_epochs_int, model_type)} min)")
+                    selected_duration = next((v for k, v in duration_configs.items() if v['epochs'] == new_epochs_int), duration_configs['2'])
+                    print(Fore.GREEN + Style.BRIGHT + f"\nSelected: " + Fore.YELLOW + Style.BRIGHT + f"{selected_duration['name']}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{new_epochs_int}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Quality: " + Fore.YELLOW + Style.BRIGHT + f"{selected_duration['training_quality']}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Estimated Time: " + Fore.YELLOW + Style.BRIGHT + f"{selected_duration['estimated_time']}")
                 else:
-                    print(Fore.GREEN + Style.BRIGHT + f"\nKeeping: {current_epochs} epochs")
+                    print(Fore.RED + Style.BRIGHT + "\nInvalid choice. Please select 0-5.")
+                    print(Fore.YELLOW + Style.BRIGHT + f"\nKeeping: {current_epochs} epochs")
                     
             except ValueError:
                 print(Fore.RED + Style.BRIGHT + f"\nInvalid input, keeping {current_epochs} epochs")
@@ -56457,81 +56963,177 @@ def _interactive_preset_setup(
         if custom_choice in ['4', '5']:
             print(Fore.MAGENTA + Style.BRIGHT + "\nMODEL ARCHITECTURE CUSTOMIZATION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
+            
             current_model_type = model_config.get('model_type', 'EnhancedAutoencoder')
             
-            print(Fore.YELLOW + Style.BRIGHT + f"Current model: " + Fore.CYAN + Style.BRIGHT + f"{current_model_type}")
-            print(Fore.WHITE + Style.BRIGHT + "1. Keep current model type")
-            print(Fore.WHITE + Style.BRIGHT + "2. SimpleAutoencoder " + Fore.GREEN + Style.BRIGHT + "(fast, lightweight)")
-            print(Fore.WHITE + Style.BRIGHT + "3. EnhancedAutoencoder " + Fore.GREEN + Style.BRIGHT + "(balanced, recommended)")
-            print(Fore.WHITE + Style.BRIGHT + "4. AutoencoderEnsemble " + Fore.GREEN + Style.BRIGHT + "(accurate, slower)")
-            print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+            # Get preset model compatibility
+            preset_data = PRESET_CONFIGS.get(selected_preset.lower(), {})
+            preset_compatibility = preset_data.get('metadata', {}).get('compatibility', [])
+            preset_model_type = model_config.get('model_type', 'EnhancedAutoencoder')
             
-            try:
-                model_change = input(Fore.YELLOW + Style.BRIGHT + "\nSelect model type (0-4, default=1): " + Style.RESET_ALL).strip()
+            # Determine available models based on preset compatibility
+            if preset_compatibility:
+                available_models = [m for m in preset_compatibility if m in MODEL_VARIANTS.keys()]
+            else:
+                available_models = list(MODEL_VARIANTS.keys())
+            
+            # Determine recommended model based on system class
+            if system_class == "enterprise":
+                recommended_model = 'AutoencoderEnsemble' if 'AutoencoderEnsemble' in available_models else available_models[0]
+            elif system_class in ["high-end", "performance"]:
+                recommended_model = 'EnhancedAutoencoder' if 'EnhancedAutoencoder' in available_models else available_models[0]
+            else:  # standard, balanced, or limited
+                recommended_model = 'SimpleAutoencoder' if 'SimpleAutoencoder' in available_models else available_models[0]
+            
+            # Fallback to preset model if recommended model is not in available models
+            if recommended_model not in available_models:
+                recommended_model = preset_model_type if preset_model_type in available_models else available_models[0]
+            
+            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Current Model: " + Fore.YELLOW + Style.BRIGHT + f"{current_model_type}")
+            print(Fore.GREEN + Style.BRIGHT + f"  └─ Preset Compatible: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(available_models) if available_models else 'All models'}")
+            
+            # Model type configurations
+            model_configs = {
+                'EnhancedAutoencoder': {
+                    'index': '1',
+                    'name': 'EnhancedAutoencoder',
+                    'description': 'Advanced features with good balance',
+                    'strengths': ['Advanced architecture', 'Good performance', 'Balanced resource usage'],
+                    'weaknesses': ['More complex', 'Moderate training time'],
+                    'best_for': 'Most use cases, production systems, balanced optimization',
+                    'aligned_system_classes': ['standard', 'performance', 'high-end', 'enterprise'],
+                    'complexity': 'Medium',
+                    'training_time': 'Moderate',
+                    'resource_usage': 'Balanced'
+                },
+                'SimpleAutoencoder': {
+                    'index': '2',
+                    'name': 'SimpleAutoencoder',
+                    'description': 'Fast and lightweight architecture',
+                    'strengths': ['Very fast training', 'Minimal resources', 'Easy to tune'],
+                    'weaknesses': ['Basic features', 'Lower accuracy potential'],
+                    'best_for': 'Quick experiments, limited resources, baseline establishment',
+                    'aligned_system_classes': ['limited', 'balanced', 'standard'],
+                    'complexity': 'Low',
+                    'training_time': 'Fast',
+                    'resource_usage': 'Minimal'
+                },
+                'AutoencoderEnsemble': {
+                    'index': '3',
+                    'name': 'AutoencoderEnsemble',
+                    'description': 'Best accuracy with ensemble approach',
+                    'strengths': ['Highest accuracy', 'Robust performance', 'Multiple model perspectives'],
+                    'weaknesses': ['Slower training', 'More resources', 'Complex tuning'],
+                    'best_for': 'Critical applications, maximum accuracy, production deployments',
+                    'aligned_system_classes': ['high-end', 'enterprise'],
+                    'complexity': 'High',
+                    'training_time': 'Slow',
+                    'resource_usage': 'High'
+                }
+            }
+            
+            # Filter available models
+            available_model_configs = {k: v for k, v in model_configs.items() if k in available_models}
+            
+            if not available_model_configs:
+                print(Fore.RED + Style.BRIGHT + "\nNo compatible models available for current preset!")
+                print(Fore.YELLOW + Style.BRIGHT + f"\nKeeping: {current_model_type}")
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Model Architectures:\n")
                 
-                if model_change == '0':
+                for model_name, config in available_model_configs.items():
+                    recommendation_indicator = " " + Fore.GREEN + Style.BRIGHT + "*Recommended" + Style.RESET_ALL if model_name == recommended_model else ""
+                    system_alignment = f" [Compatible: {', '.join(config['aligned_system_classes'])}]" if config['aligned_system_classes'] else ""
+                    
+                    print(Fore.WHITE + Style.BRIGHT + f"{config['index']}. {config['name']}{recommendation_indicator}")
+                    print(Fore.CYAN + Style.BRIGHT + f"   ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{config['description']}{system_alignment}")
+                    print(Fore.CYAN + Style.BRIGHT + f"   ├─ Strengths: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(config['strengths'])}")
+                    print(Fore.CYAN + Style.BRIGHT + f"   ├─ Weaknesses: " + Fore.MAGENTA + Style.BRIGHT + f"{', '.join(config['weaknesses'])}")
+                    print(Fore.CYAN + Style.BRIGHT + f"   ├─ Best for: " + Fore.GREEN + Style.BRIGHT + f"{config['best_for']}")
+                    print(Fore.CYAN + Style.BRIGHT + f"   ├─ Complexity: " + Fore.YELLOW + Style.BRIGHT + f"{config['complexity']}")
+                    print(Fore.CYAN + Style.BRIGHT + f"   ├─ Training Time: " + Fore.YELLOW + Style.BRIGHT + f"{config['training_time']}")
+                    print(Fore.CYAN + Style.BRIGHT + f"   └─ Resource Usage: " + Fore.YELLOW + Style.BRIGHT + f"{config['resource_usage']}")
+                    print()
+                
+                print(Fore.WHITE + Style.BRIGHT + f"{len(available_model_configs)+1}. Keep current model type")
+                print(Fore.RED + Style.BRIGHT + "0. Cancel and return to previous menu")
+                
+                try:
+                    model_change = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect model type (0-{len(available_model_configs)+1}): " + Style.RESET_ALL).strip()
+                    
+                    # Allow empty input to use recommended model
+                    if not model_change:
+                        model_change = next((v['index'] for k, v in available_model_configs.items() if k == recommended_model), None)
+                        if model_change:
+                            print(Fore.GREEN + Style.BRIGHT + f"\nUsing recommended model: {model_change}")
+                    
+                    if model_change == '0':
+                        print(Fore.RED + Style.BRIGHT + "\nModel customization cancelled")
+                        return None
+                    elif model_change == str(len(available_model_configs)+1):
+                        print(Fore.GREEN + Style.BRIGHT + f"\nKeeping: {current_model_type}")
+                    elif model_change in [v['index'] for v in available_model_configs.values()]:
+                        new_model_type = next((k for k, v in available_model_configs.items() if v['index'] == model_change), current_model_type)
+                        
+                        # Store user-configured epochs BEFORE applying model defaults
+                        user_epochs = final_config.get('training', {}).get('user_configured_epochs')
+                        user_patience = final_config.get('training', {}).get('patience')
+                        
+                        final_config.setdefault('model', {})['model_type'] = new_model_type
+                        
+                        print(Fore.GREEN + Style.BRIGHT + f"\nChanged model type to: {new_model_type}")
+                        
+                        # Apply model-specific defaults
+                        _apply_model_type_defaults(final_config, new_model_type)
+                        
+                        # RESTORE user-configured epochs if they were set
+                        if user_epochs is not None:
+                            final_config['training']['epochs'] = user_epochs
+                            if user_patience is not None:
+                                final_config['training']['patience'] = user_patience
+                            print(Fore.CYAN + Style.BRIGHT + f"  └─ Preserved your configured epochs: {user_epochs}")
+                        
+                        selected_config = available_model_configs[new_model_type]
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Description: " + Fore.YELLOW + Style.BRIGHT + f"{selected_config['description']}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ Complexity: " + Fore.YELLOW + Style.BRIGHT + f"{selected_config['complexity']}")
+                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Best for: " + Fore.YELLOW + Style.BRIGHT + f"{selected_config['best_for']}")
+                    else:
+                        print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Keeping: {current_model_type}")
+                        
+                except (EOFError, KeyboardInterrupt):
                     print(Fore.RED + Style.BRIGHT + "\nModel customization cancelled")
                     return None
-                elif model_change in ['2', '3', '4']:
-                    new_types = ['SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble']
-                    new_model_type = new_types[int(model_change)-2]
-                    
-                    # Store user-configured epochs BEFORE applying model defaults
-                    user_epochs = final_config.get('training', {}).get('user_configured_epochs')
-                    user_patience = final_config.get('training', {}).get('patience')
-                    
-                    final_config.setdefault('model', {})['model_type'] = new_model_type
-                    
-                    print(Fore.GREEN + Style.BRIGHT + f"\nChanged model type to: {new_model_type}")
-                    
-                    # Apply model-specific defaults
-                    _apply_model_type_defaults(final_config, new_model_type)
-                    
-                    # RESTORE user-configured epochs if they were set
-                    if user_epochs is not None:
-                        final_config['training']['epochs'] = user_epochs
-                        if user_patience is not None:
-                            final_config['training']['patience'] = user_patience
-                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Preserved your configured epochs: {user_epochs}")
-                else:
-                    print(Fore.GREEN + Style.BRIGHT + f"\nKeeping: {current_model_type}")
-                    
-            except (EOFError, KeyboardInterrupt):
-                print(Fore.RED + Style.BRIGHT + "\nModel customization cancelled")
-                return None
         
         # Full customization fallback
         if custom_choice == '5':
             print(Fore.GREEN + Style.BRIGHT + "\nSwitching to full customization mode...")
-            return _interactive_custom_setup(final_config, use_real_data, **kwargs)
-        
-        # Final confirmation with comprehensive summary
+            return _interactive_custom_setup(base_config=final_config, use_real_data=use_real_data, **kwargs)
+
+        # Final confirmation with summary
         print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.MAGENTA + Style.BRIGHT + "FINAL CONFIGURATION SUMMARY")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
-        
+
         final_model_type = final_config.get('model', {}).get('model_type', model_type)
         final_epochs = final_config.get('training', {}).get('epochs', epochs)
+        final_batch_size = final_config.get('training', {}).get('batch_size', batch_size)
         final_data_source = final_config.get('data', {}).get('use_real_data', use_real_data)
-        
+
         print(Fore.YELLOW + Style.BRIGHT + "Configuration:")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Preset: " + Fore.GREEN + Style.BRIGHT + f"{selected_preset}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model: " + Fore.GREEN + Style.BRIGHT + f"{final_model_type}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data: " + Fore.GREEN + Style.BRIGHT + f"{'Real' if final_data_source else 'Synthetic'}")
         print(Fore.CYAN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.GREEN + Style.BRIGHT + f"{final_epochs}")
-        print(Fore.CYAN + Style.BRIGHT + f"  └─ Estimated Time: " + Fore.GREEN + Style.BRIGHT + f"~{_estimate_training_time(final_epochs, final_model_type)} min")
-        
+        print(Fore.CYAN + Style.BRIGHT + f"  └─ Estimated Time: " + Fore.GREEN + Style.BRIGHT + f"~{_estimate_training_time(final_epochs, final_model_type, final_batch_size)} min")
+
         if custom_choice != '1':
             print(Fore.YELLOW + Style.BRIGHT + f"\nCustomizations Applied:")
             customizations = []
             if custom_choice in ['2', '3', '4', '5']:
-                #print(Fore.CYAN + Style.BRIGHT + f"  ├─ Data source customized")
                 customizations.append("Data source")
             if custom_choice in ['3', '4', '5']:
-                #print(Fore.CYAN + Style.BRIGHT + f"  ├─ Training duration adjusted")
                 customizations.append("Training duration")
             if custom_choice in ['4', '5']:
-                #print(Fore.CYAN + Style.BRIGHT + f"  ├─ Model architecture modified")
                 customizations.append("Model architecture")
             
             for i, customization in enumerate(customizations):
@@ -56547,7 +57149,7 @@ def _interactive_preset_setup(
         
         if confirm in ('', 'y', 'yes'):
             print(Fore.GREEN + Style.BRIGHT + "\nLaunching training with preset configuration...")
-            return _launch_training_with_config(final_config, **kwargs)
+            return _launch_training_with_config(config=final_config, **kwargs)
         elif confirm in ('c', 'cancel'):
             print(Fore.RED + Style.BRIGHT + "\nTraining cancelled")
             return None
@@ -74957,7 +75559,7 @@ def _interactive_hpo_preset_setup(
         
         current_optimization_focus = optimization_focus.title() if optimization_focus else hpo_config.get('optimization_focus', None).title()
         
-        # Clear screen and show context
+        # Display context
         print(Fore.MAGENTA + Style.BRIGHT + header_title)
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -86083,8 +86685,7 @@ def select_preset_config():
             current_preset = current_preset.title()
         
         # Menu header with current context
-        #print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
-        print(Fore.YELLOW + Style.BRIGHT + "PRESET CONFIGURATION SELECTION")
+        print(Fore.MAGENTA + Style.BRIGHT + "PRESET CONFIGURATION SELECTION")
         print(Fore.CYAN + Style.BRIGHT + "="*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Current Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Active Preset: " + Fore.YELLOW + Style.BRIGHT + f"{current_preset}")
