@@ -39449,7 +39449,7 @@ def generate_synthetic_data(
             # Use defaults without prompting in automated contexts
             save_data = True
             file_format = 'csv'
-            compression = 'zip'
+            compression = None
             metadata_file = True
             
             # Update configuration
@@ -39529,7 +39529,7 @@ def generate_synthetic_data(
                     # Set to default and persist immediately
                     save_data = True
                     file_format = file_format or 'csv'
-                    compression = compression or 'zip'
+                    compression = compression or None
                     
                     # Update configuration
                     export_config['save_data'] = save_data
@@ -39646,11 +39646,11 @@ def generate_synthetic_data(
                                     final_config['export']['compression'] = compression
                                     break
                                 elif not compression_type_choice:
-                                    compression = 'zip'
+                                    compression = None
                                     # Update immediately
-                                    export_config['compression'] = compression
-                                    final_config['export']['compression'] = compression
-                                    print(Fore.GREEN + Style.BRIGHT + "\nUsing default compression: " + Fore.YELLOW + Style.BRIGHT + "zip" + Style.RESET_ALL)
+                                    export_config['compression'] = None
+                                    final_config['export']['compression'] = None
+                                    print(Fore.GREEN + Style.BRIGHT + "\nUsing default compression: " + Fore.YELLOW + Style.BRIGHT + "None" + Style.RESET_ALL)
                                     break
                                 elif compression_type_choice.isdigit():
                                     choice_idx = int(compression_type_choice) - 1
@@ -39660,7 +39660,7 @@ def generate_synthetic_data(
                                         # Update immediately
                                         export_config['compression'] = selected_comp
                                         final_config['export']['compression'] = selected_comp
-                                        comp_display = selected_comp if selected_comp else 'None'
+                                        comp_display = selected_comp if selected_comp else None
                                         print(Fore.GREEN + Style.BRIGHT + f"\nSelected compression: " + Fore.YELLOW + Style.BRIGHT + f"{comp_display}" + Style.RESET_ALL)
                                         break
                                     else:
@@ -39766,13 +39766,13 @@ def generate_synthetic_data(
                 # Apply defaults
                 save_data = True
                 file_format = file_format or 'csv'
-                compression = compression or 'zip'
+                compression = None
                 metadata_file = True
                 
                 # Update configuration
                 export_config['save_data'] = save_data
                 export_config['file_format'] = file_format
-                export_config['compression'] = compression
+                export_config['compression'] = None
                 export_config['metadata_file'] = metadata_file
                 final_config['export'] = export_config
             
@@ -39789,13 +39789,13 @@ def generate_synthetic_data(
             # Apply defaults automatically
             save_data = True
             file_format = file_format or 'csv'
-            compression = compression or 'zip'
+            compression = None
             metadata_file = True
 
             # Update configuration
             export_config['save_data'] = save_data
             export_config['file_format'] = file_format
-            export_config['compression'] = compression
+            export_config['compression'] = None
             export_config['metadata_file'] = metadata_file
             final_config['export'] = export_config
 
@@ -39815,14 +39815,14 @@ def generate_synthetic_data(
         if file_format is None:
             file_format = export_config.get('file_format', 'csv')
         if compression is None:
-            compression = export_config.get('compression', 'zip')
+            compression = export_config.get('compression', None)
         if metadata_file is None:
             metadata_file = export_config.get('metadata_file', True)
 
         # Update configuration
         export_config['save_data'] = save_data
         export_config['file_format'] = file_format
-        export_config['compression'] = compression
+        export_config['compression'] = None
         export_config['metadata_file'] = metadata_file
         final_config['export'] = export_config
         
@@ -41230,19 +41230,34 @@ def generate_synthetic_data(
 
             # Include run_id in filename if run tracking is enabled
             if use_run_tracking and run_id:
-                filename = f"synthetic_data_{run_id}_{timestamp}.{file_extension}"
+                base_filename = f"synthetic_data_{run_id}_{timestamp}"
             else:
-                filename = f"synthetic_data_{timestamp}.{file_extension}"
+                base_filename = f"synthetic_data_{timestamp}"
             
-            datasets_file = datasets_dir / filename
-            
-            # Ensure parent directory exists
-            if datasets_file:
-                datasets_path = Path(datasets_file)
-                datasets_path.parent.mkdir(parents=True, exist_ok=True)
+            # Create the uncompressed file path first
+            uncompressed_path = datasets_dir / f"{base_filename}.{file_extension}"
+            uncompressed_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # If compression is specified, the final file will have a compression extension
+            if compression is not None:
+                # Map compression types to file extensions
+                compression_extensions = {
+                    'gzip': 'gz',
+                    'zip': 'zip',
+                    'bz2': 'bz2',
+                    'xz': 'xz',
+                    'zstd': 'zst'
+                }
+                compression_extension = compression_extensions.get(compression, 'zip')
+                datasets_path = datasets_dir / f"{base_filename}.{compression_extension}"
+            else:
+                datasets_path = uncompressed_path
 
             if verbose:
-                logger.info(f"Saving synthetic data to {datasets_path}")
+                if compression:
+                    logger.info(f"Saving synthetic data to {uncompressed_path} and compressing to {datasets_path}")
+                else:
+                    logger.info(f"Saving synthetic data to {datasets_path}")
             
             try:
                 # Prepare combined dataframe for formats that need it
@@ -41253,107 +41268,55 @@ def generate_synthetic_data(
                 split_info = ['train'] * len(X_train_normal) + ['val'] * len(X_val_normal) + ['test'] * len(X_test)
                 df_combined['split'] = split_info
                 
+                compression_type = None
+                encoding = 'utf-8'
+                will_be_binary = False
+                
+                # First save the uncompressed file
                 if file_format == 'csv':
-                    # Save as CSV
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as CSV..."
                     
-                    # CSV compression mapping
-                    csv_compression_map = {
-                        'gzip': 'gzip',
-                        'zip': 'zip',
-                        'bz2': 'bz2',
-                        'xz': 'xz',
-                        'zstd': 'zstd',
-                        None: None
-                    }
+                    df_combined.to_csv(uncompressed_path, index=False, encoding=encoding)
+                    will_be_binary = False
                     
-                    compression_type = csv_compression_map.get(compression, None)
-                    
-                    if compression_type:
-                        df_combined.to_csv(datasets_path, index=False, compression=compression_type, encoding='utf-8')
-                    else:
-                        df_combined.to_csv(datasets_path, index=False, encoding='utf-8')
-                    
-                    metadata['saved_file'] = str(datasets_path)
-                    metadata['file_format'] = 'csv'
-                    metadata['compression'] = compression_type or 'none'
-                    metadata['encoding'] = 'utf-8'
-                
                 elif file_format == 'parquet':
-                    # Save as Parquet
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as Parquet..."
                     
                     try:
-                        # Parquet compression mapping
-                        parquet_compression_map = {
-                            'gzip': 'gzip',
-                            'bz2': 'brotli',
-                            'xz': 'gzip',
-                            'zstd': 'zstd',
-                            None: None
-                        }
-                        
-                        compression_type = parquet_compression_map.get(compression, 'snappy')
-                        
-                        df_combined.to_parquet(datasets_path, compression=compression_type, index=False)
-                        
-                        metadata['saved_file'] = str(datasets_path)
-                        metadata['file_format'] = 'parquet'
-                        metadata['compression'] = compression_type or 'snappy'
+                        df_combined.to_parquet(uncompressed_path, index=False, engine='pyarrow')
+                        will_be_binary = True
                         
                     except ImportError:
-                        warning_msg = "pyarrow/fastparquet not available, falling back to CSV format"
+                        warning_msg = "pyarrow not available, falling back to CSV format"
                         generation_stats['warnings_encountered'].append(warning_msg)
                         if verbose:
                             logger.warning(warning_msg)
                         # Fallback to CSV
-                        datasets_path = datasets_path.with_suffix('.csv')
-                        df_combined.to_csv(datasets_path, index=False, encoding='utf-8')
-                        metadata['saved_file'] = str(datasets_path)
-                        metadata['file_format'] = 'csv'
-                        metadata['compression'] = 'none'
-                        metadata['encoding'] = 'utf-8'
+                        file_format = 'csv'
+                        uncompressed_path = uncompressed_path.with_suffix('.csv')
+                        df_combined.to_csv(uncompressed_path, index=False, encoding=encoding)
+                        will_be_binary = False
                 
                 elif file_format == 'json':
-                    # Save as JSON
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as JSON..."
                     
-                    # JSON compression mapping
-                    json_compression_map = {
-                        'gzip': 'gzip',
-                        'bz2': 'bz2',
-                        'xz': 'xz',
-                        'zip': 'zip',
-                        None: 'infer'
-                    }
-                    
-                    compression_type = json_compression_map.get(compression, 'infer')
-                    
-                    df_combined.to_json(datasets_path, orient='records', compression=compression_type, indent=2, force_ascii=False)
-                    
-                    metadata['saved_file'] = str(datasets_path)
-                    metadata['file_format'] = 'json'
-                    metadata['compression'] = compression or 'none'
-                    metadata['encoding'] = 'utf-8'
+                    df_combined.to_json(uncompressed_path, orient='records', indent=2, force_ascii=False)
+                    will_be_binary = False
                 
                 elif file_format == 'pickle':
-                    # Save as pickle
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as pickle..."
                     
                     # Pickle doesn't support built-in compression, save the result dict
-                    with open(datasets_path, 'wb') as f:
+                    with open(uncompressed_path, 'wb') as f:
                         pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
                     
-                    metadata['saved_file'] = str(datasets_path)
-                    metadata['file_format'] = 'pickle'
-                    metadata['compression'] = 'none'  # Pickle doesn't have built-in compression
+                    will_be_binary = True
                 
                 elif file_format in ['npy', 'npz']:
-                    # Save as numpy arrays
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as NumPy arrays..."
                     
@@ -41364,32 +41327,27 @@ def generate_synthetic_data(
                         'y_train': y_train_normal,
                         'y_val': y_val_normal,
                         'y_test': y_test,
-                        'feature_names': np.array(feature_names)
+                        'feature_names': np.array(feature_names, dtype=object)
                     }
                     
                     if file_format == 'npz' or compression:
-                        # Use compressed format
-                        datasets_path = datasets_path.with_suffix('.npz')
-                        np.savez_compressed(datasets_path, **save_args)
-                        metadata['compression'] = 'npz_compressed'
+                        uncompressed_path = uncompressed_path.with_suffix('.npz')
+                        np.savez_compressed(uncompressed_path, **save_args)
                     else:
-                        # Uncompressed npy format (save as npz for multiple arrays)
-                        datasets_path = datasets_path.with_suffix('.npz')
-                        np.savez(datasets_path, **save_args)
-                        metadata['compression'] = 'npz_uncompressed'
+                        uncompressed_path = uncompressed_path.with_suffix('.npz')
+                        np.savez(uncompressed_path, **save_args)
                     
-                    metadata['saved_file'] = str(datasets_path)
-                    metadata['file_format'] = 'numpy'
+                    file_format = 'numpy'
+                    will_be_binary = True
                 
                 elif file_format in ['hdf5', 'h5']:
-                    # Save as HDF5 format
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as HDF5..."
                     
                     try:
                         import h5py
-                        with h5py.File(datasets_path, 'w') as f:
-                            # Create datasets with gzip compression
+                        with h5py.File(uncompressed_path, 'w') as f:
+                            # Create datasets
                             f.create_dataset('X_train', data=X_train_normal, compression='gzip')
                             f.create_dataset('X_val', data=X_val_normal, compression='gzip')
                             f.create_dataset('X_test', data=X_test, compression='gzip')
@@ -41397,7 +41355,7 @@ def generate_synthetic_data(
                             f.create_dataset('y_val', data=y_val_normal)
                             f.create_dataset('y_test', data=y_test)
                             
-                            # Store feature names
+                            # Store feature names with proper UTF-8 encoding
                             feature_names_encoded = [name.encode('utf-8') for name in feature_names]
                             f.create_dataset('feature_names', data=np.array(feature_names_encoded, dtype='S'))
                             
@@ -41405,101 +41363,147 @@ def generate_synthetic_data(
                             for key, value in metadata.items():
                                 if isinstance(value, (str, int, float, bool)):
                                     try:
-                                        # Encode strings as UTF-8
                                         if isinstance(value, str):
                                             f.attrs[key] = value.encode('utf-8')
                                         else:
                                             f.attrs[key] = value
                                     except Exception:
-                                        pass  # Skip non-serializable attributes
+                                        pass
                         
-                        metadata['saved_file'] = str(datasets_path)
-                        metadata['file_format'] = 'hdf5'
-                        metadata['compression'] = 'gzip'
-                        metadata['encoding'] = 'utf-8'
+                        will_be_binary = True
                         
                     except ImportError:
                         warning_msg = "h5py not available, falling back to numpy format"
                         generation_stats['warnings_encountered'].append(warning_msg)
                         if verbose:
                             logger.warning(warning_msg)
-                        # Fallback to numpy
-                        datasets_path = datasets_path.with_suffix('.npz')
-                        np.savez_compressed(datasets_path, **{
-                            'X_train': X_train_normal,
-                            'X_val': X_val_normal,
-                            'X_test': X_test,
-                            'y_train': y_train_normal,
-                            'y_val': y_val_normal,
-                            'y_test': y_test,
-                            'feature_names': np.array(feature_names)
-                        })
-                        metadata['saved_file'] = str(datasets_path)
-                        metadata['file_format'] = 'numpy'
-                        metadata['compression'] = 'npz_compressed'
+                        file_format = 'numpy'
+                        uncompressed_path = uncompressed_path.with_suffix('.npz')
+                        save_args = {
+                            'X_train': X_train_normal, 'X_val': X_val_normal, 'X_test': X_test,
+                            'y_train': y_train_normal, 'y_val': y_val_normal, 'y_test': y_test,
+                            'feature_names': np.array(feature_names, dtype=object)
+                        }
+                        np.savez_compressed(uncompressed_path, **save_args)
+                        will_be_binary = True
                 
                 elif file_format == 'feather':
-                    # Save as Feather format
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving as Feather..."
                     
                     try:
-                        # Feather compression mapping
-                        feather_compression_map = {
-                            'gzip': 'zstd',
-                            'zip': 'zstd',
-                            'bz2': 'zstd',
-                            'xz': 'zstd',
-                            'zstd': 'zstd',
-                            None: 'uncompressed'
-                        }
-                        
-                        compression_type = feather_compression_map.get(compression, 'uncompressed')
-                        
-                        df_combined.to_feather(datasets_path, compression=compression_type)
-                        
-                        metadata['saved_file'] = str(datasets_path)
-                        metadata['file_format'] = 'feather'
-                        metadata['compression'] = compression_type
+                        df_combined.to_feather(uncompressed_path)
+                        will_be_binary = True
                         
                     except (ImportError, AttributeError):
                         warning_msg = "pyarrow not available for Feather format, falling back to CSV"
                         generation_stats['warnings_encountered'].append(warning_msg)
                         if verbose:
                             logger.warning(warning_msg)
-                        # Fallback to CSV
-                        datasets_path = datasets_path.with_suffix('.csv')
-                        df_combined.to_csv(datasets_path, index=False, encoding='utf-8')
-                        metadata['saved_file'] = str(datasets_path)
-                        metadata['file_format'] = 'csv'
-                        metadata['compression'] = 'none'
-                        metadata['encoding'] = 'utf-8'
+                        file_format = 'csv'
+                        uncompressed_path = uncompressed_path.with_suffix('.csv')
+                        df_combined.to_csv(uncompressed_path, index=False, encoding=encoding)
+                        will_be_binary = False
                 
-                # Dataset file size
+                # Now handle compression if requested
+                if compression and uncompressed_path.exists():
+                    if not silent_mode and 'main_bar' in locals():
+                        main_bar.text = f"Compressing to {compression}..."
+                    
+                    try:
+                        if compression == 'zip':
+                            import zipfile
+                            with zipfile.ZipFile(datasets_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                                zipf.write(uncompressed_path, uncompressed_path.name)
+                            compression_type = 'zip'
+                            
+                        elif compression == 'gzip':
+                            import gzip
+                            import shutil
+                            with open(uncompressed_path, 'rb') as f_in:
+                                with gzip.open(datasets_path, 'wb') as f_out:
+                                    shutil.copyfileobj(f_in, f_out)
+                            compression_type = 'gzip'
+                            
+                        elif compression == 'bz2':
+                            import bz2
+                            with open(uncompressed_path, 'rb') as f_in:
+                                with bz2.open(datasets_path, 'wb') as f_out:
+                                    shutil.copyfileobj(f_in, f_out)
+                            compression_type = 'bz2'
+                            
+                        elif compression == 'xz':
+                            import lzma
+                            with open(uncompressed_path, 'rb') as f_in:
+                                with lzma.open(datasets_path, 'wb') as f_out:
+                                    shutil.copyfileobj(f_in, f_out)
+                            compression_type = 'xz'
+                            
+                        else:
+                            warning_msg = f"Unsupported compression type '{compression}', using zip instead"
+                            generation_stats['warnings_encountered'].append(warning_msg)
+                            if verbose:
+                                logger.warning(warning_msg)
+                            
+                            import zipfile
+                            datasets_path = datasets_dir / f"{base_filename}.zip"
+                            with zipfile.ZipFile(datasets_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                                zipf.write(uncompressed_path, uncompressed_path.name)
+                            compression_type = 'zip'
+                        
+                        # Remove the uncompressed file if compression was successful
+                        uncompressed_path.unlink()
+                        
+                    except Exception as compression_error:
+                        warning_msg = f"Compression failed: {compression_error}. Keeping uncompressed file."
+                        generation_stats['warnings_encountered'].append(warning_msg)
+                        if verbose:
+                            logger.warning(warning_msg)
+                        # Fall back to uncompressed file
+                        datasets_path = uncompressed_path
+                        compression_type = None
+                else:
+                    # No compression, use the uncompressed file directly
+                    datasets_path = uncompressed_path
+                    compression_type = None
+                
+                # Update metadata with save results
+                metadata.update({
+                    'saved_file': str(datasets_path),
+                    'file_format': file_format,
+                    'compression': compression_type or 'none',
+                    'encoding': encoding,
+                    'is_binary': will_be_binary or (compression_type is not None),
+                    'file_type': 'binary' if (will_be_binary or compression_type) else 'text',
+                    'original_filename': f"{base_filename}.{file_extension}" if compression_type else None
+                })
+                
+                # Calculate and add file size information
                 if datasets_path.exists():
                     file_size_bytes = datasets_path.stat().st_size
-                    if file_size_bytes < 1024:
-                        dataset_file_size = file_size_bytes
-                        size_unit = 'bytes'
-                    elif file_size_bytes >= 1024 and file_size_bytes < 1048576:
-                        dataset_file_size = file_size_bytes / 1024
-                        size_unit = 'KB'
-                    elif file_size_bytes >= 1048576:
-                        dataset_file_size = file_size_bytes / 1048576
-                        size_unit = 'MB'
-                    elif file_size_bytes >= 1073741824:
-                        dataset_file_size = file_size_bytes / 1073741824
-                        size_unit = 'GB'
+                    size_units = [(1073741824, 'GB'), (1048576, 'MB'), (1024, 'KB')]
+                    
+                    for divisor, unit in size_units:
+                        if file_size_bytes >= divisor:
+                            dataset_file_size = file_size_bytes / divisor
+                            size_unit = unit
+                            break
                     else:
                         dataset_file_size = file_size_bytes
                         size_unit = 'bytes'
                     
                     metadata['dataset_file_size'] = f"{dataset_file_size:.2f} {size_unit}"
+                    metadata['file_size_bytes'] = file_size_bytes
                 
                 if verbose:
+                    file_type = "binary" if metadata['is_binary'] else "text"
                     logger.info(f"Successfully saved data to: {datasets_path}")
+                    
                     print(Fore.GREEN + Style.BRIGHT + "\nSuccessfully generated dataset:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Dataset Location: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_path} ({metadata['dataset_file_size']})")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Dataset Location: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_path}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ File Size: " + Fore.YELLOW + Style.BRIGHT + f"{metadata['dataset_file_size']}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format.upper()}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Compression: " + Fore.YELLOW + Style.BRIGHT + f"{compression_type or 'none'}")
                 
                 # Save metadata if requested
                 if metadata_file:
@@ -41507,19 +41511,15 @@ def generate_synthetic_data(
                     if use_run_tracking and run_id:
                         metadata_filename = f"synthetic_data_{run_id}_{timestamp}_metadata.json"
                     else:
-                        metadata_filename = datasets_path.stem + '_metadata.json'
+                        metadata_filename = f"{base_filename}_metadata.json"
 
-                    json_metadata_file = datasets_dir / metadata_filename
-
-                    # Ensure Path object
-                    if json_metadata_file:
-                        metadata_path = Path(json_metadata_file)
-                        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+                    metadata_path = datasets_dir / metadata_filename
+                    metadata_path.parent.mkdir(parents=True, exist_ok=True)
                     
                     if not silent_mode and 'main_bar' in locals():
                         main_bar.text = "Saving metadata..."
                     
-                    with open(metadata_path, 'w') as f:
+                    with open(metadata_path, 'w', encoding='utf-8') as f:
                         # Make metadata JSON serializable
                         serializable_metadata = {}
                         for key, value in metadata.items():
@@ -41527,28 +41527,27 @@ def generate_synthetic_data(
                                 # Test if serializable
                                 json.dumps(value)
                                 serializable_metadata[key] = value
-                            except TypeError:
-                                serializable_metadata[key] = str(value)
+                            except (TypeError, ValueError):
+                                # Convert non-serializable objects to strings
+                                if hasattr(value, '__dict__'):
+                                    serializable_metadata[key] = str(value.__dict__)
+                                else:
+                                    serializable_metadata[key] = str(value)
                         
-                        json.dump(serializable_metadata, f, indent=2)
+                        json.dump(serializable_metadata, f, indent=2, ensure_ascii=False)
                     
                     metadata['metadata_file_path'] = str(metadata_path)
 
-                    # Metadata file size in mb if greater than 1024 kb else in kb
+                    # Calculate metadata file size
                     if metadata_path.exists():
                         meta_file_size_bytes = metadata_path.stat().st_size
-                        if meta_file_size_bytes < 1024:
-                            metadata_file_size = meta_file_size_bytes
-                            meta_size_unit = 'bytes'
-                        elif meta_file_size_bytes >= 1024 and meta_file_size_bytes < 1048576:
-                            metadata_file_size = meta_file_size_bytes / 1024
-                            meta_size_unit = 'KB'
-                        elif meta_file_size_bytes >= 1048576:
-                            metadata_file_size = meta_file_size_bytes / 1048576
-                            meta_size_unit = 'MB'
-                        elif meta_file_size_bytes >= 1073741824:
-                            metadata_file_size = meta_file_size_bytes / 1073741824
-                            meta_size_unit = 'GB'
+                        size_units = [(1073741824, 'GB'), (1048576, 'MB'), (1024, 'KB')]
+                        
+                        for divisor, unit in size_units:
+                            if meta_file_size_bytes >= divisor:
+                                metadata_file_size = meta_file_size_bytes / divisor
+                                meta_size_unit = unit
+                                break
                         else:
                             metadata_file_size = meta_file_size_bytes
                             meta_size_unit = 'bytes'
@@ -41561,10 +41560,11 @@ def generate_synthetic_data(
                         print(Fore.GREEN + Style.BRIGHT + f"  └─ Metadata Location: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_path} ({metadata['metadata_file_size']})")
                 
             except Exception as e:
-                error_msg = f"Failed to save data: {e}"
+                error_msg = f"Failed to save data as {file_format}: {e}"
                 generation_stats['warnings_encountered'].append(error_msg)
                 if verbose:
                     logger.error(error_msg)
+                    logger.error(f"Error details: {traceback.format_exc()}")
         
         # Log summary
         if verbose:
@@ -52614,19 +52614,19 @@ def train_model(
         experiment_dir.mkdir(parents=True, exist_ok=True)
 
         # Create run-specific subdirectories for all outputs
-        run_model_dir = model_dir / run_id
-        run_log_dir = log_dir / run_id
-        run_tensorboard_dir = tensorboard_dir / run_id
-        run_config_dir = config_dir / run_id
-        run_checkpoint_dir = checkpoint_dir / run_id
-        run_results_dir = results_dir / run_id
-        run_data_dir = data_dir / run_id
-        run_reports_dir = reports_dir / run_id
-        run_metrics_dir = metrics_dir / run_id
-        run_datasets_dir = datasets_dir / run_id
-        run_artifacts_dir = artifacts_dir / run_id
-        run_figures_dir = figures_dir / run_id
-        run_info_dir = info_dir / run_id
+        run_model_dir = experiment_dir / "models"
+        run_log_dir = experiment_dir / "logs"
+        run_tensorboard_dir = experiment_dir / "tensorboard"
+        run_config_dir = experiment_dir / "config"
+        run_checkpoint_dir = experiment_dir / "checkpoints"
+        run_results_dir = experiment_dir / "results"
+        run_data_dir = experiment_dir / "data"
+        run_reports_dir = experiment_dir / "reports"
+        run_metrics_dir = experiment_dir / "metrics"
+        run_datasets_dir = experiment_dir / "datasets"
+        run_artifacts_dir = experiment_dir / "artifacts"
+        run_figures_dir = experiment_dir / "figures"
+        run_info_dir = experiment_dir / "info"
 
         # Create all run-specific directories
         run_directories = [
@@ -56294,45 +56294,45 @@ def _interactive_preset_setup(
                     description_text.append("...", style="red")
             
             # Preset Configuration details
-            optimizer = preset.get('optimizer', 'AdamW')
-            optimizer_style = "bold green" if optimizer is not None else "bold red"
-            preset_scheduler = preset.get('scheduler', 'ReduceLROnPlateau')
-            if isinstance(preset_scheduler, str):
-                scheduler = preset_scheduler[:20] + ('...' if len(preset_scheduler) > 18 else '')
-            else:
-                scheduler = str(preset_scheduler)
-            scheduler_style = "bold green" if scheduler is not None else "bold red"
+            def style_value(value, default='N/A'):
+                """Style a value with green if present, red if None/missing"""
+                actual_value = value if value is not None else default
+                color_style = "bold yellow" if value is not None else "bold red"
+                return Text(str(actual_value), style=color_style)
 
-            # data source with color coding
+            # Get and style all values
+            optimizer = preset.get('optimizer', 'AdamW')
+            scheduler = preset.get('scheduler', 'ReduceLROnPlateau')
+            if isinstance(scheduler, str):
+                scheduler = scheduler[:20] + ('...' if len(scheduler) > 18 else '')
+
             data_source = 'Real' if use_real_data else 'Synthetic'
-            data_source_style = "bold green" if data_source is not None else "bold red"
-            val_split = preset.get('validation_split', 0.2)
-            val_split_style = "bold green" if val_split is not None else "bold red"
-            encoding_dim = preset.get('encoding_dim', 'N/A')
-            encoding_dim_style = "bold green" if encoding_dim is not None else "bold red"
-            hidden_dims = preset.get('hidden_dims', 'N/A')
-            hidden_dims_style = "bold green" if hidden_dims is not None else "bold red"
-            num_models = preset.get('num_models', 'N/A')
-            num_models_style = "bold green" if num_models is not None else "bold red"
+
+            # Define layout as (label, value, line_break)
+            config_items = [
+                ("Data source", data_source, True),
+                ("Num models", preset.get('num_models'), False),
+                ("Encoding dim", preset.get('encoding_dim'), True),
+                ("Hidden dims", preset.get('hidden_dims'), False),
+                ("Epochs", preset.get('epochs'), True),
+                ("Batch", preset.get('batch_size'), False),
+                ("LR", preset.get('learning_rate'), True),
+                ("Val split", preset.get('validation_split', 0.2), False),
+                ("Scheduler", scheduler, True),
+                ("Optimizer", optimizer, False)
+            ]
 
             config_text = Text()
-            config_text.append(f"Data source: ", style="yellow")
-            config_text.append(f"{data_source}\n", style=data_source_style)
-            config_text.append(f"Num models: ", style="yellow")
-            config_text.append(f"{num_models} ", style=num_models_style)
-            config_text.append(f"Encoding dim: ", style="yellow")
-            config_text.append(f"{encoding_dim}\n", style=encoding_dim_style)
-            config_text.append(f"Hidden dims: ", style="yellow")
-            config_text.append(f"{hidden_dims} ", style=hidden_dims_style)
-            config_text.append(f"Epochs: {preset['epochs']}\n", style="yellow")
-            config_text.append(f"Batch: {preset['batch_size']} ", style="yellow")
-            config_text.append(f"LR: {preset['learning_rate']}\n", style="yellow")
-            config_text.append(f"Val split: ", style="yellow")
-            config_text.append(f"{val_split} ", style=val_split_style)
-            config_text.append(f"Scheduler: ", style="yellow")
-            config_text.append(f"{scheduler}\n", style=scheduler_style)
-            config_text.append(f"Optimizer: ", style="yellow")
-            config_text.append(f"{optimizer}", style=optimizer_style)
+            for label, value, line_break in config_items:
+                styled_value = style_value(value)
+                ending = "\n" if line_break else " "
+                
+                # Append the label in cyan
+                config_text.append(f"{label}: ", style="bold green")
+                # Append the styled value
+                config_text.append(styled_value)
+                # Append the line ending
+                config_text.append(ending)
             
             # Preset Hardware requirements
             hw_req = preset['recommended_hardware']
@@ -61947,10 +61947,21 @@ def run_stability_test(
                 
                 if verbose:
                     print(Fore.YELLOW + Style.BRIGHT + "\nSystem Information:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ System: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('system', 'Unknown')} {system_info.get('machine', '')}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Python: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('python_version', '').split()[0]}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('pytorch_version', 'Unknown')}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('device', 'Unknown')}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ System: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('system', system_platform_config)} {system_info.get('machine', machine_config)}")
+                    python_version = system_info.get('python_version', python_config)
+                    if isinstance(python_version, (list, tuple)):
+                        # Convert list/tuple to string format: "3.11.4"
+                        python_version_str = '.'.join(map(str, python_version))
+                    elif isinstance(python_version, str):
+                        # Use string as-is
+                        python_version_str = python_version
+                    else:
+                        # Fallback to string conversion
+                        python_version_str = str(python_version)
+                    
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Python: " + Fore.YELLOW + Style.BRIGHT + f"{python_version_str}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('pytorch_version', pytorch_config)}")
+                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{system_info.get('device', device_config)}")
                     
                     # CPU Information
                     if 'cpu_logical_cores' in system_info:
@@ -62979,16 +62990,27 @@ def run_stability_test(
                 if test_results['system_info']:
                     si = test_results['system_info']
                     print(Fore.YELLOW + Style.BRIGHT + f"\nSystem Information:")
-                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Platform: " + Fore.GREEN + Style.BRIGHT + f"{si.get('system', 'Unknown')} {si.get('machine', '')}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Python: " + Fore.GREEN + Style.BRIGHT + f"{si.get('python_version', '').split()[0]}")
-                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.GREEN + Style.BRIGHT + f"{si.get('pytorch_version', 'Unknown')}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Platform: " + Fore.GREEN + Style.BRIGHT + f"{si.get('system', system_platform_config)} {si.get('machine', machine_config)}")
+                    python_version = system_info.get('python_version', python_config)
+                    if isinstance(python_version, (list, tuple)):
+                        # Convert list/tuple to string format: "3.11.4"
+                        python_version_str = '.'.join(map(str, python_version))
+                    elif isinstance(python_version, str):
+                        # Use string as-is
+                        python_version_str = python_version
+                    else:
+                        # Fallback to string conversion
+                        python_version_str = str(python_version)
+                    
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Python: " + Fore.GREEN + Style.BRIGHT + f"{python_version_str}")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ PyTorch: " + Fore.GREEN + Style.BRIGHT + f"{si.get('pytorch_version', pytorch_config)}")
                     
                     # Device info with conditional GPU display
                     if si.get('gpu_count', 0) > 0:
-                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + Style.BRIGHT + f"{si.get('device', 'Unknown')}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  ├─ Device: " + Fore.GREEN + Style.BRIGHT + f"{si.get('device', device_config)}")
                         print(Fore.CYAN + Style.BRIGHT + f"  └─ GPUs: " + Fore.GREEN + Style.BRIGHT + f"{si.get('gpu_count', 0)}")
                     else:
-                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Device: " + Fore.GREEN + Style.BRIGHT + f"{si.get('device', 'Unknown')}")
+                        print(Fore.CYAN + Style.BRIGHT + f"  └─ Device: " + Fore.GREEN + Style.BRIGHT + f"{si.get('device', device_config)}")
                 
                 # Performance metrics
                 if test_results.get('performance_metrics'):
