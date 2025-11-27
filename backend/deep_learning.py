@@ -60573,12 +60573,6 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
         print("\033c", end="")
         banner_config = show_banner(return_config=True)
         
-        # Use the config returned from show_banner or fallback
-        # if banner_config is not None:
-        #     config = banner_config
-        # elif config is None:
-        #     config = get_current_config()
-        
         if config is None and banner_config is not None:
             config = banner_config
         else:
@@ -60606,8 +60600,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu header with context
-        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.MAGENTA + Style.BRIGHT + "CUSTOM TRAINING CONFIGURATION")
+        print(Fore.MAGENTA + Style.BRIGHT + "\nCUSTOM TRAINING CONFIGURATION")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.GREEN + Style.BRIGHT + f"Active Context:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
@@ -60619,17 +60612,7 @@ def train_model_custom(config: Optional[Dict[str, Any]] = None):
             base_config = get_current_config() if 'get_current_config' in globals() else {}
         except Exception as e:
             logger.warning(f"Failed to load current config: {e}")
-            console.print(
-                Panel.fit(
-                    #f"Warning: Failed to load current config, using defaults: {str(e)}",
-                    f"Failed to load current config, using defaults: {str(e)}",
-                    title="WARNING",
-                    style="bold yellow",
-                    border_style="yellow",
-                    padding=(1, 1),
-                    box=box.ROUNDED
-                )
-            )
+            print(Fore.RED + Style.BRIGHT + f"Failed to load current config, using defaults: " + Fore.YELLOW + Style.BRIGHT + f"{e}")
             base_config = {}
         
         print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration includes:")
