@@ -82385,16 +82385,15 @@ def print_main_menu(config: Optional[Dict[str, Any]] = None):
         elif "metadata" in config and isinstance(config["metadata"], dict):
             config_source = config["metadata"].get("config_source", "Unknown")
     
-    # menu header with context
-    #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-    print(Fore.YELLOW + Style.BRIGHT + "MAIN APPLICATION MENU")
+    # Menu header with context
+    print(Fore.MAGENTA + Style.BRIGHT + "MAIN APPLICATION MENU")
     print(Fore.CYAN + Style.BRIGHT + "-"*40)
     print(Fore.YELLOW + Style.BRIGHT + f"Active Context:")
     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.YELLOW + Style.BRIGHT + f"{preset_name}")
     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
     print(Fore.GREEN + Style.BRIGHT + f"  └─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{config_source}")
     
-    # Print menu options with descriptions
+    # Print menu options
     print(Fore.YELLOW + Style.BRIGHT + "\nCore Functions:")
     print(Fore.WHITE + Style.BRIGHT + "1. Model Training " + Fore.GREEN + Style.BRIGHT + "(Train & Evaluate Models)")
     print(Fore.WHITE + Style.BRIGHT + "2. Hyperparameter Optimization " + Fore.GREEN + Style.BRIGHT + "(Auto-tune Parameters)")

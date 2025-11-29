@@ -6,6 +6,9 @@ import hashlib
 import json
 import logging
 import os
+# Suppress TensorFlow warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import platform
 import random
 import subprocess
@@ -36,7 +39,8 @@ from rich.prompt import Prompt
 from copy import deepcopy
 import numpy as np
 import pandas as pd
-import pkg_resources
+import importlib.metadata
+from packaging import version as pkg_version
 from pynput.keyboard import Key, Listener
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -686,6 +690,7 @@ def configure_system() -> None:
     
     # TensorFlow
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+    os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
     
     # Intel MKL
     os.environ['KMP_WARNINGS'] = '0'
@@ -802,8 +807,13 @@ MODEL_DIR = LOG_DIR = DATA_DIR = FIGURE_DIR = TB_DIR = CHECKPOINT_DIR = None
 CONFIG_DIR = RESULTS_DIR = METRICS_DIR = REPORTS_DIR = LATEST_DIR = None
 INFO_DIR = ARTIFACTS_DIR = DOCS_DIR = None
 
-def setup_logging(log_dir: Path) -> logging.Logger:
+def setup_logging(log_dir: Path = None) -> logging.Logger:
     """Configure logging with a single log file and proper handler management."""
+    # Determine log_dir (default: script's directory / logs)
+    if log_dir is None:
+        log_dir = Path(__file__).resolve().parent / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
     logger = logging.getLogger(__name__)
     
     # Clear existing handlers if any
@@ -978,12 +988,14 @@ def check_versions(logger: logging.Logger) -> bool:
     version_data = []
     for pkg, min_ver in requirements.items():
         try:
-            current_ver = pkg_resources.get_distribution(pkg).version
-            is_ok = (pkg_resources.parse_version(current_ver) >= 
-                    pkg_resources.parse_version(min_ver))
+            current_ver = importlib.metadata.version(pkg)
+            is_ok = (pkg_version.parse(current_ver) >= pkg_version.parse(min_ver))
             version_data.append((pkg, current_ver, min_ver, is_ok, None))
             if not is_ok:
                 logger.warning(f"Version mismatch: {pkg} {current_ver} (needs >= {min_ver})")
+        except importlib.metadata.PackageNotFoundError as e:
+            version_data.append((pkg, None, min_ver, False, f"Package not found: {str(e)}"))
+            logger.warning(f"Package not found: {pkg}")
         except Exception as e:
             version_data.append((pkg, None, min_ver, False, str(e)))
             logger.warning(f"Package not found: {pkg} - {str(e)}")
@@ -2065,12 +2077,12 @@ def check_preprocessing_outputs(
     reset = Style.RESET_ALL if use_color else ""
     
     required_files = {
-        "models/preprocessed_dataset.csv": {
+        "preprocessed_dataset.csv": {
             "min_size": min_csv_size,
             "checks": ["header", "delimiter"] if validate_csv else [],
             "description": "Preprocessed dataset CSV"
         },
-        "models/preprocessing_artifacts.pkl": {
+        "preprocessing_artifacts.pkl": {
             "min_size": min_pkl_size,
             "required_keys": ["feature_names", "scaler"] if validate_pickle else [],
             "description": "Preprocessing artifacts pickle"
@@ -2083,7 +2095,8 @@ def check_preprocessing_outputs(
     logger.debug(f"Validation mode: {'STRICT' if strict else 'BASIC'}")
     
     for filepath, requirements in required_files.items():
-        path = Path(filepath)
+        path = Path(MODEL_DIR / filepath)
+        
         logger.debug(f"Checking {requirements['description']} at {path}")
         
         # File existence check (always performed)
@@ -2120,7 +2133,7 @@ def check_preprocessing_outputs(
                         if len(header.split(',')) < 2:
                             logger.error(f"{red}Invalid CSV format in: {filepath}{reset}")
                             all_valid = False
-                            
+                
                 # Additional validation - check sample rows
                 try:
                     sample_df = pd.read_csv(path, nrows=10)
@@ -2147,7 +2160,7 @@ def check_preprocessing_outputs(
                         if key not in data:
                             logger.error(f"{red}Missing key '{key}' in: {filepath}{reset}")
                             all_valid = False
-                            
+                    
                     # Additional validation for specific artifacts
                     if "feature_names" in data:
                         if not isinstance(data["feature_names"], list) or len(data["feature_names"]) == 0:
@@ -2157,7 +2170,7 @@ def check_preprocessing_outputs(
                         if not hasattr(data["scaler"], "transform"):
                             logger.error(f"{red}Invalid scaler object in: {filepath}{reset}")
                             all_valid = False
-                            
+            
             except Exception as e:
                 logger.error(f"{red}Pickle load failed: {filepath} - {str(e)}{reset}")
                 all_valid = False
@@ -2206,7 +2219,8 @@ def run_preprocessing(
     logger.debug(f"Parameters: timeout={timeout_minutes}min, cleanup={cleanup}, strict={strict_output_check}, reproducible={reproducible}")
 
     # Validate script existence
-    script_path = Path("preprocessing.py")
+    base_dir = Path(__file__).resolve().parent
+    script_path = Path(base_dir / "preprocessing.py")
     if not script_path.exists():
         logger.error(f"{red}Preprocessing script not found at {script_path.absolute()}{reset}")
         raise FileNotFoundError(f"preprocessing.py not found at {script_path.absolute()}")
@@ -2214,8 +2228,8 @@ def run_preprocessing(
     try:
         # Cleanup previous outputs
         output_files = [
-            Path("models/preprocessed_dataset.csv"),
-            Path("models/preprocessing_artifacts.pkl")
+            Path(MODEL_DIR / "preprocessed_dataset.csv"),
+            Path(MODEL_DIR / "preprocessing_artifacts.pkl")
         ]
         
         if cleanup:
@@ -2590,7 +2604,7 @@ def display_smote_results(original_counts: pd.Series, new_counts: pd.Series) -> 
     ))
 
 def load_preprocessing_artifacts(
-    filepath: str = "models/preprocessing_artifacts.pkl",
+    filepath: Path = None,
     strict: bool = True,
     use_color: bool = True,
     required_keys: List[str] = None,
@@ -2614,6 +2628,10 @@ def load_preprocessing_artifacts(
         RuntimeError: For invalid artifacts (when strict=True)
         FileNotFoundError: If file is missing
     """
+    # Determine filepath (default: script's directory / models/preprocessing_artifacts.pkl)
+    if filepath is None:
+        filepath = Path(MODEL_DIR / "preprocessing_artifacts.pkl")
+
     # Setup styling
     red = Fore.RED if use_color else ""
     yellow = Fore.YELLOW if use_color else ""
@@ -4363,19 +4381,19 @@ def load_and_validate_data(
             logger.info("Starting data loading (legacy mode)...")
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=UserWarning)
-                artifacts = joblib.load("models/preprocessing_artifacts.pkl")
+                artifacts = joblib.load(MODEL_DIR / "preprocessing_artifacts.pkl")
             
             feature_names = artifacts.get("feature_names", [])
             if not feature_names:
                 raise ValueError("No feature names found in artifacts")
-                
+            
             # Original chunked loading
             chunksize = kwargs.get('chunk_size', 100000)
             df_chunks = []
-            for chunk in pd.read_csv("models/preprocessed_dataset.csv", chunksize=chunksize):
+            for chunk in pd.read_csv(MODEL_DIR / "preprocessed_dataset.csv", chunksize=chunksize):
                 chunk = chunk.drop_duplicates().dropna(subset=feature_names + ["Label"])
                 df_chunks.append(chunk)
-                
+            
             df = pd.concat(df_chunks, ignore_index=True)
             return df, artifacts
         
@@ -4387,7 +4405,8 @@ def load_and_validate_data(
         
         artifacts = load_preprocessing_artifacts(**kwargs)
         df = load_and_clean_data(
-            "models/preprocessed_dataset.csv", 
+            #"models/preprocessed_dataset.csv",
+            MODEL_DIR / "preprocessed_dataset.csv",
             artifacts["feature_names"],
             **kwargs
         )
@@ -4982,8 +5001,7 @@ def visualize_data_distribution(
         plt.grid(alpha=0.3)
         
         # Save plot
-        #plot_dir = Path(filename).absolute()
-        plot_dir = Path("figures")
+        plot_dir = FIGURE_DIR
         plot_dir.parent.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         run_id = f"run_{timestamp}"
@@ -5608,7 +5626,7 @@ def print_menu() -> None:
     print(Fore.WHITE + Style.BRIGHT + "9. Quick Stability Test")
     print(Fore.WHITE + Style.BRIGHT + "10. Show Current Configuration")
     print(Fore.WHITE + Style.BRIGHT + "11. Compare Model Architectures")
-    print(Fore.RED + Style.BRIGHT + "12. Exit")
+    print(Fore.RED + Style.BRIGHT + "0. Exit")
 
 def verify_model_classes():
     """Verify that all model classes are properly defined"""
@@ -5714,260 +5732,300 @@ def interactive_main(
     config: Dict[str, Any],
     directories: Dict[str, Path]
 ) -> None:
-    """Enhanced interactive main function with new options"""
+    """Interactive main function with new options"""
+    # Clear any residual input buffer from system initialization
+    if hasattr(sys.stdin, 'flush'):
+        try:
+            sys.stdin.flush()
+        except:
+            pass
+    
+    # Small delay to ensure all output is complete
+    time.sleep(1)
+
     # Use the initialized objects passed from main
     while True:
+        print("\033c", end="")
         banner()
         print_menu()
-        choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect an option " + Fore.WHITE + Style.BRIGHT + "(1-12): ").strip()
         
-        if choice == "1":
-            print("\033c", end="")
-            configure_system()
-            print(Fore.GREEN + Style.BRIGHT + "System configuration applied")
-            
-        elif choice == "2":
+        # Input handling with retry logic
+        choice = None
+        while not choice:
             try:
+                choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect an option (0-11): ").strip()
+                
+                # If empty input, retry
+                if not choice:
+                    continue
+                    
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nExiting...")
+                print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
+                return
+        #choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect an option " + Fore.WHITE + Style.BRIGHT + "(0-11): ").strip()
+        try:
+            if choice == "1":
                 print("\033c", end="")
-                configure_directories(logger)
-                print(Fore.GREEN + Style.BRIGHT + "Directories set up successfully")
-            except Exception as e:
-                print(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
+                configure_system()
+                print(Fore.GREEN + Style.BRIGHT + "System configuration applied")
                 
-        elif choice == "3":
-            print("\033c", end="")
-            check_versions(logger)
-            
-        elif choice == "4":
-            print("\033c", end="")
-            setup_gpu(logger)
-            
-        elif choice == "5":
-            print("\033c", end="")
-            enhanced_config_menu(logger)
-            
-        elif choice == "6":
-            print("\033c", end="")
-            
-            # Offer preset selection before training
-            console.print(
-                Panel.fit(
-                    Text("Select training configuration", justify="center", style="bold cyan"),
-                    title="[bold yellow]Training Pipeline[/]",
-                    border_style="cyan"
-                )
-            )
-            
-            preset = select_config_preset()
-            if preset:
-                print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline with selected preset...")
-                train_config = preset
-            else:
-                print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline with current configuration...")
-                train_config = None
-                
-            # Skip re-initializing logging if already set up
-            try:
-                train_model(logger, use_mock=False, config=train_config)
-            except Exception as e:
-                console.print(
-                    Panel.fit(
-                        Text(f"Training failed: {str(e)}", style="bold red"),
-                        title="[bold red]Training Error[/]",
-                        border_style="red"
-                    )
-                )
-            
-        elif choice == "7":
-            print("\033c", end="")
-            
-            # Offer preset selection for synthetic training
-            console.print(
-                Panel.fit(
-                    Text("Select configuration for synthetic data training", justify="center", style="bold cyan"),
-                    title="[bold yellow]Synthetic Data Training[/]",
-                    border_style="cyan"
-                )
-            )
-            
-            preset = select_config_preset()
-            if preset:
-                print(Fore.YELLOW + Style.BRIGHT + "\nStarting synthetic training with selected preset...")
-                train_config = preset
-            else:
-                print(Fore.YELLOW + Style.BRIGHT + "\nStarting synthetic training with current configuration...")
-                train_config = None
-                
-            # Skip re-initializing logging if already set up
-            try:
-                train_model(logger, use_mock=True, config=train_config)
-            except Exception as e:
-                console.print(
-                    Panel.fit(
-                        Text(f"Synthetic training failed: {str(e)}", style="bold red"),
-                        title="[bold red]Training Error[/]",
-                        border_style="red"
-                    )
-                )
-            
-        elif choice == "8":
-            print("\033c", end="")
-            console.print(
-                Panel.fit(
-                    Text("Starting Progressive Training Pipeline", justify="center", style="bold yellow"),
-                    subtitle="This will run: Stability Test → Baseline → Performance",
-                    border_style="yellow",
-                    padding=(1, 2)
-                )
-            )
-            
-            # Confirm before starting long process
-            proceed = console.input("\n[bold cyan]This may take a while. Continue? (y/n): [/]").lower()
-            if proceed == 'y':
-                if not logger.handlers:
-                    logger = setup_logging(LOG_DIR)
+            elif choice == "2":
                 try:
-                    results = progressive_training_pipeline(logger)
+                    print("\033c", end="")
+                    configure_directories(logger)
+                    print(Fore.GREEN + Style.BRIGHT + "Directories set up successfully")
+                except Exception as e:
+                    print(Fore.RED + Style.BRIGHT + f"Directory setup failed: {str(e)}")
                     
-                    # Display summary of results
-                    console.print()
-                    summary_table = Table(
-                        title="[bold]Progressive Training Results[/]",
-                        box=box.ROUNDED,
-                        header_style="bold cyan"
+            elif choice == "3":
+                print("\033c", end="")
+                check_versions(logger)
+                
+            elif choice == "4":
+                print("\033c", end="")
+                setup_gpu(logger)
+                
+            elif choice == "5":
+                print("\033c", end="")
+                enhanced_config_menu(logger)
+                
+            elif choice == "6":
+                print("\033c", end="")
+                
+                # Offer preset selection before training
+                console.print(
+                    Panel.fit(
+                        Text("Select training configuration", justify="center", style="bold cyan"),
+                        title="[bold yellow]Training Pipeline[/]",
+                        border_style="cyan"
                     )
-                    summary_table.add_column("Phase", style="bold yellow")
-                    summary_table.add_column("Status", style="bold white")
-                    summary_table.add_column("Best F2", style="bold green")
+                )
+                
+                preset = select_config_preset()
+                if preset:
+                    print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline with selected preset...")
+                    train_config = preset
+                else:
+                    print(Fore.YELLOW + Style.BRIGHT + "\nStarting training pipeline with current configuration...")
+                    train_config = None
                     
-                    for phase, result in results.items():
-                        if 'error' in result:
-                            summary_table.add_row(phase.title(), "[red]Failed[/]", "[red]N/A[/]")
-                        else:
-                            f2_score = result.get('best_metrics', {}).get('val_f2', 0)
-                            status = "[green]Completed[/]" if result.get('completed', False) else "[yellow]Partial[/]"
-                            summary_table.add_row(phase.title(), status, f"{f2_score:.3f}")
-                    
-                    console.print(summary_table)
+                # Skip re-initializing logging if already set up
+                try:
+                    train_model(logger, use_mock=False, config=train_config)
                 except Exception as e:
                     console.print(
                         Panel.fit(
-                            Text(f"Progressive training failed: {str(e)}", style="bold red"),
-                            title="[bold red]Pipeline Error[/]",
+                            Text(f"Training failed: {str(e)}", style="bold red"),
+                            title="[bold red]Training Error[/]",
                             border_style="red"
                         )
                     )
-            else:
+                
+            elif choice == "7":
+                print("\033c", end="")
+                
+                # Offer preset selection for synthetic training
                 console.print(
                     Panel.fit(
-                        Text("Progressive training cancelled", style="bold yellow"),
-                        border_style="yellow"
+                        Text("Select configuration for synthetic data training", justify="center", style="bold cyan"),
+                        title="[bold yellow]Synthetic Data Training[/]",
+                        border_style="cyan"
                     )
                 )
                 
-        elif choice == "9":
-            print("\033c", end="")
-            console.print(
-                Panel.fit(
-                    Text("Running Quick Stability Test", justify="center", style="bold cyan"),
-                    subtitle="10 epochs with simple model on synthetic data",
-                    border_style="cyan"
-                )
-            )
-            
-            try:
-                stability_result = run_stability_test(logger)
-                
-                # Show detailed results
-                if stability_result.get('training_stable', False):
-                    console.print(
-                        Panel.fit(
-                            Text(f"✓ Training completed successfully!\nFinal epoch: {stability_result['final_epoch']}\nBest validation loss: {stability_result['best_val_loss']:.4f}", 
-                                 style="bold green"),
-                            title="[bold green]Stability Test Results[/]",
-                            border_style="green"
-                        )
-                    )
+                preset = select_config_preset()
+                if preset:
+                    print(Fore.YELLOW + Style.BRIGHT + "\nStarting synthetic training with selected preset...")
+                    train_config = preset
                 else:
-                    error_msg = stability_result.get('error', 'Training was unstable')
+                    print(Fore.YELLOW + Style.BRIGHT + "\nStarting synthetic training with current configuration...")
+                    train_config = None
+                    
+                # Skip re-initializing logging if already set up
+                try:
+                    train_model(logger, use_mock=True, config=train_config)
+                except Exception as e:
                     console.print(
                         Panel.fit(
-                            Text(f"✗ Test failed: {error_msg}", style="bold red"),
-                            title="[bold red]Stability Test Results[/]",
+                            Text(f"Synthetic training failed: {str(e)}", style="bold red"),
+                            title="[bold red]Training Error[/]",
                             border_style="red"
                         )
                     )
-            except Exception as e:
+                
+            elif choice == "8":
+                print("\033c", end="")
                 console.print(
                     Panel.fit(
-                        Text(f"Stability test failed: {str(e)}", style="bold red"),
-                        title="[bold red]Test Error[/]",
-                        border_style="red"
+                        Text("Starting Progressive Training Pipeline", justify="center", style="bold yellow"),
+                        subtitle="This will run: Stability Test → Baseline → Performance",
+                        border_style="yellow",
+                        padding=(1, 2)
                     )
                 )
                 
-        elif choice == "10":
-            print("\033c", end="")
-            try:
-                show_config()
-            except Exception as e:
-                console.print(
-                    Panel.fit(
-                        Text(f"Failed to show config: {str(e)}", style="bold red"),
-                        title="[bold red]Config Error[/]",
-                        border_style="red"
-                    )
-                )
-            
-        elif choice == "11":
-            print("\033c", end="")
-            try:
-                display_model_comparison()
-                
-                # Optionally offer to switch to a different model
-                console.print()
-                switch = console.input("[bold cyan]Switch to a different model architecture? (y/n): [/]").lower()
-                if switch == 'y':
-                    model_choice = console.input("[bold cyan]Enter model type (simple/standard/ensemble/stabilized): [/]").lower()
-                    if model_choice in MODEL_VARIANTS:
-                        # Update config
-                        config = get_current_config()
-                        config['model']['type'] = model_choice
-                        save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+                # Confirm before starting long process
+                proceed = console.input("\n[bold cyan]This may take a while. Continue? (y/n): [/]").lower()
+                if proceed == 'y':
+                    if not logger.handlers:
+                        logger = setup_logging(LOG_DIR)
+                    try:
+                        results = progressive_training_pipeline(logger)
+                        
+                        # Display summary of results
+                        console.print()
+                        summary_table = Table(
+                            title="[bold]Progressive Training Results[/]",
+                            box=box.ROUNDED,
+                            header_style="bold cyan"
+                        )
+                        summary_table.add_column("Phase", style="bold yellow")
+                        summary_table.add_column("Status", style="bold white")
+                        summary_table.add_column("Best F2", style="bold green")
+                        
+                        for phase, result in results.items():
+                            if 'error' in result:
+                                summary_table.add_row(phase.title(), "[red]Failed[/]", "[red]N/A[/]")
+                            else:
+                                f2_score = result.get('best_metrics', {}).get('val_f2', 0)
+                                status = "[green]Completed[/]" if result.get('completed', False) else "[yellow]Partial[/]"
+                                summary_table.add_row(phase.title(), status, f"{f2_score:.3f}")
+                        
+                        console.print(summary_table)
+                    except Exception as e:
                         console.print(
                             Panel.fit(
-                                Text(f"Model architecture changed to: {model_choice}", style="bold green"),
+                                Text(f"Progressive training failed: {str(e)}", style="bold red"),
+                                title="[bold red]Pipeline Error[/]",
+                                border_style="red"
+                            )
+                        )
+                else:
+                    console.print(
+                        Panel.fit(
+                            Text("Progressive training cancelled", style="bold yellow"),
+                            border_style="yellow"
+                        )
+                    )
+                    
+            elif choice == "9":
+                print("\033c", end="")
+                console.print(
+                    Panel.fit(
+                        Text("Running Quick Stability Test", justify="center", style="bold cyan"),
+                        subtitle="10 epochs with simple model on synthetic data",
+                        border_style="cyan"
+                    )
+                )
+                
+                try:
+                    stability_result = run_stability_test(logger)
+                    
+                    # Show detailed results
+                    if stability_result.get('training_stable', False):
+                        console.print(
+                            Panel.fit(
+                                Text(f"✓ Training completed successfully!\nFinal epoch: {stability_result['final_epoch']}\nBest validation loss: {stability_result['best_val_loss']:.4f}", 
+                                    style="bold green"),
+                                title="[bold green]Stability Test Results[/]",
                                 border_style="green"
                             )
                         )
                     else:
+                        error_msg = stability_result.get('error', 'Training was unstable')
                         console.print(
                             Panel.fit(
-                                Text("Invalid model type", style="bold red"),
+                                Text(f"✗ Test failed: {error_msg}", style="bold red"),
+                                title="[bold red]Stability Test Results[/]",
                                 border_style="red"
                             )
                         )
-            except Exception as e:
-                console.print(
-                    Panel.fit(
-                        Text(f"Model comparison failed: {str(e)}", style="bold red"),
-                        title="[bold red]Comparison Error[/]",
-                        border_style="red"
+                except Exception as e:
+                    console.print(
+                        Panel.fit(
+                            Text(f"Stability test failed: {str(e)}", style="bold red"),
+                            title="[bold red]Test Error[/]",
+                            border_style="red"
+                        )
                     )
-                )
                     
-        elif choice == "12":
-            print(Fore.RED + Style.BRIGHT + "\nExiting...")
-            print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
-            break
-            
-        else:
-            print(Fore.RED + Style.BRIGHT + "Invalid selection. Choose 1-12.")
+            elif choice == "10":
+                print("\033c", end="")
+                try:
+                    show_config()
+                except Exception as e:
+                    console.print(
+                        Panel.fit(
+                            Text(f"Failed to show config: {str(e)}", style="bold red"),
+                            title="[bold red]Config Error[/]",
+                            border_style="red"
+                        )
+                    )
+                
+            elif choice == "11":
+                print("\033c", end="")
+                try:
+                    display_model_comparison()
+                    
+                    # Optionally offer to switch to a different model
+                    console.print()
+                    switch = console.input("[bold cyan]Switch to a different model architecture? (y/n): [/]").lower()
+                    if switch == 'y':
+                        model_choice = console.input("[bold cyan]Enter model type (simple/standard/ensemble/stabilized): [/]").lower()
+                        if model_choice in MODEL_VARIANTS:
+                            # Update config
+                            config = get_current_config()
+                            config['model']['type'] = model_choice
+                            save_config(config, CONFIG_DIR / "train_model_config.json", logger)
+                            console.print(
+                                Panel.fit(
+                                    Text(f"Model architecture changed to: {model_choice}", style="bold green"),
+                                    border_style="green"
+                                )
+                            )
+                        else:
+                            console.print(
+                                Panel.fit(
+                                    Text("Invalid model type", style="bold red"),
+                                    border_style="red"
+                                )
+                            )
+                except Exception as e:
+                    console.print(
+                        Panel.fit(
+                            Text(f"Model comparison failed: {str(e)}", style="bold red"),
+                            title="[bold red]Comparison Error[/]",
+                            border_style="red"
+                        )
+                    )
+                        
+            elif choice == "0":
+                print(Fore.RED + Style.BRIGHT + "\nExiting...")
+                print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
+                break
+                
+            else:
+                print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Choose 0-11.")
+        
+        except KeyboardInterrupt:
+            print(Fore.RED + Style.BRIGHT + "\nOperation interrupted by user")
+        except Exception as e:
+            logger.error(f"Main menu error: {e}", exc_info=True)
+            print(Fore.RED + Style.BRIGHT + "\nUnexpected error in main menu: " + Fore.YELLOW + Style.BRIGHT + f"{str(e)}")
             
         # Add pause before returning to menu (fixed colorama usage)
         # Don't pause for long operations or exit
-        if choice not in ["8", "12"]:
-            input(Style.DIM + "\nPress Enter to continue..." + Style.RESET_ALL)
+        # if choice not in ["0", "6", "7", "8", "9"]:
+        #     input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
+        # Only continue if not exiting
+        if choice != "0":
+            try:
+                input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
+            except (EOFError, KeyboardInterrupt):
+                print(Fore.RED + Style.BRIGHT + "\nExiting...")
+                print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
+                break
 
 class TrainingError(Exception):
     """Base class for training-related exceptions"""
@@ -6246,7 +6304,6 @@ def train_model(
             training_meta['final_samples'] = len(df)
             
             # Visualize data
-            #viz_path = visualize_data_distribution(df, filename=run_figure_dir / f"data_pca_distribution_{timestamp}.png")
             viz_path = visualize_data_distribution(df, filename=run_figure_dir / f"data_pca_distribution_{run_id}.png")
             if viz_path:
                 training_meta['visualization'] = str(viz_path)

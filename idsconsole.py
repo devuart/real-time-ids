@@ -25,7 +25,7 @@ def start_dashboard():
 
 def start_websocket():
     """ Starts the WebSocket server for real-time logs """
-    start_process(["python3", "backend/ws_server.py"], "WebSocket Server")    
+    start_process(["python3", "backend/ws_server.py"], "WebSocket Server")
 
 def run_attack_simulation():
     """ Allows users to select and run attack simulations """
