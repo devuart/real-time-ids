@@ -6630,7 +6630,8 @@ def _apply_oversampling(
     
     # Extract feature matrix and labels
     X = df[artifacts['feature_names']].values
-    y = df[label_col].values
+    #y = df[label_col].values
+    y = df[label_col].values.astype(np.int64)
     
     # Set default optimization parameters if not provided
     if optimize_params is None:
