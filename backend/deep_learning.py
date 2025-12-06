@@ -48,6 +48,7 @@ from sklearn.covariance import EllipticEnvelope
 from sklearn.mixture import GaussianMixture
 
 # PyTorch ecosystem
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -442,7 +443,7 @@ DATA_DIR.mkdir(exist_ok=True)
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
-CHECKPOINTS_DIR = Path("checkpoints") / f"checkpoints_v{VERSION_INFO['torch']}"
+CHECKPOINTS_DIR = Path("checkpoints")
 CHECKPOINTS_DIR.mkdir(exist_ok=True)
 
 RESULTS_DIR = Path("results")
@@ -745,13 +746,7 @@ class CheckLevel(Enum):
 class CheckResult:
     """Encapsulates the outcome of a system check with enhanced functionality."""
     
-    def __init__(self, 
-                 passed: bool, 
-                 message: str, 
-                 level: CheckLevel = CheckLevel.IMPORTANT,
-                 details: Optional[Union[str, Dict[str, Any]]] = None,
-                 metadata: Optional[Dict[str, Any]] = None,
-                 exception: Optional[Exception] = None):
+    def __init__(self, passed: bool, message: str, level: CheckLevel = CheckLevel.IMPORTANT, details: Optional[Union[str, Dict[str, Any]]] = None, metadata: Optional[Dict[str, Any]] = None, exception: Optional[Exception] = None):
         self.passed = passed
         self.message = message
         self.level = level
@@ -857,7 +852,7 @@ def loading_screen(
                     
                     if is_tty:
                         current_status = console.status(
-                            f"[bold blue]{message}[/bold blue]" if supports_color else message,
+                            f"[bold green]{message}[/bold green]" if supports_color else message,
                             spinner="dots" if is_tty else None
                         )
                         current_status.start()
@@ -903,9 +898,9 @@ def loading_screen(
                     console.print("\n", Panel.fit(
                         ascii_art,
                         style="bold cyan" if supports_color else "",
-                        title="[bold yellow]GreyChamp | IDS[/]" if supports_color else "GreyChamp | IDS",
-                        subtitle="[magenta]SYSTEM INITIALIZATION[/]" if supports_color else "SYSTEM INITIALIZATION",
-                        border_style="bold blue" if supports_color else "ascii",
+                        title="[bold yellow]GreyChamp | IDS[/bold yellow]" if supports_color else "GreyChamp | IDS",
+                        subtitle="[bold magenta]SYSTEM INITIALIZATION[/bold magenta]" if supports_color else "SYSTEM INITIALIZATION",
+                        border_style="bold cyan" if supports_color else "ascii",
                         box=box.DOUBLE if supports_color else box.ASCII,
                         padding=(1, 1),
                         width=min(banner_width, console_width - 4)
@@ -913,7 +908,7 @@ def loading_screen(
                 else:
                     # Simple fallback for narrow terminals
                     console.print("\n" + "=" * min(60, banner_width))
-                    console.print("    GreyChamp | IDS - SYSTEM INITIALIZATION")
+                    console.print("\tGreyChamp | IDS - SYSTEM INITIALIZATION")
                     console.print("=" * min(60, banner_width) + "\n")
             except Exception as banner_error:
                 # Ultra-safe fallback
@@ -940,12 +935,12 @@ def loading_screen(
                     ))
                 else:
                     console.print(f"\nRunning {check_type_info}")
-                    console.print("Please wait while we validate your system...\n")
+                    console.print("Please wait while we validate your system...")
             except Exception:
                 console.print(f"\nRunning {check_type_info}\n")
             
             # Thread-safe system checks execution
-            console.print("Executing system checks..." if not supports_color else "[bold cyan]Executing system checks...[/bold cyan]")
+            console.print("\nExecuting system checks..." if not supports_color else "\n[bold green]Executing system checks...[/bold green]")
             
             # Use thread-safe timing measurement
             checks_start = time.perf_counter()
@@ -963,7 +958,7 @@ def loading_screen(
             try:
                 display_check_results(results, logger, extended, include_performance)
             except Exception as display_error:
-                console.print(f"[red]Error displaying results: {display_error}[/red]" if supports_color else f"Error displaying results: {display_error}")
+                console.print(f"[bold red]Error displaying results: {display_error}[/bold red]" if supports_color else f"Error displaying results: {display_error}")
                 if logger:
                     logger.error(f"Failed to display check results: {display_error}")
             console.print()
@@ -999,7 +994,7 @@ def loading_screen(
                     ]
                     
                     error_message = (
-                        f"CRITICAL SYSTEM CHECKS FAILED\n\n"
+                        f"CRITICAL SYSTEM CHECKS FAILED\n"
                         f"The system cannot continue due to critical failures.\n"
                         f"Failed checks: {', '.join(failed_critical_checks) if failed_critical_checks else 'System error occurred'}\n\n"
                         f"Please check the logs and resolve these issues before continuing."
@@ -1008,16 +1003,16 @@ def loading_screen(
                     try:
                         if supports_color and banner_width > 60:
                             console.print(Panel.fit(
-                                f"[bold red]{error_message}[/bold red]",
+                                f"{error_message}",
                                 border_style="red",
-                                title="Critical Failure",
+                                style="bold red",
                                 padding=(1, 3),
                                 width=min(banner_width, console_width - 4)
                             ))
                         else:
-                            console.print(f"\nCRITICAL FAILURE:\n{error_message}")
+                            console.print(f"\n{error_message}")
                     except Exception:
-                        console.print(f"\nCRITICAL FAILURE:\n{error_message}")
+                        console.print(f"\n{error_message}")
                     
                     if logger:
                         logger.critical(f"Critical system checks failed - cannot continue. Failed checks: {failed_critical_checks}")
@@ -1026,10 +1021,7 @@ def loading_screen(
                     
                 elif system_status in ["DEGRADED", "LIMITED"] or important_failed > 0 or informational_failed > 0:
                     # Non-critical failures - user decision with proper input handling
-                    user_choice = _handle_user_decision_safe(
-                        results, system_status, important_failed, informational_failed, 
-                        elapsed_time, supports_color, banner_width, console_width, logger
-                    )
+                    user_choice = _handle_user_decision_safe(results, system_status, important_failed, informational_failed, elapsed_time, supports_color, banner_width, console_width, logger)
                     
                     if user_choice is False:
                         return_value = False
@@ -1039,9 +1031,7 @@ def loading_screen(
                         
                 else:
                     # All checks passed - success scenario
-                    return_value = _handle_success_scenario(
-                        summary, elapsed_time, supports_color, banner_width, console_width, logger
-                    )
+                    return_value = _handle_success_scenario(summary, elapsed_time, supports_color, banner_width, console_width, logger)
             
             except Exception as scenario_error:
                 console.print(f"Error handling system check results: {scenario_error}")
@@ -1064,36 +1054,40 @@ def loading_screen(
             # Thread-safe interrupt handling
             try:
                 console.print(Panel.fit(
-                    "INITIALIZATION INTERRUPTED\n\n"
-                    "System initialization was cancelled by user.",
-                    border_style="red" if supports_color else "ascii",
-                    title="Interrupted",
+                    "System initialization was interrupted by user (Ctrl+C).",
+                    border_style="yellow" if supports_color else "ascii",
+                    title="INITIALIZATION INTERRUPTED",
+                    style="bold yellow",
                     padding=(1, 3)
-                ) if supports_color else "\nINITIALIZATION INTERRUPTED\n\nSystem initialization was cancelled by user.\n")
+                ) if supports_color else "\nSystem initialization was interrupted by user.")
             except Exception:
-                console.print("\nINITIALIZATION INTERRUPTED\n\nSystem initialization was cancelled by user.\n")
+                console.print("\nSystem initialization was cancelled by user (Ctrl+C).")
             
             if logger:
-                logger.warning("System initialization interrupted by user (Ctrl+C)")
+                logger.warning("System initialization interrupted by user (Ctrl+C).")
             
             sys.exit(0)
             
         except Exception as e:
             # Thread-safe error handling
-            error_msg = f"UNEXPECTED ERROR DURING INITIALIZATION\n\nAn unexpected error occurred: {str(e)}\nError type: {type(e).__name__}"
+            error_msg = (
+                f"SYSTEM ERROR\n"
+                f"An unexpected error occurred during initialization: {str(e)}\n"
+                f"Error details: {type(e).__name__}"
+            )
             
             try:
                 if supports_color:
                     console.print(Panel.fit(
-                        f"[bold red]{error_msg}[/bold red]",
+                        f"{error_msg}",
                         border_style="red",
-                        title="System Error",
+                        style="bold red",
                         padding=(1, 3)
                     ))
                 else:
-                    console.print(f"\nSYSTEM ERROR:\n{error_msg}\n")
+                    console.print(f"\n{error_msg}")
             except Exception:
-                console.print(f"\nSYSTEM ERROR:\n{error_msg}\n")
+                console.print(f"\n{error_msg}")
             
             if logger:
                 logger.critical(f"Loading screen failed with unexpected error: {str(e)}", exc_info=True)
@@ -1509,7 +1503,7 @@ def run_system_checks(
     hardware_data: Optional[Dict[str, Any]] = None
 ) -> Dict[str, CheckResult]:
     """
-    Run comprehensive system checks with optional extended validations.
+    Run system checks with optional extended validations.
     
     Args:
         logger: Configured logger for recording check results
@@ -6515,7 +6509,6 @@ MODEL_VARIANTS = {
     'AutoencoderEnsemble': AutoencoderEnsemble
 }
 
-# Consolidated Preset Configurations
 # Initialize empty PRESET_CONFIGS to avoid forward reference errors
 PRESET_CONFIGS = {}
 
@@ -7487,8 +7480,6 @@ def ensure_preset_consistency(config: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"Preset consistency check failed: {e}")
         return config
-
-
 
 @enhanced_monitor_performance(include_memory=True, log_level=logging.DEBUG)
 def get_system_info(
@@ -18528,8 +18519,6 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             logger.critical(f"Even emergency fallback configuration failed: {fallback_error}")
             raise RuntimeError(f"Complete configuration initialization failure: {str(e)}. Emergency fallback also failed: {str(fallback_error)}") from e
 
-
-
 # Helper functions for the updated configuration system
 def save_change_log(changes: Dict[str, Any]) -> None:
     """
@@ -23605,8 +23594,6 @@ def _generate_inline_dashboard_fallback(enhanced_status: Dict, compact_status: D
 </body>
 </html>"""
 
-
-
 def _display_text_report(file_path, title=None):
     """Display a text report with pagination."""
     try:
@@ -23870,1600 +23857,6 @@ def _show_all_report_files(report_dir, report_files):
         print("No files found.")
 
 # Model architecture comparison
-def initialize_model_variants(silent: bool = False) -> None:
-    """Initialize MODEL_VARIANTS dictionary with validation and error recovery.
-    
-    This function has been updated to leverage the model_instantiation_with_validation() helper
-    for comprehensive model initialization with built-in validation and error handling.
-    
-    Args:
-        silent: If True, suppress detailed logging messages and progress bars during system checks
-    """
-    global MODEL_VARIANTS
-    
-    if not silent:
-        logger.info("Initializing model variants using helper functions")
-    
-    # Initialize progress tracking
-    progress_data = {
-        'current_stage': 'Starting...',
-        'successful_models': 0,
-        'failed_models': 0,
-        'current_model': None,
-        'instantiation_method': None
-    }
-    
-    # Calculate total work units for progress bar
-    total_stages = 6  # System, Config, Params, Definitions, Models, Finalization
-    total_models = 0  # Will be set after model_definitions is created
-    
-    try:
-        # STAGE 1: System Preparation
-        progress_data['current_stage'] = "System Preparation"
-        
-        hardware_data = None
-        total_ram_gb = 8.0
-        
-        with alive_bar(total_stages, title='Initializing Model Variants\t', unit='stages') as bar:
-            
-            try:
-                bar.text = "Checking system hardware..."
-                hardware_data = check_hardware(include_memory_usage=True)
-                total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
-                
-                # Initial memory cleanup for memory-constrained systems
-                _optimize_memory_if_needed(
-                    condition=total_ram_gb < 8,
-                    hardware_data=hardware_data,
-                    aggressive=total_ram_gb < 4,
-                    silent=silent
-                )
-                bar.text = "System check complete"
-            except Exception as e:
-                if not silent:
-                    logger.debug(f"Hardware detection failed: {e}")
-                hardware_data = {}
-                bar.text = "System check (using defaults)"
-            
-            # Clear existing variants
-            MODEL_VARIANTS = {}
-            bar()
-            
-            # STAGE 2: Configuration Loading
-            progress_data['current_stage'] = "Loading Configuration"
-            bar.text = "Loading configuration..."
-            
-            # Get current configuration with fallbacks
-            try:
-                current_config = get_current_config()
-                if not isinstance(current_config, dict):
-                    current_config = {}
-                
-                model_config = current_config.get('model', {})
-                data_config = current_config.get('data', {})
-                training_config = current_config.get('training', {})
-                hardware_config = current_config.get('hardware', {})
-                system_config = current_config.get('system', {})
-                
-                if not silent:
-                    logger.debug("Loaded configuration for model variant initialization")
-                bar.text = "Configuration loaded"
-            except Exception as e:
-                if not silent:
-                    logger.warning(f"Could not load current config, using defaults: {e}")
-                current_config = {}
-                model_config = {}
-                data_config = {}
-                training_config = {}
-                hardware_config = {}
-                system_config = {}
-                bar.text = "Configuration (using defaults)"
-            
-            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory after config processing for large configs
-            config_size_estimate = len(str(current_config))
-            _optimize_memory_if_needed(
-                condition=config_size_estimate > 50000 and total_ram_gb < 16,
-                hardware_data=hardware_data,
-                aggressive=config_size_estimate > 100000,
-                silent=silent
-            )
-            
-            bar()
-            
-            # STAGE 3: Parameter Extraction & Validation
-            progress_data['current_stage'] = "Validating Parameters"
-            bar.text = "Extracting parameters..."
-            
-            # Extract configuration values using helper function
-            test_input_dim = _extract_and_validate_config_param(
-                data_config, 'features', 20, 'FEATURES',
-                lambda x: isinstance(x, int) and x > 0,
-                "input feature dimension", silent
-            )
-            
-            base_encoding_dim = _extract_and_validate_config_param(
-                model_config, 'encoding_dim', 16, 'DEFAULT_ENCODING_DIM',
-                lambda x: isinstance(x, int) and x > 0,
-                "latent encoding dimension", silent
-            )
-            
-            base_hidden_dims = _extract_and_validate_config_param(
-                model_config, 'hidden_dims', [128, 64], 'HIDDEN_LAYER_SIZES',
-                lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(d, int) and d > 0 for d in x),
-                "hidden layer dimensions", silent
-            )
-            
-            base_dropout_rates = _extract_and_validate_config_param(
-                model_config, 'dropout_rates', [0.2, 0.15], 'DROPOUT_RATES',
-                lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in x),
-                "dropout rates", silent
-            )
-            
-            # Activation and normalization
-            activation = _extract_and_validate_config_param(
-                model_config, 'activation', 'leaky_relu', 'ACTIVATION',
-                lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
-                "activation function", silent
-            )
-            
-            activation_param = _extract_and_validate_config_param(
-                model_config, 'activation_param', 0.2, 'ACTIVATION_PARAM',
-                lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
-                "activation parameter", silent
-            )
-            
-            normalization = _extract_and_validate_config_param(
-                model_config, 'normalization', 'batch', 'NORMALIZATION',
-                lambda x: x in ['batch', 'layer', 'instance', 'group', 'none', None],
-                "normalization type", silent
-            )
-            
-            # Architecture features
-            use_batch_norm = _extract_and_validate_config_param(
-                model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
-                lambda x: isinstance(x, bool),
-                "batch normalization flag", silent
-            )
-            
-            use_layer_norm = _extract_and_validate_config_param(
-                model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
-                lambda x: isinstance(x, bool),
-                "layer normalization flag", silent
-            )
-            
-            skip_connection = _extract_and_validate_config_param(
-                model_config, 'skip_connection', True, 'SKIP_CONNECTION',
-                lambda x: isinstance(x, bool),
-                "skip connections flag", silent
-            )
-            
-            residual_blocks = _extract_and_validate_config_param(
-                model_config, 'residual_blocks', False, 'RESIDUAL_BLOCKS',
-                lambda x: isinstance(x, bool),
-                "residual blocks flag", silent
-            )
-            
-            use_attention = _extract_and_validate_config_param(
-                model_config, 'use_attention', False, 'USE_ATTENTION',
-                lambda x: isinstance(x, bool),
-                "attention mechanism flag", silent
-            )
-            
-            # Ensemble parameters
-            num_models = _extract_and_validate_config_param(
-                model_config, 'num_models', 3, 'NUM_MODELS',
-                lambda x: isinstance(x, int) and 1 <= x <= 10,
-                "ensemble size", silent
-            )
-            
-            diversity_factor = _extract_and_validate_config_param(
-                model_config, 'diversity_factor', 0.2, 'DIVERSITY_FACTOR',
-                lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
-                "ensemble diversity factor", silent
-            )
-            
-            # Training parameters
-            mixed_precision = _extract_and_validate_config_param(
-                training_config, 'mixed_precision', False, 'MIXED_PRECISION',
-                lambda x: isinstance(x, bool),
-                "mixed precision training", silent
-            )
-            
-            learning_rate = _extract_and_validate_config_param(
-                training_config, 'learning_rate', 0.001, 'LEARNING_RATE',
-                lambda x: isinstance(x, (int, float)) and x > 0,
-                "learning rate", silent
-            )
-            
-            batch_size = _extract_and_validate_config_param(
-                training_config, 'batch_size', 32, 'BATCH_SIZE',
-                lambda x: isinstance(x, int) and x > 0,
-                "batch size", silent
-            )
-            
-            # Hardware parameters
-            device = _extract_and_validate_config_param(
-                hardware_config, 'device', 'auto', 'DEVICE',
-                lambda x: isinstance(x, str) and x in ['auto', 'cpu', 'cuda'] or x.startswith('cuda:'),
-                "compute device", silent
-            )
-            
-            # System parameters
-            random_seed = _extract_and_validate_config_param(
-                system_config, 'random_seed', 42, 'RANDOM_SEED',
-                lambda x: isinstance(x, int),
-                "random seed", silent
-            )
-            
-            legacy_mode = _extract_and_validate_config_param(
-                model_config, 'legacy_mode', False, 'LEGACY_MODE',
-                lambda x: isinstance(x, bool),
-                "legacy compatibility mode", silent
-            )
-            
-            # Validate and adjust parameters using helper function
-            base_hidden_dims, base_dropout_rates = _validate_and_adjust_parameters(
-                base_hidden_dims, base_dropout_rates, silent
-            )
-            
-            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before intensive model testing
-            _optimize_memory_if_needed(
-                condition=len(str(base_hidden_dims) + str(base_dropout_rates)) > 1000 or total_ram_gb < 8,
-                hardware_data=hardware_data,
-                aggressive=total_ram_gb < 4,
-                silent=silent
-            )
-            
-            bar.text = "Parameters validated"
-            bar()
-            
-            # STAGE 4: Model Definitions
-            progress_data['current_stage'] = "Creating Model Definitions"
-            bar.text = "Creating model definitions..."
-            
-            # Create model test definitions using helper function with ALL required parameters
-            model_definitions = _create_model_test_definition(
-                encoding_dim=base_encoding_dim,
-                hidden_dims=base_hidden_dims,
-                dropout_rates=base_dropout_rates,
-                use_attention=use_attention,
-                residual_blocks=residual_blocks,
-                skip_connection=skip_connection,
-                legacy_mode=legacy_mode,
-                num_models=num_models,
-                diversity_factor=diversity_factor,
-                mixed_precision=mixed_precision,
-                input_dim=test_input_dim,
-                activation=activation,
-                activation_param=activation_param,
-                normalization=normalization,
-                use_batch_norm=use_batch_norm,
-                use_layer_norm=use_layer_norm
-            )
-            
-            total_models = len(model_definitions)
-            bar.text = f"Created {total_models} model definitions"
-            bar()
-            
-            # Close the main progress bar and start model initialization bar
-            bar.text = "Starting model initialization..."
-        
-        # STAGE 5: Model Initialization with detailed progress
-        progress_data['current_stage'] = "Model Initialization"
-        
-        # Track initialization statistics
-        initialization_stats = {
-            'attempted': 0,
-            'successful': [],
-            'failed': [],
-            'skipped': [],
-            'fallback_used': [],
-            'minimal_used': [],
-            'adaptive_used': [],
-            'validation_passed': 0,
-            'errors': [],
-            'config_validation_passed': 0,
-            'architecture_tests_passed': 0,
-            'performance_tests_passed': 0,
-            'memory_optimizations_performed': 0,
-            'detailed_metrics': {}
-        }
-        
-        # Status symbols for visual feedback
-        status_symbols = {
-            'success': '[OK]',
-            'failure': '[FAIL]',
-            'skip': '[SKIP]'
-        }
-        
-        method_symbols = {
-            'primary': '[PRIMARY]',
-            'fallback': '[FALLBACK]',
-            'minimal': '[MINIMAL]',
-            'adaptive': '[ADAPTIVE]'
-        }
-        
-        with alive_bar(total_models, title='Initializing Models\t\t', unit='models') as model_bar:
-            
-            # Initialize each model variant using the helper function
-            for name, definition in model_definitions.items():
-                initialization_stats['attempted'] += 1
-                progress_data['current_model'] = name
-                
-                # Update progress bar with current model info
-                successful_count = len(initialization_stats['successful'])
-                failed_count = len(initialization_stats['failed'])
-                model_bar.text = f"Testing {name}... ({successful_count} passed, {failed_count} failed)"
-                
-                try:
-                    if not silent:
-                        logger.debug(f"Attempting to initialize {name} using helper function")
-                    
-                    # Check if model class exists and is callable
-                    if not definition['class_check']():
-                        error_msg = f"Class not available or not callable"
-                        if not silent:
-                            logger.warning(f"{name}: {error_msg}")
-                        initialization_stats['errors'].append(f"{name}: {error_msg}")
-                        initialization_stats['skipped'].append(name)
-                        model_bar.text = f"{status_symbols['skip']} {name} skipped"
-                        progress_data['failed_models'] += 1
-                        model_bar()
-                        continue
-                    
-                    # Get the model class
-                    model_class = definition['class_getter']()
-                    
-                    # Use model_instantiation_with_validation for initialization
-                    test_model, validation_results, performance_metrics, instantiation_details = model_instantiation_with_validation(
-                        variant_class=model_class,
-                        variant_name=name,
-                        input_dim=test_input_dim,
-                        base_config=definition['primary_config'],
-                        fallback_config=definition['fallback_config'],
-                        minimal_config=definition['minimal_config'],
-                        validation_tests=['basic', 'forward_pass', 'parameters', 'config_methods', 'training_mode'],
-                        comprehensive_validation=True,
-                        hardware_data=hardware_data,
-                        silent=silent,
-                        logger=logger
-                    )
-                    
-                    # Track instantiation method used
-                    instantiation_method = instantiation_details.get('method', 'failed')
-                    progress_data['instantiation_method'] = instantiation_method
-                    
-                    if instantiation_method == 'fallback':
-                        initialization_stats['fallback_used'].append(name)
-                    elif instantiation_method == 'minimal':
-                        initialization_stats['minimal_used'].append(name)
-                    elif instantiation_method == 'adaptive':
-                        initialization_stats['adaptive_used'].append(name)
-                    
-                    # Process instantiation results
-                    if test_model is not None:
-                        try:
-                            # Store detailed metrics
-                            initialization_stats['detailed_metrics'][name] = {
-                                'instantiation_method': instantiation_method,
-                                'performance_metrics': performance_metrics,
-                                'validation_results': validation_results,
-                                'config_used': instantiation_details.get('config_used', {})
-                            }
-                            
-                            # Record validation statistics from helper function
-                            test_results = validation_results.get('test_results', {})
-                            
-                            # Test 1: Configuration validation (handled by helper)
-                            if test_results.get('config_methods') == 'passed':
-                                initialization_stats['config_validation_passed'] += 1
-                            
-                            # Test 2: Basic forward pass (handled by helper)
-                            if test_results.get('forward_pass') == 'passed':
-                                initialization_stats['architecture_tests_passed'] += 1
-                            
-                            # Test 3: Training mode compatibility (handled by helper)
-                            if test_results.get('training_mode') == 'passed':
-                                initialization_stats['performance_tests_passed'] += 1
-                            
-                            # Additional validation
-                            if hasattr(test_model, 'encode') and hasattr(test_model, 'decode'):
-                                try:
-                                    test_model.eval()
-                                    test_input_encode = torch.randn(2, test_input_dim)
-                                    if hasattr(test_model, 'device'):
-                                        test_input_encode = test_input_encode.to(test_model.device)
-                                    
-                                    encoded = test_model.encode(test_input_encode)
-                                    decoded = test_model.decode(encoded)
-                                    
-                                    if decoded.shape == test_input_encode.shape:
-                                        initialization_stats['performance_tests_passed'] += 1
-                                except Exception:
-                                    pass  # Encode/decode is optional
-                            
-                            # Test parameter counting (already done by helper)
-                            total_params = performance_metrics.get('total_parameters', 0)
-                            if total_params > 0:
-                                initialization_stats['performance_tests_passed'] += 1
-                            
-                            # Test device compatibility
-                            device_str = str(test_model.device if hasattr(test_model, 'device') else 'cpu')
-                            if 'cuda' in device_str and not torch.cuda.is_available():
-                                if not silent:
-                                    logger.warning(f"{name}: Model on CUDA device but CUDA not available")
-                            
-                            # Success - register the model variant
-                            MODEL_VARIANTS[name] = model_class
-                            initialization_stats['successful'].append(name)
-                            initialization_stats['validation_passed'] += 1
-                            progress_data['successful_models'] += 1
-                            
-                            method_symbol = method_symbols.get(instantiation_method, '[UNKNOWN]')
-                            model_bar.text = f"{status_symbols['success']} {name} {method_symbol} ({total_params:,} params)"
-                            
-                            if not silent:
-                                logger.info(f"{status_symbols['success']} {name}: Successfully initialized and validated "
-                                          f"({instantiation_method}, {total_params:,} params, "
-                                          f"score: {validation_results.get('overall_score', 0):.1%})")
-                            
-                        except Exception as validation_error:
-                            error_msg = f"Post-instantiation validation failed: {str(validation_error)}"
-                            if not silent:
-                                logger.error(f"{status_symbols['failure']} {name}: {error_msg}")
-                            initialization_stats['errors'].append(f"{name}: {error_msg}")
-                            initialization_stats['failed'].append(name)
-                            progress_data['failed_models'] += 1
-                            model_bar.text = f"{status_symbols['failure']} {name} validation failed"
-                    else:
-                        # Instantiation failed
-                        error_msg = f"Instantiation failed: {', '.join(validation_results.get('errors', []))}"
-                        if not silent:
-                            logger.error(f"{status_symbols['failure']} {name}: {error_msg}")
-                        initialization_stats['errors'].append(f"{name}: {error_msg}")
-                        initialization_stats['failed'].append(name)
-                        progress_data['failed_models'] += 1
-                        model_bar.text = f"{status_symbols['failure']} {name} instantiation failed"
-                    
-                    # Cleanup test model and free memory
-                    if test_model is not None:
-                        del test_model
-                    
-                    # MEMORY OPTIMIZATION CHECKPOINT - Cleanup between model tests
-                    if _optimize_memory_if_needed(
-                        condition=True,  # Always aggressive between models
-                        hardware_data=hardware_data,
-                        aggressive=True,
-                        silent=silent
-                    ):
-                        initialization_stats['memory_optimizations_performed'] += 1
-                    
-                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
-                    
-                except Exception as e:
-                    if not silent:
-                        logger.error(f"{status_symbols['failure']} Failed to initialize model variant {name}: {e}")
-                    initialization_stats['errors'].append(f"{name}: Unexpected error: {str(e)}")
-                    initialization_stats['failed'].append(name)
-                    progress_data['failed_models'] += 1
-                    model_bar.text = f"{status_symbols['failure']} {name} unexpected error"
-                
-                # Update progress bar
-                model_bar()
-            
-            # Final update for model initialization
-            successful_count = len(initialization_stats['successful'])
-            failed_count = len(initialization_stats['failed'])
-            model_bar.text = f"Models: {successful_count} passed, {failed_count} failed"
-        
-        # STAGE 6: Finalization
-        progress_data['current_stage'] = "Finalizing"
-        
-        with alive_bar(1, title='Finalizing\t\t\t') as final_bar:
-            
-            final_bar.text = "Finalizing setup..."
-            
-            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before post-processing
-            _optimize_memory_if_needed(
-                condition=len(MODEL_VARIANTS) > 2,
-                hardware_data=hardware_data,
-                aggressive=len(MODEL_VARIANTS) > 2,
-                silent=silent
-            )
-            
-            # Log initialization summary
-            total_attempted = initialization_stats['attempted']
-            successful_count = len(initialization_stats['successful'])
-            failed_count = len(initialization_stats['failed'])
-            fallback_count = len(initialization_stats['fallback_used'])
-            minimal_count = len(initialization_stats['minimal_used'])
-            adaptive_count = len(initialization_stats['adaptive_used'])
-            memory_opts = initialization_stats['memory_optimizations_performed']
-            
-            if not silent:
-                logger.info("Model variants initialization completed using helper functions:")
-                logger.info(f"  - Total attempted: {total_attempted}")
-                logger.info(f"  - Successful: {successful_count}")
-                logger.info(f"  - Failed: {failed_count}")
-                logger.info(f"  - Using primary config: {successful_count - fallback_count - minimal_count - adaptive_count}")
-                logger.info(f"  - Using fallback config: {fallback_count}")
-                logger.info(f"  - Using minimal config: {minimal_count}")
-                logger.info(f"  - Using adaptive config: {adaptive_count}")
-                logger.info(f"  - Configuration validation passed: {initialization_stats['config_validation_passed']}")
-                logger.info(f"  - Architecture tests passed: {initialization_stats['architecture_tests_passed']}")
-                logger.info(f"  - Performance tests passed: {initialization_stats['performance_tests_passed']}")
-                logger.info(f"  - Memory optimizations performed: {memory_opts}")
-                
-                # Log detailed metrics for successful models
-                if initialization_stats['detailed_metrics']:
-                    logger.info("  - Detailed metrics available for successful models")
-                    for model_name, metrics in initialization_stats['detailed_metrics'].items():
-                        score = metrics['validation_results'].get('overall_score', 0)
-                        params = metrics['performance_metrics'].get('total_parameters', 0)
-                        logger.debug(f"    {model_name}: {score:.1%} score, {params:,} params, {metrics['instantiation_method']} config")
-                
-                if initialization_stats['successful']:
-                    logger.info(f"  - Available models: {', '.join(initialization_stats['successful'])}")
-                
-                if initialization_stats['failed']:
-                    logger.warning(f"  - Failed models: {', '.join(initialization_stats['failed'])}")
-                
-                # Log critical errors for debugging
-                if initialization_stats['errors']:
-                    logger.warning("Initialization errors encountered (showing first 5):")
-                    for error in initialization_stats['errors'][:5]:
-                        logger.warning(f"  - {error}")
-                    if len(initialization_stats['errors']) > 5:
-                        logger.warning(f"  ... and {len(initialization_stats['errors']) - 5} more errors")
-            
-            # Ensure at least one model variant is available
-            if not MODEL_VARIANTS:
-                error_msg = "No model variants could be initialized"
-                if not silent:
-                    logger.error(error_msg)
-                    logger.error("This indicates a serious configuration or dependency issue")
-                
-                final_bar.text = "No models - emergency fallback"
-                
-                # Emergency fallback using the helper function
-                try:
-                    if SimpleAutoencoder is not None:
-                        emergency_model, emergency_results, emergency_metrics, emergency_details = model_instantiation_with_validation(
-                            variant_class=SimpleAutoencoder,
-                            variant_name='SimpleAutoencoder',
-                            input_dim=10,
-                            base_config=_create_adaptive_config(
-                                model_name='SimpleAutoencoder',
-                                model_class=SimpleAutoencoder,
-                                system_class='emergency',
-                                input_dim=10,
-                                encoding_dim=4,
-                                hidden_dims=[16],
-                                dropout_rates=[0.1],
-                                activation='relu',
-                                activation_param=0.0,
-                                normalization=None,
-                                use_batch_norm=False,
-                                use_layer_norm=False,
-                                skip_connection=False,
-                                residual_blocks=False,
-                                use_attention=False,
-                                legacy_mode=True,
-                                num_models=1,
-                                diversity_factor=0.0,
-                                learning_rate=0.001,
-                                batch_size=32,
-                                mixed_precision=False,
-                                optimizer_type='Adam',
-                                device_setting='cpu',
-                                random_seed=42,
-                                hardware_data=hardware_data
-                            ),
-                            validation_tests=['basic', 'forward_pass'],
-                            comprehensive_validation=False,
-                            hardware_data=hardware_data,
-                            silent=silent,
-                            logger=logger
-                        )
-                        
-                        if emergency_model is not None:
-                            MODEL_VARIANTS['SimpleAutoencoder'] = SimpleAutoencoder
-                            initialization_stats['memory_optimizations_performed'] += 1
-                            initialization_stats['successful'].append('SimpleAutoencoder')
-                            progress_data['successful_models'] += 1
-                            final_bar.text = "Emergency fallback activated"
-                            if not silent:
-                                logger.warning("Emergency fallback: Ultra-minimal SimpleAutoencoder available")
-                        else:
-                            raise RuntimeError("Emergency fallback instantiation failed")
-                    else:
-                        raise RuntimeError(error_msg)
-                        
-                except Exception as e:
-                    if not silent:
-                        logger.critical(f"Emergency fallback failed: {e}")
-                    raise RuntimeError(f"{error_msg}: {str(e)}")
-            
-            # Run post-initialization validation if available
-            try:
-                if not silent:
-                    final_bar.text = "Running final validation"
-                
-                # Use the validation function if available
-                if 'validate_model_variants' in globals():
-                    variant_validation_results = validate_model_variants(logger, silent=silent)
-                    
-                    fully_validated = [
-                        name for name, status in variant_validation_results.items() 
-                        if status == 'available'
-                    ]
-                    
-                    if fully_validated:
-                        if not silent:
-                            logger.info(f"-SUCCESS- Fully validated model variants: {', '.join(fully_validated)}")
-                    else:
-                        if not silent:
-                            logger.warning("-WARN- No model variants passed comprehensive post-validation")
-                    final_bar.text = "Final validation complete"
-                else:
-                    if not silent:
-                        logger.debug("Post-initialization validation function not available")
-                    
-            except Exception as validation_error:
-                if not silent:
-                    logger.error(f"Post-initialization validation failed: {validation_error}")
-            
-            # FINAL MEMORY OPTIMIZATION
-            _optimize_memory_if_needed(
-                condition=True,  # Always aggressive final cleanup
-                hardware_data=hardware_data,
-                aggressive=True,
-                silent=silent
-            )
-            
-            final_bar.text = "Initialization complete!"
-            final_bar()
-    
-    except Exception as e:
-        # If we were using progress bars, they're already closed by the context managers
-        raise e
-    
-    if not silent:
-        logger.info(f"Model variants initialization completed successfully with "
-                   f"{len(MODEL_VARIANTS)} available variants")
-        logger.info(f"Memory optimizations: {initialization_stats['memory_optimizations_performed']} operations performed")
-        
-        # Log final summary of available capabilities
-        capabilities_summary = []
-        for name in MODEL_VARIANTS.keys():
-            if name == 'SimpleAutoencoder':
-                capabilities_summary.append("Simple: Basic encoder-decoder")
-            elif name == 'EnhancedAutoencoder':
-                capabilities_summary.append("Enhanced: Advanced features")
-            elif name == 'AutoencoderEnsemble':
-                capabilities_summary.append("Ensemble: Multiple models")
-        
-        if capabilities_summary:
-            logger.info(f"Available capabilities: {', '.join(capabilities_summary)}")
-
-def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dict[str, str]:
-    """
-    Validation of all registered model variants with testing.
-    
-    This function has been updated to fully leverage the existing helper functions while
-    preserving ALL original validation capabilities including advanced scenario testing,
-    memory analysis, model-specific feature validation, and comprehensive diagnostics.
-    
-    Args:
-        logger: Logger instance for reporting validation results
-        silent: If True, suppress detailed logging messages and progress bars during validation
-        
-    Returns:
-        Dictionary mapping model names to their validation status
-    """
-    variant_status = {}
-    validation_start_time = time.time()
-    
-    # Initialize progress tracking
-    progress_data = {
-        'current_stage': 'Starting...',
-        'models_tested': 0,
-        'models_passed': 0,
-        'models_failed': 0,
-        'current_model': None,
-        'current_test': None
-    }
-    
-    # Phase 1: Check if MODEL_VARIANTS exists and initialize if needed
-    progress_data['current_stage'] = "Initial Setup"
-    
-    with alive_bar(1, title='Validation Setup\t\t') as setup_bar:
-        
-        setup_bar.text = "Checking model variants..."
-        
-        if not MODEL_VARIANTS:
-            if not silent:
-                logger.warning("MODEL_VARIANTS is empty, attempting initialization")
-            try:
-                initialize_model_variants(silent=silent)
-                setup_bar.text = "Model variants initialized"
-            except Exception as e:
-                error_msg = f'initialization_failed: {str(e)}'
-                if not silent:
-                    logger.error(f"Failed to initialize model variants for validation: {e}")
-                setup_bar.text = "Initialization failed"
-                return {'error': error_msg}
-        
-        if not MODEL_VARIANTS:
-            error_msg = 'no_models_available'
-            if not silent:
-                logger.error("No model variants available after initialization attempt")
-            setup_bar.text = "No models available"
-            return {'error': error_msg}
-        
-        setup_bar.text = f"Found {len(MODEL_VARIANTS)} model variants"
-        setup_bar()
-    
-    # Phase 2: Get hardware context for memory optimization
-    progress_data['current_stage'] = "Hardware Check"
-    
-    with alive_bar(1, title='Hardware Check\t\t\t') as hardware_bar:
-        
-        hardware_bar.text = "Checking hardware..."
-        
-        try:
-            hardware_data = check_hardware(include_memory_usage=True)
-            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
-            
-            # Initial memory cleanup for memory-constrained systems
-            _optimize_memory_if_needed(
-                condition=total_ram_gb < 8,
-                hardware_data=hardware_data,
-                aggressive=total_ram_gb < 4,
-                silent=silent
-            )
-            hardware_bar.text = f"Hardware check complete ({total_ram_gb}GB RAM)"
-        except Exception as e:
-            if not silent:
-                logger.debug(f"Hardware detection failed: {e}")
-            hardware_data = {}
-            total_ram_gb = 8.0
-            hardware_bar.text = "Hardware check (using defaults)"
-        
-        hardware_bar()
-    
-    # Phase 3: Load configuration
-    progress_data['current_stage'] = "Configuration Loading"
-    
-    with alive_bar(1, title='Loading Configuration\t\t') as config_bar:
-        
-        config_bar.text = "Loading configuration..."
-        
-        try:
-            current_config = get_current_config()
-            if not isinstance(current_config, dict):
-                current_config = {}
-            
-            model_config = current_config.get('model', {})
-            data_config = current_config.get('data', {})
-            training_config = current_config.get('training', {})
-            hardware_config = current_config.get('hardware', {})
-            system_config = current_config.get('system', {})
-            
-            if not silent:
-                logger.debug("Loaded configuration for validation testing")
-            config_bar.text = "Configuration loaded"
-                
-        except Exception as e:
-            if not silent:
-                logger.warning(f"Could not load configuration for validation, using defaults: {e}")
-            current_config = {}
-            model_config = {}
-            data_config = {}
-            training_config = {}
-            hardware_config = {}
-            system_config = {}
-            config_bar.text = "Configuration (using defaults)"
-        
-        config_bar()
-    
-    # Phase 4: Extract configuration parameters using helper functions
-    progress_data['current_stage'] = "Parameter Extraction"
-    
-    with alive_bar(1, title='Extracting Parameters\t\t') as param_bar:
-        
-        param_bar.text = "Extracting parameters..."
-        
-        test_input_dim = _extract_and_validate_config_param(
-            data_config, 'features', 20, 'FEATURES',
-            lambda x: isinstance(x, int) and x > 0,
-            "input feature dimension", silent
-        )
-        
-        base_encoding_dim = _extract_and_validate_config_param(
-            model_config, 'encoding_dim', 16, 'DEFAULT_ENCODING_DIM',
-            lambda x: isinstance(x, int) and x > 0,
-            "latent encoding dimension", silent
-        )
-        
-        base_hidden_dims = _extract_and_validate_config_param(
-            model_config, 'hidden_dims', [128, 64], 'HIDDEN_LAYER_SIZES',
-            lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(d, int) and d > 0 for d in x),
-            "hidden layer dimensions", silent
-        )
-        
-        base_dropout_rates = _extract_and_validate_config_param(
-            model_config, 'dropout_rates', [0.2, 0.15], 'DROPOUT_RATES',
-            lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in x),
-            "dropout rates", silent
-        )
-        
-        # Additional parameters for validation
-        activation = _extract_and_validate_config_param(
-            model_config, 'activation', 'leaky_relu', 'ACTIVATION',
-            lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
-            "activation function", silent
-        )
-        
-        activation_param = _extract_and_validate_config_param(
-            model_config, 'activation_param', 0.2, 'ACTIVATION_PARAM',
-            lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
-            "activation parameter", silent
-        )
-        
-        normalization = _extract_and_validate_config_param(
-            model_config, 'normalization', 'batch', 'NORMALIZATION',
-            lambda x: x in ['batch', 'layer', 'instance', 'group', 'none', None],
-            "normalization type", silent
-        )
-        
-        use_batch_norm = _extract_and_validate_config_param(
-            model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
-            lambda x: isinstance(x, bool),
-            "batch normalization flag", silent
-        )
-        
-        use_layer_norm = _extract_and_validate_config_param(
-            model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
-            lambda x: isinstance(x, bool),
-            "layer normalization flag", silent
-        )
-        
-        skip_connection = _extract_and_validate_config_param(
-            model_config, 'skip_connection', True, 'SKIP_CONNECTION',
-            lambda x: isinstance(x, bool),
-            "skip connections flag", silent
-        )
-        
-        residual_blocks = _extract_and_validate_config_param(
-            model_config, 'residual_blocks', False, 'RESIDUAL_BLOCKS',
-            lambda x: isinstance(x, bool),
-            "residual blocks flag", silent
-        )
-        
-        use_attention = _extract_and_validate_config_param(
-            model_config, 'use_attention', False, 'USE_ATTENTION',
-            lambda x: isinstance(x, bool),
-            "attention mechanism flag", silent
-        )
-        
-        num_models = _extract_and_validate_config_param(
-            model_config, 'num_models', 3, 'NUM_MODELS',
-            lambda x: isinstance(x, int) and 1 <= x <= 10,
-            "ensemble size", silent
-        )
-        
-        diversity_factor = _extract_and_validate_config_param(
-            model_config, 'diversity_factor', 0.2, 'DIVERSITY_FACTOR',
-            lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
-            "ensemble diversity factor", silent
-        )
-        
-        mixed_precision = _extract_and_validate_config_param(
-            training_config, 'mixed_precision', False, 'MIXED_PRECISION',
-            lambda x: isinstance(x, bool),
-            "mixed precision training", silent
-        )
-        
-        learning_rate = _extract_and_validate_config_param(
-            training_config, 'learning_rate', 0.001, 'LEARNING_RATE',
-            lambda x: isinstance(x, (int, float)) and x > 0,
-            "learning rate", silent
-        )
-        
-        device_setting = _extract_and_validate_config_param(
-            hardware_config, 'device', 'auto', 'DEVICE',
-            lambda x: isinstance(x, str) and x in ['auto', 'cpu', 'cuda'] or x.startswith('cuda:'),
-            "compute device", silent
-        )
-        
-        random_seed = _extract_and_validate_config_param(
-            system_config, 'random_seed', 42, 'RANDOM_SEED',
-            lambda x: isinstance(x, int),
-            "random seed", silent
-        )
-        
-        legacy_mode = _extract_and_validate_config_param(
-            model_config, 'legacy_mode', False, 'LEGACY_MODE',
-            lambda x: isinstance(x, bool),
-            "legacy compatibility mode", silent
-        )
-        
-        # Phase 5: Validate and adjust parameters
-        base_hidden_dims, base_dropout_rates = _validate_and_adjust_parameters(
-            base_hidden_dims, base_dropout_rates, silent
-        )
-        
-        param_bar.text = "Parameters validated"
-        param_bar()
-    
-    # Phase 6: Create model test definitions with ALL required parameters
-    progress_data['current_stage'] = "Creating Test Definitions"
-    
-    with alive_bar(1, title='Creating Test Definitions\t') as def_bar:
-        
-        def_bar.text = "Creating model definitions..."
-        
-        # Create model test definitions with ALL required parameters
-        model_definitions = _create_model_test_definition(
-            encoding_dim=base_encoding_dim,
-            hidden_dims=base_hidden_dims,
-            dropout_rates=base_dropout_rates,
-            use_attention=use_attention,
-            residual_blocks=residual_blocks,
-            skip_connection=skip_connection,
-            legacy_mode=legacy_mode,
-            num_models=num_models,
-            diversity_factor=diversity_factor,
-            mixed_precision=mixed_precision,
-            # ADDED: Pass all the missing parameters that are now required
-            input_dim=test_input_dim,
-            activation=activation,
-            activation_param=activation_param,
-            normalization=normalization,
-            use_batch_norm=use_batch_norm,
-            use_layer_norm=use_layer_norm
-        )
-        
-        # Update configurations with validation-specific input dimension (redundant but safe)
-        for definition in model_definitions.values():
-            for config_type in ['primary_config', 'fallback_config', 'minimal_config']:
-                if config_type in definition:
-                    definition[config_type]['data']['features'] = test_input_dim
-                    definition[config_type]['model']['input_dim'] = test_input_dim
-        
-        def_bar.text = f"Created {len(model_definitions)} test definitions"
-        def_bar()
-    
-    # Define validation test scenarios
-    validation_scenarios = [
-        {
-            'name': 'batch_norm_compatible',
-            'batch_size': 4,
-            'description': 'Batch normalization compatibility test'
-        },
-        {
-            'name': 'single_sample',
-            'batch_size': 1,
-            'description': 'Single sample inference test'
-        },
-        {
-            'name': 'small_batch',
-            'batch_size': 2,
-            'description': 'Small batch processing test'
-        },
-        {
-            'name': 'medium_batch',
-            'batch_size': 8,
-            'description': 'Medium batch processing test'
-        },
-        {
-            'name': 'large_batch',
-            'batch_size': 16,
-            'description': 'Large batch processing test'
-        }
-    ]
-    
-    # Phase 7: Initialize validation statistics
-    validation_stats = {
-        'models_attempted': 0,
-        'models_successful': 0,
-        'models_failed': 0,
-        'models_warning': 0,
-        'total_tests_performed': 0,
-        'total_tests_passed': 0,
-        'total_tests_failed': 0,
-        'configuration_tests_passed': 0,
-        'architecture_tests_passed': 0,
-        'functionality_tests_passed': 0,
-        'performance_tests_passed': 0,
-        'robustness_tests_passed': 0,
-        'memory_tests_passed': 0,
-        'device_compatibility_tests': 0,
-        'memory_optimizations_performed': 0,
-        'detailed_metrics': {},
-        'available_variants': [],
-        'warning_variants': [],
-        'failed_variants': []
-    }
-    
-    # Status symbols for visual feedback
-    status_symbols = {
-        'success': '[OK]',
-        'failure': '[FAIL]',
-        'warning': '[WARN]',
-        'skip': '[SKIP]'
-    }
-    
-    # Phase 8: Validate each model variant
-    progress_data['current_stage'] = "Model Validation"
-    total_models = len(MODEL_VARIANTS)
-    
-    with alive_bar(total_models, title='Validating Models\t') as model_bar:
-        
-        for variant_name, variant_class in MODEL_VARIANTS.items():
-            model_validation_start = time.time()
-            validation_stats['models_attempted'] += 1
-            progress_data['current_model'] = variant_name
-            
-            # Update progress bar with current model info
-            passed_count = validation_stats['models_successful']
-            failed_count = validation_stats['models_failed']
-            model_bar.text = f"Testing {variant_name}... ({passed_count} passed, {failed_count} failed)"
-            
-            # Initialize detailed tracking for this variant
-            overall_status = 'available'
-            variant_details = {
-                'class_name': variant_class.__name__ if variant_class else 'None',
-                'tests_performed': [],
-                'tests_passed': [],
-                'tests_failed': [],
-                'errors': [],
-                'warnings': [],
-                'performance_metrics': {},
-                'compatibility_results': {},
-                'configuration_validation': {},
-                'memory_usage': {}
-            }
-            
-            try:
-                if not silent:
-                    logger.debug(f"Starting validation for {variant_name} using helper functions")
-                
-                # Test 1: Class Availability and Callability
-                if variant_class is None:
-                    variant_status[variant_name] = 'class_not_found'
-                    variant_details['errors'].append('Model class is None')
-                    validation_stats['failed_variants'].append(variant_name)
-                    validation_stats['models_failed'] += 1
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} class not found"
-                    model_bar()
-                    continue
-                
-                if not callable(variant_class):
-                    variant_status[variant_name] = 'class_not_callable'
-                    variant_details['errors'].append('Model class is not callable')
-                    validation_stats['failed_variants'].append(variant_name)
-                    validation_stats['models_failed'] += 1
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} not callable"
-                    model_bar()
-                    continue
-                
-                variant_details['tests_performed'].append('class_availability')
-                variant_details['tests_passed'].append('class_availability')
-                validation_stats['total_tests_performed'] += 1
-                validation_stats['total_tests_passed'] += 1
-                
-                # Get the appropriate test definition for this model
-                if variant_name in model_definitions:
-                    definition = model_definitions[variant_name]
-                else:
-                    # Create adaptive definition for unknown model types
-                    if not silent:
-                        logger.debug(f"Creating adaptive configuration for unknown model type: {variant_name}")
-                    definition = {
-                        'primary_config': _create_adaptive_config(
-                            model_name=variant_name,
-                            model_class=variant_class,
-                            system_class='validation',
-                            input_dim=test_input_dim,
-                            encoding_dim=base_encoding_dim,
-                            hidden_dims=base_hidden_dims,
-                            dropout_rates=base_dropout_rates,
-                            activation=activation,
-                            activation_param=activation_param,
-                            normalization=normalization,
-                            use_batch_norm=use_batch_norm,
-                            use_layer_norm=use_layer_norm,
-                            skip_connection=skip_connection,
-                            residual_blocks=residual_blocks,
-                            use_attention=use_attention,
-                            legacy_mode=legacy_mode,
-                            num_models=num_models,
-                            diversity_factor=diversity_factor,
-                            learning_rate=learning_rate,
-                            batch_size=32,
-                            mixed_precision=mixed_precision,
-                            optimizer_type='AdamW',
-                            device_setting=device_setting,
-                            random_seed=random_seed,
-                            hardware_data=hardware_data
-                        ),
-                        'fallback_config': _create_adaptive_config(
-                            model_name=variant_name,
-                            model_class=variant_class,
-                            system_class='fallback',
-                            input_dim=test_input_dim,
-                            encoding_dim=max(4, base_encoding_dim // 2),
-                            hidden_dims=[64],
-                            dropout_rates=[0.2],
-                            activation='relu',
-                            activation_param=0.0,
-                            normalization=None,
-                            use_batch_norm=False,
-                            use_layer_norm=False,
-                            skip_connection=False,
-                            residual_blocks=False,
-                            use_attention=False,
-                            legacy_mode=True,
-                            num_models=1,
-                            diversity_factor=0.0,
-                            learning_rate=0.001,
-                            batch_size=32,
-                            mixed_precision=False,
-                            optimizer_type='Adam',
-                            device_setting='cpu',
-                            random_seed=42,
-                            hardware_data=hardware_data
-                        ),
-                        'minimal_config': _create_adaptive_config(
-                            model_name=variant_name,
-                            model_class=variant_class,
-                            system_class='minimal',
-                            input_dim=test_input_dim,
-                            encoding_dim=8,
-                            hidden_dims=[32],
-                            dropout_rates=[0.1],
-                            activation='relu',
-                            activation_param=0.0,
-                            normalization=None,
-                            use_batch_norm=False,
-                            use_layer_norm=False,
-                            skip_connection=False,
-                            residual_blocks=False,
-                            use_attention=False,
-                            legacy_mode=True,
-                            num_models=1,
-                            diversity_factor=0.0,
-                            learning_rate=0.001,
-                            batch_size=32,
-                            mixed_precision=False,
-                            optimizer_type='Adam',
-                            device_setting='cpu',
-                            random_seed=42,
-                            hardware_data=hardware_data
-                        )
-                    }
-                
-                # Test 2: Configuration Creation
-                variant_details['configuration_validation']['config_created'] = True
-                variant_details['tests_performed'].append('configuration_creation')
-                variant_details['tests_passed'].append('configuration_creation')
-                validation_stats['total_tests_performed'] += 1
-                validation_stats['total_tests_passed'] += 1
-                validation_stats['configuration_tests_passed'] += 1
-                
-                # Use the model_instantiation_with_validation helper function
-                test_instance, validation_results, performance_metrics, instantiation_details = model_instantiation_with_validation(
-                    variant_class=variant_class,
-                    variant_name=variant_name,
-                    input_dim=test_input_dim,
-                    base_config=definition['primary_config'],
-                    fallback_config=definition.get('fallback_config'),
-                    minimal_config=definition.get('minimal_config'),
-                    validation_tests=['basic', 'forward_pass', 'parameters', 'config_methods', 'training_mode'],
-                    comprehensive_validation=True,
-                    hardware_data=hardware_data,
-                    silent=silent,
-                    logger=logger
-                )
-                
-                # Process results
-                instantiation_method = instantiation_details.get('method', 'failed')
-                validation_score = validation_results.get('overall_score', 0)
-                test_results = validation_results.get('test_results', {})
-                warnings = validation_results.get('warnings', [])
-                errors = validation_results.get('errors', [])
-                
-                # Track instantiation method
-                if instantiation_method == 'fallback':
-                    variant_details['warnings'].append('Used fallback configuration')
-                elif instantiation_method == 'minimal':
-                    variant_details['warnings'].append('Used minimal configuration')
-                elif instantiation_method == 'adaptive':
-                    variant_details['warnings'].append('Used adaptive configuration')
-                
-                # Add all results
-                variant_details['warnings'].extend(warnings)
-                variant_details['errors'].extend(errors)
-                variant_details['performance_metrics'].update(performance_metrics)
-                variant_details['configuration_validation'].update(performance_metrics.get('config_validation', {}))
-                variant_details['instantiation_method'] = instantiation_method
-                
-                # Track models for cleanup
-                test_models = []
-                if test_instance is not None:
-                    test_models.append(test_instance)
-                    
-                    # Record instantiation success
-                    variant_details['tests_performed'].append(f'instantiation_{instantiation_method}')
-                    variant_details['tests_passed'].append(f'instantiation_{instantiation_method}')
-                    validation_stats['total_tests_performed'] += 1
-                    validation_stats['total_tests_passed'] += 1
-                    
-                    # Process validation results
-                    for test_name, test_result in test_results.items():
-                        variant_details['tests_performed'].append(test_name)
-                        if test_result == 'passed':
-                            variant_details['tests_passed'].append(test_name)
-                            validation_stats['total_tests_passed'] += 1
-                        else:
-                            variant_details['tests_failed'].append(test_name)
-                            validation_stats['total_tests_failed'] += 1
-                        validation_stats['total_tests_performed'] += 1
-                    
-                    # Update validation statistics based on helper results
-                    if test_results.get('basic') == 'passed':
-                        validation_stats['architecture_tests_passed'] += 1
-                    if test_results.get('forward_pass') == 'passed':
-                        validation_stats['functionality_tests_passed'] += 1
-                    if test_results.get('parameters') == 'passed':
-                        validation_stats['performance_tests_passed'] += 1
-                    if test_results.get('config_methods') == 'passed':
-                        validation_stats['configuration_tests_passed'] += 1
-                    if test_results.get('comprehensive') == 'passed':
-                        validation_stats['robustness_tests_passed'] += 1
-                    
-                    if not silent:
-                        logger.debug(f"{status_symbols['success']} {variant_name}: Comprehensive validation completed with {instantiation_method} configuration")
-                        
-                else:
-                    # Instantiation failed
-                    variant_details['tests_performed'].append('instantiation')
-                    variant_details['tests_failed'].append('instantiation')
-                    validation_stats['total_tests_performed'] += 1
-                    validation_stats['total_tests_failed'] += 1
-                    validation_stats['models_failed'] += 1
-                    
-                    if not silent:
-                        logger.error(f"{status_symbols['failure']} {variant_name}: Instantiation failed")
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} instantiation failed"
-                    model_bar()
-                    continue
-                
-                # Memory optimization after model instantiation
-                _optimize_memory_if_needed(
-                    condition=True,
-                    hardware_data=hardware_data,
-                    aggressive=total_ram_gb < 4,
-                    silent=silent
-                )
-                
-                # Additional specialized tests beyond the helper function
-                if test_instance is not None:
-                    # Test: Advanced Forward Pass Scenarios
-                    try:
-                        scenario_results = {}
-                        for scenario in validation_scenarios:
-                            try:
-                                test_instance.eval()
-                                batch_size = scenario['batch_size']
-                                
-                                # Adjust for batch norm requirements
-                                test_config = definition['primary_config']
-                                if ((test_config['model'].get('use_batch_norm', False) or 
-                                     test_config['model'].get('normalization') == 'batch') and 
-                                     batch_size == 1):
-                                    batch_size = 2
-                                
-                                test_input = torch.randn(batch_size, test_input_dim)
-                                if hasattr(test_instance, 'device'):
-                                    test_input = test_input.to(test_instance.device)
-                                
-                                with torch.no_grad():
-                                    output = test_instance(test_input)
-                                
-                                expected_shape = (batch_size, test_input_dim)
-                                if output.shape == expected_shape:
-                                    scenario_results[scenario['name']] = 'passed'
-                                else:
-                                    scenario_results[scenario['name']] = 'failed'
-                                    variant_details['warnings'].append(f"Shape mismatch in {scenario['name']}")
-                            except Exception as scenario_error:
-                                scenario_results[scenario['name']] = 'failed'
-                                variant_details['warnings'].append(f"{scenario['name']} failed: {str(scenario_error)}")
-                        
-                        # Record scenario results
-                        passed_scenarios = sum(1 for result in scenario_results.values() if result == 'passed')
-                        total_scenarios = len(scenario_results)
-                        
-                        variant_details['performance_metrics']['scenario_testing'] = scenario_results
-                        variant_details['tests_performed'].append('advanced_scenarios')
-                        
-                        if passed_scenarios == total_scenarios:
-                            variant_details['tests_passed'].append('advanced_scenarios')
-                            validation_stats['total_tests_passed'] += 1
-                        else:
-                            variant_details['tests_failed'].append('advanced_scenarios')
-                            validation_stats['total_tests_failed'] += 1
-                        validation_stats['total_tests_performed'] += 1
-                        
-                    except Exception as scenario_test_error:
-                        variant_details['warnings'].append(f"Advanced scenario testing failed: {str(scenario_test_error)}")
-                    
-                    # Test: Memory Usage Analysis
-                    try:
-                        # Use psutil if available for memory monitoring
-                        try:
-                            process = psutil.Process()
-                            memory_before = process.memory_info().rss
-                            
-                            memory_test_input = torch.randn(32, test_input_dim)
-                            if hasattr(test_instance, 'device'):
-                                memory_test_input = memory_test_input.to(test_instance.device)
-                            
-                            test_instance.eval()
-                            with torch.no_grad():
-                                _ = test_instance(memory_test_input)
-                            
-                            memory_after = process.memory_info().rss
-                            memory_used_mb = (memory_after - memory_before) / (1024 * 1024)
-                            
-                            variant_details['memory_usage']['inference_memory_mb'] = memory_used_mb
-                            
-                            if memory_used_mb > 1000:
-                                variant_details['warnings'].append(f'High memory usage: {memory_used_mb:.1f} MB')
-                            
-                            variant_details['tests_performed'].append('memory_analysis')
-                            variant_details['tests_passed'].append('memory_analysis')
-                            validation_stats['total_tests_performed'] += 1
-                            validation_stats['total_tests_passed'] += 1
-                            validation_stats['memory_tests_passed'] += 1
-                            
-                        except ImportError:
-                            variant_details['memory_usage']['psutil_available'] = False
-                            variant_details['warnings'].append('psutil not available for detailed memory analysis')
-                        
-                    except Exception as memory_error:
-                        variant_details['warnings'].append(f'Memory analysis failed: {str(memory_error)}')
-                    
-                    # Test: Model-Specific Feature Validation
-                    if variant_name == 'EnhancedAutoencoder' and test_instance is not None:
-                        try:
-                            enhanced_features = []
-                            if hasattr(test_instance, 'attention') and test_instance.attention is not None:
-                                enhanced_features.append('attention')
-                            if hasattr(test_instance, 'skip_layers'):
-                                enhanced_features.append('skip_connections')
-                            test_config = definition.get('primary_config', {})
-                            if test_config.get('model', {}).get('residual_blocks', False):
-                                enhanced_features.append('residual_blocks')
-                            
-                            variant_details['compatibility_results']['enhanced_features'] = enhanced_features
-                            variant_details['tests_performed'].append('enhanced_features')
-                            variant_details['tests_passed'].append('enhanced_features')
-                            validation_stats['total_tests_performed'] += 1
-                            validation_stats['total_tests_passed'] += 1
-                            
-                        except Exception as enhanced_error:
-                            variant_details['warnings'].append(f'Enhanced features validation failed: {str(enhanced_error)}')
-                    
-                    elif variant_name == 'AutoencoderEnsemble' and test_instance is not None:
-                        try:
-                            if hasattr(test_instance, 'models'):
-                                ensemble_size = len(test_instance.models)
-                                variant_details['compatibility_results']['ensemble_size'] = ensemble_size
-                                
-                                test_config = definition.get('primary_config', {})
-                                expected_models = test_config.get('model', {}).get('num_models', 3)
-                                
-                                if ensemble_size == 0:
-                                    variant_details['errors'].append('Empty ensemble')
-                                elif ensemble_size < expected_models:
-                                    variant_details['warnings'].append(f'Partial ensemble: {ensemble_size} models')
-                                
-                                variant_details['tests_performed'].append('ensemble_features')
-                                variant_details['tests_passed'].append('ensemble_features')
-                                validation_stats['total_tests_performed'] += 1
-                                validation_stats['total_tests_passed'] += 1
-                            
-                        except Exception as ensemble_error:
-                            variant_details['warnings'].append(f'Ensemble features validation failed: {str(ensemble_error)}')
-                
-                # Calculate model validation time
-                model_validation_time = time.time() - model_validation_start
-                variant_details['performance_metrics']['validation_time_seconds'] = model_validation_time
-                
-                # Determine final status based on results
-                error_count = len(variant_details['errors'])
-                warning_count = len(variant_details['warnings'])
-                tests_passed = len(variant_details['tests_passed'])
-                tests_total = len(variant_details['tests_performed'])
-                
-                if error_count > 0:
-                    overall_status = 'error'
-                    validation_stats['models_failed'] += 1
-                    validation_stats['failed_variants'].append(variant_name)
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} ({error_count} errors)"
-                elif warning_count > 0 or validation_score < 0.8:
-                    overall_status = 'warning'
-                    validation_stats['models_warning'] += 1
-                    validation_stats['warning_variants'].append(variant_name)
-                    model_bar.text = f"{status_symbols['warning']} {variant_name} ({warning_count} warnings)"
-                else:
-                    overall_status = 'available'
-                    validation_stats['models_successful'] += 1
-                    validation_stats['available_variants'].append(variant_name)
-                    model_bar.text = f"{status_symbols['success']} {variant_name} ({tests_passed}/{tests_total} tests)"
-                
-                # Create detailed status message
-                status_msg = overall_status
-                if overall_status != 'available':
-                    details = []
-                    if error_count > 0:
-                        details.append(f"{error_count} errors")
-                    if warning_count > 0:
-                        details.append(f"{warning_count} warnings")
-                    if details:
-                        status_msg += f": {', '.join(details)}"
-                    status_msg += f" ({validation_score:.1%} score)"
-                
-                variant_status[variant_name] = status_msg
-                
-                # Store detailed metrics for reporting
-                validation_stats['detailed_metrics'][variant_name] = {
-                    'instantiation_method': instantiation_method,
-                    'validation_score': validation_score,
-                    'tests_passed': tests_passed,
-                    'tests_total': tests_total,
-                    'performance_metrics': variant_details['performance_metrics'],
-                    'validation_time_seconds': model_validation_time
-                }
-                
-                # Cleanup test model and apply memory optimization
-                if test_instance is not None:
-                    del test_instance
-                    
-                # Memory optimization after each model test
-                if _optimize_memory_if_needed(
-                    condition=True,
-                    hardware_data=hardware_data,
-                    aggressive=total_ram_gb < 4,
-                    silent=silent
-                ):
-                    validation_stats['memory_optimizations_performed'] += 1
-                
-                torch.cuda.empty_cache() if torch.cuda.is_available() else None
-                
-                if not silent:
-                    logger.info(f"Model {variant_name} validation completed: {status_msg} "
-                               f"({tests_passed}/{tests_total} tests passed, "
-                               f"{instantiation_method} config, "
-                               f"{model_validation_time:.2f}s)")
-                
-            except Exception as e:
-                error_msg = f'validation_error: {str(e)}'
-                variant_status[variant_name] = error_msg
-                validation_stats['failed_variants'].append(variant_name)
-                validation_stats['models_failed'] += 1
-                model_bar.text = f"{status_symbols['failure']} {variant_name} unexpected error"
-                
-                if not silent:
-                    logger.error(f"Model variant {variant_name} validation failed with unexpected error: {e}")
-            
-            finally:
-                # Store detailed results
-                validation_stats[variant_name] = variant_details
-                # Additional cleanup
-                try:
-                    if 'test_models' in locals():
-                        for model in test_models:
-                            del model
-                    if 'test_instance' in locals():
-                        del test_instance
-                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
-                except Exception as cleanup_error:
-                    if not silent:
-                        logger.debug(f"Cleanup warning for {variant_name}: {cleanup_error}")
-            
-            # Update progress bar
-            model_bar()
-        
-        # Final update for model validation
-        passed_count = validation_stats['models_successful']
-        failed_count = validation_stats['models_failed']
-        model_bar.text = f"Validation complete: {passed_count} passed, {failed_count} failed"
-    
-    # Phase 9: Finalization
-    progress_data['current_stage'] = "Finalizing"
-    
-    with alive_bar(1, title='Finalizing\t\t') as final_bar:
-        
-        final_bar.text = "Generating summary..."
-        
-        total_validation_time = time.time() - validation_start_time
-        
-        # Final memory cleanup
-        _optimize_memory_if_needed(
-            condition=True,
-            hardware_data=hardware_data,
-            aggressive=True,
-            silent=silent
-        )
-        
-        # Phase 10: Log validation summary
-        if not silent:
-            logger.info("="*70)
-            logger.info("MODEL VARIANTS VALIDATION SUMMARY")
-            logger.info("="*70)
-            logger.info(f"Total Validation Time: {total_validation_time:.2f} seconds")
-            logger.info(f"Models Attempted: {validation_stats['models_attempted']}")
-            logger.info(f"Models Available: {validation_stats['models_successful']}")
-            logger.info(f"Models with Warnings: {validation_stats['models_warning']}")
-            logger.info(f"Models Failed: {validation_stats['models_failed']}")
-            logger.info("-"*70)
-            logger.info(f"Total Tests Performed: {validation_stats['total_tests_performed']}")
-            logger.info(f"Total Tests Passed: {validation_stats['total_tests_passed']}")
-            logger.info(f"Total Tests Failed: {validation_stats['total_tests_failed']}")
-            success_rate = validation_stats['total_tests_passed']/max(1, validation_stats['total_tests_performed'])*100
-            logger.info(f"Test Success Rate: {success_rate:.1f}%")
-            logger.info("-"*70)
-            logger.info(f"Configuration Tests Passed: {validation_stats['configuration_tests_passed']}")
-            logger.info(f"Architecture Tests Passed: {validation_stats['architecture_tests_passed']}")
-            logger.info(f"Functionality Tests Passed: {validation_stats['functionality_tests_passed']}")
-            logger.info(f"Performance Tests Passed: {validation_stats['performance_tests_passed']}")
-            logger.info(f"Robustness Tests Passed: {validation_stats['robustness_tests_passed']}")
-            logger.info(f"Memory Tests Passed: {validation_stats['memory_tests_passed']}")
-            logger.info(f"Device Compatibility Tests: {validation_stats['device_compatibility_tests']}")
-            logger.info(f"Memory Optimizations Performed: {validation_stats['memory_optimizations_performed']}")
-            
-            # Log detailed metrics
-            if validation_stats['detailed_metrics']:
-                logger.info("-"*70)
-                logger.info("DETAILED METRICS:")
-                for model_name, metrics in validation_stats['detailed_metrics'].items():
-                    score = metrics['validation_score']
-                    tests_passed = metrics['tests_passed']
-                    tests_total = metrics['tests_total']
-                    method = metrics['instantiation_method']
-                    logger.info(f"  {model_name}: {score:.1%} score, {tests_passed}/{tests_total} tests, {method} config")
-            
-            # Log individual model results
-            logger.info("="*70)
-            for model_name, status in variant_status.items():
-                status_icon = "OK" if status == "available" else "WARN" if status.startswith("warning") else "FAIL"
-                logger.info(f"{status_icon} {model_name}: {status}")
-            
-            # Log recommendations
-            logger.info("="*70)
-            available_models = [name for name, status in variant_status.items() if status == 'available']
-            warning_models = [name for name, status in variant_status.items() if status.startswith('warning')]
-            failed_models = [name for name, status in variant_status.items() if status.startswith('error') or 'failed' in status]
-            
-            if available_models:
-                logger.info(f"RECOMMENDED MODELS: {', '.join(available_models)}")
-            if warning_models:
-                logger.info(f"MODELS WITH WARNINGS: {', '.join(warning_models)}")
-            if failed_models:
-                logger.info(f"FAILED MODELS: {', '.join(failed_models)}")
-            
-            logger.info("="*70)
-        
-        final_bar.text = "Validation complete!"
-        final_bar()
-    
-    return variant_status
-
 def model_instantiation(
     variant_class: Any,
     variant_name: str,
@@ -32544,8 +30937,1600 @@ def display_model_comparison() -> None:
             )
         )
 
-# Model variants validation
+# Model variants initialization and validation
+def initialize_model_variants(silent: bool = False) -> None:
+    """Initialize MODEL_VARIANTS dictionary with validation and error recovery.
+    
+    This function has been updated to leverage the model_instantiation_with_validation() helper
+    for comprehensive model initialization with built-in validation and error handling.
+    
+    Args:
+        silent: If True, suppress detailed logging messages and progress bars during system checks
+    """
+    global MODEL_VARIANTS
+    
+    if not silent:
+        logger.info("Initializing model variants using helper functions")
+    
+    # Initialize progress tracking
+    progress_data = {
+        'current_stage': 'Starting...',
+        'successful_models': 0,
+        'failed_models': 0,
+        'current_model': None,
+        'instantiation_method': None
+    }
+    
+    # Calculate total work units for progress bar
+    total_stages = 6  # System, Config, Params, Definitions, Models, Finalization
+    total_models = 0  # Will be set after model_definitions is created
+    
+    try:
+        # STAGE 1: System Preparation
+        progress_data['current_stage'] = "System Preparation"
+        
+        hardware_data = None
+        total_ram_gb = 8.0
+        
+        with alive_bar(total_stages, title='Initializing Model Variants\t', unit='stages') as bar:
+            
+            try:
+                bar.text = "Checking system hardware..."
+                hardware_data = check_hardware(include_memory_usage=True)
+                total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+                
+                # Initial memory cleanup for memory-constrained systems
+                _optimize_memory_if_needed(
+                    condition=total_ram_gb < 8,
+                    hardware_data=hardware_data,
+                    aggressive=total_ram_gb < 4,
+                    silent=silent
+                )
+                bar.text = "System check complete"
+            except Exception as e:
+                if not silent:
+                    logger.debug(f"Hardware detection failed: {e}")
+                hardware_data = {}
+                bar.text = "System check (using defaults)"
+            
+            # Clear existing variants
+            MODEL_VARIANTS = {}
+            bar()
+            
+            # STAGE 2: Configuration Loading
+            progress_data['current_stage'] = "Loading Configuration"
+            bar.text = "Loading configuration..."
+            
+            # Get current configuration with fallbacks
+            try:
+                current_config = get_current_config()
+                if not isinstance(current_config, dict):
+                    current_config = {}
+                
+                model_config = current_config.get('model', {})
+                data_config = current_config.get('data', {})
+                training_config = current_config.get('training', {})
+                hardware_config = current_config.get('hardware', {})
+                system_config = current_config.get('system', {})
+                
+                if not silent:
+                    logger.debug("Loaded configuration for model variant initialization")
+                bar.text = "Configuration loaded"
+            except Exception as e:
+                if not silent:
+                    logger.warning(f"Could not load current config, using defaults: {e}")
+                current_config = {}
+                model_config = {}
+                data_config = {}
+                training_config = {}
+                hardware_config = {}
+                system_config = {}
+                bar.text = "Configuration (using defaults)"
+            
+            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory after config processing for large configs
+            config_size_estimate = len(str(current_config))
+            _optimize_memory_if_needed(
+                condition=config_size_estimate > 50000 and total_ram_gb < 16,
+                hardware_data=hardware_data,
+                aggressive=config_size_estimate > 100000,
+                silent=silent
+            )
+            
+            bar()
+            
+            # STAGE 3: Parameter Extraction & Validation
+            progress_data['current_stage'] = "Validating Parameters"
+            bar.text = "Extracting parameters..."
+            
+            # Extract configuration values using helper function
+            test_input_dim = _extract_and_validate_config_param(
+                data_config, 'features', 20, 'FEATURES',
+                lambda x: isinstance(x, int) and x > 0,
+                "input feature dimension", silent
+            )
+            
+            base_encoding_dim = _extract_and_validate_config_param(
+                model_config, 'encoding_dim', 16, 'DEFAULT_ENCODING_DIM',
+                lambda x: isinstance(x, int) and x > 0,
+                "latent encoding dimension", silent
+            )
+            
+            base_hidden_dims = _extract_and_validate_config_param(
+                model_config, 'hidden_dims', [128, 64], 'HIDDEN_LAYER_SIZES',
+                lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(d, int) and d > 0 for d in x),
+                "hidden layer dimensions", silent
+            )
+            
+            base_dropout_rates = _extract_and_validate_config_param(
+                model_config, 'dropout_rates', [0.2, 0.15], 'DROPOUT_RATES',
+                lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in x),
+                "dropout rates", silent
+            )
+            
+            # Activation and normalization
+            activation = _extract_and_validate_config_param(
+                model_config, 'activation', 'leaky_relu', 'ACTIVATION',
+                lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
+                "activation function", silent
+            )
+            
+            activation_param = _extract_and_validate_config_param(
+                model_config, 'activation_param', 0.2, 'ACTIVATION_PARAM',
+                lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
+                "activation parameter", silent
+            )
+            
+            normalization = _extract_and_validate_config_param(
+                model_config, 'normalization', 'batch', 'NORMALIZATION',
+                lambda x: x in ['batch', 'layer', 'instance', 'group', 'none', None],
+                "normalization type", silent
+            )
+            
+            # Architecture features
+            use_batch_norm = _extract_and_validate_config_param(
+                model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
+                lambda x: isinstance(x, bool),
+                "batch normalization flag", silent
+            )
+            
+            use_layer_norm = _extract_and_validate_config_param(
+                model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
+                lambda x: isinstance(x, bool),
+                "layer normalization flag", silent
+            )
+            
+            skip_connection = _extract_and_validate_config_param(
+                model_config, 'skip_connection', True, 'SKIP_CONNECTION',
+                lambda x: isinstance(x, bool),
+                "skip connections flag", silent
+            )
+            
+            residual_blocks = _extract_and_validate_config_param(
+                model_config, 'residual_blocks', False, 'RESIDUAL_BLOCKS',
+                lambda x: isinstance(x, bool),
+                "residual blocks flag", silent
+            )
+            
+            use_attention = _extract_and_validate_config_param(
+                model_config, 'use_attention', False, 'USE_ATTENTION',
+                lambda x: isinstance(x, bool),
+                "attention mechanism flag", silent
+            )
+            
+            # Ensemble parameters
+            num_models = _extract_and_validate_config_param(
+                model_config, 'num_models', 3, 'NUM_MODELS',
+                lambda x: isinstance(x, int) and 1 <= x <= 10,
+                "ensemble size", silent
+            )
+            
+            diversity_factor = _extract_and_validate_config_param(
+                model_config, 'diversity_factor', 0.2, 'DIVERSITY_FACTOR',
+                lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
+                "ensemble diversity factor", silent
+            )
+            
+            # Training parameters
+            mixed_precision = _extract_and_validate_config_param(
+                training_config, 'mixed_precision', False, 'MIXED_PRECISION',
+                lambda x: isinstance(x, bool),
+                "mixed precision training", silent
+            )
+            
+            learning_rate = _extract_and_validate_config_param(
+                training_config, 'learning_rate', 0.001, 'LEARNING_RATE',
+                lambda x: isinstance(x, (int, float)) and x > 0,
+                "learning rate", silent
+            )
+            
+            batch_size = _extract_and_validate_config_param(
+                training_config, 'batch_size', 32, 'BATCH_SIZE',
+                lambda x: isinstance(x, int) and x > 0,
+                "batch size", silent
+            )
+            
+            # Hardware parameters
+            device = _extract_and_validate_config_param(
+                hardware_config, 'device', 'auto', 'DEVICE',
+                lambda x: isinstance(x, str) and x in ['auto', 'cpu', 'cuda'] or x.startswith('cuda:'),
+                "compute device", silent
+            )
+            
+            # System parameters
+            random_seed = _extract_and_validate_config_param(
+                system_config, 'random_seed', 42, 'RANDOM_SEED',
+                lambda x: isinstance(x, int),
+                "random seed", silent
+            )
+            
+            legacy_mode = _extract_and_validate_config_param(
+                model_config, 'legacy_mode', False, 'LEGACY_MODE',
+                lambda x: isinstance(x, bool),
+                "legacy compatibility mode", silent
+            )
+            
+            # Validate and adjust parameters using helper function
+            base_hidden_dims, base_dropout_rates = _validate_and_adjust_parameters(
+                base_hidden_dims, base_dropout_rates, silent
+            )
+            
+            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before intensive model testing
+            _optimize_memory_if_needed(
+                condition=len(str(base_hidden_dims) + str(base_dropout_rates)) > 1000 or total_ram_gb < 8,
+                hardware_data=hardware_data,
+                aggressive=total_ram_gb < 4,
+                silent=silent
+            )
+            
+            bar.text = "Parameters validated"
+            bar()
+            
+            # STAGE 4: Model Definitions
+            progress_data['current_stage'] = "Creating Model Definitions"
+            bar.text = "Creating model definitions..."
+            
+            # Create model test definitions using helper function with ALL required parameters
+            model_definitions = _create_model_test_definition(
+                encoding_dim=base_encoding_dim,
+                hidden_dims=base_hidden_dims,
+                dropout_rates=base_dropout_rates,
+                use_attention=use_attention,
+                residual_blocks=residual_blocks,
+                skip_connection=skip_connection,
+                legacy_mode=legacy_mode,
+                num_models=num_models,
+                diversity_factor=diversity_factor,
+                mixed_precision=mixed_precision,
+                input_dim=test_input_dim,
+                activation=activation,
+                activation_param=activation_param,
+                normalization=normalization,
+                use_batch_norm=use_batch_norm,
+                use_layer_norm=use_layer_norm
+            )
+            
+            total_models = len(model_definitions)
+            bar.text = f"Created {total_models} model definitions"
+            bar()
+            
+            # Close the main progress bar and start model initialization bar
+            bar.text = "Starting model initialization..."
+        
+        # STAGE 5: Model Initialization with detailed progress
+        progress_data['current_stage'] = "Model Initialization"
+        
+        # Track initialization statistics
+        initialization_stats = {
+            'attempted': 0,
+            'successful': [],
+            'failed': [],
+            'skipped': [],
+            'fallback_used': [],
+            'minimal_used': [],
+            'adaptive_used': [],
+            'validation_passed': 0,
+            'errors': [],
+            'config_validation_passed': 0,
+            'architecture_tests_passed': 0,
+            'performance_tests_passed': 0,
+            'memory_optimizations_performed': 0,
+            'detailed_metrics': {}
+        }
+        
+        # Status symbols for visual feedback
+        status_symbols = {
+            'success': '[OK]',
+            'failure': '[FAIL]',
+            'skip': '[SKIP]'
+        }
+        
+        method_symbols = {
+            'primary': '[PRIMARY]',
+            'fallback': '[FALLBACK]',
+            'minimal': '[MINIMAL]',
+            'adaptive': '[ADAPTIVE]'
+        }
+        
+        with alive_bar(total_models, title='Initializing Models\t\t', unit='models') as model_bar:
+            
+            # Initialize each model variant using the helper function
+            for name, definition in model_definitions.items():
+                initialization_stats['attempted'] += 1
+                progress_data['current_model'] = name
+                
+                # Update progress bar with current model info
+                successful_count = len(initialization_stats['successful'])
+                failed_count = len(initialization_stats['failed'])
+                model_bar.text = f"Testing {name}... ({successful_count} passed, {failed_count} failed)"
+                
+                try:
+                    if not silent:
+                        logger.debug(f"Attempting to initialize {name} using helper function")
+                    
+                    # Check if model class exists and is callable
+                    if not definition['class_check']():
+                        error_msg = f"Class not available or not callable"
+                        if not silent:
+                            logger.warning(f"{name}: {error_msg}")
+                        initialization_stats['errors'].append(f"{name}: {error_msg}")
+                        initialization_stats['skipped'].append(name)
+                        model_bar.text = f"{status_symbols['skip']} {name} skipped"
+                        progress_data['failed_models'] += 1
+                        model_bar()
+                        continue
+                    
+                    # Get the model class
+                    model_class = definition['class_getter']()
+                    
+                    # Use model_instantiation_with_validation for initialization
+                    test_model, validation_results, performance_metrics, instantiation_details = model_instantiation_with_validation(
+                        variant_class=model_class,
+                        variant_name=name,
+                        input_dim=test_input_dim,
+                        base_config=definition['primary_config'],
+                        fallback_config=definition['fallback_config'],
+                        minimal_config=definition['minimal_config'],
+                        validation_tests=['basic', 'forward_pass', 'parameters', 'config_methods', 'training_mode'],
+                        comprehensive_validation=True,
+                        hardware_data=hardware_data,
+                        silent=silent,
+                        logger=logger
+                    )
+                    
+                    # Track instantiation method used
+                    instantiation_method = instantiation_details.get('method', 'failed')
+                    progress_data['instantiation_method'] = instantiation_method
+                    
+                    if instantiation_method == 'fallback':
+                        initialization_stats['fallback_used'].append(name)
+                    elif instantiation_method == 'minimal':
+                        initialization_stats['minimal_used'].append(name)
+                    elif instantiation_method == 'adaptive':
+                        initialization_stats['adaptive_used'].append(name)
+                    
+                    # Process instantiation results
+                    if test_model is not None:
+                        try:
+                            # Store detailed metrics
+                            initialization_stats['detailed_metrics'][name] = {
+                                'instantiation_method': instantiation_method,
+                                'performance_metrics': performance_metrics,
+                                'validation_results': validation_results,
+                                'config_used': instantiation_details.get('config_used', {})
+                            }
+                            
+                            # Record validation statistics from helper function
+                            test_results = validation_results.get('test_results', {})
+                            
+                            # Test 1: Configuration validation (handled by helper)
+                            if test_results.get('config_methods') == 'passed':
+                                initialization_stats['config_validation_passed'] += 1
+                            
+                            # Test 2: Basic forward pass (handled by helper)
+                            if test_results.get('forward_pass') == 'passed':
+                                initialization_stats['architecture_tests_passed'] += 1
+                            
+                            # Test 3: Training mode compatibility (handled by helper)
+                            if test_results.get('training_mode') == 'passed':
+                                initialization_stats['performance_tests_passed'] += 1
+                            
+                            # Additional validation
+                            if hasattr(test_model, 'encode') and hasattr(test_model, 'decode'):
+                                try:
+                                    test_model.eval()
+                                    test_input_encode = torch.randn(2, test_input_dim)
+                                    if hasattr(test_model, 'device'):
+                                        test_input_encode = test_input_encode.to(test_model.device)
+                                    
+                                    encoded = test_model.encode(test_input_encode)
+                                    decoded = test_model.decode(encoded)
+                                    
+                                    if decoded.shape == test_input_encode.shape:
+                                        initialization_stats['performance_tests_passed'] += 1
+                                except Exception:
+                                    pass  # Encode/decode is optional
+                            
+                            # Test parameter counting (already done by helper)
+                            total_params = performance_metrics.get('total_parameters', 0)
+                            if total_params > 0:
+                                initialization_stats['performance_tests_passed'] += 1
+                            
+                            # Test device compatibility
+                            device_str = str(test_model.device if hasattr(test_model, 'device') else 'cpu')
+                            if 'cuda' in device_str and not torch.cuda.is_available():
+                                if not silent:
+                                    logger.warning(f"{name}: Model on CUDA device but CUDA not available")
+                            
+                            # Success - register the model variant
+                            MODEL_VARIANTS[name] = model_class
+                            initialization_stats['successful'].append(name)
+                            initialization_stats['validation_passed'] += 1
+                            progress_data['successful_models'] += 1
+                            
+                            method_symbol = method_symbols.get(instantiation_method, '[UNKNOWN]')
+                            model_bar.text = f"{status_symbols['success']} {name} {method_symbol} ({total_params:,} params)"
+                            
+                            if not silent:
+                                logger.info(f"{status_symbols['success']} {name}: Successfully initialized and validated "
+                                          f"({instantiation_method}, {total_params:,} params, "
+                                          f"score: {validation_results.get('overall_score', 0):.1%})")
+                            
+                        except Exception as validation_error:
+                            error_msg = f"Post-instantiation validation failed: {str(validation_error)}"
+                            if not silent:
+                                logger.error(f"{status_symbols['failure']} {name}: {error_msg}")
+                            initialization_stats['errors'].append(f"{name}: {error_msg}")
+                            initialization_stats['failed'].append(name)
+                            progress_data['failed_models'] += 1
+                            model_bar.text = f"{status_symbols['failure']} {name} validation failed"
+                    else:
+                        # Instantiation failed
+                        error_msg = f"Instantiation failed: {', '.join(validation_results.get('errors', []))}"
+                        if not silent:
+                            logger.error(f"{status_symbols['failure']} {name}: {error_msg}")
+                        initialization_stats['errors'].append(f"{name}: {error_msg}")
+                        initialization_stats['failed'].append(name)
+                        progress_data['failed_models'] += 1
+                        model_bar.text = f"{status_symbols['failure']} {name} instantiation failed"
+                    
+                    # Cleanup test model and free memory
+                    if test_model is not None:
+                        del test_model
+                    
+                    # MEMORY OPTIMIZATION CHECKPOINT - Cleanup between model tests
+                    if _optimize_memory_if_needed(
+                        condition=True,  # Always aggressive between models
+                        hardware_data=hardware_data,
+                        aggressive=True,
+                        silent=silent
+                    ):
+                        initialization_stats['memory_optimizations_performed'] += 1
+                    
+                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                    
+                except Exception as e:
+                    if not silent:
+                        logger.error(f"{status_symbols['failure']} Failed to initialize model variant {name}: {e}")
+                    initialization_stats['errors'].append(f"{name}: Unexpected error: {str(e)}")
+                    initialization_stats['failed'].append(name)
+                    progress_data['failed_models'] += 1
+                    model_bar.text = f"{status_symbols['failure']} {name} unexpected error"
+                
+                # Update progress bar
+                model_bar()
+            
+            # Final update for model initialization
+            successful_count = len(initialization_stats['successful'])
+            failed_count = len(initialization_stats['failed'])
+            model_bar.text = f"Models: {successful_count} passed, {failed_count} failed"
+        
+        # STAGE 6: Finalization
+        progress_data['current_stage'] = "Finalizing"
+        
+        with alive_bar(1, title='Finalizing\t\t\t') as final_bar:
+            
+            final_bar.text = "Finalizing setup..."
+            
+            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before post-processing
+            _optimize_memory_if_needed(
+                condition=len(MODEL_VARIANTS) > 2,
+                hardware_data=hardware_data,
+                aggressive=len(MODEL_VARIANTS) > 2,
+                silent=silent
+            )
+            
+            # Log initialization summary
+            total_attempted = initialization_stats['attempted']
+            successful_count = len(initialization_stats['successful'])
+            failed_count = len(initialization_stats['failed'])
+            fallback_count = len(initialization_stats['fallback_used'])
+            minimal_count = len(initialization_stats['minimal_used'])
+            adaptive_count = len(initialization_stats['adaptive_used'])
+            memory_opts = initialization_stats['memory_optimizations_performed']
+            
+            if not silent:
+                logger.info("Model variants initialization completed using helper functions:")
+                logger.info(f"  - Total attempted: {total_attempted}")
+                logger.info(f"  - Successful: {successful_count}")
+                logger.info(f"  - Failed: {failed_count}")
+                logger.info(f"  - Using primary config: {successful_count - fallback_count - minimal_count - adaptive_count}")
+                logger.info(f"  - Using fallback config: {fallback_count}")
+                logger.info(f"  - Using minimal config: {minimal_count}")
+                logger.info(f"  - Using adaptive config: {adaptive_count}")
+                logger.info(f"  - Configuration validation passed: {initialization_stats['config_validation_passed']}")
+                logger.info(f"  - Architecture tests passed: {initialization_stats['architecture_tests_passed']}")
+                logger.info(f"  - Performance tests passed: {initialization_stats['performance_tests_passed']}")
+                logger.info(f"  - Memory optimizations performed: {memory_opts}")
+                
+                # Log detailed metrics for successful models
+                if initialization_stats['detailed_metrics']:
+                    logger.info("  - Detailed metrics available for successful models")
+                    for model_name, metrics in initialization_stats['detailed_metrics'].items():
+                        score = metrics['validation_results'].get('overall_score', 0)
+                        params = metrics['performance_metrics'].get('total_parameters', 0)
+                        logger.debug(f"    {model_name}: {score:.1%} score, {params:,} params, {metrics['instantiation_method']} config")
+                
+                if initialization_stats['successful']:
+                    logger.info(f"  - Available models: {', '.join(initialization_stats['successful'])}")
+                
+                if initialization_stats['failed']:
+                    logger.warning(f"  - Failed models: {', '.join(initialization_stats['failed'])}")
+                
+                # Log critical errors for debugging
+                if initialization_stats['errors']:
+                    logger.warning("Initialization errors encountered (showing first 5):")
+                    for error in initialization_stats['errors'][:5]:
+                        logger.warning(f"  - {error}")
+                    if len(initialization_stats['errors']) > 5:
+                        logger.warning(f"  ... and {len(initialization_stats['errors']) - 5} more errors")
+            
+            # Ensure at least one model variant is available
+            if not MODEL_VARIANTS:
+                error_msg = "No model variants could be initialized"
+                if not silent:
+                    logger.error(error_msg)
+                    logger.error("This indicates a serious configuration or dependency issue")
+                
+                final_bar.text = "No models - emergency fallback"
+                
+                # Emergency fallback using the helper function
+                try:
+                    if SimpleAutoencoder is not None:
+                        emergency_model, emergency_results, emergency_metrics, emergency_details = model_instantiation_with_validation(
+                            variant_class=SimpleAutoencoder,
+                            variant_name='SimpleAutoencoder',
+                            input_dim=10,
+                            base_config=_create_adaptive_config(
+                                model_name='SimpleAutoencoder',
+                                model_class=SimpleAutoencoder,
+                                system_class='emergency',
+                                input_dim=10,
+                                encoding_dim=4,
+                                hidden_dims=[16],
+                                dropout_rates=[0.1],
+                                activation='relu',
+                                activation_param=0.0,
+                                normalization=None,
+                                use_batch_norm=False,
+                                use_layer_norm=False,
+                                skip_connection=False,
+                                residual_blocks=False,
+                                use_attention=False,
+                                legacy_mode=True,
+                                num_models=1,
+                                diversity_factor=0.0,
+                                learning_rate=0.001,
+                                batch_size=32,
+                                mixed_precision=False,
+                                optimizer_type='Adam',
+                                device_setting='cpu',
+                                random_seed=42,
+                                hardware_data=hardware_data
+                            ),
+                            validation_tests=['basic', 'forward_pass'],
+                            comprehensive_validation=False,
+                            hardware_data=hardware_data,
+                            silent=silent,
+                            logger=logger
+                        )
+                        
+                        if emergency_model is not None:
+                            MODEL_VARIANTS['SimpleAutoencoder'] = SimpleAutoencoder
+                            initialization_stats['memory_optimizations_performed'] += 1
+                            initialization_stats['successful'].append('SimpleAutoencoder')
+                            progress_data['successful_models'] += 1
+                            final_bar.text = "Emergency fallback activated"
+                            if not silent:
+                                logger.warning("Emergency fallback: Ultra-minimal SimpleAutoencoder available")
+                        else:
+                            raise RuntimeError("Emergency fallback instantiation failed")
+                    else:
+                        raise RuntimeError(error_msg)
+                        
+                except Exception as e:
+                    if not silent:
+                        logger.critical(f"Emergency fallback failed: {e}")
+                    raise RuntimeError(f"{error_msg}: {str(e)}")
+            
+            # Run post-initialization validation if available
+            try:
+                if not silent:
+                    final_bar.text = "Running final validation"
+                
+                # Use the validation function if available
+                if 'validate_model_variants' in globals():
+                    variant_validation_results = validate_model_variants(logger, silent=silent)
+                    
+                    fully_validated = [
+                        name for name, status in variant_validation_results.items() 
+                        if status == 'available'
+                    ]
+                    
+                    if fully_validated:
+                        if not silent:
+                            logger.info(f"-SUCCESS- Fully validated model variants: {', '.join(fully_validated)}")
+                    else:
+                        if not silent:
+                            logger.warning("-WARN- No model variants passed comprehensive post-validation")
+                    final_bar.text = "Final validation complete"
+                else:
+                    if not silent:
+                        logger.debug("Post-initialization validation function not available")
+                    
+            except Exception as validation_error:
+                if not silent:
+                    logger.error(f"Post-initialization validation failed: {validation_error}")
+            
+            # FINAL MEMORY OPTIMIZATION
+            _optimize_memory_if_needed(
+                condition=True,  # Always aggressive final cleanup
+                hardware_data=hardware_data,
+                aggressive=True,
+                silent=silent
+            )
+            
+            final_bar.text = "Initialization complete!"
+            final_bar()
+    
+    except Exception as e:
+        # If we were using progress bars, they're already closed by the context managers
+        raise e
+    
+    if not silent:
+        logger.info(f"Model variants initialization completed successfully with "
+                   f"{len(MODEL_VARIANTS)} available variants")
+        logger.info(f"Memory optimizations: {initialization_stats['memory_optimizations_performed']} operations performed")
+        
+        # Log final summary of available capabilities
+        capabilities_summary = []
+        for name in MODEL_VARIANTS.keys():
+            if name == 'SimpleAutoencoder':
+                capabilities_summary.append("Simple: Basic encoder-decoder")
+            elif name == 'EnhancedAutoencoder':
+                capabilities_summary.append("Enhanced: Advanced features")
+            elif name == 'AutoencoderEnsemble':
+                capabilities_summary.append("Ensemble: Multiple models")
+        
+        if capabilities_summary:
+            logger.info(f"Available capabilities: {', '.join(capabilities_summary)}")
 
+def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dict[str, str]:
+    """
+    Validation of all registered model variants with testing.
+    
+    This function has been updated to fully leverage the existing helper functions while
+    preserving ALL original validation capabilities including advanced scenario testing,
+    memory analysis, model-specific feature validation, and comprehensive diagnostics.
+    
+    Args:
+        logger: Logger instance for reporting validation results
+        silent: If True, suppress detailed logging messages and progress bars during validation
+        
+    Returns:
+        Dictionary mapping model names to their validation status
+    """
+    variant_status = {}
+    validation_start_time = time.time()
+    
+    # Initialize progress tracking
+    progress_data = {
+        'current_stage': 'Starting...',
+        'models_tested': 0,
+        'models_passed': 0,
+        'models_failed': 0,
+        'current_model': None,
+        'current_test': None
+    }
+    
+    # Phase 1: Check if MODEL_VARIANTS exists and initialize if needed
+    progress_data['current_stage'] = "Initial Setup"
+    
+    with alive_bar(1, title='Validation Setup\t\t') as setup_bar:
+        
+        setup_bar.text = "Checking model variants..."
+        
+        if not MODEL_VARIANTS:
+            if not silent:
+                logger.warning("MODEL_VARIANTS is empty, attempting initialization")
+            try:
+                initialize_model_variants(silent=silent)
+                setup_bar.text = "Model variants initialized"
+            except Exception as e:
+                error_msg = f'initialization_failed: {str(e)}'
+                if not silent:
+                    logger.error(f"Failed to initialize model variants for validation: {e}")
+                setup_bar.text = "Initialization failed"
+                return {'error': error_msg}
+        
+        if not MODEL_VARIANTS:
+            error_msg = 'no_models_available'
+            if not silent:
+                logger.error("No model variants available after initialization attempt")
+            setup_bar.text = "No models available"
+            return {'error': error_msg}
+        
+        setup_bar.text = f"Found {len(MODEL_VARIANTS)} model variants"
+        setup_bar()
+    
+    # Phase 2: Get hardware context for memory optimization
+    progress_data['current_stage'] = "Hardware Check"
+    
+    with alive_bar(1, title='Hardware Check\t\t\t') as hardware_bar:
+        
+        hardware_bar.text = "Checking hardware..."
+        
+        try:
+            hardware_data = check_hardware(include_memory_usage=True)
+            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
+            
+            # Initial memory cleanup for memory-constrained systems
+            _optimize_memory_if_needed(
+                condition=total_ram_gb < 8,
+                hardware_data=hardware_data,
+                aggressive=total_ram_gb < 4,
+                silent=silent
+            )
+            hardware_bar.text = f"Hardware check complete ({total_ram_gb}GB RAM)"
+        except Exception as e:
+            if not silent:
+                logger.debug(f"Hardware detection failed: {e}")
+            hardware_data = {}
+            total_ram_gb = 8.0
+            hardware_bar.text = "Hardware check (using defaults)"
+        
+        hardware_bar()
+    
+    # Phase 3: Load configuration
+    progress_data['current_stage'] = "Configuration Loading"
+    
+    with alive_bar(1, title='Loading Configuration\t\t') as config_bar:
+        
+        config_bar.text = "Loading configuration..."
+        
+        try:
+            current_config = get_current_config()
+            if not isinstance(current_config, dict):
+                current_config = {}
+            
+            model_config = current_config.get('model', {})
+            data_config = current_config.get('data', {})
+            training_config = current_config.get('training', {})
+            hardware_config = current_config.get('hardware', {})
+            system_config = current_config.get('system', {})
+            
+            if not silent:
+                logger.debug("Loaded configuration for validation testing")
+            config_bar.text = "Configuration loaded"
+                
+        except Exception as e:
+            if not silent:
+                logger.warning(f"Could not load configuration for validation, using defaults: {e}")
+            current_config = {}
+            model_config = {}
+            data_config = {}
+            training_config = {}
+            hardware_config = {}
+            system_config = {}
+            config_bar.text = "Configuration (using defaults)"
+        
+        config_bar()
+    
+    # Phase 4: Extract configuration parameters using helper functions
+    progress_data['current_stage'] = "Parameter Extraction"
+    
+    with alive_bar(1, title='Extracting Parameters\t\t') as param_bar:
+        
+        param_bar.text = "Extracting parameters..."
+        
+        test_input_dim = _extract_and_validate_config_param(
+            data_config, 'features', 20, 'FEATURES',
+            lambda x: isinstance(x, int) and x > 0,
+            "input feature dimension", silent
+        )
+        
+        base_encoding_dim = _extract_and_validate_config_param(
+            model_config, 'encoding_dim', 16, 'DEFAULT_ENCODING_DIM',
+            lambda x: isinstance(x, int) and x > 0,
+            "latent encoding dimension", silent
+        )
+        
+        base_hidden_dims = _extract_and_validate_config_param(
+            model_config, 'hidden_dims', [128, 64], 'HIDDEN_LAYER_SIZES',
+            lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(d, int) and d > 0 for d in x),
+            "hidden layer dimensions", silent
+        )
+        
+        base_dropout_rates = _extract_and_validate_config_param(
+            model_config, 'dropout_rates', [0.2, 0.15], 'DROPOUT_RATES',
+            lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in x),
+            "dropout rates", silent
+        )
+        
+        # Additional parameters for validation
+        activation = _extract_and_validate_config_param(
+            model_config, 'activation', 'leaky_relu', 'ACTIVATION',
+            lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
+            "activation function", silent
+        )
+        
+        activation_param = _extract_and_validate_config_param(
+            model_config, 'activation_param', 0.2, 'ACTIVATION_PARAM',
+            lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
+            "activation parameter", silent
+        )
+        
+        normalization = _extract_and_validate_config_param(
+            model_config, 'normalization', 'batch', 'NORMALIZATION',
+            lambda x: x in ['batch', 'layer', 'instance', 'group', 'none', None],
+            "normalization type", silent
+        )
+        
+        use_batch_norm = _extract_and_validate_config_param(
+            model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
+            lambda x: isinstance(x, bool),
+            "batch normalization flag", silent
+        )
+        
+        use_layer_norm = _extract_and_validate_config_param(
+            model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
+            lambda x: isinstance(x, bool),
+            "layer normalization flag", silent
+        )
+        
+        skip_connection = _extract_and_validate_config_param(
+            model_config, 'skip_connection', True, 'SKIP_CONNECTION',
+            lambda x: isinstance(x, bool),
+            "skip connections flag", silent
+        )
+        
+        residual_blocks = _extract_and_validate_config_param(
+            model_config, 'residual_blocks', False, 'RESIDUAL_BLOCKS',
+            lambda x: isinstance(x, bool),
+            "residual blocks flag", silent
+        )
+        
+        use_attention = _extract_and_validate_config_param(
+            model_config, 'use_attention', False, 'USE_ATTENTION',
+            lambda x: isinstance(x, bool),
+            "attention mechanism flag", silent
+        )
+        
+        num_models = _extract_and_validate_config_param(
+            model_config, 'num_models', 3, 'NUM_MODELS',
+            lambda x: isinstance(x, int) and 1 <= x <= 10,
+            "ensemble size", silent
+        )
+        
+        diversity_factor = _extract_and_validate_config_param(
+            model_config, 'diversity_factor', 0.2, 'DIVERSITY_FACTOR',
+            lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
+            "ensemble diversity factor", silent
+        )
+        
+        mixed_precision = _extract_and_validate_config_param(
+            training_config, 'mixed_precision', False, 'MIXED_PRECISION',
+            lambda x: isinstance(x, bool),
+            "mixed precision training", silent
+        )
+        
+        learning_rate = _extract_and_validate_config_param(
+            training_config, 'learning_rate', 0.001, 'LEARNING_RATE',
+            lambda x: isinstance(x, (int, float)) and x > 0,
+            "learning rate", silent
+        )
+        
+        device_setting = _extract_and_validate_config_param(
+            hardware_config, 'device', 'auto', 'DEVICE',
+            lambda x: isinstance(x, str) and x in ['auto', 'cpu', 'cuda'] or x.startswith('cuda:'),
+            "compute device", silent
+        )
+        
+        random_seed = _extract_and_validate_config_param(
+            system_config, 'random_seed', 42, 'RANDOM_SEED',
+            lambda x: isinstance(x, int),
+            "random seed", silent
+        )
+        
+        legacy_mode = _extract_and_validate_config_param(
+            model_config, 'legacy_mode', False, 'LEGACY_MODE',
+            lambda x: isinstance(x, bool),
+            "legacy compatibility mode", silent
+        )
+        
+        # Phase 5: Validate and adjust parameters
+        base_hidden_dims, base_dropout_rates = _validate_and_adjust_parameters(
+            base_hidden_dims, base_dropout_rates, silent
+        )
+        
+        param_bar.text = "Parameters validated"
+        param_bar()
+    
+    # Phase 6: Create model test definitions with ALL required parameters
+    progress_data['current_stage'] = "Creating Test Definitions"
+    
+    with alive_bar(1, title='Creating Test Definitions\t') as def_bar:
+        
+        def_bar.text = "Creating model definitions..."
+        
+        # Create model test definitions with ALL required parameters
+        model_definitions = _create_model_test_definition(
+            encoding_dim=base_encoding_dim,
+            hidden_dims=base_hidden_dims,
+            dropout_rates=base_dropout_rates,
+            use_attention=use_attention,
+            residual_blocks=residual_blocks,
+            skip_connection=skip_connection,
+            legacy_mode=legacy_mode,
+            num_models=num_models,
+            diversity_factor=diversity_factor,
+            mixed_precision=mixed_precision,
+            # ADDED: Pass all the missing parameters that are now required
+            input_dim=test_input_dim,
+            activation=activation,
+            activation_param=activation_param,
+            normalization=normalization,
+            use_batch_norm=use_batch_norm,
+            use_layer_norm=use_layer_norm
+        )
+        
+        # Update configurations with validation-specific input dimension (redundant but safe)
+        for definition in model_definitions.values():
+            for config_type in ['primary_config', 'fallback_config', 'minimal_config']:
+                if config_type in definition:
+                    definition[config_type]['data']['features'] = test_input_dim
+                    definition[config_type]['model']['input_dim'] = test_input_dim
+        
+        def_bar.text = f"Created {len(model_definitions)} test definitions"
+        def_bar()
+    
+    # Define validation test scenarios
+    validation_scenarios = [
+        {
+            'name': 'batch_norm_compatible',
+            'batch_size': 4,
+            'description': 'Batch normalization compatibility test'
+        },
+        {
+            'name': 'single_sample',
+            'batch_size': 1,
+            'description': 'Single sample inference test'
+        },
+        {
+            'name': 'small_batch',
+            'batch_size': 2,
+            'description': 'Small batch processing test'
+        },
+        {
+            'name': 'medium_batch',
+            'batch_size': 8,
+            'description': 'Medium batch processing test'
+        },
+        {
+            'name': 'large_batch',
+            'batch_size': 16,
+            'description': 'Large batch processing test'
+        }
+    ]
+    
+    # Phase 7: Initialize validation statistics
+    validation_stats = {
+        'models_attempted': 0,
+        'models_successful': 0,
+        'models_failed': 0,
+        'models_warning': 0,
+        'total_tests_performed': 0,
+        'total_tests_passed': 0,
+        'total_tests_failed': 0,
+        'configuration_tests_passed': 0,
+        'architecture_tests_passed': 0,
+        'functionality_tests_passed': 0,
+        'performance_tests_passed': 0,
+        'robustness_tests_passed': 0,
+        'memory_tests_passed': 0,
+        'device_compatibility_tests': 0,
+        'memory_optimizations_performed': 0,
+        'detailed_metrics': {},
+        'available_variants': [],
+        'warning_variants': [],
+        'failed_variants': []
+    }
+    
+    # Status symbols for visual feedback
+    status_symbols = {
+        'success': '[OK]',
+        'failure': '[FAIL]',
+        'warning': '[WARN]',
+        'skip': '[SKIP]'
+    }
+    
+    # Phase 8: Validate each model variant
+    progress_data['current_stage'] = "Model Validation"
+    total_models = len(MODEL_VARIANTS)
+    
+    with alive_bar(total_models, title='Validating Models\t') as model_bar:
+        
+        for variant_name, variant_class in MODEL_VARIANTS.items():
+            model_validation_start = time.time()
+            validation_stats['models_attempted'] += 1
+            progress_data['current_model'] = variant_name
+            
+            # Update progress bar with current model info
+            passed_count = validation_stats['models_successful']
+            failed_count = validation_stats['models_failed']
+            model_bar.text = f"Testing {variant_name}... ({passed_count} passed, {failed_count} failed)"
+            
+            # Initialize detailed tracking for this variant
+            overall_status = 'available'
+            variant_details = {
+                'class_name': variant_class.__name__ if variant_class else 'None',
+                'tests_performed': [],
+                'tests_passed': [],
+                'tests_failed': [],
+                'errors': [],
+                'warnings': [],
+                'performance_metrics': {},
+                'compatibility_results': {},
+                'configuration_validation': {},
+                'memory_usage': {}
+            }
+            
+            try:
+                if not silent:
+                    logger.debug(f"Starting validation for {variant_name} using helper functions")
+                
+                # Test 1: Class Availability and Callability
+                if variant_class is None:
+                    variant_status[variant_name] = 'class_not_found'
+                    variant_details['errors'].append('Model class is None')
+                    validation_stats['failed_variants'].append(variant_name)
+                    validation_stats['models_failed'] += 1
+                    model_bar.text = f"{status_symbols['failure']} {variant_name} class not found"
+                    model_bar()
+                    continue
+                
+                if not callable(variant_class):
+                    variant_status[variant_name] = 'class_not_callable'
+                    variant_details['errors'].append('Model class is not callable')
+                    validation_stats['failed_variants'].append(variant_name)
+                    validation_stats['models_failed'] += 1
+                    model_bar.text = f"{status_symbols['failure']} {variant_name} not callable"
+                    model_bar()
+                    continue
+                
+                variant_details['tests_performed'].append('class_availability')
+                variant_details['tests_passed'].append('class_availability')
+                validation_stats['total_tests_performed'] += 1
+                validation_stats['total_tests_passed'] += 1
+                
+                # Get the appropriate test definition for this model
+                if variant_name in model_definitions:
+                    definition = model_definitions[variant_name]
+                else:
+                    # Create adaptive definition for unknown model types
+                    if not silent:
+                        logger.debug(f"Creating adaptive configuration for unknown model type: {variant_name}")
+                    definition = {
+                        'primary_config': _create_adaptive_config(
+                            model_name=variant_name,
+                            model_class=variant_class,
+                            system_class='validation',
+                            input_dim=test_input_dim,
+                            encoding_dim=base_encoding_dim,
+                            hidden_dims=base_hidden_dims,
+                            dropout_rates=base_dropout_rates,
+                            activation=activation,
+                            activation_param=activation_param,
+                            normalization=normalization,
+                            use_batch_norm=use_batch_norm,
+                            use_layer_norm=use_layer_norm,
+                            skip_connection=skip_connection,
+                            residual_blocks=residual_blocks,
+                            use_attention=use_attention,
+                            legacy_mode=legacy_mode,
+                            num_models=num_models,
+                            diversity_factor=diversity_factor,
+                            learning_rate=learning_rate,
+                            batch_size=32,
+                            mixed_precision=mixed_precision,
+                            optimizer_type='AdamW',
+                            device_setting=device_setting,
+                            random_seed=random_seed,
+                            hardware_data=hardware_data
+                        ),
+                        'fallback_config': _create_adaptive_config(
+                            model_name=variant_name,
+                            model_class=variant_class,
+                            system_class='fallback',
+                            input_dim=test_input_dim,
+                            encoding_dim=max(4, base_encoding_dim // 2),
+                            hidden_dims=[64],
+                            dropout_rates=[0.2],
+                            activation='relu',
+                            activation_param=0.0,
+                            normalization=None,
+                            use_batch_norm=False,
+                            use_layer_norm=False,
+                            skip_connection=False,
+                            residual_blocks=False,
+                            use_attention=False,
+                            legacy_mode=True,
+                            num_models=1,
+                            diversity_factor=0.0,
+                            learning_rate=0.001,
+                            batch_size=32,
+                            mixed_precision=False,
+                            optimizer_type='Adam',
+                            device_setting='cpu',
+                            random_seed=42,
+                            hardware_data=hardware_data
+                        ),
+                        'minimal_config': _create_adaptive_config(
+                            model_name=variant_name,
+                            model_class=variant_class,
+                            system_class='minimal',
+                            input_dim=test_input_dim,
+                            encoding_dim=8,
+                            hidden_dims=[32],
+                            dropout_rates=[0.1],
+                            activation='relu',
+                            activation_param=0.0,
+                            normalization=None,
+                            use_batch_norm=False,
+                            use_layer_norm=False,
+                            skip_connection=False,
+                            residual_blocks=False,
+                            use_attention=False,
+                            legacy_mode=True,
+                            num_models=1,
+                            diversity_factor=0.0,
+                            learning_rate=0.001,
+                            batch_size=32,
+                            mixed_precision=False,
+                            optimizer_type='Adam',
+                            device_setting='cpu',
+                            random_seed=42,
+                            hardware_data=hardware_data
+                        )
+                    }
+                
+                # Test 2: Configuration Creation
+                variant_details['configuration_validation']['config_created'] = True
+                variant_details['tests_performed'].append('configuration_creation')
+                variant_details['tests_passed'].append('configuration_creation')
+                validation_stats['total_tests_performed'] += 1
+                validation_stats['total_tests_passed'] += 1
+                validation_stats['configuration_tests_passed'] += 1
+                
+                # Use the model_instantiation_with_validation helper function
+                test_instance, validation_results, performance_metrics, instantiation_details = model_instantiation_with_validation(
+                    variant_class=variant_class,
+                    variant_name=variant_name,
+                    input_dim=test_input_dim,
+                    base_config=definition['primary_config'],
+                    fallback_config=definition.get('fallback_config'),
+                    minimal_config=definition.get('minimal_config'),
+                    validation_tests=['basic', 'forward_pass', 'parameters', 'config_methods', 'training_mode'],
+                    comprehensive_validation=True,
+                    hardware_data=hardware_data,
+                    silent=silent,
+                    logger=logger
+                )
+                
+                # Process results
+                instantiation_method = instantiation_details.get('method', 'failed')
+                validation_score = validation_results.get('overall_score', 0)
+                test_results = validation_results.get('test_results', {})
+                warnings = validation_results.get('warnings', [])
+                errors = validation_results.get('errors', [])
+                
+                # Track instantiation method
+                if instantiation_method == 'fallback':
+                    variant_details['warnings'].append('Used fallback configuration')
+                elif instantiation_method == 'minimal':
+                    variant_details['warnings'].append('Used minimal configuration')
+                elif instantiation_method == 'adaptive':
+                    variant_details['warnings'].append('Used adaptive configuration')
+                
+                # Add all results
+                variant_details['warnings'].extend(warnings)
+                variant_details['errors'].extend(errors)
+                variant_details['performance_metrics'].update(performance_metrics)
+                variant_details['configuration_validation'].update(performance_metrics.get('config_validation', {}))
+                variant_details['instantiation_method'] = instantiation_method
+                
+                # Track models for cleanup
+                test_models = []
+                if test_instance is not None:
+                    test_models.append(test_instance)
+                    
+                    # Record instantiation success
+                    variant_details['tests_performed'].append(f'instantiation_{instantiation_method}')
+                    variant_details['tests_passed'].append(f'instantiation_{instantiation_method}')
+                    validation_stats['total_tests_performed'] += 1
+                    validation_stats['total_tests_passed'] += 1
+                    
+                    # Process validation results
+                    for test_name, test_result in test_results.items():
+                        variant_details['tests_performed'].append(test_name)
+                        if test_result == 'passed':
+                            variant_details['tests_passed'].append(test_name)
+                            validation_stats['total_tests_passed'] += 1
+                        else:
+                            variant_details['tests_failed'].append(test_name)
+                            validation_stats['total_tests_failed'] += 1
+                        validation_stats['total_tests_performed'] += 1
+                    
+                    # Update validation statistics based on helper results
+                    if test_results.get('basic') == 'passed':
+                        validation_stats['architecture_tests_passed'] += 1
+                    if test_results.get('forward_pass') == 'passed':
+                        validation_stats['functionality_tests_passed'] += 1
+                    if test_results.get('parameters') == 'passed':
+                        validation_stats['performance_tests_passed'] += 1
+                    if test_results.get('config_methods') == 'passed':
+                        validation_stats['configuration_tests_passed'] += 1
+                    if test_results.get('comprehensive') == 'passed':
+                        validation_stats['robustness_tests_passed'] += 1
+                    
+                    if not silent:
+                        logger.debug(f"{status_symbols['success']} {variant_name}: Comprehensive validation completed with {instantiation_method} configuration")
+                        
+                else:
+                    # Instantiation failed
+                    variant_details['tests_performed'].append('instantiation')
+                    variant_details['tests_failed'].append('instantiation')
+                    validation_stats['total_tests_performed'] += 1
+                    validation_stats['total_tests_failed'] += 1
+                    validation_stats['models_failed'] += 1
+                    
+                    if not silent:
+                        logger.error(f"{status_symbols['failure']} {variant_name}: Instantiation failed")
+                    model_bar.text = f"{status_symbols['failure']} {variant_name} instantiation failed"
+                    model_bar()
+                    continue
+                
+                # Memory optimization after model instantiation
+                _optimize_memory_if_needed(
+                    condition=True,
+                    hardware_data=hardware_data,
+                    aggressive=total_ram_gb < 4,
+                    silent=silent
+                )
+                
+                # Additional specialized tests beyond the helper function
+                if test_instance is not None:
+                    # Test: Advanced Forward Pass Scenarios
+                    try:
+                        scenario_results = {}
+                        for scenario in validation_scenarios:
+                            try:
+                                test_instance.eval()
+                                batch_size = scenario['batch_size']
+                                
+                                # Adjust for batch norm requirements
+                                test_config = definition['primary_config']
+                                if ((test_config['model'].get('use_batch_norm', False) or 
+                                     test_config['model'].get('normalization') == 'batch') and 
+                                     batch_size == 1):
+                                    batch_size = 2
+                                
+                                test_input = torch.randn(batch_size, test_input_dim)
+                                if hasattr(test_instance, 'device'):
+                                    test_input = test_input.to(test_instance.device)
+                                
+                                with torch.no_grad():
+                                    output = test_instance(test_input)
+                                
+                                expected_shape = (batch_size, test_input_dim)
+                                if output.shape == expected_shape:
+                                    scenario_results[scenario['name']] = 'passed'
+                                else:
+                                    scenario_results[scenario['name']] = 'failed'
+                                    variant_details['warnings'].append(f"Shape mismatch in {scenario['name']}")
+                            except Exception as scenario_error:
+                                scenario_results[scenario['name']] = 'failed'
+                                variant_details['warnings'].append(f"{scenario['name']} failed: {str(scenario_error)}")
+                        
+                        # Record scenario results
+                        passed_scenarios = sum(1 for result in scenario_results.values() if result == 'passed')
+                        total_scenarios = len(scenario_results)
+                        
+                        variant_details['performance_metrics']['scenario_testing'] = scenario_results
+                        variant_details['tests_performed'].append('advanced_scenarios')
+                        
+                        if passed_scenarios == total_scenarios:
+                            variant_details['tests_passed'].append('advanced_scenarios')
+                            validation_stats['total_tests_passed'] += 1
+                        else:
+                            variant_details['tests_failed'].append('advanced_scenarios')
+                            validation_stats['total_tests_failed'] += 1
+                        validation_stats['total_tests_performed'] += 1
+                        
+                    except Exception as scenario_test_error:
+                        variant_details['warnings'].append(f"Advanced scenario testing failed: {str(scenario_test_error)}")
+                    
+                    # Test: Memory Usage Analysis
+                    try:
+                        # Use psutil if available for memory monitoring
+                        try:
+                            process = psutil.Process()
+                            memory_before = process.memory_info().rss
+                            
+                            memory_test_input = torch.randn(32, test_input_dim)
+                            if hasattr(test_instance, 'device'):
+                                memory_test_input = memory_test_input.to(test_instance.device)
+                            
+                            test_instance.eval()
+                            with torch.no_grad():
+                                _ = test_instance(memory_test_input)
+                            
+                            memory_after = process.memory_info().rss
+                            memory_used_mb = (memory_after - memory_before) / (1024 * 1024)
+                            
+                            variant_details['memory_usage']['inference_memory_mb'] = memory_used_mb
+                            
+                            if memory_used_mb > 1000:
+                                variant_details['warnings'].append(f'High memory usage: {memory_used_mb:.1f} MB')
+                            
+                            variant_details['tests_performed'].append('memory_analysis')
+                            variant_details['tests_passed'].append('memory_analysis')
+                            validation_stats['total_tests_performed'] += 1
+                            validation_stats['total_tests_passed'] += 1
+                            validation_stats['memory_tests_passed'] += 1
+                            
+                        except ImportError:
+                            variant_details['memory_usage']['psutil_available'] = False
+                            variant_details['warnings'].append('psutil not available for detailed memory analysis')
+                        
+                    except Exception as memory_error:
+                        variant_details['warnings'].append(f'Memory analysis failed: {str(memory_error)}')
+                    
+                    # Test: Model-Specific Feature Validation
+                    if variant_name == 'EnhancedAutoencoder' and test_instance is not None:
+                        try:
+                            enhanced_features = []
+                            if hasattr(test_instance, 'attention') and test_instance.attention is not None:
+                                enhanced_features.append('attention')
+                            if hasattr(test_instance, 'skip_layers'):
+                                enhanced_features.append('skip_connections')
+                            test_config = definition.get('primary_config', {})
+                            if test_config.get('model', {}).get('residual_blocks', False):
+                                enhanced_features.append('residual_blocks')
+                            
+                            variant_details['compatibility_results']['enhanced_features'] = enhanced_features
+                            variant_details['tests_performed'].append('enhanced_features')
+                            variant_details['tests_passed'].append('enhanced_features')
+                            validation_stats['total_tests_performed'] += 1
+                            validation_stats['total_tests_passed'] += 1
+                            
+                        except Exception as enhanced_error:
+                            variant_details['warnings'].append(f'Enhanced features validation failed: {str(enhanced_error)}')
+                    
+                    elif variant_name == 'AutoencoderEnsemble' and test_instance is not None:
+                        try:
+                            if hasattr(test_instance, 'models'):
+                                ensemble_size = len(test_instance.models)
+                                variant_details['compatibility_results']['ensemble_size'] = ensemble_size
+                                
+                                test_config = definition.get('primary_config', {})
+                                expected_models = test_config.get('model', {}).get('num_models', 3)
+                                
+                                if ensemble_size == 0:
+                                    variant_details['errors'].append('Empty ensemble')
+                                elif ensemble_size < expected_models:
+                                    variant_details['warnings'].append(f'Partial ensemble: {ensemble_size} models')
+                                
+                                variant_details['tests_performed'].append('ensemble_features')
+                                variant_details['tests_passed'].append('ensemble_features')
+                                validation_stats['total_tests_performed'] += 1
+                                validation_stats['total_tests_passed'] += 1
+                            
+                        except Exception as ensemble_error:
+                            variant_details['warnings'].append(f'Ensemble features validation failed: {str(ensemble_error)}')
+                
+                # Calculate model validation time
+                model_validation_time = time.time() - model_validation_start
+                variant_details['performance_metrics']['validation_time_seconds'] = model_validation_time
+                
+                # Determine final status based on results
+                error_count = len(variant_details['errors'])
+                warning_count = len(variant_details['warnings'])
+                tests_passed = len(variant_details['tests_passed'])
+                tests_total = len(variant_details['tests_performed'])
+                
+                if error_count > 0:
+                    overall_status = 'error'
+                    validation_stats['models_failed'] += 1
+                    validation_stats['failed_variants'].append(variant_name)
+                    model_bar.text = f"{status_symbols['failure']} {variant_name} ({error_count} errors)"
+                elif warning_count > 0 or validation_score < 0.8:
+                    overall_status = 'warning'
+                    validation_stats['models_warning'] += 1
+                    validation_stats['warning_variants'].append(variant_name)
+                    model_bar.text = f"{status_symbols['warning']} {variant_name} ({warning_count} warnings)"
+                else:
+                    overall_status = 'available'
+                    validation_stats['models_successful'] += 1
+                    validation_stats['available_variants'].append(variant_name)
+                    model_bar.text = f"{status_symbols['success']} {variant_name} ({tests_passed}/{tests_total} tests)"
+                
+                # Create detailed status message
+                status_msg = overall_status
+                if overall_status != 'available':
+                    details = []
+                    if error_count > 0:
+                        details.append(f"{error_count} errors")
+                    if warning_count > 0:
+                        details.append(f"{warning_count} warnings")
+                    if details:
+                        status_msg += f": {', '.join(details)}"
+                    status_msg += f" ({validation_score:.1%} score)"
+                
+                variant_status[variant_name] = status_msg
+                
+                # Store detailed metrics for reporting
+                validation_stats['detailed_metrics'][variant_name] = {
+                    'instantiation_method': instantiation_method,
+                    'validation_score': validation_score,
+                    'tests_passed': tests_passed,
+                    'tests_total': tests_total,
+                    'performance_metrics': variant_details['performance_metrics'],
+                    'validation_time_seconds': model_validation_time
+                }
+                
+                # Cleanup test model and apply memory optimization
+                if test_instance is not None:
+                    del test_instance
+                    
+                # Memory optimization after each model test
+                if _optimize_memory_if_needed(
+                    condition=True,
+                    hardware_data=hardware_data,
+                    aggressive=total_ram_gb < 4,
+                    silent=silent
+                ):
+                    validation_stats['memory_optimizations_performed'] += 1
+                
+                torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                
+                if not silent:
+                    logger.info(f"Model {variant_name} validation completed: {status_msg} "
+                               f"({tests_passed}/{tests_total} tests passed, "
+                               f"{instantiation_method} config, "
+                               f"{model_validation_time:.2f}s)")
+                
+            except Exception as e:
+                error_msg = f'validation_error: {str(e)}'
+                variant_status[variant_name] = error_msg
+                validation_stats['failed_variants'].append(variant_name)
+                validation_stats['models_failed'] += 1
+                model_bar.text = f"{status_symbols['failure']} {variant_name} unexpected error"
+                
+                if not silent:
+                    logger.error(f"Model variant {variant_name} validation failed with unexpected error: {e}")
+            
+            finally:
+                # Store detailed results
+                validation_stats[variant_name] = variant_details
+                # Additional cleanup
+                try:
+                    if 'test_models' in locals():
+                        for model in test_models:
+                            del model
+                    if 'test_instance' in locals():
+                        del test_instance
+                    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+                except Exception as cleanup_error:
+                    if not silent:
+                        logger.debug(f"Cleanup warning for {variant_name}: {cleanup_error}")
+            
+            # Update progress bar
+            model_bar()
+        
+        # Final update for model validation
+        passed_count = validation_stats['models_successful']
+        failed_count = validation_stats['models_failed']
+        model_bar.text = f"Validation complete: {passed_count} passed, {failed_count} failed"
+    
+    # Phase 9: Finalization
+    progress_data['current_stage'] = "Finalizing"
+    
+    with alive_bar(1, title='Finalizing\t\t') as final_bar:
+        
+        final_bar.text = "Generating summary..."
+        
+        total_validation_time = time.time() - validation_start_time
+        
+        # Final memory cleanup
+        _optimize_memory_if_needed(
+            condition=True,
+            hardware_data=hardware_data,
+            aggressive=True,
+            silent=silent
+        )
+        
+        # Phase 10: Log validation summary
+        if not silent:
+            logger.info("="*70)
+            logger.info("MODEL VARIANTS VALIDATION SUMMARY")
+            logger.info("="*70)
+            logger.info(f"Total Validation Time: {total_validation_time:.2f} seconds")
+            logger.info(f"Models Attempted: {validation_stats['models_attempted']}")
+            logger.info(f"Models Available: {validation_stats['models_successful']}")
+            logger.info(f"Models with Warnings: {validation_stats['models_warning']}")
+            logger.info(f"Models Failed: {validation_stats['models_failed']}")
+            logger.info("-"*70)
+            logger.info(f"Total Tests Performed: {validation_stats['total_tests_performed']}")
+            logger.info(f"Total Tests Passed: {validation_stats['total_tests_passed']}")
+            logger.info(f"Total Tests Failed: {validation_stats['total_tests_failed']}")
+            success_rate = validation_stats['total_tests_passed']/max(1, validation_stats['total_tests_performed'])*100
+            logger.info(f"Test Success Rate: {success_rate:.1f}%")
+            logger.info("-"*70)
+            logger.info(f"Configuration Tests Passed: {validation_stats['configuration_tests_passed']}")
+            logger.info(f"Architecture Tests Passed: {validation_stats['architecture_tests_passed']}")
+            logger.info(f"Functionality Tests Passed: {validation_stats['functionality_tests_passed']}")
+            logger.info(f"Performance Tests Passed: {validation_stats['performance_tests_passed']}")
+            logger.info(f"Robustness Tests Passed: {validation_stats['robustness_tests_passed']}")
+            logger.info(f"Memory Tests Passed: {validation_stats['memory_tests_passed']}")
+            logger.info(f"Device Compatibility Tests: {validation_stats['device_compatibility_tests']}")
+            logger.info(f"Memory Optimizations Performed: {validation_stats['memory_optimizations_performed']}")
+            
+            # Log detailed metrics
+            if validation_stats['detailed_metrics']:
+                logger.info("-"*70)
+                logger.info("DETAILED METRICS:")
+                for model_name, metrics in validation_stats['detailed_metrics'].items():
+                    score = metrics['validation_score']
+                    tests_passed = metrics['tests_passed']
+                    tests_total = metrics['tests_total']
+                    method = metrics['instantiation_method']
+                    logger.info(f"  {model_name}: {score:.1%} score, {tests_passed}/{tests_total} tests, {method} config")
+            
+            # Log individual model results
+            logger.info("="*70)
+            for model_name, status in variant_status.items():
+                status_icon = "OK" if status == "available" else "WARN" if status.startswith("warning") else "FAIL"
+                logger.info(f"{status_icon} {model_name}: {status}")
+            
+            # Log recommendations
+            logger.info("="*70)
+            available_models = [name for name, status in variant_status.items() if status == 'available']
+            warning_models = [name for name, status in variant_status.items() if status.startswith('warning')]
+            failed_models = [name for name, status in variant_status.items() if status.startswith('error') or 'failed' in status]
+            
+            if available_models:
+                logger.info(f"RECOMMENDED MODELS: {', '.join(available_models)}")
+            if warning_models:
+                logger.info(f"MODELS WITH WARNINGS: {', '.join(warning_models)}")
+            if failed_models:
+                logger.info(f"FAILED MODELS: {', '.join(failed_models)}")
+            
+            logger.info("="*70)
+        
+        final_bar.text = "Validation complete!"
+        final_bar()
+    
+    return variant_status
 
 def display_model_initialization_summary(
     model_instance,
@@ -37598,17 +37583,17 @@ def get_autocast_context(device, mixed_precision=True, enabled=True):
     if device.type == 'cuda':
         try:
             # Try new API first (PyTorch 1.10+)
-            return torch.cuda.amp.autocast(enabled=True)
+            return torch.amp.autocast(device_type=device, enabled=True)
         except TypeError:
             try:
                 # Fallback for older PyTorch versions
-                return torch.cuda.amp.autocast()
+                return torch.amp.autocast()
             except Exception:
                 return nullcontext()
     else:
         try:
             # Try CPU autocast (PyTorch 1.10+)
-            return torch.cpu.amp.autocast(enabled=True)
+            return torch.amp.autocast(device_type=device, enabled=True)
         except (TypeError, AttributeError):
             # CPU autocast not available or different API
             return nullcontext()
@@ -37998,7 +37983,6 @@ def load_and_validate_data(
                     # Use default path
                     data_path = DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"
                 else:
-                    #data_path = Path(data_path) / "preprocessed_dataset.csv"
                     data_path = Path(data_path)
             else:
                 data_path = Path(data_path)
@@ -38408,17 +38392,19 @@ def load_and_validate_data(
             loading_stats['label_distribution'] = label_counts
             
             # Check for class balance issues
-            if class_balance_config.get('min_class_samples', 10):
+            if class_balance_config.setdefault('min_class_samples', 10):
                 min_class_size = min(label_counts.values())
+                min_class_samples_threshold = class_balance_config.setdefault('min_class_samples', 10)
                 if min_class_size < class_balance_config['min_class_samples']:
                     warning_msg = f"Smallest class has only {min_class_size} samples"
                     if not silent_mode:
                         logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
             
-            if class_balance_config.get('max_class_ratio', 10):
+            if class_balance_config.setdefault('max_class_ratio', 10):
                 max_class_size = max(label_counts.values())
                 min_class_size = min(label_counts.values())
+                max_class_ratio_threshold = class_balance_config.setdefault('max_class_ratio', 10)
                 class_ratio = max_class_size / min_class_size if min_class_size > 0 else float('inf')
                 if class_ratio > class_balance_config['max_class_ratio']:
                     warning_msg = f"Class imbalance ratio: {class_ratio:.2f}"
@@ -42368,1257 +42354,6 @@ def create_enhanced_collate_fn(config=None, dtype=torch.float32, error_handling=
         dtype=dtype,
         error_handling=error_handling
     )
-
-
-
-def load_and_validate_data(
-    # Core Data Parameters
-    data_path: Optional[Union[str, Path]] = None,
-    artifacts_path: Optional[Union[str, Path]] = None,
-    config: Optional[Dict[str, Any]] = None,
-    
-    # Data Loading Parameters
-    use_real_data: Optional[bool] = None,
-    data_format: Optional[str] = None,
-    encoding: Optional[str] = None,
-    delimiter: Optional[str] = None,
-    header: Optional[Union[int, str]] = None,
-    index_col: Optional[Union[int, str]] = None,
-    skiprows: Optional[Union[int, List[int]]] = None,
-    nrows: Optional[int] = None,
-    chunk_size: Optional[int] = None,
-    low_memory: Optional[bool] = None,
-    memory_map: Optional[bool] = None,
-    
-    # Data Validation Parameters
-    min_samples: Optional[int] = None,
-    max_samples: Optional[int] = None,
-    min_features: Optional[int] = None,
-    max_features: Optional[int] = None,
-    required_columns: Optional[List[str]] = None,
-    label_column: Optional[str] = None,
-    feature_columns: Optional[List[str]] = None,
-    exclude_columns: Optional[List[str]] = None,
-    
-    # Data Processing Parameters
-    normalization: Optional[str] = None,
-    scaling_method: Optional[str] = None,
-    handle_missing: Optional[str] = None,
-    missing_value_strategy: Optional[str] = None,
-    outlier_detection: Optional[bool] = None,
-    outlier_method: Optional[str] = None,
-    outlier_threshold: Optional[float] = None,
-    
-    # Data Splitting Parameters
-    train_split: Optional[float] = None,
-    validation_split: Optional[float] = None,
-    test_split: Optional[float] = None,
-    stratified_split: Optional[bool] = None,
-    shuffle: Optional[bool] = None,
-    random_state: Optional[int] = None,
-    
-    # Class Balance Parameters
-    balance_classes: Optional[bool] = None,
-    balance_method: Optional[str] = None,
-    min_class_samples: Optional[int] = None,
-    max_class_ratio: Optional[float] = None,
-    
-    # Feature Engineering Parameters
-    feature_selection: Optional[bool] = None,
-    feature_selection_method: Optional[str] = None,
-    n_features_select: Optional[int] = None,
-    correlation_threshold: Optional[float] = None,
-    variance_threshold: Optional[float] = None,
-    
-    # Synthetic Data Parameters
-    synthetic_normal_samples: Optional[int] = None,
-    synthetic_attack_samples: Optional[int] = None,
-    synthetic_generation_method: Optional[str] = None,
-    synthetic_noise_level: Optional[float] = None,
-    synthetic_seed: Optional[int] = None,
-    
-    # Performance Parameters
-    parallel_loading: Optional[bool] = None,
-    n_jobs: Optional[int] = None,
-    batch_processing: Optional[bool] = None,
-    memory_efficient: Optional[bool] = None,
-    cache_data: Optional[bool] = None,
-    
-    # Security Parameters
-    validate_data_integrity: Optional[bool] = None,
-    check_data_corruption: Optional[bool] = None,
-    anomaly_detection_threshold: Optional[float] = None,
-    security_validation: Optional[bool] = None,
-    
-    # Monitoring Parameters
-    verbose: Optional[bool] = None,
-    log_level: Optional[str] = None,
-    progress_bar: Optional[bool] = None,
-    silent: Optional[bool] = None,
-    save_statistics: Optional[bool] = True,
-    statistics_path: Optional[Union[str, Path]] = None,
-    
-    # Compatibility Parameters
-    legacy_format: Optional[bool] = None,
-    backward_compatibility: Optional[bool] = None,
-    version_check: Optional[bool] = None,
-    
-    # Advanced Parameters
-    data_quality_checks: Optional[bool] = None,
-    statistical_validation: Optional[bool] = None,
-    distribution_checks: Optional[bool] = None,
-    cross_validation_ready: Optional[bool] = None,
-    
-    # Experimental Parameters
-    experimental_features: Optional[bool] = None,
-    advanced_preprocessing: Optional[bool] = None,
-
-    # Run Tracking Parameters
-    run_id: Optional[str] = None,
-    run_number: Optional[int] = None,
-    run_specific_dirs: Optional[Dict[str, Path]] = None,
-    use_run_tracking: Optional[bool] = None,
-    
-    **kwargs
-) -> Dict[str, Union[np.ndarray, Dict[str, Any]]]:
-
-    # Start timing
-    start_time = datetime.now()
-    
-    # Initialize configuration with defaults
-    if config is None:
-        try:
-            config = get_current_config() if 'get_current_config' in globals() else {}
-        except Exception:
-            config = {}
-    
-    # Apply all parameters to configuration
-    final_config = {}
-    
-    # Merge with existing config
-    final_config.update(config)
-    
-    # Apply individual parameters
-    params = locals().copy()
-    params.update(kwargs)
-    
-    # Remove non-parameter items
-    params_to_remove = {
-        'config', 'kwargs', 'start_time', 'datetime', 'traceback', 'hashlib', 'train_test_split', 'StratifiedShuffleSplit', 'StandardScaler', 'MinMaxScaler', 'RobustScaler',
-        'QuantileTransformer','SelectKBest', 'f_classif', 'VarianceThreshold', 'SimpleImputer', 'KNNImputer', 'IsolationForest', 'stats', 'joblib', 'os', 'pd', 'np'
-    }
-    
-    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
-    
-    # Organize parameters into logical sections
-    param_sections = {
-        'data_loading': [
-            'use_real_data', 'data_format', 'encoding', 'delimiter', 'header', 'index_col', 'skiprows', 'nrows', 'chunk_size', 'low_memory', 'memory_map'
-        ],
-        'data_validation': [
-            'min_samples', 'max_samples', 'min_features', 'max_features', 'required_columns', 'label_column', 'feature_columns', 'exclude_columns'
-        ],
-        'data_processing': [
-            'normalization', 'scaling_method', 'handle_missing', 'missing_value_strategy', 'outlier_detection', 'outlier_method', 'outlier_threshold'
-        ],
-        'data_splitting': [
-            'train_split', 'validation_split', 'test_split', 'stratified_split', 'shuffle', 'random_state'
-        ],
-        'class_balance': [
-            'balance_classes', 'balance_method', 'min_class_samples', 'max_class_ratio'
-        ],
-        'feature_engineering': [
-            'feature_selection', 'feature_selection_method', 'n_features_select', 'correlation_threshold', 'variance_threshold'
-        ],
-        'synthetic_data': [
-            'synthetic_normal_samples', 'synthetic_attack_samples', 'synthetic_generation_method', 'synthetic_noise_level', 'synthetic_seed'
-        ],
-        'performance': [
-            'parallel_loading', 'n_jobs', 'batch_processing', 'memory_efficient', 'cache_data'
-        ],
-        'security': [
-            'validate_data_integrity', 'check_data_corruption', 'anomaly_detection_threshold', 'security_validation'
-        ],
-        'monitoring': [
-            'verbose', 'log_level', 'progress_bar', 'silent', 'save_statistics', 'statistics_path'
-        ],
-        'compatibility': [
-            'legacy_format', 'backward_compatibility', 'version_check'
-        ],
-        'advanced': [
-            'data_quality_checks', 'statistical_validation', 'distribution_checks', 'cross_validation_ready', 'experimental_features', 'advanced_preprocessing'
-        ],
-        'run_tracking': [
-            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
-        ]
-    }
-    
-    # Apply parameters to appropriate sections
-    for section, param_list in param_sections.items():
-        section_config = final_config.setdefault(section, {})
-        for param in param_list:
-            if param in cleaned_params:
-                section_config[param] = cleaned_params[param]
-    
-    # Set up defaults
-    data_loading_config = final_config.setdefault('data_loading', {})
-    data_validation_config = final_config.setdefault('data_validation', {})
-    data_processing_config = final_config.setdefault('data_processing', {})
-    data_splitting_config = final_config.setdefault('data_splitting', {})
-    class_balance_config = final_config.setdefault('class_balance', {})
-    feature_engineering_config = final_config.setdefault('feature_engineering', {})
-    synthetic_data_config = final_config.setdefault('synthetic_data', {})
-    performance_config = final_config.setdefault('performance', {})
-    security_config = final_config.setdefault('security', {})
-    monitoring_config = final_config.setdefault('monitoring', {})
-    compatibility_config = final_config.setdefault('compatibility', {})
-    advanced_config = final_config.setdefault('advanced', {})
-    run_tracking_config = final_config.setdefault('run_tracking', {})
-    
-    # Handle silent mode - override verbose and progress_bar if silent is True
-    silent_mode = monitoring_config.get('silent', False)
-    if silent_mode:
-        # Force silent mode behavior
-        monitoring_config['verbose'] = False
-        monitoring_config['progress_bar'] = False
-    
-    # Data Loading parameters
-    use_real_data = data_loading_config.setdefault('use_real_data', True)
-    data_format = data_loading_config.setdefault('data_format', 'csv')
-    encoding = data_loading_config.setdefault('encoding', 'utf-8')
-    delimiter = data_loading_config.setdefault('delimiter', ',')
-    header = data_loading_config.setdefault('header', 0)
-    low_memory = data_loading_config.setdefault('low_memory', True)
-    
-    # Validation parameters
-    min_features = data_validation_config.setdefault('min_features', MIN_FEATURES)
-    min_samples = data_validation_config.setdefault('min_samples', 100)
-    label_column = data_validation_config.setdefault('label_column', 'Label')
-    required_columns = data_validation_config.setdefault('required_columns', [label_column])
-    
-    # Processing parameters
-    normalization = data_processing_config.setdefault('normalization', 'standard')
-    handle_missing = data_processing_config.setdefault('handle_missing', 'drop')
-    outlier_detection = data_processing_config.setdefault('outlier_detection', False)
-    outlier_method = data_processing_config.setdefault('outlier_method', 'iqr')
-    outlier_threshold = data_processing_config.setdefault('outlier_threshold', 1.5)
-    
-    # Splitting parameters
-    validation_split = data_splitting_config.setdefault('validation_split', 0.2)
-    test_split = data_splitting_config.setdefault('test_split', 0.2)
-    stratified_split = data_splitting_config.setdefault('stratified_split', True)
-    shuffle_data = data_splitting_config.setdefault('shuffle', True)
-    random_state = data_splitting_config.setdefault('random_state', 42)
-    
-    # Performance parameters
-    parallel_loading = performance_config.setdefault('parallel_loading', False)
-    n_jobs = performance_config.setdefault('n_jobs', -1)
-    memory_efficient = performance_config.setdefault('memory_efficient', True)
-    cache_data = performance_config.setdefault('cache_data', False)
-    
-    # Security parameters
-    validate_data_integrity = security_config.setdefault('validate_data_integrity', True)
-    check_data_corruption = security_config.setdefault('check_data_corruption', False)
-    
-    # Monitoring parameters
-    verbose = monitoring_config.setdefault('verbose', False)
-    progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
-    save_statistics = monitoring_config.setdefault('save_statistics', True)
-    statistics_path = monitoring_config.get('statistics_path', None)
-    
-    # Advanced parameters
-    data_quality_checks = advanced_config.setdefault('data_quality_checks', True)
-    statistical_validation = advanced_config.setdefault('statistical_validation', False)
-
-    # Extract run tracking parameters
-    run_id = run_tracking_config.get('run_id', run_id)
-    run_number = run_tracking_config.get('run_number', run_number)
-    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
-    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
-
-    if statistics_path is None and save_statistics:
-        if use_run_tracking and run_id is not None:
-            if 'metrics' in run_specific_dirs:
-                statistics_path = run_specific_dirs['metrics'] / f"data_loading_statistics.json"
-            else:
-                statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
-        else:
-            statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
-    
-    # Convert to Path object if necessary
-    if statistics_path is not None:
-        statistics_path = Path(statistics_path)
-    
-    # Set up logging level based on silent mode
-    if not silent_mode and verbose:
-        original_level = logger.level
-        logger.setLevel(logging.INFO)
-    
-    if not silent_mode:
-        logger.info("Starting data loading and validation")
-    
-    # Initialize progress tracking
-    progress_data = {
-        'current_stage': 'Starting...',
-        'current_substage': None,
-        'rows_processed': 0,
-        'features_processed': 0,
-        'data_quality_score': 0.0,
-        'validation_passed': 0,
-        'validation_failed': 0
-    }
-    
-    # Initialize statistics
-    loading_stats = {
-        'start_time': start_time.isoformat(),
-        'data_path': None,
-        'artifacts_path': None,
-        'use_real_data': use_real_data,
-        'config_applied': final_config,
-        'stages_completed': [],
-        'errors_encountered': [],
-        'warnings_encountered': [],
-        'performance_metrics': {}
-    }
-    
-    try:
-        # Calculate total stages for progress tracking
-        total_stages = 8  # Configuration, Paths, Loading, Validation, Processing, Splitting, Statistics, Finalization
-        
-        # Use progress bar only if not in silent mode and progress_bar is True
-        if not silent_mode and progress_bar:
-            print(Fore.GREEN + Style.BRIGHT + "\nStarting data loading and validation..." + Style.RESET_ALL)
-            bar_context = alive_bar(total_stages, title='Data Loading & Validation\t', unit='stages')
-        else:
-            # Create a dummy context manager that does nothing
-            class DummyBar:
-                def __enter__(self):
-                    return self
-                def __exit__(self, *args):
-                    pass
-                def __call__(self):
-                    pass
-                def __setattr__(self, name, value):
-                    pass
-            bar_context = DummyBar()
-        
-        with bar_context as main_bar:
-            
-            # STAGE 1: Configuration and Setup
-            progress_data['current_stage'] = "Configuration Setup"
-            if not silent_mode:
-                main_bar.text = "Setting up configuration and parameters..."
-            
-            # Determine paths with multiple fallback strategies
-            if data_path is None:
-                # Try to get from config
-                data_path = final_config.get('data', {}).get('data_path') or final_config.get('system', {}).get('data_dir')
-                
-                if data_path is None:
-                    # Use default path
-                    data_path = DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"
-                else:
-                    #data_path = Path(data_path) / "preprocessed_dataset.csv"
-                    data_path = Path(data_path)
-            else:
-                data_path = Path(data_path)
-            
-            if artifacts_path is None:
-                # Try to get from config or derive from data path
-                artifacts_path = final_config.get('data', {}).get('artifacts_path')
-                if artifacts_path is None:
-                    artifacts_path = data_path.parent / "preprocessing_artifacts.pkl"
-                else:
-                    artifacts_path = Path(artifacts_path)
-            else:
-                artifacts_path = Path(artifacts_path)
-            
-            loading_stats['data_path'] = str(data_path)
-            loading_stats['artifacts_path'] = str(artifacts_path)
-            
-            if not silent_mode:
-                logger.info(f"Data path: {data_path}")
-                logger.info(f"Artifacts path: {artifacts_path}")
-            
-            if not silent_mode:
-                main_bar.text = "Configuration complete"
-            loading_stats['stages_completed'].append('configuration')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 2: Path Validation and File Discovery
-            progress_data['current_stage'] = "Path Validation"
-            if not silent_mode:
-                main_bar.text = "Validating paths and discovering files..."
-            
-            # Validate file existence with helpful error messages
-            if use_real_data:
-                if not data_path.exists():
-                    # Try alternative locations
-                    alternative_paths = [
-                        data_path.parent / "dataset.csv",
-                        data_path.parent / "data.csv",
-                        Path.cwd() / "data" / data_path.name,
-                        Path.cwd() / data_path.name
-                    ]
-                    
-                    found_alternative = None
-                    for alt_path in alternative_paths:
-                        if alt_path.exists():
-                            found_alternative = alt_path
-                            break
-                    
-                    if found_alternative:
-                        if not silent_mode:
-                            logger.warning(f"Data file not found at {data_path}, using {found_alternative}")
-                        data_path = found_alternative
-                        loading_stats['data_path'] = str(data_path)
-                        loading_stats['warnings_encountered'].append(f"Used alternative path: {found_alternative}")
-                    else:
-                        error_msg = f"Data file not found: {data_path}\nTried alternatives: {alternative_paths}"
-                        loading_stats['errors_encountered'].append(error_msg)
-                        raise FileNotFoundError(error_msg)
-                
-                if not artifacts_path.exists() and normalization != 'none':
-                    if not silent_mode:
-                        logger.warning(f"Artifacts file not found: {artifacts_path}")
-                        logger.info("Will attempt to load data without preprocessing artifacts")
-                    loading_stats['warnings_encountered'].append("Artifacts file not found")
-            
-            if not silent_mode:
-                main_bar.text = "Path validation complete"
-            loading_stats['stages_completed'].append('path_validation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 3: Data Loading
-            progress_data['current_stage'] = "Data Loading"
-            if not silent_mode:
-                main_bar.text = "Loading data from source..."
-            
-            # Load data based on format and parameters
-            if not silent_mode:
-                logger.info(f"Loading data in {data_format} format")
-            
-            if use_real_data:
-                try:
-                    # Load data based on format
-                    if data_format.lower() == 'csv':
-                        load_params = {
-                            'encoding': encoding,
-                            'sep': delimiter,
-                            'header': header,
-                            'low_memory': low_memory
-                        }
-                        
-                        if index_col is not None:
-                            load_params['index_col'] = index_col
-                        if skiprows is not None:
-                            load_params['skiprows'] = skiprows
-                        if nrows is not None:
-                            load_params['nrows'] = nrows
-                        
-                        if chunk_size is not None:
-                            # Handle large files with chunking
-                            if not silent_mode:
-                                logger.info(f"Loading data in chunks of size {chunk_size}")
-                            chunk_iter = pd.read_csv(data_path, chunksize=chunk_size, **load_params)
-                            df_chunks = []
-                            
-                            # Show chunk loading progress only if not in silent mode and progress_bar is True
-                            if not silent_mode and progress_bar:
-                                total_chunks = (os.path.getsize(data_path) // (chunk_size * 1000)) + 1
-                                with alive_bar(total_chunks, title='Loading Chunks\t\t', unit='chunks') as chunk_bar:
-                                    for i, chunk in enumerate(chunk_iter):
-                                        df_chunks.append(chunk)
-                                        chunk_bar.text = f"Chunk {i+1}: {len(chunk)} rows"
-                                        chunk_bar()
-                                        if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
-                                            break
-                            else:
-                                # Silent mode or no progress bar - just load chunks
-                                for i, chunk in enumerate(chunk_iter):
-                                    df_chunks.append(chunk)
-                                    if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
-                                        break
-                            
-                            df = pd.concat(df_chunks, ignore_index=True)
-                        else:
-                            df = pd.read_csv(data_path, **load_params)
-                            
-                    elif data_format.lower() == 'parquet':
-                        df = pd.read_parquet(data_path)
-                    elif data_format.lower() == 'json':
-                        df = pd.read_json(data_path, encoding=encoding)
-                    elif data_format.lower() == 'pickle':
-                        df = pd.read_pickle(data_path)
-                    else:
-                        raise ValueError(f"Unsupported data format: {data_format}")
-                    
-                    loading_stats['rows_loaded'] = len(df)
-                    loading_stats['columns_loaded'] = len(df.columns)
-                    progress_data['rows_processed'] = len(df)
-                    progress_data['features_processed'] = len(df.columns)
-                    
-                    if not silent_mode:
-                        logger.info(f"Loaded {len(df)} rows and {len(df.columns)} columns")
-                    
-                except Exception as e:
-                    if not silent_mode:
-                        logger.error(f"Failed to load data from {data_path}: {e}")
-                    loading_stats['errors_encountered'].append(f"Data loading failed: {str(e)}")
-                    
-                    if not use_real_data:
-                        if not silent_mode:
-                            logger.info("Falling back to synthetic data generation")
-                    else:
-                        raise RuntimeError(f"Data loading failed: {str(e)}")
-            
-            # Generate synthetic data if needed
-            if not use_real_data or (use_real_data and 'df' not in locals()):
-                progress_data['current_substage'] = "Synthetic Data Generation"
-                if not silent_mode:
-                    main_bar.text = "Generating synthetic data..."
-                
-                if not silent_mode:
-                    logger.info("Generating synthetic data")
-                
-                normal_samples = synthetic_data_config.get('synthetic_normal_samples', 8000)
-                attack_samples = synthetic_data_config.get('synthetic_attack_samples', 2000)
-                n_features = min_features
-                generation_method = synthetic_data_config.get('synthetic_generation_method', 'gaussian')
-                noise_level = synthetic_data_config.get('synthetic_noise_level', 0.1)
-                synthetic_seed = synthetic_data_config.get('synthetic_seed', random_state)
-                
-                np.random.seed(synthetic_seed)
-                
-                if generation_method == 'gaussian':
-                    # Generate normal data
-                    X_normal = np.random.normal(0, 1, (normal_samples, n_features))
-                    
-                    # Generate attack data with different distribution
-                    X_attack = np.random.normal(2, 1.5, (attack_samples, n_features))
-                    X_attack += np.random.normal(0, noise_level, X_attack.shape)
-                    
-                elif generation_method == 'mixed':
-                    # More complex synthetic data
-                    X_normal = np.random.multivariate_normal(
-                        np.zeros(n_features), 
-                        np.eye(n_features), 
-                        normal_samples
-                    )
-                    
-                    # Create correlated attack features
-                    attack_mean = np.random.uniform(-2, 2, n_features)
-                    attack_cov = np.eye(n_features) * np.random.uniform(0.5, 2, n_features)
-                    X_attack = np.random.multivariate_normal(attack_mean, attack_cov, attack_samples)
-                    
-                else:
-                    raise ValueError(f"Unknown synthetic generation method: {generation_method}")
-                
-                # Combine data
-                X = np.vstack([X_normal, X_attack])
-                y = np.hstack([np.zeros(normal_samples), np.ones(attack_samples)])
-                
-                # Create DataFrame
-                feature_names = [f'feature_{i}' for i in range(n_features)]
-                df = pd.DataFrame(X, columns=feature_names)
-                df[label_column] = y
-                
-                loading_stats.update({
-                    'synthetic_data_generated': True,
-                    'normal_samples': normal_samples,
-                    'attack_samples': attack_samples,
-                    'generation_method': generation_method,
-                    'noise_level': noise_level
-                })
-                
-                progress_data['rows_processed'] = len(df)
-                progress_data['features_processed'] = len(df.columns)
-                
-                if not silent_mode:
-                    logger.info(f"Generated synthetic data: {normal_samples} normal, {attack_samples} attack samples")
-            
-            if not silent_mode:
-                main_bar.text = "Data loading complete"
-            loading_stats['stages_completed'].append('data_loading')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 4: Data Validation
-            progress_data['current_stage'] = "Data Validation"
-            if not silent_mode:
-                main_bar.text = "Validating data structure and quality..."
-            
-            if not silent_mode:
-                logger.info("Performing data validation")
-            
-            if df is None or df.empty:
-                error_msg = "No data loaded or generated"
-                loading_stats['errors_encountered'].append(error_msg)
-                raise ValueError(error_msg)
-            
-            # Check required columns
-            missing_columns = [col for col in required_columns if col not in df.columns]
-            if missing_columns:
-                error_msg = f"Missing required columns: {missing_columns}"
-                loading_stats['errors_encountered'].append(error_msg)
-                raise ValueError(error_msg)
-            
-            # Validate label column
-            if label_column not in df.columns:
-                error_msg = f"Label column '{label_column}' not found in dataset"
-                loading_stats['errors_encountered'].append(error_msg)
-                raise ValueError(error_msg)
-            
-            # Check data types and handle mixed types
-            numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
-            if label_column in numeric_columns:
-                numeric_columns.remove(label_column)
-            
-            if len(numeric_columns) < min_features:
-                if not silent_mode:
-                    logger.warning(f"Only {len(numeric_columns)} numeric features found, minimum is {min_features}")
-                loading_stats['warnings_encountered'].append(f"Low numeric features: {len(numeric_columns)}")
-                
-                # Try to convert non-numeric columns
-                conversion_attempts = 0
-                for col in df.columns:
-                    if col != label_column and col not in numeric_columns:
-                        try:
-                            df[col] = pd.to_numeric(df[col], errors='coerce')
-                            if not df[col].isna().all():
-                                numeric_columns.append(col)
-                                conversion_attempts += 1
-                        except Exception:
-                            continue
-                
-                if conversion_attempts > 0 and not silent_mode:
-                    logger.info(f"Converted {conversion_attempts} columns to numeric")
-            
-            # Update feature columns
-            if feature_columns is None:
-                feature_columns = [col for col in numeric_columns if col != label_column]
-            
-            # Exclude specified columns
-            if exclude_columns:
-                feature_columns = [col for col in feature_columns if col not in exclude_columns]
-            
-            # Validate final feature set
-            if len(feature_columns) < min_features:
-                error_msg = f"Too few valid features ({len(feature_columns)}), need at least {min_features}"
-                loading_stats['errors_encountered'].append(error_msg)
-                raise ValueError(error_msg)
-            
-            if max_features and len(feature_columns) > max_features:
-                if not silent_mode:
-                    logger.info(f"Reducing features from {len(feature_columns)} to {max_features}")
-                feature_columns = feature_columns[:max_features]
-            
-            loading_stats['feature_columns'] = feature_columns
-            loading_stats['n_features'] = len(feature_columns)
-            progress_data['features_processed'] = len(feature_columns)
-            
-            # Extract features and labels
-            X = df[feature_columns].values.astype(np.float32)
-            y = df[label_column].values
-            
-            progress_data['validation_passed'] += 1
-            if not silent_mode:
-                main_bar.text = "Data validation complete"
-            loading_stats['stages_completed'].append('data_validation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 5: Data Processing
-            progress_data['current_stage'] = "Data Processing"
-            if not silent_mode:
-                main_bar.text = "Processing data (cleaning, scaling, etc.)..."
-            
-            # Validate data quality
-            if data_quality_checks:
-                progress_data['current_substage'] = "Quality Checks"
-                if not silent_mode:
-                    main_bar.text = "Performing data quality checks..."
-                
-                if not silent_mode:
-                    logger.info("Performing data quality checks")
-                
-                # Check for infinite values
-                inf_mask = np.isinf(X)
-                if inf_mask.any():
-                    if not silent_mode:
-                        logger.warning(f"Found {inf_mask.sum()} infinite values, replacing with NaN")
-                    X[inf_mask] = np.nan
-                    loading_stats['warnings_encountered'].append(f"Fixed {inf_mask.sum()} infinite values")
-                
-                # Check for excessive missing values
-                missing_per_feature = np.isnan(X).sum(axis=0) / len(X)
-                problematic_features = np.where(missing_per_feature > 0.5)[0]
-                if len(problematic_features) > 0:
-                    warning_msg = f"Features with >50% missing values: {problematic_features}"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
-                    loading_stats['warnings_encountered'].append(warning_msg)
-                
-                # Check for zero variance features
-                if feature_engineering_config.get('variance_threshold', 0) > 0:
-                    variances = np.var(X, axis=0)
-                    zero_var_features = np.where(variances < feature_engineering_config['variance_threshold'])[0]
-                    if len(zero_var_features) > 0:
-                        warning_msg = f"Low variance features detected: {zero_var_features}"
-                        if not silent_mode:
-                            logger.warning(warning_msg)
-                        loading_stats['warnings_encountered'].append(warning_msg)
-            
-            # Handle missing values
-            if handle_missing and np.isnan(X).any():
-                progress_data['current_substage'] = "Missing Value Handling"
-                if not silent_mode:
-                    main_bar.text = "Handling missing values..."
-                
-                if not silent_mode:
-                    logger.info(f"Handling missing values using strategy: {handle_missing}")
-                
-                if handle_missing == 'drop':
-                    # Drop rows with any missing values
-                    valid_mask = ~np.isnan(X).any(axis=1)
-                    rows_dropped = (~valid_mask).sum()
-                    X = X[valid_mask]
-                    y = y[valid_mask]
-                    if not silent_mode:
-                        logger.info(f"Dropped {rows_dropped} rows with missing values")
-                    loading_stats['rows_dropped_missing'] = rows_dropped
-                    
-                elif handle_missing == 'fill':
-                    strategy = data_processing_config.get('missing_value_strategy', 'mean')
-                    if strategy in ['mean', 'median', 'most_frequent']:
-                        imputer = SimpleImputer(strategy=strategy)
-                    elif strategy == 'knn':
-                        imputer = KNNImputer(n_neighbors=5)
-                    else:
-                        imputer = SimpleImputer(strategy='mean')
-                    
-                    X = imputer.fit_transform(X)
-                    if not silent_mode:
-                        logger.info(f"Filled missing values using {strategy} strategy")
-                    loading_stats['missing_values_filled'] = True
-                    loading_stats['imputation_strategy'] = strategy
-            
-            # Validate sample sizes
-            if len(X) < min_samples:
-                error_msg = f"Too few samples ({len(X)}), need at least {min_samples}"
-                loading_stats['errors_encountered'].append(error_msg)
-                raise ValueError(error_msg)
-            
-            if max_samples and len(X) > max_samples:
-                if not silent_mode:
-                    logger.info(f"Limiting dataset to {max_samples} samples")
-                indices = np.random.choice(len(X), max_samples, replace=False)
-                X = X[indices]
-                y = y[indices]
-                loading_stats['samples_limited'] = max_samples
-            
-            # Validate label distribution
-            unique_labels = np.unique(y)
-            label_counts = {label: np.sum(y == label) for label in unique_labels}
-            
-            if not silent_mode:
-                logger.info(f"Label distribution: {label_counts}")
-            loading_stats['label_distribution'] = label_counts
-            
-            # Check for class balance issues
-            if class_balance_config.setdefault('min_class_samples', 10):
-                min_class_size = min(label_counts.values())
-                min_class_samples_threshold = class_balance_config.setdefault('min_class_samples', 10)
-                if min_class_size < class_balance_config['min_class_samples']:
-                    warning_msg = f"Smallest class has only {min_class_size} samples"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
-                    loading_stats['warnings_encountered'].append(warning_msg)
-            
-            if class_balance_config.setdefault('max_class_ratio', 10):
-                max_class_size = max(label_counts.values())
-                min_class_size = min(label_counts.values())
-                max_class_ratio_threshold = class_balance_config.setdefault('max_class_ratio', 10)
-                class_ratio = max_class_size / min_class_size if min_class_size > 0 else float('inf')
-                if class_ratio > class_balance_config['max_class_ratio']:
-                    warning_msg = f"Class imbalance ratio: {class_ratio:.2f}"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
-                    loading_stats['warnings_encountered'].append(warning_msg)
-            
-            # Outlier detection and handling
-            if outlier_detection:
-                progress_data['current_substage'] = "Outlier Detection"
-                if not silent_mode:
-                    main_bar.text = "Detecting and handling outliers..."
-                
-                if not silent_mode:
-                    logger.info(f"Detecting outliers using {outlier_method} method")
-                
-                if outlier_method == 'iqr':
-                    Q1 = np.percentile(X, 25, axis=0)
-                    Q3 = np.percentile(X, 75, axis=0)
-                    IQR = Q3 - Q1
-                    lower_bound = Q1 - outlier_threshold * IQR
-                    upper_bound = Q3 + outlier_threshold * IQR
-                    
-                    outlier_mask = ((X < lower_bound) | (X > upper_bound)).any(axis=1)
-                    
-                elif outlier_method == 'zscore':
-                    z_scores = np.abs(stats.zscore(X, axis=0, nan_policy='omit'))
-                    outlier_mask = (z_scores > outlier_threshold).any(axis=1)
-                    
-                elif outlier_method == 'isolation':
-                    iso_forest = IsolationForest(contamination=0.1, random_state=random_state)
-                    outlier_labels = iso_forest.fit_predict(X)
-                    outlier_mask = outlier_labels == -1
-                    
-                else:
-                    if not silent_mode:
-                        logger.warning(f"Unknown outlier method: {outlier_method}")
-                    outlier_mask = np.zeros(len(X), dtype=bool)
-                    loading_stats['warnings_encountered'].append(f"Unknown outlier method: {outlier_method}")
-                
-                n_outliers = outlier_mask.sum()
-                if n_outliers > 0:
-                    if not silent_mode:
-                        logger.info(f"Detected {n_outliers} outliers ({n_outliers/len(X)*100:.1f}%)")
-                    # Remove outliers
-                    X = X[~outlier_mask]
-                    y = y[~outlier_mask]
-                    if not silent_mode:
-                        logger.info(f"Removed outliers, dataset size: {len(X)}")
-                    loading_stats['outliers_removed'] = n_outliers
-                    loading_stats['outlier_percentage'] = n_outliers/len(X)*100
-            
-            # Load preprocessing artifacts if available
-            scaler = None
-            feature_selector = None
-            artifacts = {}
-            
-            if artifacts_path.exists():
-                try:
-                    progress_data['current_substage'] = "Loading Artifacts"
-                    if not silent_mode:
-                        main_bar.text = "Loading preprocessing artifacts..."
-                    
-                    if not silent_mode:
-                        logger.info("Loading preprocessing artifacts")
-                    artifacts = joblib.load(artifacts_path)
-                    
-                    # Validate artifacts
-                    artifacts_features = artifacts.get("feature_names", [])
-                    if artifacts_features and set(artifacts_features) != set(feature_columns):
-                        warning_msg = "Feature names in artifacts don't match current features"
-                        if not silent_mode:
-                            logger.warning(warning_msg)
-                            logger.warning(f"Artifacts features: {len(artifacts_features)}")
-                            logger.warning(f"Current features: {len(feature_columns)}")
-                        loading_stats['warnings_encountered'].append(warning_msg)
-                    
-                    scaler = artifacts.get("scaler")
-                    feature_selector = artifacts.get("feature_selector")
-                    
-                    loading_stats['artifacts_loaded'] = True
-                    loading_stats['scaler_type'] = type(scaler).__name__ if scaler else None
-                    
-                except Exception as e:
-                    warning_msg = f"Failed to load artifacts: {e}"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
-                    loading_stats['warnings_encountered'].append(warning_msg)
-                    artifacts = {}
-            
-            # Apply or create scaling
-            if normalization and normalization != 'none':
-                progress_data['current_substage'] = "Feature Scaling"
-                if not silent_mode:
-                    main_bar.text = "Applying feature scaling..."
-                
-                if scaler is not None:
-                    if not silent_mode:
-                        logger.info(f"Applying existing {type(scaler).__name__} scaler")
-                    try:
-                        X_scaled = scaler.transform(X)
-                        loading_stats['scaling_applied'] = 'existing'
-                    except Exception as e:
-                        warning_msg = f"Failed to apply existing scaler: {e}"
-                        if not silent_mode:
-                            logger.warning(warning_msg)
-                        loading_stats['warnings_encountered'].append(warning_msg)
-                        scaler = None
-                
-                if scaler is None:
-                    if not silent_mode:
-                        logger.info(f"Creating new {normalization} scaler")
-                    
-                    if normalization == 'standard':
-                        scaler = StandardScaler()
-                    elif normalization == 'minmax':
-                        scaler = MinMaxScaler()
-                    elif normalization == 'robust':
-                        scaler = RobustScaler()
-                    elif normalization == 'quantile':
-                        scaler = QuantileTransformer()
-                    else:
-                        if not silent_mode:
-                            logger.warning(f"Unknown normalization method: {normalization}, using standard")
-                        scaler = StandardScaler()
-                    
-                    X_scaled = scaler.fit_transform(X)
-                    loading_stats['scaling_applied'] = 'new'
-                
-                X = X_scaled.astype(np.float32)
-            else:
-                loading_stats['scaling_applied'] = 'none'
-            
-            # Feature selection
-            if feature_engineering_config.get('feature_selection', False):
-                progress_data['current_substage'] = "Feature Selection"
-                if not silent_mode:
-                    main_bar.text = "Performing feature selection..."
-                
-                n_features_select = feature_engineering_config.get('n_features_select', min(50, len(feature_columns)))
-                selection_method = feature_engineering_config.get('feature_selection_method', 'k_best')
-                
-                if not silent_mode:
-                    logger.info(f"Performing feature selection: {selection_method}")
-                
-                if selection_method == 'k_best':
-                    if feature_selector is None:
-                        feature_selector = SelectKBest(f_classif, k=n_features_select)
-                        X_selected = feature_selector.fit_transform(X, y)
-                        loading_stats['feature_selection_applied'] = 'new'
-                    else:
-                        X_selected = feature_selector.transform(X)
-                        loading_stats['feature_selection_applied'] = 'existing'
-                    
-                    selected_features = feature_selector.get_support()
-                    selected_feature_names = [feature_columns[i] for i in range(len(feature_columns)) if selected_features[i]]
-                    
-                    X = X_selected
-                    feature_columns = selected_feature_names
-                    
-                    if not silent_mode:
-                        logger.info(f"Selected {len(feature_columns)} features from {len(selected_features)}")
-                    loading_stats['features_selected'] = len(feature_columns)
-            
-            progress_data['validation_passed'] += 1
-            if not silent_mode:
-                main_bar.text = "Data processing complete"
-            loading_stats['stages_completed'].append('data_processing')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 6: Data Splitting
-            progress_data['current_stage'] = "Data Splitting"
-            if not silent_mode:
-                main_bar.text = "Splitting data into train/validation/test sets..."
-            
-            # Split data into normal and attack samples
-            normal_mask = (y == 0)
-            attack_mask = (y == 1) if len(unique_labels) == 2 else (~normal_mask)
-            
-            X_normal = X[normal_mask]
-            X_attack = X[attack_mask]
-            
-            if not silent_mode:
-                logger.info(f"Data split: {len(X_normal)} normal, {len(X_attack)} attack samples")
-            
-            # Perform train/validation/test splits
-            if len(X_normal) == 0:
-                error_msg = "No normal samples found in dataset"
-                loading_stats['errors_encountered'].append(error_msg)
-                raise ValueError(error_msg)
-            
-            # Split normal data for training and validation
-            if validation_split > 0:
-                X_train_normal, X_val_normal = train_test_split(
-                    X_normal,
-                    test_size=validation_split,
-                    random_state=random_state,
-                    shuffle=shuffle_data
-                )
-            else:
-                X_train_normal = X_normal
-                X_val_normal = np.array([]).reshape(0, X_normal.shape[1])
-            
-            # Handle test data
-            if len(X_attack) > 0:
-                if test_split > 0 and test_split < 1.0:
-                    test_size = int(len(X_attack) * test_split)
-                    X_test = X_attack[:test_size] if test_size > 0 else X_attack
-                else:
-                    X_test = X_attack
-            else:
-                # If no attack data, use a portion of normal data for testing
-                if test_split > 0:
-                    test_size = int(len(X_train_normal) * test_split)
-                    if test_size > 0:
-                        X_test = X_train_normal[:test_size]
-                        X_train_normal = X_train_normal[test_size:]
-                    else:
-                        X_test = np.array([]).reshape(0, X_train_normal.shape[1])
-                else:
-                    X_test = np.array([]).reshape(0, X_train_normal.shape[1])
-            
-            loading_stats.update({
-                'train_samples': len(X_train_normal),
-                'val_samples': len(X_val_normal),
-                'test_samples': len(X_test),
-                'final_feature_count': len(feature_columns)
-            })
-            
-            progress_data['validation_passed'] += 1
-            if not silent_mode:
-                main_bar.text = "Data splitting complete"
-            loading_stats['stages_completed'].append('data_splitting')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 7: Statistical Validation and Quality Assessment
-            progress_data['current_stage'] = "Quality Assessment"
-            if not silent_mode:
-                main_bar.text = "Performing final quality assessment..."
-            
-            # Statistical validation
-            if statistical_validation:
-                if not silent_mode:
-                    logger.info("Performing statistical validation")
-                
-                # Check data distributions
-                if advanced_config.get('distribution_checks', False):
-                    # Kolmogorov-Smirnov test for normality
-                    normality_results = []
-                    for i, feature_name in enumerate(feature_columns):
-                        # Ensure we don't exceed dimensions
-                        if i < X_train_normal.shape[1]:
-                            feature_data = X_train_normal[:, i]
-                            ks_stat, p_value = stats.kstest(feature_data, 'norm')
-                            normality_results.append({
-                                'feature': feature_name,
-                                'ks_statistic': ks_stat,
-                                'p_value': p_value,
-                                'normal': p_value >= 0.05
-                            })
-                            if p_value < 0.05 and not silent_mode:
-                                logger.debug(f"Feature {feature_name} may not be normally distributed (p={p_value:.4f})")
-                    
-                    loading_stats['normality_tests'] = normality_results
-            
-            # Calculate data quality score
-            quality_metrics = []
-            
-            # Sample size adequacy
-            sample_score = min(1.0, len(X) / max(min_samples, 1000))
-            quality_metrics.append(('sample_size', sample_score))
-            
-            # Feature adequacy
-            feature_score = min(1.0, len(feature_columns) / max(min_features, 10))
-            quality_metrics.append(('feature_count', feature_score))
-            
-            # Class balance (if applicable)
-            if len(label_counts) > 1:
-                min_class = min(label_counts.values())
-                max_class = max(label_counts.values())
-                balance_score = min_class / max_class if max_class > 0 else 1.0
-                quality_metrics.append(('class_balance', balance_score))
-            else:
-                quality_metrics.append(('class_balance', 1.0))
-            
-            # Missing data handling
-            missing_score = 1.0 if not np.isnan(X).any() else 0.8
-            quality_metrics.append(('missing_data', missing_score))
-            
-            # Overall quality score (weighted average)
-            weights = [0.3, 0.3, 0.2, 0.2]  # Adjust weights as needed
-            quality_score = sum(score * weight for (_, score), weight in zip(quality_metrics, weights))
-            
-            progress_data['data_quality_score'] = quality_score
-            loading_stats['data_quality_score'] = quality_score
-            loading_stats['quality_metrics'] = dict(quality_metrics)
-            
-            if not silent_mode:
-                main_bar.text = "Quality assessment complete"
-            loading_stats['stages_completed'].append('quality_assessment')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 8: Finalization and Statistics
-            progress_data['current_stage'] = "Finalization"
-            if not silent_mode:
-                main_bar.text = "Finalizing data preparation..."
-            
-            # Prepare final data dictionary
-            data_dict = {
-                "X_train": X_train_normal.astype(np.float32),
-                "X_val": X_val_normal.astype(np.float32),
-                "X_test": X_test.astype(np.float32),
-                "feature_names": feature_columns,
-                "metadata": {
-                    # Basic statistics
-                    "total_samples": len(X),
-                    "total_normal": len(X_normal),
-                    "total_attack": len(X_attack),
-                    "n_features": len(feature_columns),
-                    "train_samples": len(X_train_normal),
-                    "val_samples": len(X_val_normal),
-                    "test_samples": len(X_test),
-                    
-                    # Configuration used
-                    "validation_split": validation_split,
-                    "test_split": test_split,
-                    "stratified_split": stratified_split,
-                    "random_state": random_state,
-                    "normalization": normalization,
-                    
-                    # Processing applied
-                    "scaler_applied": scaler is not None,
-                    "scaler_type": type(scaler).__name__ if scaler else None,
-                    "feature_selection_applied": feature_selector is not None,
-                    "outliers_removed": outlier_detection,
-                    "missing_values_handled": handle_missing if np.isnan(X).any() else 'none',
-                    
-                    # Data quality metrics
-                    "class_balance_ratio": max(label_counts.values()) / min(label_counts.values()) if min(label_counts.values()) > 0 else float('inf'),
-                    "data_quality_score": quality_score,
-                    
-                    # Loading statistics
-                    "loading_time_seconds": (datetime.now() - start_time).total_seconds(),
-                    "data_source": "real" if use_real_data else "synthetic",
-                    "config_applied": final_config,
-                    
-                    # Artifacts information
-                    "artifacts_available": scaler is not None or feature_selector is not None,
-                    "preprocessing_pipeline": {
-                        "scaler": type(scaler).__name__ if scaler else None,
-                        "feature_selector": type(feature_selector).__name__ if feature_selector else None,
-                        "steps_applied": loading_stats.get('steps_applied', [])
-                    },
-
-                    # Run tracking information
-                    "run_tracking": {
-                        "run_id": run_id,
-                        "run_number": run_number,
-                        "use_run_tracking": use_run_tracking,
-                        "run_specific_directories": {
-                            k: str(v) for k, v in run_specific_dirs.items()
-                        } if run_specific_dirs else None,
-                        "data_loaded_from_run": run_id if use_run_tracking else None
-                    } if use_run_tracking else None,
-                },
-                
-                # Include preprocessing components for future use
-                "scaler": scaler,
-                "feature_selector": feature_selector,
-                "label_encoder": artifacts.get("label_encoder"),
-                
-                # Raw data for advanced use cases
-                "raw_data": {
-                    "X_full": X,
-                    "y_full": y,
-                    "original_features": df.columns.tolist() if 'df' in locals() else feature_columns
-                } if advanced_config.get('include_raw_data', False) else None
-            }
-            
-            # Validate final data shapes and consistency
-            if not silent_mode:
-                logger.info("Performing final data validation")
-            
-            # Shape consistency checks
-            expected_features = len(feature_columns)
-            for key in ["X_train", "X_val", "X_test"]:
-                # Only check non-empty arrays
-                if data_dict[key].size > 0:
-                    if data_dict[key].shape[1] != expected_features:
-                        error_msg = f"{key} has {data_dict[key].shape[1]} features, expected {expected_features}"
-                        loading_stats['errors_encountered'].append(error_msg)
-                        raise ValueError(error_msg)
-            
-            # Data type consistency
-            for key in ["X_train", "X_val", "X_test"]:
-                if data_dict[key].dtype != np.float32:
-                    if not silent_mode:
-                        logger.warning(f"{key} has dtype {data_dict[key].dtype}, converting to float32")
-                    data_dict[key] = data_dict[key].astype(np.float32)
-            
-            # Save statistics if requested
-            if save_statistics and statistics_path:
-                if not silent_mode:
-                    logger.info(f"Saving loading statistics to {statistics_path}")
-                try:
-                    with open(statistics_path, 'w') as f:
-                        # Make loading_stats JSON serializable
-                        serializable_stats = {}
-                        for key, value in loading_stats.items():
-                            if isinstance(value, (str, int, float, bool, list, dict)):
-                                serializable_stats[key] = value
-                            else:
-                                serializable_stats[key] = str(value)
-                        
-                        json.dump(serializable_stats, f, indent=2)
-                    if not silent_mode:
-                        logger.info(f"Saved loading statistics to {statistics_path}")
-                except Exception as e:
-                    if not silent_mode:
-                        logger.warning(f"Failed to save statistics: {e}")
-            
-            if not silent_mode:
-                main_bar.text = "Finalization complete"
-            loading_stats['stages_completed'].append('finalization')
-            if not silent_mode:
-                main_bar()
-        
-        # Log summary
-        total_time = (datetime.now() - start_time).total_seconds()
-        loading_stats['total_processing_time'] = total_time
-        loading_stats['completion_status'] = 'success'
-        
-        if verbose:
-            logger.info("-" * 40)
-            logger.info("DATA LOADING SUMMARY")
-            logger.info("-" * 40)
-            logger.info(f"Data source: {'Real data' if use_real_data else 'Synthetic data'}")
-            logger.info(f"Total samples: {len(X):,} ({len(X_normal):,} normal, {len(X_attack):,} attack)")
-            logger.info(f"Features: {len(feature_columns)} (after processing)")
-            logger.info(f"Train/Val/Test split: {len(X_train_normal)}/{len(X_val_normal)}/{len(X_test)}")
-            logger.info(f"Normalization: {normalization} ({'applied' if scaler else 'none'})")
-            logger.info(f"Feature selection: {'applied' if feature_selector else 'none'}")
-            logger.info(f"Data quality score: {quality_score:.3f}")
-            logger.info(f"Processing time: {total_time:.2f} seconds")
-            logger.info(f"Stages completed: {len(loading_stats['stages_completed'])}/{total_stages}")
-            logger.info(f"Warnings encountered: {len(loading_stats['warnings_encountered'])}")
-            logger.info("-" * 40)
-        
-        # Restore original logging level if it was changed
-        if not silent_mode and verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        return data_dict
-        
-    except Exception as e:
-        # Update loading stats with error information
-        loading_stats['completion_status'] = 'failed'
-        loading_stats['error_message'] = str(e)
-        loading_stats['error_traceback'] = traceback.format_exc()
-        
-        # Restore original logging level on error
-        if not silent_mode and verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        error_msg = f"Data loading and validation failed: {str(e)}"
-        if not silent_mode:
-            logger.error(error_msg)
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            
-            # Provide helpful error context
-            logger.error(f"Error occurred while processing: {data_path}")
-            logger.error(f"Configuration used: {final_config}")
-            logger.error(f"Stages completed: {loading_stats['stages_completed']}")
-        
-        raise RuntimeError(error_msg)
 
 def create_dataloaders(
     # Core Data Parameters
@@ -48186,8 +46921,6 @@ def train_epoch(
             gc.collect()
         except:
             pass
-
-
 
 def _default_security_metrics(inputs, outputs, targets, loss):
     """
@@ -53208,9 +51941,7 @@ def train_model(
                     custom_threshold_fn=_default_adaptive_threshold if security_config.get('adaptive_threshold', True) else None,
                     custom_analysis_fn=_default_validation_analysis if validation_config.get('detailed_metrics', True) else None,
                     validation_callbacks=_default_validation_callbacks() if monitoring_config.get('real_time_monitoring', True) else [],
-                    
                     progress_bar=progress_bar and not epoch_pbar,
-                    # Update progress bar description
                     progress_bar_desc=f"Validating Epoch {epoch+1}/{epochs}",
                     verbose=debug_mode,
                     config=config,
@@ -67273,7 +66004,6 @@ def setup_hyperparameter_optimization(
                 print(Fore.GREEN + Style.BRIGHT + "Target: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials} trials" + (f" or {timeout_seconds}s" if timeout_seconds > 0 else ""))
                 print(Fore.GREEN + Style.BRIGHT + "Focus: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_focus.title()} | System: {system_class.upper()}")
                 print(Fore.GREEN + Style.BRIGHT + "Started: " + Fore.YELLOW + Style.BRIGHT + f"{start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
-                #print(Fore.CYAN + Style.BRIGHT + "-"*40 + "\n" + Style.RESET_ALL)
                 print(Fore.CYAN + Style.BRIGHT + "-"*40 + Style.RESET_ALL)
             
             try:
@@ -73713,14 +72443,14 @@ def _handle_hpo_result(result: Optional[Dict[str, Any]], hpo_type: str) -> None:
             
             # Context-specific failure guidance
             if 'quick' in hpo_type.lower():
-                print(Fore.RED + Style.BRIGHT + "⚠ Quick test revealed system configuration issues")
-                print(Fore.RED + Style.BRIGHT + "⚠ Review system setup before proceeding")
+                print(Fore.RED + Style.BRIGHT + "Quick test revealed system configuration issues")
+                print(Fore.RED + Style.BRIGHT + "Review system setup before proceeding")
             elif 'comparison' in hpo_type.lower():
-                print(Fore.RED + Style.BRIGHT + "⚠ Model comparison could not be completed")
-                print(Fore.RED + Style.BRIGHT + "⚠ Check individual model configurations")
+                print(Fore.RED + Style.BRIGHT + "Model comparison could not be completed")
+                print(Fore.RED + Style.BRIGHT + "Check individual model configurations")
             else:
-                print(Fore.RED + Style.BRIGHT + "⚠ Optimization did not complete successfully")
-                print(Fore.RED + Style.BRIGHT + "⚠ Review recommendations for recovery steps")
+                print(Fore.RED + Style.BRIGHT + "Optimization did not complete successfully")
+                print(Fore.RED + Style.BRIGHT + "Review recommendations for recovery steps")
             
             print(Fore.RED + Style.BRIGHT + "-"*40)
     
@@ -79836,8 +78566,6 @@ def _interactive_hpo_continue_setup(
                 print(Fore.RED + Style.BRIGHT + "\nRecovery option selection interrupted!")
                 return None
 
-
-
 def _estimate_hpo_time(
     n_trials: int,
     trial_epochs: int,
@@ -82711,8 +81439,8 @@ def interactive_main():
             try:
                 input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
             except (EOFError, KeyboardInterrupt):
-                print(Fore.RED + Style.BRIGHT + "\nExiting...")
-                print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
+                print(Fore.RED + Style.BRIGHT + "\nExiting..." + Style.RESET_ALL)
+                print(Fore.YELLOW + Style.BRIGHT + "Goodbye!" + Style.RESET_ALL)
                 break
 
 def model_training_menu(config: Optional[Dict[str, Any]] = None):
@@ -83045,8 +81773,6 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
                 break
-
-
 
 def configuration_menu():
     """Menu for configuration management options with context display and error handling."""
@@ -85128,8 +83854,6 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
         )
         raise
 
-
-
 def show_system_info():
     """Enhanced system information display leveraging comprehensive get_system_info() analysis.
     
@@ -86646,8 +85370,6 @@ def show_system_info():
             console.print(f"[bold red]Original error: {e}[/bold red]")
             console.print("[bold red]System is in critical failure state[/bold red]")
 
-
-
 # Helper functions for configuration management
 def select_preset_config():
     """Preset configuration selection with error handling and context integration."""
@@ -87456,8 +86178,6 @@ def load_config_from_file():
         except Exception as e:
             print(Fore.RED + Style.BRIGHT + f"Failed to load configuration: {e}")
 
-
-
 def edit_config_interactive():
     """Interactive configuration editor."""
     # clear screen and show banner
@@ -87475,8 +86195,6 @@ def compare_configs_interactive():
     
     print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration comparison not yet implemented")
     print(Fore.YELLOW + Style.BRIGHT + "This feature will allow side-by-side comparison of different configurations.")
-
-
 
 def main(logger: logging.Logger):
     """Main entry point with comprehensive argument parsing and system orchestration."""

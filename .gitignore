@@ -12,6 +12,8 @@ __pycache__/
 *.venv/
 venv/
 env/
+models/
+logs/
 node_modules/
 backend/latest/
 backend/reports/
@@ -24,6 +26,7 @@ backend/data/
 backend/checkpoints/
 backend/artifacts/
 backend/config/
+backend/models/
 
 # Database files
 *.db
@@ -91,6 +94,7 @@ logs/
 *.xz
 *.jar
 *.npz
+*.npy
 
 # Temporary files
 *.tmp
@@ -107,4 +111,6 @@ Thumbs.db
 
 # Coverage reports
 .coverage
-backend/latest.txt
+*latest.txt
+*.run_tracker
+*events.out.tfevents.*
