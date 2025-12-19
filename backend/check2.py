@@ -32,8 +32,8 @@ def verify_model_output(model_path: str) -> None:
             bar()
             
             # Step 4: Display results
-            print("\n=== Model Output Verification ===")
-            print(f"[SUCCESS] Model loaded: {model_path}")
+            print("\nModel Output Verification")
+            print(f"Successfully loaded Model: {model_path}")
             print(f"1. Output name: {output_info.name}")
             print(f"2. Shape: {output_info.shape}")
             print(f"3. Type: {output_info.type}")
@@ -67,4 +67,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     verify_model_output(args.model)
-

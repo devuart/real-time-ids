@@ -14198,8 +14198,8 @@ def banner() -> None:
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⠇⠀⠀⠀⠀⠀⠀⠀
 
     """,
-        style="bold cyan", 
-        title="[bold yellow]GreyChamp | IDS[/]", 
+        style="bold cyan",
+        title="[bold yellow]GreyChamp | IDS[/]",
         subtitle="[magenta]MODEL TRAINING SUITE[/]",
         border_style="bold blue",
         box=box.DOUBLE,
