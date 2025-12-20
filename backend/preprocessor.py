@@ -1479,7 +1479,7 @@ class MemoryAwarePreprocessor:
                 # Truncate long descriptions
                 if len(desc) > 60:
                     desc = desc[:57] + "..."
-                self.print_color(f"  {i:2d}. {Fore.CYAN + Style.BRIGHT}{feature:<30}{Style.RESET_ALL} - {desc}", 'info')
+                self.print_color(f"  {i:2d}. {Fore.CYAN + Style.BRIGHT}{feature:<30}{Fore.WHITE + Style.BRIGHT} - {desc}{Style.RESET_ALL}", 'info')
             else:
                 self.print_color(f"  {i:2d}. {Fore.CYAN + Style.BRIGHT}{feature}", 'info')
         
@@ -3905,10 +3905,10 @@ class MemoryAwarePreprocessor:
                         bar.text = f"Chunk {chunk_index}: {rows_processed:,} rows | Total: {total_rows:,} | Features: {len(features)}"
                         
                         if verbose and chunk_index <= 3:  # Only show first 3 chunks if verbose
-                            self.print_color(f"\n [+] Chunk {chunk_index} Details:", 'success')
-                            self.print_color(f"    ├─ Rows processed: {Fore.YELLOW + Style.BRIGHT}{rows_processed:,}", 'success')
-                            self.print_color(f"    ├─ Features: {Fore.YELLOW + Style.BRIGHT}{len(features)}", 'success')
-                            self.print_color(f"    └─ Sample: {Fore.YELLOW + Style.BRIGHT}{features[:5]}{'...' if len(features) > 5 else ''}", 'success')
+                            self.print_color(f"  [+] Chunk {chunk_index} Details:", 'success')
+                            self.print_color(f"      ├─ Rows processed: {Fore.YELLOW + Style.BRIGHT}{rows_processed:,}", 'success')
+                            self.print_color(f"      ├─ Features: {Fore.YELLOW + Style.BRIGHT}{len(features)}", 'success')
+                            self.print_color(f"      └─ Sample: {Fore.YELLOW + Style.BRIGHT}{features[:5]}{'...' if len(features) > 5 else ''}", 'success')
                     
                     except Exception as e:
                         bar.text = f"Chunk {chunk_index}: Failed - {str(e)[:30]}..."
