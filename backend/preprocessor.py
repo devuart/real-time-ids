@@ -838,7 +838,6 @@ class MemoryAwarePreprocessor:
                             self.config[key] = self.max_history_entries
                         elif key == 'preprocessing_config':
                             self.config[key] = {
-                                #'default_output_dir': str(self.models_dir),
                                 'default_output_dir': str(self.results_dir),
                                 'default_input_dir': str(self.datasets_dir),
                                 'default_results_dir': str(self.results_dir),
@@ -976,7 +975,6 @@ class MemoryAwarePreprocessor:
             'recent_files': [],
             'max_history_entries': 10,
             'preprocessing_config': {
-                #'default_output_dir': 'models',
                 'default_output_dir': 'results',
                 'default_input_dir': 'datasets',
                 'default_results_dir': 'results',
@@ -1246,7 +1244,7 @@ class MemoryAwarePreprocessor:
             history = history[-max_entries:]
             
             self.print_color(f"\nHistory file overview:", 'success')
-            self.print_color(f"  ├─ New entry timestamp: {Fore.CYAN + Style.BRIGHT}{summary.get('timestamp', 'Unknown')}", 'success')
+            self.print_color(f"  ├─ New entry timestamp: {Fore.YELLOW + Style.BRIGHT}{summary.get('timestamp', 'Unknown')}", 'success')
             self.print_color(f"  ├─ Dataset file: {Fore.MAGENTA + Style.BRIGHT}{summary.get('dataset_info', {}).get('filepath', 'Unknown')}", 'success')
             self.print_color(f"  ├─ History file: {Fore.MAGENTA + Style.BRIGHT}{self.history_file}", 'success')
             self.print_color(f"  └─ Total history entries: {Fore.YELLOW + Style.BRIGHT}{len(history)}/{max_entries}", 'success')
@@ -1371,7 +1369,7 @@ class MemoryAwarePreprocessor:
             # If only one match, use it automatically
             if len(matching_files) == 1:
                 feature_desc_file = matching_files[0]
-                self.print_color(f"\nFound feature descriptions: {Fore.MAGENTA + Style.BRIGHT}{feature_desc_file.name}", 'success')
+                self.print_color(f"\nFound feature descriptions: {Fore.WHITE + Style.BRIGHT}{feature_desc_file.name}", 'success')
             
             # If multiple matches and interactive mode, let user choose
             elif len(matching_files) > 1 and interactive:
@@ -1452,8 +1450,8 @@ class MemoryAwarePreprocessor:
             # Create mapping
             feature_map = dict(zip(features_df['Feature'], features_df['Description']))
             
-            self.print_color(f"  ├─ Loaded descriptions for {Fore.YELLOW + Style.BRIGHT}{len(feature_map)} features", 'success')
-            self.print_color(f"  └─ Source: {Fore.CYAN + Style.BRIGHT}{feature_desc_file.name}", 'success')
+            self.print_color(f"  ├─ Loaded descriptions for: {Fore.YELLOW + Style.BRIGHT}{len(feature_map)} features", 'success')
+            self.print_color(f"  └─ Filepath: {Fore.MAGENTA + Style.BRIGHT}{feature_desc_file}", 'success')
             
             return feature_map
             
@@ -1465,11 +1463,11 @@ class MemoryAwarePreprocessor:
         self,
         features: List[str],
         descriptions: Optional[Dict[str, str]] = None,
-        max_display: int = 10
+        max_display: int = 20
     ) -> None:
         """Display features with their descriptions if available."""
         
-        self.print_color(f"\nFeature Overview ({len(features)} total):", 'info')
+        self.print_color(f"\nFeatures Overview {Fore.YELLOW + Style.BRIGHT}({len(features)} total)", 'info')
         
         display_count = min(len(features), max_display)
         
@@ -1739,7 +1737,7 @@ class MemoryAwarePreprocessor:
             
             # Save plots
             if filepath is None:
-                plot_filepath = output_dir / "preprocessing_performance_plots.png"
+                plot_filepath = output_dir / "max_rows_test_performance_plots.png"
             else:
                 plot_filepath = Path(filepath)
             
@@ -1954,7 +1952,7 @@ class MemoryAwarePreprocessor:
             process_id = os.getpid()
             unique_hash = hashlib.md5(
                 f"{timestamp}_{process_id}".encode()
-            ).hexdigest()[:4]
+            ).hexdigest()[:8]
             
             # Full ID stored only in metadata, not used for file/directory names
             run_id_full = f"run_{run_number:03d}_{timestamp}_{unique_hash}"
@@ -1979,17 +1977,17 @@ class MemoryAwarePreprocessor:
         # Display run header
         if run_info and 'run_id' in run_info:
             self.print_color(f"\n" + "-"*40, 'highlight')
-            self.print_color(f"TEST RUN: {Fore.YELLOW + Style.BRIGHT}{run_number:03d}", 'highlight')
+            self.print_color(f"TEST MAX ROWS RUN: {Fore.YELLOW + Style.BRIGHT}{run_number:03d}", 'highlight')
             # Extract timestamp from run_id_full if available
             if 'run_id_full' in run_info:
-                timestamp_str = run_info['run_id_full'].split('_')[2] + "_" + run_info['run_id_full'].split('_')[3]
                 parts = run_info['run_id_full'].split('_')
-                date_part = parts[2]   # YYYYMMDD
-                time_part = parts[3]   # HHMMSS
-                formatted_timestamp = (f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:]}")
-                self.print_color(f"Timestamp: {Fore.YELLOW + Style.BRIGHT}{formatted_timestamp}", 'highlight')
+                if len(parts) >= 4:
+                    date_part = parts[2]   # YYYYMMDD
+                    time_part = parts[3]   # HHMMSS
+                    formatted_timestamp = (f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:]} {time_part[:2]}:{time_part[2:4]}:{time_part[4:]}")
+                    self.print_color(f"Timestamp: {Fore.YELLOW + Style.BRIGHT}{formatted_timestamp}", 'highlight')
             # Extract hash from run_id_full if available
-            if 'run_id_full' in run_info:
+            if 'run_id_full' in run_info and len(run_info['run_id_full'].split('_')) >= 5:
                 unique_hash = run_info['run_id_full'].split('_')[-1]
                 self.print_color(f"Unique Hash: {Fore.YELLOW + Style.BRIGHT}{unique_hash}", 'highlight')
             self.print_color("-"*40, 'highlight')
@@ -2018,7 +2016,7 @@ class MemoryAwarePreprocessor:
         sys_info = self._get_system_info()
         test_statistics["system_info"] = sys_info
         
-        self.print_color("\nSystem Information:", 'info')
+        self.print_color("System Information:", 'info')
         self.print_color(f"  ├─ CPU Cores: {Fore.YELLOW + Style.BRIGHT}{sys_info['cpu_cores']}", 'system')
         self.print_color(f"  └─ Available RAM: {Fore.YELLOW + Style.BRIGHT}{sys_info['available_ram_gb']:.1f}GB", 'system')
         self.print_color("\nDataset Information:", 'info')
@@ -2666,7 +2664,7 @@ class MemoryAwarePreprocessor:
                     writer.writerow([f"Run_{key}", value])
         
         # Generate plots in run directory
-        plot_filepath = output_dir / f"preprocessing_performance_plots_{run_id}.png"
+        plot_filepath = output_dir / f"max_rows_test_performance_plots_{run_id}.png"
         self.plot_file = self.generate_plots(all_results, output_dir, plot_filepath)
         
         # Update history with run information
@@ -2676,7 +2674,7 @@ class MemoryAwarePreprocessor:
         self.print_color("TEST COMPLETED SUCCESSFULLY", 'success')
         self.print_color("-"*40, 'highlight')
         
-        self.print_color(f"\nSummary files:", 'success')
+        self.print_color(f"Summary files:", 'success')
         self.print_color(f"   ├─ JSON: {Fore.MAGENTA + Style.BRIGHT}{summary_file}", 'success')
         self.print_color(f"   └─ CSV: {Fore.MAGENTA + Style.BRIGHT}{csv_file}", 'success')
         self.print_color(f"\nRun summary:", 'success')
@@ -2971,7 +2969,6 @@ class MemoryAwarePreprocessor:
     def display_test_runs(self, results_dir: Optional[str] = None) -> None:
         """Display available test runs in a formatted table."""
         if results_dir is None:
-            #results_dir = self.config.get('default_output_dir', 'results')
             results_dir = self.config.get('default_results_dir', 'results')
         
         results_path = Path(results_dir)
@@ -3046,7 +3043,6 @@ class MemoryAwarePreprocessor:
     def select_test_run_interactively(self, results_dir: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Allow user to select from available test runs."""
         if results_dir is None:
-            #results_dir = self.config.get('default_output_dir', 'results')
             results_dir = self.config.get('default_results_dir', 'results')
         
         results_path = Path(results_dir)
@@ -3124,7 +3120,7 @@ class MemoryAwarePreprocessor:
         config_file = Path(config_path)
         
         try:
-            # Check if the provided path is a specific run directory (either by name or by checking for summary file)
+            # Check if the provided path is a specific run directory
             if config_file.is_dir() and (config_file.name.startswith('run_') or (config_file / f"max_rows_testing_summary_{config_file.name}.json").exists()):
                 # Direct run directory provided
                 run_dir = config_file
@@ -3134,21 +3130,58 @@ class MemoryAwarePreprocessor:
                 if summary_file.exists():
                     with open(summary_file) as f:
                         config = json.load(f)
+                        results_file = config['results_file']
                         max_rows = config['dataset_info']['total_rows']
-                        chunk_size = int(config['performance_metrics']['max_chunk_size'] * self.config['preprocessing_config']['memory_safety_factor'])
+                        max_chunk_size = config['performance_metrics']['max_chunk_size']
+                        chunk_size = int(max_chunk_size * self.config['preprocessing_config']['memory_safety_factor'])
                         
-                        self.print_color(f"\nUsing tested configuration from {Fore.YELLOW + Style.BRIGHT}{run_id}", 'success')
-                        self.print_color(f"  ├─ Run number: {Fore.YELLOW + Style.BRIGHT}{config.get('run_number', 'Unknown')}", 'success')
-                        self.print_color(f"  ├─ Test timestamp: {Fore.YELLOW + Style.BRIGHT}{config.get('timestamp', 'Unknown')}", 'success')
-                        self.print_color(f"  ├─ Max rows: {Fore.YELLOW + Style.BRIGHT}{max_rows:,}", 'success')
-                        self.print_color(f"  └─ Safe chunk size: {Fore.YELLOW + Style.BRIGHT}{chunk_size:,}", 'success')
+                        # Display run summary
+                        self.print_color(f"CONFIGURATION LOADED FROM RUN DIRECTORY", 'success')
+                        self.print_color(f"  └─ File (Config Source): {Fore.MAGENTA}{Path(results_file)}", 'success')
+                        
+                        # Run Information
+                        self.print_color("\nRun Summary:", 'info')
+                        self.print_color(f"  ├─ Run ID: {Fore.WHITE}{config.get('run_id', 'N/A')}", 'system')
+                        self.print_color(f"  ├─ Test ID: {Fore.YELLOW}{config.get('test_id', 'N/A')}", 'system')
+                        self.print_color(f"  └─ Timestamp: {Fore.CYAN}{config.get('timestamp', 'N/A')}", 'system')
+                        
+                        # Dataset Information
+                        self.print_color("\nDataset Information:", 'info')
+                        self.print_color(f"  ├─ File: {Fore.YELLOW}{Path(config['dataset_info'].get('filepath', 'N/A')).name}", 'system')
+                        self.print_color(f"  ├─ Total Rows: {Fore.YELLOW}{config['dataset_info'].get('total_rows', 0):,}", 'system')
+                        self.print_color(f"  ├─ Processed Rows: {Fore.YELLOW}{config['dataset_info'].get('processed_rows', 0):,}", 'system')
+                        self.print_color(f"  └─ Chunks Tested: {Fore.YELLOW}{config['dataset_info'].get('chunks_tested', 0)}", 'system')
+                        
+                        # Performance Summary
+                        self.print_color("\nPerformance Metrics:", 'info')
+                        perf_metrics = config['performance_metrics']
+                        self.print_color(f"  ├─ Avg Throughput: {Fore.YELLOW}{perf_metrics.get('average_throughput', 0):,.0f} rows/sec", 'system')
+                        self.print_color(f"  ├─ Max Chunk Size: {Fore.YELLOW}{perf_metrics.get('max_chunk_size', 0):,} rows", 'system')
+                        self.print_color(f"  ├─ Min Memory/Row: {Fore.YELLOW}{perf_metrics.get('min_memory_per_row', 0):.6f} MB", 'system')
+                        self.print_color(f"  ├─ Peak CPU Usage: {Fore.YELLOW}{perf_metrics.get('max_cpu_usage', 0):.1f}%", 'system')
+                        self.print_color(f"  └─ Total Processing Time: {Fore.YELLOW}{perf_metrics.get('total_processing_time', 0):.2f} sec", 'system')
+                        
+                        # Configuration Derived Values
+                        self.print_color("\nConfiguration Values:", 'info')
+                        self.print_color(f"  ├─ Safety Factor: {Fore.YELLOW}{self.config['preprocessing_config']['memory_safety_factor']}", 'system')
+                        self.print_color(f"  ├─ Hybrid Features: {Fore.YELLOW}{self.config['preprocessing_config']['hybrid_feature_count']}", 'system')
+                        self.print_color(f"  ├─ Scaler Range: {Fore.YELLOW}{self.config['preprocessing_config']['scaler_range']}", 'system')
+                        self.print_color(f"  ├─ Max Rows (Dataset): {Fore.YELLOW}{max_rows:,}", 'system')
+                        self.print_color(f"  ├─ Max Tested Chunk Size: {Fore.YELLOW}{max_chunk_size:,}", 'system')
+                        self.print_color(f"  └─ Safe Chunk Size: {Fore.YELLOW}{chunk_size:,}", 'system')
+
+                        # System Information
+                        self.print_color("\nSystem Overview:", 'info')
+                        sys_info = config.get('system_info', {})
+                        self.print_color(f"  ├─ CPU Cores: {Fore.YELLOW}{sys_info.get('cpu_cores', 'N/A')}", 'system')
+                        self.print_color(f"  └─ Available RAM: {Fore.YELLOW}{sys_info.get('available_ram_gb', 0):.1f} GB", 'system')
                         
                         if interactive:
                             response = input(Fore.YELLOW + Style.BRIGHT + "\nUse this configuration? (Y/n): " + Style.RESET_ALL).strip().lower()
                             if response in ['n', 'no']:
-                                raise FileNotFoundError("\nUser chose not to use found configuration")
+                                raise FileNotFoundError("User chose not to use found configuration")
                         
-                        return max_rows, chunk_size
+                        return max_rows, max_chunk_size, chunk_size
                 else:
                     self.print_color(f"\nSummary file not found in run directory: {summary_file}", 'warning')
             
@@ -3172,43 +3205,97 @@ class MemoryAwarePreprocessor:
                     if summary_file.exists():
                         with open(summary_file) as f:
                             config = json.load(f)
+                            results_file = config['results_file']
                             max_rows = config['dataset_info']['total_rows']
-                            chunk_size = int(config['performance_metrics']['max_chunk_size'] * self.config['preprocessing_config']['memory_safety_factor'])
+                            max_chunk_size = config['performance_metrics']['max_chunk_size']
+                            chunk_size = int(max_chunk_size * self.config['preprocessing_config']['memory_safety_factor'])
                             
-                            self.print_color(f"\nUsing latest tested configuration from {Fore.YELLOW + Style.BRIGHT}{run_id}", 'success')
-                            self.print_color(f"  ├─ Run number: {Fore.YELLOW + Style.BRIGHT}{config.get('run_number', 'Unknown')}", 'success')
-                            self.print_color(f"  ├─ Test timestamp: {Fore.YELLOW + Style.BRIGHT}{config.get('timestamp', 'Unknown')}", 'success')
-                            self.print_color(f"  ├─ Max rows: {Fore.YELLOW + Style.BRIGHT}{max_rows:,}", 'success')
-                            self.print_color(f"  └─ Safe chunk size: {Fore.YELLOW + Style.BRIGHT}{chunk_size:,}", 'success')
+                            # Display summary for latest run
+                            self.print_color(f"CONFIGURATION LOADED FROM LATEST RUN", 'success')
+                            self.print_color(f"  └─ File (Config Source): {Fore.MAGENTA}{Path(results_file)}", 'success')
+                            
+                            # Run Information
+                            self.print_color("\nRun Summary:", 'info')
+                            self.print_color(f"  ├─ Run ID: {Fore.YELLOW}{config.get('run_id', 'N/A')}", 'system')
+                            self.print_color(f"  └─ Timestamp: {Fore.CYAN}{config.get('timestamp', 'N/A')}", 'system')
+                            
+                            # Dataset Information
+                            self.print_color("\nDataset Information:", 'info')
+                            dataset_info = config['dataset_info']
+                            self.print_color(f"  ├─ File: {Fore.YELLOW}{Path(dataset_info.get('filepath', 'N/A')).name}", 'system')
+                            self.print_color(f"  ├─ Total Rows: {Fore.YELLOW}{dataset_info.get('total_rows', 0):,}", 'system')
+                            self.print_color(f"  └─ Processed Rows: {Fore.YELLOW}{dataset_info.get('processed_rows', 0):,}", 'system')
+                            
+                            # Performance Information
+                            self.print_color("\nPerformance Metrics:", 'info')
+                            perf_metrics = config['performance_metrics']
+                            self.print_color(f"  ├─ Avg Throughput: {Fore.YELLOW}{perf_metrics.get('average_throughput', 0):,.0f} rows/sec", 'system')
+                            self.print_color(f"  └─ Max Chunk Size: {Fore.YELLOW}{perf_metrics.get('max_chunk_size', 0):,} rows", 'system')
+                            
+                            # Derived Configuration
+                            self.print_color("\nConfiguration Values:", 'info')
+                            self.print_color(f"  ├─ Max Rows: {Fore.YELLOW}{max_rows:,}", 'system')
+                            self.print_color(f"  ├─ Safe Chunk Size: {Fore.YELLOW}{chunk_size:,}", 'system')
+                            self.print_color(f"  └─ Safety Factor: {Fore.YELLOW}{self.config['preprocessing_config']['memory_safety_factor']}", 'system')
                             
                             if interactive:
                                 response = input(Fore.YELLOW + Style.BRIGHT + "\nUse this configuration? (Y/n): " + Style.RESET_ALL).strip().lower()
                                 if response in ['n', 'no']:
-                                    raise FileNotFoundError("\nUser chose not to use found configuration")
+                                    raise FileNotFoundError("User chose not to use found configuration")
                             
-                            return max_rows, chunk_size
+                            return max_rows, max_chunk_size, chunk_size
             
-            # Original path handling for backward compatibility (specific summary file)
+            # Path handling for specific summary file
             elif config_file.exists() and config_file.is_file():
+                results_dir = config_file.parent
                 with open(config_file) as f:
                     config = json.load(f)
                     max_rows = config['dataset_info']['total_rows']
-                    chunk_size = int(config['performance_metrics']['max_chunk_size'] * self.config['preprocessing_config']['memory_safety_factor'])
-                    self.print_color(f"\nUsing tested configuration from file:", 'success')
-                    self.print_color(f"  ├─ Max rows: {Fore.YELLOW + Style.BRIGHT}{max_rows:,}", 'success')
-                    self.print_color(f"  └─ Safe chunk size: {Fore.YELLOW + Style.BRIGHT}{chunk_size:,}", 'success')
-                    return max_rows, chunk_size
+                    max_chunk_size = config['performance_metrics']['max_chunk_size']
+                    chunk_size = int(max_chunk_size * self.config['preprocessing_config']['memory_safety_factor'])
+                    
+                    # Display summary for direct file loading
+                    self.print_color(f"CONFIGURATION LOADED FROM FILE", 'success')
+                    self.print_color(f"  └─ File (Config Source): {Fore.MAGENTA}{Path(config_file)}", 'success')
+                    
+                    # Source Information
+                    self.print_color("\nConfiguration Overview:", 'info')
+                    self.print_color(f"  ├─ Test ID: {Fore.YELLOW}{config.get('test_id', 'N/A')}", 'system')
+                    self.print_color(f"  └─ Timestamp: {Fore.CYAN}{config.get('timestamp', 'N/A')}", 'system')
+                    
+                    # Dataset Information
+                    self.print_color("\nDataset Information:", 'info')
+                    dataset_info = config['dataset_info']
+                    self.print_color(f"  ├─ Total Rows: {Fore.YELLOW}{dataset_info.get('total_rows', 0):,}", 'system')
+                    self.print_color(f"  ├─ Processed Rows: {Fore.YELLOW}{dataset_info.get('processed_rows', 0):,}", 'system')
+                    self.print_color(f"  └─ Chunks Tested: {Fore.YELLOW}{dataset_info.get('chunks_tested', 0)}", 'system')
+                    
+                    # Performance Information
+                    self.print_color("\nPerformance Metrics:", 'info')
+                    perf_metrics = config['performance_metrics']
+                    self.print_color(f"  ├─ Max Chunk Size: {Fore.YELLOW}{perf_metrics.get('max_chunk_size', 0):,} rows", 'system')
+                    self.print_color(f"  ├─ Avg Throughput: {Fore.YELLOW}{perf_metrics.get('average_throughput', 0):,.0f} rows/sec", 'system')
+                    self.print_color(f"  └─ Total Time: {Fore.YELLOW}{perf_metrics.get('total_processing_time', 0):.2f} sec", 'system')
+                    
+                    # Configuration Values
+                    self.print_color("\nConfiguration Values:", 'info')
+                    self.print_color(f"  ├─ Max Rows: {Fore.YELLOW}{max_rows:,}", 'system')
+                    self.print_color(f"  ├─ Safe Chunk Size: {Fore.YELLOW}{chunk_size:,}", 'system')
+                    self.print_color(f"  └─ Safety Factor: {Fore.YELLOW}{self.config['preprocessing_config']['memory_safety_factor']}", 'system')
+                    
+                    return max_rows, max_chunk_size, chunk_size
         
         except Exception as e:
-            self.print_color(f"\nConfig load error: {str(e)}", 'error')
+            self.print_color(f"\nConfiguration load error: {str(e)}", 'error')
             self._log_event(f"Failed to load config from {config_path}: {str(e)}", "error")
         
         if not interactive:
             return 1000000, 100000
         
-        self.print_color("\n" + "-" * 40, 'warning')
+        # Interactive configuration selection when no valid config found
+        self.print_color("\n" + "-" * 50, 'warning')
         self.print_color("SYSTEM CAPACITY DATA NOT AVAILABLE", 'warning')
-        self.print_color("-" * 40, 'warning')
+        self.print_color("-" * 50, 'warning')
         
         self.print_color("\nRunning a capacity test ensures optimal performance and prevents memory errors.", 'info')
         self.print_color("Without tested configuration, you may experience:", 'warning')
@@ -3243,8 +3330,9 @@ class MemoryAwarePreprocessor:
                     if test_result:
                         try:
                             max_rows = test_result['dataset_info']['total_rows']
-                            chunk_size = int(test_result['performance_metrics']['max_chunk_size'] * self.config['preprocessing_config']['memory_safety_factor'])
-                            return max_rows, chunk_size
+                            max_chunk_size = test_result['performance_metrics']['max_chunk_size']
+                            chunk_size = int(max_chunk_size * self.config['preprocessing_config']['memory_safety_factor'])
+                            return max_rows, max_chunk_size, chunk_size
                         except KeyError:
                             self.print_color("\nTest didn't produce valid results", 'error')
                     break
@@ -3258,9 +3346,9 @@ class MemoryAwarePreprocessor:
                 self.print_color("\nInput cancelled", 'warning')
                 break
         
-        self.print_color("\n" + "-" * 40, 'error')
+        self.print_color("\n" + "-" * 50, 'error')
         self.print_color("USING DEFAULT VALUES - MAY CAUSE MEMORY ISSUES", 'error')
-        self.print_color("-" * 40, 'error')
+        self.print_color("-" * 50, 'error')
         
         if interactive:
             self.print_color("\nYou can specify custom limits or accept defaults:", 'info')
@@ -3275,12 +3363,16 @@ class MemoryAwarePreprocessor:
                             try:
                                 max_rows = int(input(Fore.YELLOW + Style.BRIGHT + "\nEnter max rows to process (default: 1,000,000): " + Style.RESET_ALL) or "1000000")
                                 chunk_size = int(input(Fore.YELLOW + Style.BRIGHT + "\nEnter chunk size (default: 100,000): " + Style.RESET_ALL) or "100000")
+                                max_chunk_size = int(input(Fore.YELLOW + Style.BRIGHT + "\nEnter max chunk size (default: 100,000): " + Style.RESET_ALL) or "100000")
                                 
-                                if max_rows > 0 and chunk_size > 0:
-                                    self.print_color(f"\nUsing custom configuration:", 'success')
-                                    self.print_color(f"  ├─ Max rows: {max_rows:,}", 'success')
-                                    self.print_color(f"  └─ Chunk size: {chunk_size:,}", 'success')
-                                    return max_rows, chunk_size
+                                if max_rows > 0 and chunk_size > 0 and max_chunk_size > 0:
+                                    self.print_color(f"\nCustom Configuration:", 'success')
+                                    self.print_color("-" * 40, 'success')
+                                    self.print_color(f"  ├─ Max rows: {Fore.YELLOW}{max_rows:,}", 'system')
+                                    self.print_color(f"  ├─ Chunk size: {Fore.YELLOW}{chunk_size:,}", 'system')
+                                    self.print_color(f"  └─ Max chunk size: {Fore.YELLOW}{max_chunk_size:,}", 'system')
+                                    self.print_color("-" * 40, 'success')
+                                    return max_rows, max_chunk_size, chunk_size
                                 else:
                                     self.print_color("\nPlease enter positive integers", 'warning')
                             except ValueError:
@@ -3296,12 +3388,15 @@ class MemoryAwarePreprocessor:
         
         default_max = 1000000
         default_chunk = 100000
+        default_max_chunk_size = 100000
+        
         self.print_color(f"\nUsing default values:", 'warning')
-        self.print_color(f"  ├─ Max rows: {default_max:,}", 'warning')
-        self.print_color(f"  └─ Chunk size: {default_chunk:,}", 'warning')
+        self.print_color(f"  ├─ Max rows: {Fore.YELLOW}{default_max:,}", 'system')
+        self.print_color(f"  ├─ Chunk size: {Fore.YELLOW}{default_chunk:,}", 'system')
+        self.print_color(f"  └─ Max chunk size: {Fore.YELLOW}{default_max_chunk_size:,}", 'system')
         self.print_color("\nWarning: These values may cause memory issues with large datasets!", 'error')
         
-        return default_max, default_chunk
+        return default_max, default_chunk, default_max_chunk_size
 
     def select_and_pad_features(self, df: pd.DataFrame, all_features: list, target_count: int = None) -> Tuple[pd.DataFrame, List[str]]:
         """Select and pad features to reach target count for hybrid system compatibility."""
@@ -3319,7 +3414,7 @@ class MemoryAwarePreprocessor:
         else:
             missing_count = target_count - len(current_features)
             self.print_color(f"\nFeature Padding:", 'info')
-            self.print_color(f"  ├─ Current features: {Fore.GREEN + Style.BRIGHT}{len(current_features)}", 'info')
+            self.print_color(f"  ├─ Current features: {Fore.WHITE + Style.BRIGHT}{len(current_features)}", 'info')
             self.print_color(f"  ├─ Target features: {Fore.YELLOW + Style.BRIGHT}{target_count}", 'info')
             self.print_color(f"  └─ Synthetic features adding: {Fore.GREEN + Style.BRIGHT}{missing_count}", 'info')
             
@@ -3363,6 +3458,10 @@ class MemoryAwarePreprocessor:
         if initial_rows != len(df):
             self.print_color(f"  └─ Rows removed with missing values: {Fore.GREEN + Style.BRIGHT}{initial_rows - len(df)}", 'warning')
         
+        # Check if label column exists
+        if label_col not in df.columns:
+            raise KeyError(f"Label column '{label_col}' not found in dataframe. Available columns: {list(df.columns)}")
+
         labels = df[label_col].astype('category').cat.codes
         df.drop(columns=[label_col], inplace=True)
         
@@ -3418,7 +3517,7 @@ class MemoryAwarePreprocessor:
 
         if output_dir is None:
             preprocessing_config = self.config.get('preprocessing_config', {})
-            output_dir = preprocessing_config.get('default_output_dir', 'results')
+            output_dir = preprocessing_config.get('default_input_dir', 'datasets')
         
         if config_path is None:
             config_path = self.config.get('default_results_dir', 'results')
@@ -3441,6 +3540,7 @@ class MemoryAwarePreprocessor:
             "failed_chunks": 0,
             "memory_config": {
                 "max_rows": 0,
+                "max_chunk_size": 0,
                 "chunk_size": 0,
                 "safety_factor": self.config['preprocessing_config']['memory_safety_factor']
             },
@@ -3576,7 +3676,7 @@ class MemoryAwarePreprocessor:
             process_id = os.getpid()
             unique_hash = hashlib.md5(
                 f"{timestamp}_{process_id}".encode()
-            ).hexdigest()[:4]
+            ).hexdigest()[:8]
             
             # Full ID stored only in metadata, not used for file/directory names
             run_id_full = f"run_{run_number:03d}_{timestamp}_{unique_hash}"
@@ -3596,6 +3696,7 @@ class MemoryAwarePreprocessor:
         # Create preprocessing-specific output directory using simple run_id
         preprocess_output_dir = output_path / run_id
         preprocess_output_dir.mkdir(parents=True, exist_ok=True)
+        self.preprocess_output_dir = preprocess_output_dir
 
         # Update statistics with run information
         preprocess_statistics["run_id"] = run_id_full
@@ -3603,13 +3704,10 @@ class MemoryAwarePreprocessor:
         preprocess_statistics["run_info"] = run_info
         preprocess_statistics["output_directory"] = str(preprocess_output_dir)
         
-        self.print_color("\n" + "-" * 40, 'highlight')
-        self.print_color("PREPROCESSING PIPELINE", 'highlight')
-        self.print_color("-" * 40, 'highlight')
-        
         # Display run header
         if run_info and 'run_id' in run_info:
-            self.print_color(f"\nPREPROCESSING RUN: {Fore.YELLOW + Style.BRIGHT}{run_number:03d}", 'highlight')
+            self.print_color("\n" + "-" * 40, 'highlight')
+            self.print_color(f"PREPROCESSING PIPELINE RUN: {Fore.YELLOW + Style.BRIGHT}{run_number:03d}", 'highlight')
             # Extract timestamp from run_id_full if available
             if 'run_id_full' in run_info:
                 parts = run_info['run_id_full'].split('_')
@@ -3622,7 +3720,7 @@ class MemoryAwarePreprocessor:
             if 'run_id_full' in run_info and len(run_info['run_id_full'].split('_')) >= 5:
                 unique_hash = run_info['run_id_full'].split('_')[-1]
                 self.print_color(f"Unique Hash: {Fore.YELLOW + Style.BRIGHT}{unique_hash}", 'highlight')
-            self.print_color(f"Output Directory: {Fore.CYAN + Style.BRIGHT}{preprocess_output_dir}", 'highlight')
+            self.print_color(f"Output Directory: {Fore.WHITE + Style.BRIGHT}{preprocess_output_dir}", 'highlight')
             self.print_color("-" * 40, 'highlight')
         
         # Update tracker with start of processing
@@ -3660,11 +3758,6 @@ class MemoryAwarePreprocessor:
                         'run_directory': str(config_file),
                         'summary_file': str(summary_file)
                     }
-                    
-                    self.print_color(f"\nUsing test configuration from {Fore.YELLOW + Style.BRIGHT}{run_id}", 'success')
-                    self.print_color(f"  ├─ Run #{Fore.YELLOW + Style.BRIGHT}{selected_run['run_number']}", 'success')
-                    self.print_color(f"  ├─ Timestamp: {Fore.GREEN + Style.BRIGHT}{selected_run['timestamp']}", 'success')
-                    self.print_color(f"  └─ Config source: {Fore.MAGENTA + Style.BRIGHT}{str(config_file)}", 'success')
                 
                 except Exception as e:
                     self.print_color(f"\nError reading run configuration: {str(e)}", 'warning')
@@ -3682,36 +3775,38 @@ class MemoryAwarePreprocessor:
             else:
                 self.print_color("\nNo specific run selected, searching for latest...", 'info')
         
-        max_rows, chunk_size = self.get_memory_config(config_path, interactive)
+        # Call get_memory_config to obtain memory configuration
+        memory_config_result = self.get_memory_config(config_path, interactive)
+        
+        # Handle the return value from get_memory_config
+        if isinstance(memory_config_result, tuple) and len(memory_config_result) == 3:
+            # get_memory_config returns (max_rows, max_chunk_size, chunk_size)
+            max_rows, max_chunk_size, chunk_size = memory_config_result
+        elif isinstance(memory_config_result, tuple) and len(memory_config_result) == 2:
+            # Old format: (max_rows, chunk_size) - use chunk_size for both
+            max_rows, chunk_size = memory_config_result
+            max_chunk_size = chunk_size
+        else:
+            # Fallback defaults
+            self.print_color("\nError: Invalid memory configuration returned", 'error')
+            max_rows = 1000000
+            max_chunk_size = 100000
+            chunk_size = 100000
         
         # Update statistics with memory configuration
         preprocess_statistics["memory_config"]["max_rows"] = max_rows
+        preprocess_statistics["memory_config"]["max_chunk_size"] = max_chunk_size
         preprocess_statistics["memory_config"]["chunk_size"] = chunk_size
-        preprocess_statistics["total_rows"] = max_rows
+        preprocess_statistics["total_rows"] = 0
         preprocess_statistics["status"] = "configuration_loaded"
         
         # Update tracker with configuration loaded
         self._update_run_tracker(output_path.parent, run_number, 'configuration_loaded', {
             'max_rows': max_rows,
+            'max_chunk_size': max_chunk_size,
             'chunk_size': chunk_size,
             'timestamp': datetime.now().isoformat()
         })
-        
-        self.print_color("\n" + "-" * 40, 'info')
-        self.print_color("PROCESSING CONFIGURATION", 'info')
-        self.print_color("-" * 40, 'info')
-        
-        self.print_color(f"\nInput file: {Fore.MAGENTA + Style.BRIGHT}{filepath}", 'info')
-        self.print_color(f"Output directory: {Fore.MAGENTA + Style.BRIGHT}{preprocess_output_dir}", 'info')
-        self.print_color(f"Processing limit: {Fore.YELLOW + Style.BRIGHT}{max_rows:,} rows", 'info')
-        self.print_color(f"Chunk size: {Fore.GREEN + Style.BRIGHT}{chunk_size:,} rows", 'info')
-        self.print_color(f"Target feature count: {Fore.YELLOW + Style.BRIGHT}{self.config['preprocessing_config']['hybrid_feature_count']}", 'info')
-        self.print_color(f"Memory safety factor: {Fore.GREEN + Style.BRIGHT}{self.config['preprocessing_config']['memory_safety_factor']}", 'info')
-        
-        if selected_run:
-            self.print_color(f"Config source: Run {selected_run['run_id']} (#{selected_run['run_number']})", 'success')
-        else:
-            self.print_color(f"Config source: {Fore.MAGENTA + Style.BRIGHT}{config_path}", 'info')
         
         # Verify file exists
         if not Path(filepath).exists():
@@ -3732,14 +3827,13 @@ class MemoryAwarePreprocessor:
         
         # Load feature descriptions
         feature_descriptions = self.load_feature_descriptions(filepath, interactive=interactive)
+
+        # Extract dataset name from filepath
+        dataset_name = Path(filepath).stem
         
         # Initialize encoders on a larger sample to reduce chance of unseen labels
-        self.print_color("\n" + "-" * 40, 'info')
-        self.print_color("INITIALIZING ENCODERS", 'info')
-        self.print_color("-" * 40, 'info')
-        
         sample_size = min(50000, chunk_size)
-        self.print_color(f"\nLoading sample data ({sample_size:,} rows)...", 'warning')
+        self.print_color(f"\nInitializing encoders...", 'warning')
         
         try:
             sample_df = pd.read_csv(
@@ -3771,7 +3865,8 @@ class MemoryAwarePreprocessor:
                 le = LabelEncoder()
                 le.fit(sample_df[col])
                 encoders[col] = le
-                joblib.dump(le, preprocess_output_dir / f"{col}_label_encoder.pkl")
+                encoder_filename = f"{dataset_name}_{col}_label_encoder.pkl"
+                joblib.dump(le, preprocess_output_dir / encoder_filename)
                 self.print_color(f"  ├─ {col} encoder: {Fore.YELLOW + Style.BRIGHT}{len(le.classes_)} unique values", 'success')
         
         categorical_cols = sample_df.select_dtypes(include=["object", "category"]).columns.tolist()
@@ -3781,7 +3876,8 @@ class MemoryAwarePreprocessor:
             encoder = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
             encoder.fit(sample_df[other_categorical])
             encoders['one_hot'] = encoder
-            joblib.dump(encoder, preprocess_output_dir / "one_hot_encoder.pkl")
+            one_hot_filename = f"{dataset_name}_one_hot_encoder.pkl"
+            joblib.dump(encoder, preprocess_output_dir / one_hot_filename)
             self.print_color(f"  ├─ One-hot encoder: {Fore.YELLOW + Style.BRIGHT}{len(other_categorical)} categorical columns", 'success')
         
         self.print_color(f"  └─ Encoders saved to: {Fore.MAGENTA + Style.BRIGHT}{preprocess_output_dir}", 'success')
@@ -3794,19 +3890,139 @@ class MemoryAwarePreprocessor:
         self._update_run_tracker(output_path.parent, run_number, 'encoders_initialized', {
             'timestamp': datetime.now().isoformat()
         })
+
+        # Detect label column
+        self.print_color(f"\nDetecting label column...", 'warning')
+
+        # Common label column names in IDS datasets
+        common_label_names = [
+            'Attack', 'attack', 'ATTACK',
+            'Label', 'label', 'LABEL',
+            'Class', 'class', 'CLASS',
+            'Target', 'target', 'TARGET'
+        ]
+
+        label_col = None
+        available_columns = sample_df.columns.tolist()
+
+        # First, try common names
+        for col_name in common_label_names:
+            if col_name in available_columns:
+                label_col = col_name
+                self.print_color(f"\nLabel column detected: {Fore.YELLOW + Style.BRIGHT}{label_col}", 'success')
+                break
+
+        # If not found, let user select
+        if label_col is None and interactive:
+            self.print_color("\nLabel column not automatically detected.", 'warning')
+            self.print_color(f"\nAvailable columns ({len(available_columns)}):", 'info')
+            
+            for i, col in enumerate(available_columns, 1):
+                sample_values = sample_df[col].unique()[:3]
+                self.print_color(f"  {i:2d}. {col} (sample: {list(sample_values)})", 'debug')
+            
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect label column (1-{len(available_columns)}, 0 to cancel): " + Style.RESET_ALL).strip()
+                    
+                    if choice == '0':
+                        self.print_color("\nLabel column selection cancelled", 'error')
+                        preprocess_statistics["status"] = "cancelled_no_label"
+                        preprocess_statistics["end_time"] = datetime.now().isoformat()
+                        self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+                        return
+                    
+                    if not choice.isdigit():
+                        if attempt < max_attempts - 1:
+                            self.print_color("\nPlease enter a number.", 'warning')
+                            continue
+                        else:
+                            raise ValueError("Invalid input")
+                    
+                    choice_num = int(choice)
+                    if 1 <= choice_num <= len(available_columns):
+                        label_col = available_columns[choice_num - 1]
+                        self.print_color(f"\nSelected label column: {Fore.GREEN + Style.BRIGHT}{label_col}", 'success')
+                        break
+                    else:
+                        if attempt < max_attempts - 1:
+                            self.print_color(f"\nPlease enter a number between 1 and {len(available_columns)}.", 'warning')
+                
+                except (EOFError, KeyboardInterrupt):
+                    self.print_color("\nLabel selection cancelled", 'warning')
+                    preprocess_statistics["status"] = "cancelled_no_label"
+                    preprocess_statistics["end_time"] = datetime.now().isoformat()
+                    self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+                    return
+                except Exception as e:
+                    if attempt < max_attempts - 1:
+                        self.print_color(f"\nError: {str(e)}. Please try again.", 'error')
+
+        elif label_col is None:
+            # Non-interactive mode - try to find column with "label" in name
+            for col in available_columns:
+                if 'label' in col.lower() or 'attack' in col.lower() or 'class' in col.lower():
+                    label_col = col
+                    self.print_color(f"\nLabel column auto-detected: {Fore.YELLOW + Style.BRIGHT}{label_col}", 'success')
+                    break
+            
+            if label_col is None:
+                self.print_color("\nError: Could not auto-detect label column in non-interactive mode", 'error')
+                self.print_color(f"Available columns: {', '.join(available_columns[:10])}...", 'info')
+                preprocess_statistics["status"] = "failed_no_label"
+                preprocess_statistics["end_time"] = datetime.now().isoformat()
+                self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+                return
+
+        # Verify label column has valid data
+        unique_labels = sample_df[label_col].nunique()
+        self.print_color(f"  ├─ Unique labels: {Fore.YELLOW + Style.BRIGHT}{unique_labels}", 'success')
+        self.print_color(f"  └─ Sample values: {Fore.CYAN + Style.BRIGHT}{list(sample_df[label_col].unique()[:5])}", 'success')
+
+        # Store label column in statistics
+        preprocess_statistics["label_column"] = label_col
+        preprocess_statistics["unique_labels"] = int(unique_labels)
+
+        # Read a small sample from the actual file to verify column names match
+        try:
+            verify_df = pd.read_csv(
+                filepath,
+                nrows=min(50000, chunk_size),
+                low_memory=False,
+                dtype={col: "category" for col in ["IPV4_SRC_ADDR", "IPV4_DST_ADDR"]},
+                on_bad_lines='warn'
+            )
+            
+            if label_col not in verify_df.columns:
+                self.print_color(f"\nCRITICAL: Label column '{label_col}' not found in actual data!", 'warning')
+                self.print_color(f"Available columns in data: {', '.join(verify_df.columns.tolist())}", 'info')
+                
+                # Auto-correct by searching actual data
+                for col_name in common_label_names:
+                    if col_name in verify_df.columns:
+                        label_col = col_name
+                        self.print_color(f"\nAuto-corrected to: {Fore.YELLOW + Style.BRIGHT}{label_col}", 'success')
+                        break
+                
+                # If still not found, error out
+                if label_col not in verify_df.columns:
+                    self.print_color("\nError: Cannot find valid label column in actual dataset", 'error')
+                    preprocess_statistics["status"] = "failed_no_label"
+                    preprocess_statistics["end_time"] = datetime.now().isoformat()
+                    self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+                    return
+        
+        except Exception as test_error:
+            self.print_color(f"\nWarning during label verification: {str(test_error)}", 'warning')
         
         # Start chunked processing
-        self.print_color("\n" + "-" * 40, 'info')
-        self.print_color("CHUNKED PROCESSING", 'info')
-        self.print_color("-" * 40, 'info')
-        
         try:
-            self.print_color(f"\nStarting preprocessing with {max_rows:,} row limit...", 'warning')
+            self.print_color(f"\nStarting chunked preprocessing with {max_chunk_size:,} row limit...", 'warning')
             
             chunk_reader = pd.read_csv(
                 filepath,
                 chunksize=chunk_size,
-                nrows=max_rows,
                 low_memory=False,
                 dtype={col: "category" for col in ["IPV4_SRC_ADDR", "IPV4_DST_ADDR"]},
                 on_bad_lines='warn'
@@ -3820,17 +4036,214 @@ class MemoryAwarePreprocessor:
             processing_times = []
             rows_per_second_history = []
             
-            # Process with alive_progress bar
-            with alive_bar(title='Processing chunks', bar='smooth', spinner='dots_waves2', length=35, unit='chunks', stats=True, enrich_print=False) as bar:
+            # Calculate total number of chunks for progress bar
+            total_chunks = int(max_rows / chunk_size) + (1 if max_rows % chunk_size > 0 else 0)
+            
+            # Main processing loop
+            try:
+                with alive_bar(total=total_chunks, title='Processing dataset', bar='smooth', spinner='dots_waves2', length=40, unit=' chunks', stats=False, enrich_print=False) as main_bar:
+                    
+                    for df_chunk in chunk_reader:
+                        chunk_index += 1
+                        chunk_start_row = total_rows
+                        chunk_end_row = chunk_start_row + len(df_chunk)
+                        chunk_start_time = time.time()
+                        
+                        # Update main progress bar with chunk information
+                        main_bar.text = f"Chunk {chunk_index}/{total_chunks} | Rows {chunk_start_row:,}-{chunk_end_row:,} | Size: {len(df_chunk):,} rows"
+                        
+                        # Update tracker with chunk start
+                        self._update_run_tracker(output_path.parent, run_number, 'chunk_started', {
+                            'chunk_index': chunk_index,
+                            'chunk_size': len(df_chunk),
+                            'current_row': chunk_start_row,
+                            'chunk_end': chunk_end_row,
+                            'timestamp': datetime.now().isoformat()
+                        })
+                        
+                        try:
+                            # Process chunk with step-by-step updates
+                            main_bar.text = f"Chunk {chunk_index}/{total_chunks} | Step 1/4: Removing missing values..."
+                            df_chunk_clean = df_chunk.dropna()
+                            
+                            if len(df_chunk_clean) != len(df_chunk):
+                                rows_removed = len(df_chunk) - len(df_chunk_clean)
+                                main_bar.text = f"Chunk {chunk_index}/{total_chunks} | Step 2/4: Removed {rows_removed:,} missing rows, encoding labels..."
+                            else:
+                                main_bar.text = f"Chunk {chunk_index}/{total_chunks} | Step 2/4: Encoding labels..."
+                            
+                            # Extract and encode labels
+                            labels = df_chunk_clean[label_col].astype('category').cat.codes
+                            df_features = df_chunk_clean.drop(columns=[label_col])
+                            
+                            main_bar.text = f"Chunk {chunk_index}/{total_chunks} | Step 3/4: Encoding IP addresses..."
+                            # IP Address Encoding
+                            for col in ip_cols:
+                                if col in df_features.columns and col in encoders:
+                                    df_features[col] = self.safe_label_encode(df_features[col], encoders[col])
+                            
+                            main_bar.text = f"Chunk {chunk_index}/{total_chunks} | Step 4/4: One-hot encoding and scaling..."
+                            # Process remaining transformations
+                            df_processed, features, scaler = self.process_chunk_preprocessing(
+                                df_features,
+                                preprocess_output_dir,
+                                encoders,
+                                scaler
+                            )
+                            
+                            if not selected_features:
+                                selected_features = features
+                            
+                            # Add labels back
+                            df_processed['Label'] = labels
+                            processed_chunks.append(df_processed)
+                            rows_processed = len(df_processed)
+                            total_rows += rows_processed
+                            
+                            # Calculate chunk performance metrics
+                            chunk_processing_time = time.time() - chunk_start_time
+                            processing_times.append(chunk_processing_time)
+                            
+                            if chunk_processing_time > 0:
+                                rows_per_second = rows_processed / chunk_processing_time
+                                rows_per_second_history.append(rows_per_second)
+                            else:
+                                rows_per_second = 0
+                            
+                            # Update main progress bar with detailed stats
+                            current_rows_per_second = f"{rows_per_second:,.0f}" if rows_per_second > 0 else "N/A"
+                            avg_rows_per_second = f"{sum(rows_per_second_history)/len(rows_per_second_history):,.0f}" if rows_per_second_history else "N/A"
+                            
+                            main_bar.text = (f"Chunk {chunk_index}/{total_chunks} | Rows: {rows_processed:,} | Speed: {current_rows_per_second} rows/sec | Avg: {avg_rows_per_second} rows/sec | Features: {len(features)}")
+                            
+                            # Update statistics
+                            preprocess_statistics["successful_chunks"] += 1
+                            preprocess_statistics["total_chunks"] += 1
+                            preprocess_statistics["processed_rows"] = total_rows
+                            
+                            # Update performance metrics
+                            if processing_times:
+                                preprocess_statistics["performance_metrics"]["average_processing_time"] = sum(processing_times) / len(processing_times)
+                                preprocess_statistics["performance_metrics"]["total_processing_time"] = sum(processing_times)
+                            
+                            if rows_per_second_history:
+                                preprocess_statistics["performance_metrics"]["average_rows_per_second"] = sum(rows_per_second_history) / len(rows_per_second_history)
+                                preprocess_statistics["performance_metrics"]["max_rows_per_second"] = max(rows_per_second_history)
+                                preprocess_statistics["performance_metrics"]["min_rows_per_second"] = min(rows_per_second_history)
+                            
+                            # Track chunk in history
+                            preprocess_statistics["chunk_history"].append({
+                                "chunk_index": chunk_index,
+                                "status": "success",
+                                "rows_processed": rows_processed,
+                                "processing_time_sec": chunk_processing_time,
+                                "rows_per_second": rows_per_second,
+                                "features_count": len(features),
+                                "timestamp": datetime.now().isoformat()
+                            })
+                            
+                            # Update tracker with chunk success
+                            self._update_run_tracker(output_path.parent, run_number, 'chunk_completed', {
+                                'chunk_index': chunk_index,
+                                'rows_processed': rows_processed,
+                                'processing_time_sec': chunk_processing_time,
+                                'rows_per_second': rows_per_second,
+                                'timestamp': datetime.now().isoformat()
+                            })
+                            
+                            if verbose and chunk_index <= 3:  # Only show first 3 chunks if verbose
+                                self.print_color(f"\nChunk {Fore.YELLOW + Style.BRIGHT}#{chunk_index} completed:", 'success')
+                                self.print_color(f"  ├─ Rows processed: {Fore.WHITE + Style.BRIGHT}{rows_processed:,}", 'success')
+                                self.print_color(f"  ├─ Processing time: {Fore.CYAN + Style.BRIGHT}{chunk_processing_time:.2f} seconds", 'success')
+                                self.print_color(f"  ├─ Processing speed: {Fore.GREEN + Style.BRIGHT}{rows_per_second:,.0f} rows/second", 'success')
+                                self.print_color(f"  ├─ Features selected: {Fore.YELLOW + Style.BRIGHT}{len(features)}", 'success')
+                                self.print_color(f"  └─ Sample features: {Fore.BLUE + Style.BRIGHT}{features[:5]}{'...' if len(features) > 5 else ''}", 'success')
+                        
+                        except Exception as e:
+                            main_bar.text = f"Chunk {chunk_index}: Failed - {str(e)[:30]}..."
+                            self.print_color(f"\nFailed to process chunk {chunk_index}: {str(e)}", 'error')
+                            
+                            # Update statistics
+                            preprocess_statistics["failed_chunks"] += 1
+                            preprocess_statistics["total_chunks"] += 1
+                            
+                            preprocess_statistics["chunk_history"].append({
+                                "chunk_index": chunk_index,
+                                "status": "failed",
+                                "error": str(e),
+                                "timestamp": datetime.now().isoformat()
+                            })
+                            
+                            # Update tracker with chunk failure
+                            self._update_run_tracker(output_path.parent, run_number, 'chunk_failed', {
+                                'chunk_index': chunk_index,
+                                'error': str(e),
+                                'timestamp': datetime.now().isoformat()
+                            })
+                            
+                            if interactive:
+                                max_attempts = 3
+                                for attempt in range(max_attempts):
+                                    try:
+                                        response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue processing? (Y/n): " + Style.RESET_ALL).strip().lower()
+                                        if response in ['y', 'yes', '']:
+                                            break
+                                        elif response in ['n', 'no']:
+                                            self.print_color("\nProcessing stopped by user", 'warning')
+                                            preprocess_statistics["status"] = "stopped_by_user"
+                                            preprocess_statistics["end_time"] = datetime.now().isoformat()
+                                            self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+                                            self._update_run_tracker(output_path.parent, run_number, 'stopped_by_user', {
+                                                'timestamp': datetime.now().isoformat()
+                                            })
+                                            return
+                                        else:
+                                            if attempt < max_attempts - 1:
+                                                self.print_color("\nPlease enter 'y' for yes or 'n' for no.", 'warning')
+                                    except KeyboardInterrupt:
+                                        self.print_color("\nProcessing stopped", 'warning')
+                                        preprocess_statistics["status"] = "stopped_by_user"
+                                        preprocess_statistics["end_time"] = datetime.now().isoformat()
+                                        self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+                                        self._update_run_tracker(output_path.parent, run_number, 'stopped_by_user', {
+                                            'timestamp': datetime.now().isoformat()
+                                        })
+                                        return
+                            else:
+                                # Skip failed chunk and continue
+                                main_bar.text = f"Chunk {chunk_index}: Skipped due to error"
+                                continue
+                        
+                        # Update main progress bar
+                        main_bar()
+                        
+                        # Periodically save statistics (every 10 chunks or every minute)
+                        if chunk_index % 10 == 0 or (chunk_index > 1 and chunk_index % 5 == 0):
+                            self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+                            
+                            # Update progress in tracker
+                            progress_percent = (total_rows / max_rows) * 100 if max_rows > 0 else 0
+                            self._update_run_tracker(output_path.parent, run_number, 'progress_update', {
+                                'current_row': total_rows,
+                                'total_rows': max_rows,
+                                'progress_percent': progress_percent,
+                                'chunks_completed': chunk_index,
+                                'timestamp': datetime.now().isoformat()
+                            })
+            
+            except ImportError:
+                # Fallback if alive_progress is not available
+                self.print_color("\nNote: Install 'alive-progress' for enhanced progress tracking", 'warning')
+                self.print_color("Continuing with basic progress reporting...", 'warning')
                 
+                # Process chunks without alive_progress
                 for df_chunk in chunk_reader:
                     chunk_index += 1
                     chunk_start_row = total_rows
                     chunk_end_row = chunk_start_row + len(df_chunk)
                     chunk_start_time = time.time()
                     
-                    # Update progress bar message
-                    bar.text = f"Chunk {chunk_index} | Rows {chunk_start_row:,}-{chunk_end_row:,} | Size: {len(df_chunk):,} rows"
+                    self.print_color(f"\nChunk {chunk_index}: Processing rows {chunk_start_row:,}-{chunk_end_row:,} ({len(df_chunk):,} rows)...", 'warning')
                     
                     # Update tracker with chunk start
                     self._update_run_tracker(output_path.parent, run_number, 'chunk_started', {
@@ -3856,7 +4269,7 @@ class MemoryAwarePreprocessor:
                         rows_processed = len(df_processed)
                         total_rows += rows_processed
                         
-                        # Calculate chunk performance metrics
+                        # Calculate performance metrics
                         chunk_processing_time = time.time() - chunk_start_time
                         processing_times.append(chunk_processing_time)
                         
@@ -3870,16 +4283,6 @@ class MemoryAwarePreprocessor:
                         preprocess_statistics["successful_chunks"] += 1
                         preprocess_statistics["total_chunks"] += 1
                         preprocess_statistics["processed_rows"] = total_rows
-                        
-                        # Update performance metrics
-                        if processing_times:
-                            preprocess_statistics["performance_metrics"]["average_processing_time"] = sum(processing_times) / len(processing_times)
-                            preprocess_statistics["performance_metrics"]["total_processing_time"] = sum(processing_times)
-                        
-                        if rows_per_second_history:
-                            preprocess_statistics["performance_metrics"]["average_rows_per_second"] = sum(rows_per_second_history) / len(rows_per_second_history)
-                            preprocess_statistics["performance_metrics"]["max_rows_per_second"] = max(rows_per_second_history)
-                            preprocess_statistics["performance_metrics"]["min_rows_per_second"] = min(rows_per_second_history)
                         
                         # Track chunk in history
                         preprocess_statistics["chunk_history"].append({
@@ -3901,20 +4304,17 @@ class MemoryAwarePreprocessor:
                             'timestamp': datetime.now().isoformat()
                         })
                         
-                        # Update progress bar with processing stats
-                        bar.text = f"Chunk {chunk_index}: {rows_processed:,} rows | Total: {total_rows:,} | Features: {len(features)}"
+                        # Basic progress display
+                        progress_percent = (total_rows / max_rows) * 100 if max_rows > 0 else 0
+                        self.print_color(f"[+] Completed: {rows_processed:,} rows | Total: {total_rows:,} | Progress: {progress_percent:.1f}%", 'success')
                         
-                        if verbose and chunk_index <= 3:  # Only show first 3 chunks if verbose
-                            self.print_color(f"  [+] Chunk {chunk_index} Details:", 'success')
-                            self.print_color(f"      ├─ Rows processed: {Fore.YELLOW + Style.BRIGHT}{rows_processed:,}", 'success')
-                            self.print_color(f"      ├─ Features: {Fore.YELLOW + Style.BRIGHT}{len(features)}", 'success')
-                            self.print_color(f"      └─ Sample: {Fore.YELLOW + Style.BRIGHT}{features[:5]}{'...' if len(features) > 5 else ''}", 'success')
+                        if verbose and chunk_index <= 3:
+                            self.print_color(f"    ├─ Features: {Fore.YELLOW + Style.BRIGHT}{len(features)}", 'success')
+                            self.print_color(f"    └─ Processing speed: {Fore.GREEN + Style.BRIGHT}{rows_per_second:,.0f} rows/sec", 'success')
                     
                     except Exception as e:
-                        bar.text = f"Chunk {chunk_index}: Failed - {str(e)[:30]}..."
                         self.print_color(f"\nFailed to process chunk {chunk_index}: {str(e)}", 'error')
                         
-                        # Update statistics
                         preprocess_statistics["failed_chunks"] += 1
                         preprocess_statistics["total_chunks"] += 1
                         
@@ -3961,14 +4361,9 @@ class MemoryAwarePreprocessor:
                                     })
                                     return
                         else:
-                            # Skip failed chunk and continue
-                            bar.text = f"Chunk {chunk_index}: Skipped due to error"
                             continue
                     
-                    # Update progress bar
-                    bar()
-                    
-                    # Periodically save statistics (every 10 chunks)
+                    # Periodically save statistics
                     if chunk_index % 10 == 0:
                         self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
                         
@@ -3981,168 +4376,6 @@ class MemoryAwarePreprocessor:
                             'chunks_completed': chunk_index,
                             'timestamp': datetime.now().isoformat()
                         })
-        
-        except ImportError:
-            # Fallback to manual progress tracking if alive_progress is not available
-            self.print_color("\nNote: Install 'alive-progress' for progress tracking", 'warning')
-            self.print_color("Continuing with basic progress reporting...\n", 'warning')
-            
-            chunk_reader = pd.read_csv(
-                filepath,
-                chunksize=chunk_size,
-                nrows=max_rows,
-                low_memory=False,
-                dtype={col: "category" for col in ["IPV4_SRC_ADDR", "IPV4_DST_ADDR"]},
-                on_bad_lines='warn'
-            )
-            
-            processed_chunks = []
-            selected_features = []
-            scaler = None
-            total_rows = 0
-            chunk_index = 0
-            processing_times = []
-            rows_per_second_history = []
-            
-            for df_chunk in chunk_reader:
-                chunk_index += 1
-                chunk_start_row = total_rows
-                chunk_end_row = chunk_start_row + len(df_chunk)
-                chunk_start_time = time.time()
-                
-                self.print_color(f"\nChunk {chunk_index}: Processing rows {chunk_start_row:,}-{chunk_end_row:,} ({len(df_chunk):,} rows)...", 'warning')
-                
-                # Update tracker with chunk start
-                self._update_run_tracker(output_path.parent, run_number, 'chunk_started', {
-                    'chunk_index': chunk_index,
-                    'chunk_size': len(df_chunk),
-                    'current_row': chunk_start_row,
-                    'chunk_end': chunk_end_row,
-                    'timestamp': datetime.now().isoformat()
-                })
-                
-                try:
-                    df_processed, features, scaler = self.process_chunk_preprocessing(
-                        df_chunk,
-                        preprocess_output_dir,
-                        encoders,
-                        scaler
-                    )
-                    
-                    if not selected_features:
-                        selected_features = features
-                    
-                    processed_chunks.append(df_processed)
-                    rows_processed = len(df_processed)
-                    total_rows += rows_processed
-                    
-                    # Calculate performance metrics
-                    chunk_processing_time = time.time() - chunk_start_time
-                    processing_times.append(chunk_processing_time)
-                    
-                    if chunk_processing_time > 0:
-                        rows_per_second = rows_processed / chunk_processing_time
-                        rows_per_second_history.append(rows_per_second)
-                    else:
-                        rows_per_second = 0
-                    
-                    # Update statistics
-                    preprocess_statistics["successful_chunks"] += 1
-                    preprocess_statistics["total_chunks"] += 1
-                    preprocess_statistics["processed_rows"] = total_rows
-                    
-                    # Track chunk in history
-                    preprocess_statistics["chunk_history"].append({
-                        "chunk_index": chunk_index,
-                        "status": "success",
-                        "rows_processed": rows_processed,
-                        "processing_time_sec": chunk_processing_time,
-                        "rows_per_second": rows_per_second,
-                        "features_count": len(features),
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    
-                    # Update tracker with chunk success
-                    self._update_run_tracker(output_path.parent, run_number, 'chunk_completed', {
-                        'chunk_index': chunk_index,
-                        'rows_processed': rows_processed,
-                        'processing_time_sec': chunk_processing_time,
-                        'rows_per_second': rows_per_second,
-                        'timestamp': datetime.now().isoformat()
-                    })
-                    
-                    # Basic progress display
-                    progress_percent = (total_rows / max_rows) * 100 if max_rows > 0 else 0
-                    self.print_color(f"  [+] Completed: {rows_processed:,} rows | Total: {total_rows:,} | Progress: {progress_percent:.1f}%", 'success')
-                    
-                    if verbose and chunk_index <= 3:  # Only show first 3 chunks if verbose
-                        self.print_color(f"    ├─ Features: {Fore.YELLOW + Style.BRIGHT}{len(features)}", 'success')
-                        self.print_color(f"    └─ Sample: {Fore.YELLOW + Style.BRIGHT}{features[:5]}{'...' if len(features) > 5 else ''}", 'success')
-                
-                except Exception as e:
-                    self.print_color(f"\nFailed to process chunk {chunk_index}: {str(e)}", 'error')
-                    
-                    preprocess_statistics["failed_chunks"] += 1
-                    preprocess_statistics["total_chunks"] += 1
-                    
-                    preprocess_statistics["chunk_history"].append({
-                        "chunk_index": chunk_index,
-                        "status": "failed",
-                        "error": str(e),
-                        "timestamp": datetime.now().isoformat()
-                    })
-                    
-                    # Update tracker with chunk failure
-                    self._update_run_tracker(output_path.parent, run_number, 'chunk_failed', {
-                        'chunk_index': chunk_index,
-                        'error': str(e),
-                        'timestamp': datetime.now().isoformat()
-                    })
-                    
-                    if interactive:
-                        max_attempts = 3
-                        for attempt in range(max_attempts):
-                            try:
-                                response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue processing? (Y/n): " + Style.RESET_ALL).strip().lower()
-                                if response in ['y', 'yes', '']:
-                                    break
-                                elif response in ['n', 'no']:
-                                    self.print_color("\nProcessing stopped by user", 'warning')
-                                    preprocess_statistics["status"] = "stopped_by_user"
-                                    preprocess_statistics["end_time"] = datetime.now().isoformat()
-                                    self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
-                                    self._update_run_tracker(output_path.parent, run_number, 'stopped_by_user', {
-                                        'timestamp': datetime.now().isoformat()
-                                    })
-                                    return
-                                else:
-                                    if attempt < max_attempts - 1:
-                                        self.print_color("\nPlease enter 'y' for yes or 'n' for no.", 'warning')
-                            except KeyboardInterrupt:
-                                self.print_color("\nProcessing stopped", 'warning')
-                                preprocess_statistics["status"] = "stopped_by_user"
-                                preprocess_statistics["end_time"] = datetime.now().isoformat()
-                                self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
-                                self._update_run_tracker(output_path.parent, run_number, 'stopped_by_user', {
-                                    'timestamp': datetime.now().isoformat()
-                                })
-                                return
-                    else:
-                        continue
-                
-                # Periodically save statistics (every 10 chunks)
-                if chunk_index % 10 == 0:
-                    self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
-                    
-                    # Update progress in tracker
-                    progress_percent = (total_rows / max_rows) * 100 if max_rows > 0 else 0
-                    self._update_run_tracker(output_path.parent, run_number, 'progress_update', {
-                        'current_row': total_rows,
-                        'total_rows': max_rows,
-                        'progress_percent': progress_percent,
-                        'chunks_completed': chunk_index,
-                        'timestamp': datetime.now().isoformat()
-                    })
             
             # Update final performance metrics
             if processing_times:
@@ -4153,6 +4386,17 @@ class MemoryAwarePreprocessor:
                 preprocess_statistics["performance_metrics"]["average_rows_per_second"] = sum(rows_per_second_history) / len(rows_per_second_history)
                 preprocess_statistics["performance_metrics"]["max_rows_per_second"] = max(rows_per_second_history)
                 preprocess_statistics["performance_metrics"]["min_rows_per_second"] = min(rows_per_second_history)
+        
+        except Exception as e:
+            self.print_color(f"\nError during chunked processing: {str(e)}", 'error')
+            preprocess_statistics["status"] = "failed_processing"
+            preprocess_statistics["end_time"] = datetime.now().isoformat()
+            self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+            self._update_run_tracker(output_path.parent, run_number, 'failed_processing', {
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            })
+            return
         
         if not processed_chunks:
             self.print_color("\nNo data was processed successfully", 'error')
@@ -4165,36 +4409,64 @@ class MemoryAwarePreprocessor:
             return
         
         # Save artifacts
-        artifacts = {
-            "scaler": scaler,
-            "feature_names": selected_features,
-            "feature_descriptions": feature_descriptions,
-            "feature_descriptions_file": str(Path(filepath).parent / f"{Path(filepath).stem}_Features.csv") if feature_descriptions else None,
-            "total_rows": total_rows,
-            "chunks_processed": chunk_index,
-            "original_features": list(set(
-                sample_df.select_dtypes(include=["object", "category", "int64", "float64"]).columns.tolist()
-            )),
-            "hybrid_feature_count": self.config['preprocessing_config']['hybrid_feature_count'],
-            "input_size": len(selected_features),
-            "config_source": config_path,
-            "processing_timestamp": datetime.now().isoformat(),
-            "memory_config": {
-                "max_rows": max_rows,
-                "chunk_size": chunk_size,
-                "safety_factor": self.config['preprocessing_config']['memory_safety_factor']
-            },
-            "run_id": run_id_full,
-            "run_number": run_number
-        }
+        try:
+            self.print_color(f"\nSaving artifacts...", 'warning')
+            
+            with alive_bar(title='Saving artifacts', bar='smooth', spinner='dots_waves2', length=35, unit=' steps', stats=True, enrich_print=False) as artifacts_bar:
+                
+                artifacts_bar.text = "Step 1/4: Creating artifacts dictionary..."
+                # Create artifacts dictionary
+                artifacts = {
+                    "scaler": scaler,
+                    "feature_names": selected_features,
+                    "feature_descriptions": feature_descriptions,
+                    "feature_descriptions_file": str(Path(filepath).parent / f"{Path(filepath).stem}_Features.csv") if feature_descriptions else None,
+                    "total_rows": total_rows,
+                    "chunks_processed": chunk_index,
+                    "original_features": list(set(
+                        sample_df.select_dtypes(include=["object", "category", "int64", "float64"]).columns.tolist()
+                    )),
+                    "hybrid_feature_count": self.config['preprocessing_config']['hybrid_feature_count'],
+                    "input_size": len(selected_features),
+                    "config_source": config_path,
+                    "processing_timestamp": datetime.now().isoformat(),
+                    "memory_config": {
+                        "max_rows": max_rows,
+                        "max_chunk_size": max_chunk_size,
+                        "chunk_size": chunk_size,
+                        "safety_factor": self.config['preprocessing_config']['memory_safety_factor']
+                    },
+                    "run_id": run_id_full,
+                    "run_number": run_number
+                }
+                artifacts_bar()
+                
+                artifacts_bar.text = "Step 2/4: Saving artifacts to disk..."
+                artifacts_filename = f"{dataset_name}_preprocessing_artifacts.pkl"
+                artifacts_path = preprocess_output_dir / artifacts_filename
+                joblib.dump(artifacts, artifacts_path)
+                artifacts_bar()
+                
+                artifacts_bar.text = "Step 3/4: Concatenating processed chunks..."
+                final_df = pd.concat(processed_chunks)
+                artifacts_bar()
+                
+                artifacts_bar.text = "Step 4/4: Saving processed dataset..."
+                processed_filename = f"{dataset_name}_preprocessed_dataset.csv"
+                processed_path = preprocess_output_dir / processed_filename
+                final_df.to_csv(processed_path, index=False)
+                artifacts_bar()
         
-        artifacts_path = preprocess_output_dir / "preprocessing_artifacts.pkl"
-        joblib.dump(artifacts, artifacts_path)
-        
-        # Save final dataframe
-        final_df = pd.concat(processed_chunks)
-        processed_path = preprocess_output_dir / "preprocessed_dataset.csv"
-        final_df.to_csv(processed_path, index=False)
+        except Exception as e:
+            self.print_color(f"\nError saving artifacts: {str(e)}", 'error')
+            preprocess_statistics["status"] = "failed_saving_artifacts"
+            preprocess_statistics["end_time"] = datetime.now().isoformat()
+            self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
+            self._update_run_tracker(output_path.parent, run_number, 'failed_saving_artifacts', {
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            })
+            return
         
         # Update final statistics
         end_time = datetime.now()
@@ -4208,41 +4480,56 @@ class MemoryAwarePreprocessor:
         self._save_run_statistics(preprocess_output_dir, preprocess_statistics)
         
         # Save configuration summary
-        summary = {
-            "preprocessing_summary": {
-                "version": self.VERSION,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "run_id": run_id_full,
-                "run_number": run_number,
-                "input_file": filepath,
-                "output_directory": str(preprocess_output_dir),
-                "total_rows_processed": total_rows,
-                "chunks_processed": chunk_index,
-                "successful_chunks": preprocess_statistics["successful_chunks"],
-                "failed_chunks": preprocess_statistics["failed_chunks"],
-                "final_feature_count": len(selected_features),
-                "performance_metrics": preprocess_statistics["performance_metrics"],
-                "memory_config": {
-                    "max_rows": max_rows,
-                    "chunk_size": chunk_size,
-                    "safety_factor": self.config['preprocessing_config']['memory_safety_factor']
-                },
-                "artifacts_saved": [
-                    str(artifacts_path),
-                    str(processed_path),
-                    str(preprocess_output_dir / "IPV4_SRC_ADDR_label_encoder.pkl"),
-                    str(preprocess_output_dir / "IPV4_DST_ADDR_label_encoder.pkl"),
-                    str(preprocess_output_dir / "one_hot_encoder.pkl")
-                ],
-                "config_source": config_path,
-                "elapsed_time_seconds": preprocess_statistics["elapsed_time_seconds"],
-                "run_info": run_info
-            }
-        }
+        try:
+            self.print_color(f"\nSaving configuration summary...", 'warning')
+
+            with alive_bar(title='Saving summary', bar='smooth', spinner='dots_waves2', length=30, unit='steps', stats=False, enrich_print=False) as summary_bar:
+                
+                summary_bar.text = "Creating summary file..."
+                summary = {
+                    "preprocessing_summary": {
+                        "version": self.VERSION,
+                        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "run_id": run_id_full,
+                        "run_number": run_number,
+                        "input_file": filepath,
+                        "output_directory": str(preprocess_output_dir),
+                        "total_rows_processed": total_rows,
+                        "chunks_processed": chunk_index,
+                        "successful_chunks": preprocess_statistics["successful_chunks"],
+                        "failed_chunks": preprocess_statistics["failed_chunks"],
+                        "final_feature_count": len(selected_features),
+                        "performance_metrics": preprocess_statistics["performance_metrics"],
+                        "memory_config": {
+                            "max_rows": max_rows,
+                            "max_chunk_size": max_chunk_size,
+                            "chunk_size": chunk_size,
+                            "safety_factor": self.config['preprocessing_config']['memory_safety_factor']
+                        },
+                        "artifacts_saved": [
+                            str(artifacts_path),
+                            str(processed_path),
+                            str(preprocess_output_dir / f"{dataset_name}_IPV4_SRC_ADDR_label_encoder.pkl"),
+                            str(preprocess_output_dir / f"{dataset_name}_IPV4_DST_ADDR_label_encoder.pkl"),
+                            str(preprocess_output_dir / f"{dataset_name}_one_hot_encoder.pkl")
+                        ],
+                        "config_source": config_path,
+                        "elapsed_time_seconds": preprocess_statistics["elapsed_time_seconds"],
+                        "run_info": run_info
+                    }
+                }
+                summary_bar()
+                
+                summary_bar.text = "Writing summary to disk..."
+                summary_filename = f"{dataset_name}_preprocessing_summary_{run_id}.json"
+                summary_path = preprocess_output_dir / summary_filename
+                with open(summary_path, 'w') as f:
+                    json.dump(summary, f, indent=2)
+                summary_bar()
         
-        summary_path = preprocess_output_dir / f"preprocessing_summary_{run_id}.json"
-        with open(summary_path, 'w') as f:
-            json.dump(summary, f, indent=2)
+        except Exception as e:
+            self.print_color(f"\nError saving summary: {str(e)}", 'warning')
+            summary_path = None
         
         # Update tracker with completion
         self._update_run_tracker(output_path.parent, run_number, 'completed', {
@@ -4255,29 +4542,56 @@ class MemoryAwarePreprocessor:
             'timestamp': datetime.now().isoformat()
         })
         
-        # Display results
+        # Display final results with summary
         self.print_color("\n" + "-" * 40, 'success')
         self.print_color("PREPROCESSING COMPLETE", 'success')
         self.print_color("-" * 40, 'success')
         
-        self.print_color(f"\nResults Summary:", 'success')
+        self.print_color(f"Results Summary:", 'success')
         self.print_color(f"  ├─ Total rows processed: {Fore.YELLOW + Style.BRIGHT}{total_rows:,}", 'success')
         self.print_color(f"  ├─ Chunks processed: {Fore.YELLOW + Style.BRIGHT}{chunk_index}", 'success')
-        self.print_color(f"  ├─ Final feature count: {Fore.CYAN + Style.BRIGHT}{len(selected_features)}", 'success')
-        
+        self.print_color(f"  ├─ Successful chunks: {Fore.GREEN + Style.BRIGHT}{preprocess_statistics['successful_chunks']}", 'success')
+        self.print_color(f"  ├─ Failed chunks: {Fore.RED + Style.BRIGHT}{preprocess_statistics['failed_chunks']}", 'success')
+        self.print_color(f"  ├─ Final feature count: {Fore.YELLOW + Style.BRIGHT}{len(selected_features)}", 'success')
+
         if feature_descriptions:
             desc_coverage = sum(1 for f in selected_features if f in feature_descriptions)
             self.print_color(f"  ├─ Feature descriptions: {Fore.GREEN + Style.BRIGHT}{desc_coverage}/{len(selected_features)} available", 'success')
         
-        self.print_color(f"  ├─ Output directory: {Fore.CYAN + Style.BRIGHT}{preprocess_output_dir.resolve()}", 'success')
+        self.print_color(f"  ├─ Total processing time: {Fore.YELLOW + Style.BRIGHT}{preprocess_statistics['elapsed_time_seconds']:.2f} seconds", 'success')
+        self.print_color(f"  └─ Average processing speed: {Fore.YELLOW + Style.BRIGHT}{preprocess_statistics['performance_metrics']['average_rows_per_second']:,.0f} rows/second", 'success')
+        
+        self.print_color(f"\nOutput Files:", 'success')
+        self.print_color(f"  ├─ Output directory: {Fore.WHITE + Style.BRIGHT}{preprocess_output_dir.resolve()}", 'success')
+        
+        if summary_path:
+            self.print_color(f"  ├─ Summary file: {Fore.MAGENTA + Style.BRIGHT}{summary_path.resolve()}", 'success')
+
         self.print_color(f"  ├─ Processed dataset: {Fore.MAGENTA + Style.BRIGHT}{processed_path.resolve()}", 'success')
         self.print_color(f"  ├─ Artifacts file: {Fore.MAGENTA + Style.BRIGHT}{artifacts_path.resolve()}", 'success')
-        self.print_color(f"  └─ Summary file: {Fore.MAGENTA + Style.BRIGHT}{summary_path.resolve()}", 'success')
+
+        # Display encoder files if they were generated
+        encoder_files = []
+        for col in ip_cols:
+            encoder_file = preprocess_output_dir / f"{dataset_name}_{col}_label_encoder.pkl"
+            if encoder_file.exists():
+                encoder_files.append(encoder_file)
+        
+        one_hot_file = preprocess_output_dir / f"{dataset_name}_one_hot_encoder.pkl"
+        if one_hot_file.exists():
+            encoder_files.append(one_hot_file)
+        
+        if encoder_files:
+            total_encoder_files = len(encoder_files)
+            self.print_color(f"  └─ Encoder file(s): {Fore.YELLOW + Style.BRIGHT}{total_encoder_files}", 'success')
+            for i, encoder_file in enumerate(encoder_files):
+                prefix = "      ├─ " if i != len(encoder_files) - 1 else "      └─ "
+                self.print_color(f"{prefix}{Fore.MAGENTA + Style.BRIGHT}{encoder_file}", 'success')
         
         if verbose and feature_descriptions:
             self.display_features_with_descriptions(selected_features, feature_descriptions)
         elif verbose:
-            self.print_color(f"\nSample features:", 'info')
+            self.print_color(f"\nSample features ({len(selected_features)} total):", 'info')
             for i, feature in enumerate(selected_features[:10], 1):
                 self.print_color(f"  {i:2d}. {feature}", 'info')
             if len(selected_features) > 10:
@@ -4288,21 +4602,21 @@ class MemoryAwarePreprocessor:
     def configure_settings(self) -> None:
         """Configure settings interactively."""
         self.print_color("\n" + "-" * 40, 'highlight')
-        self.print_color("CONFIGURE SETTINGS", 'highlight')
+        self.print_color("MODIFY CONFIGURATION", 'highlight')
         self.print_color("-" * 40, 'highlight')
         
-        self.print_color("\nCurrent Configuration:", 'info')
+        self.print_color("Current Configuration:", 'info')
         for key, value in self.config.items():
             if key != 'recent_files' and key != 'preprocessing_config':
                 prefix = "  ├─" if key != list(self.config.keys())[-2] else "  └─"
-                self.print_color(f"{prefix} {key.replace('_', ' ').title():<25}: {value}", 'info')
+                self.print_color(f"{prefix} {key.replace('_', ' ').title():<25}: {Fore.GREEN + Style.BRIGHT}{value}", 'info')
         
         self.print_color("\nPreprocessing Configuration:", 'info')
         for key, value in self.config['preprocessing_config'].items():
             prefix = "  ├─" if key != list(self.config['preprocessing_config'].keys())[-1] else "  └─"
-            self.print_color(f"{prefix} {key.replace('_', ' ').title():<25}: {value}", 'info')
+            self.print_color(f"{prefix} {key.replace('_', ' ').title():<25}: {Fore.GREEN + Style.BRIGHT}{value}", 'info')
         
-        self.print_color("\nEnter new values (press Enter to keep current):", 'warning')
+        self.print_color("\nEnter new values or press Enter to keep current", 'debug')
         
         # Get new output directory for testing
         new_output = self.config['default_output_dir']
@@ -4905,6 +5219,7 @@ class MemoryAwarePreprocessor:
                                 config['recent_files'] = config['recent_files'][-10:]
                         
                         self.save_config(config)
+                        self.load_config()
                         
                         # Setup run tracking before calling run_test()
                         start_time = datetime.now()
@@ -5011,7 +5326,7 @@ class MemoryAwarePreprocessor:
                         process_id = os.getpid()
                         unique_hash = hashlib.md5(
                             f"{timestamp}_{process_id}".encode()
-                        ).hexdigest()[:4]
+                        ).hexdigest()[:8]
                         run_id_full = f"run_{run_number:03d}_{timestamp}_{unique_hash}"
                         
                         # Create run-specific output directory
@@ -5041,161 +5356,156 @@ class MemoryAwarePreprocessor:
                                 try:
                                     self.print_color("\nWhat would you like to do next?", 'warning')
                                     self.print_color("1. Run preprocessing pipeline with this test configuration", 'debug')
-                                    self.print_color("2. Run another chunk size test", 'debug')
+                                    self.print_color("2. Run preprocessing pipeline with custom configuration", 'debug')
+                                    self.print_color("3. Run another chunk size test", 'debug')
                                     self.print_color("0. Return to main menu", 'error')
                                     
                                     post_test_choice = None
                                     for attempt in range(max_attempts):
                                         try:
-                                            post_test_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): " + Style.RESET_ALL).strip()
+                                            post_test_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-3): " + Style.RESET_ALL).strip()
                                             
-                                            if post_test_choice in ['0', '1', '2']:
+                                            if post_test_choice in ['0', '1', '2', '3']:
                                                 break
                                             else:
                                                 if attempt < max_attempts - 1:
-                                                    self.print_color("\nPlease enter 0, 1, or 2.", 'warning')
+                                                    self.print_color("\nPlease enter 0, 1, 2, or 3.", 'warning')
                                         except (EOFError, KeyboardInterrupt):
                                             self.print_color("\nSelection cancelled.", 'warning')
                                             post_test_choice = '0'
                                             break
                                     
-                                    if post_test_choice == '1':  # Run preprocessing pipeline
+                                    if post_test_choice == '1':  # Run preprocessing pipeline with current test configuration
                                         try:
-                                            # Display test configuration
-                                            self.print_color(f"\nUsing test configuration from {Fore.YELLOW + Style.BRIGHT}{run_id}", 'success')
-                                            self.print_color(f"  ├─ Dataset: {Fore.MAGENTA + Style.BRIGHT}{filepath}", 'info')
-                                            self.print_color(f"  ├─ Max chunk size: {Fore.YELLOW + Style.BRIGHT}{summary['performance_metrics']['max_chunk_size']:,} rows", 'info')
-                                            self.print_color(f"  └─ Config source: {Fore.MAGENTA + Style.BRIGHT}{str(run_output_dir)}", 'info')
-                                            
+                                            # Get configuration values
                                             preprocessing_config = self.config.get('preprocessing_config', {})
-                                            self.print_color(f"\nCurrent Preprocessing Configuration:", 'info')
-                                            self.print_color(f"  ├─ Output directory: {Fore.CYAN + Style.BRIGHT}{preprocessing_config.get('default_output_dir', 'results')}", 'info')
-                                            self.print_color(f"  ├─ Memory safety factor: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('memory_safety_factor', MEMORY_SAFETY_FACTOR)}", 'info')
-                                            self.print_color(f"  ├─ Hybrid feature count: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('hybrid_feature_count', HYBRID_FEATURE_COUNT)}", 'info')
-                                            self.print_color(f"  └─ Scaler range: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('scaler_range', SCALER_RANGE)}", 'info')
+                                            preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                            config_source = str(run_output_dir)
+                                            verbose_mode = True
                                             
-                                            self.print_color("\nConfiguration Options:", 'warning')
-                                            self.print_color("1. Proceed with current configuration", 'debug')
-                                            self.print_color("2. Customize configuration", 'debug')
-                                            self.print_color("0. Return to previous menu", 'error')
+                                            # Run preprocessing with current configuration
+                                            self.preprocess_data(
+                                                filepath=filepath,
+                                                output_dir=preprocess_output_dir,
+                                                config_path=config_source,
+                                                interactive=True,
+                                                verbose=verbose_mode
+                                            )
                                             
-                                            preprocess_config_choice = None
+                                            # After preprocessing completes, return to post-test menu
+                                            try:
+                                                input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
+                                            except (EOFError, KeyboardInterrupt):
+                                                self.print_color("\nContinuing...", 'warning')
+                                            post_test_loop = False
+                                            break
+                                        
+                                        except KeyboardInterrupt:
+                                            self.print_color("\nPreprocessing setup cancelled.", 'warning')
+                                        except Exception as e:
+                                            self.print_color(f"\nError setting up preprocessing: {str(e)}", 'error')
+                                            self._log_event(f"Preprocessing setup error: {str(e)}", "error")
+                                            try:
+                                                input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
+                                            except (EOFError, KeyboardInterrupt):
+                                                self.print_color("\nContinuing...", 'warning')
+                                            post_test_loop = False
+                                            break
+                                    
+                                    elif post_test_choice == '2':  # Run preprocessing pipeline with custom configuration
+                                        try:
+                                            # Initialize with current config values
+                                            preprocessing_config = self.config.get('preprocessing_config', {})
+                                            preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                            config_source = str(run_output_dir)
+                                            verbose_mode = True
+                                            
+                                            # Custom configuration options
+                                            self.print_color("\nCustom Configuration", 'success')
+                                            self.print_color("  └─ Enter new values (press Enter to keep current):", 'success')
+                                            
+                                            # Get preprocessing output directory with validation
+                                            output_dir_valid = False
+                                            
                                             for attempt in range(max_attempts):
                                                 try:
-                                                    preprocess_config_choice = input(Fore.YELLOW + Style.BRIGHT + "\nSelect option (0-2): " + Style.RESET_ALL).strip()
+                                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory [{preprocessing_config.get('default_input_dir', 'datasets')}]: " + Style.RESET_ALL).strip()
                                                     
-                                                    if preprocess_config_choice in ['0', '1', '2']:
+                                                    if not user_input:
+                                                        preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                                        output_dir_valid = True
+                                                        break
+                                                    
+                                                    # Basic path validation
+                                                    invalid_chars = '<>:"|?*'
+                                                    if any(char in user_input for char in invalid_chars):
+                                                        self.print_color(f"\nInvalid characters in path.", 'error')
+                                                        if attempt < max_attempts - 1:
+                                                            continue
+                                                        else:
+                                                            raise ValueError("\nInvalid path characters")
+                                                    
+                                                    # Check if parent directory exists
+                                                    dir_path = Path(user_input)
+                                                    parent = dir_path.parent
+                                                    
+                                                    try:
+                                                        if not parent.exists():
+                                                            # Try to create parent to test permissions
+                                                            parent.mkdir(parents=True, exist_ok=True)
+                                                            # Clean up if we created it
+                                                            if parent != dir_path:
+                                                                try:
+                                                                    parent.rmdir()
+                                                                except:
+                                                                    pass
+                                                        preprocess_output_dir = user_input
+                                                        output_dir_valid = True
+                                                        break
+                                                    except Exception as dir_error:
+                                                        if attempt < max_attempts - 1:
+                                                            self.print_color(f"\nInvalid directory: {str(dir_error)}", 'error')
+                                                            continue
+                                                        else:
+                                                            raise ValueError(f"\nInvalid directory: {str(dir_error)}")
+                                                
+                                                except (EOFError, KeyboardInterrupt):
+                                                    self.print_color("\nOutput directory selection cancelled.", 'warning')
+                                                    break
+                                                except Exception as input_error:
+                                                    if attempt < max_attempts - 1:
+                                                        self.print_color(f"\nInput error: {str(input_error)}. Please try again.", 'error')
+                                            
+                                            if not output_dir_valid:
+                                                self.print_color("\nUsing current output directory.", 'success')
+                                                preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                            
+                                            # Get verbose mode preference
+                                            for attempt in range(max_attempts):
+                                                try:
+                                                    verbose_input = input(Fore.YELLOW + Style.BRIGHT + f"\nEnable verbose output? (Y/n) [Yes]: " + Style.RESET_ALL).strip().lower()
+                                                    
+                                                    if verbose_input in ['y', 'yes', '']:
+                                                        verbose_mode = True
+                                                        break
+                                                    elif verbose_input in ['n', 'no']:
+                                                        verbose_mode = False
                                                         break
                                                     else:
                                                         if attempt < max_attempts - 1:
-                                                            self.print_color("\nPlease enter 0, 1, or 2.", 'warning')
+                                                            self.print_color("\nPlease enter 'y' for yes or 'n' for no.", 'warning')
+                                                
                                                 except (EOFError, KeyboardInterrupt):
-                                                    self.print_color("\nSelection cancelled.", 'warning')
-                                                    preprocess_config_choice = '0'
+                                                    self.print_color("\nVerbose mode input cancelled.", 'warning')
                                                     break
                                             
-                                            if preprocess_config_choice == '0':
-                                                self.print_color("\nReturning to post-test menu...", 'warning')
-                                                continue
-                                            
-                                            # Initialize with current config values
-                                            preprocess_output_dir = preprocessing_config.get('default_output_dir', 'results')
-                                            config_source = str(run_output_dir)  # Use the test run directory
-                                            verbose_mode = True
-                                            
-                                            if preprocess_config_choice == '2':  # Customize configuration
-                                                self.print_color("\nCustomize Configuration Selected", 'success')
-                                                self.print_color("  └─ Enter new values (press Enter to keep current):", 'success')
-                                                
-                                                # Get preprocessing output directory with validation
-                                                output_dir_valid = False
-                                                
-                                                for attempt in range(max_attempts):
-                                                    try:
-                                                        user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory [{preprocessing_config.get('default_output_dir', 'results')}]: " + Style.RESET_ALL).strip()
-                                                        
-                                                        if not user_input:
-                                                            preprocess_output_dir = preprocessing_config.get('default_output_dir', 'results')
-                                                            output_dir_valid = True
-                                                            break
-                                                        
-                                                        # Basic path validation
-                                                        invalid_chars = '<>:"|?*'
-                                                        if any(char in user_input for char in invalid_chars):
-                                                            self.print_color(f"\nInvalid characters in path.", 'error')
-                                                            if attempt < max_attempts - 1:
-                                                                continue
-                                                            else:
-                                                                raise ValueError("\nInvalid path characters")
-                                                        
-                                                        # Check if parent directory exists
-                                                        dir_path = Path(user_input)
-                                                        parent = dir_path.parent
-                                                        
-                                                        try:
-                                                            if not parent.exists():
-                                                                parent.mkdir(parents=True, exist_ok=True)
-                                                                if parent != dir_path:
-                                                                    try:
-                                                                        parent.rmdir()
-                                                                    except:
-                                                                        pass
-                                                            preprocess_output_dir = user_input
-                                                            output_dir_valid = True
-                                                            break
-                                                        except Exception as dir_error:
-                                                            if attempt < max_attempts - 1:
-                                                                self.print_color(f"\nInvalid directory: {str(dir_error)}", 'error')
-                                                                continue
-                                                            else:
-                                                                raise ValueError(f"\nInvalid directory: {str(dir_error)}")
-                                                    
-                                                    except (EOFError, KeyboardInterrupt):
-                                                        self.print_color("\nOutput directory selection cancelled.", 'warning')
-                                                        break
-                                                    except Exception as input_error:
-                                                        if attempt < max_attempts - 1:
-                                                            self.print_color(f"\nInput error: {str(input_error)}. Please try again.", 'error')
-                                                
-                                                if not output_dir_valid:
-                                                    self.print_color("\nUsing current output directory.", 'success')
-                                                    preprocess_output_dir = preprocessing_config.get('default_output_dir', 'results')
-                                                
-                                                # Get verbose mode preference
-                                                for attempt in range(max_attempts):
-                                                    try:
-                                                        verbose_input = input(Fore.YELLOW + Style.BRIGHT + f"\nEnable verbose output? (Y/n): " + Style.RESET_ALL).strip().lower()
-                                                        
-                                                        if verbose_input in ['y', 'yes', '']:
-                                                            verbose_mode = True
-                                                            break
-                                                        elif verbose_input in ['n', 'no']:
-                                                            verbose_mode = False
-                                                            break
-                                                        else:
-                                                            if attempt < max_attempts - 1:
-                                                                self.print_color("\nPlease enter 'y' for yes or 'n' for no.", 'warning')
-                                                    
-                                                    except (EOFError, KeyboardInterrupt):
-                                                        self.print_color("\nVerbose mode input cancelled.", 'warning')
-                                                        break
-                                            
-                                            # Confirm parameters before running preprocessing
-                                            self.print_color("\nPreprocessing Parameters", 'highlight')
-                                            self.print_color(f"  ├─ Input file: {Fore.MAGENTA + Style.BRIGHT}{filepath}", 'info')
-                                            self.print_color(f"  ├─ Output directory: {Fore.CYAN + Style.BRIGHT}{preprocess_output_dir}", 'info')
-                                            self.print_color(f"  ├─ Config source: {Fore.MAGENTA + Style.BRIGHT}{config_source}", 'info')
-                                            self.print_color(f"  ├─ Memory safety factor: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('memory_safety_factor', MEMORY_SAFETY_FACTOR)}", 'info')
-                                            self.print_color(f"  ├─ Hybrid feature count: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('hybrid_feature_count', HYBRID_FEATURE_COUNT)}", 'info')
-                                            self.print_color(f"  ├─ Scaler range: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('scaler_range', SCALER_RANGE)}", 'info')
-                                            self.print_color(f"  └─ Verbose mode: {Fore.YELLOW + Style.BRIGHT}{verbose_mode}", 'info')
-                                            
+                                            # Confirm before running
                                             confirm_attempts = 3
                                             confirmed = False
                                             
                                             for attempt in range(confirm_attempts):
                                                 try:
-                                                    confirm = input(Fore.YELLOW + Style.BRIGHT + "\nRun preprocessing with these parameters? (Y/n): " + Style.RESET_ALL).strip().lower()
+                                                    confirm = input(Fore.YELLOW + Style.BRIGHT + "\nRun preprocessing with custom parameters? (Y/n): " + Style.RESET_ALL).strip().lower()
                                                     
                                                     if confirm in ['y', 'yes', '']:
                                                         confirmed = True
@@ -5213,7 +5523,7 @@ class MemoryAwarePreprocessor:
                                             if not confirmed:
                                                 continue
                                             
-                                            # Run preprocessing
+                                            # Run preprocessing with custom configuration
                                             self.preprocess_data(
                                                 filepath=filepath,
                                                 output_dir=preprocess_output_dir,
@@ -5238,7 +5548,7 @@ class MemoryAwarePreprocessor:
                                             except (EOFError, KeyboardInterrupt):
                                                 self.print_color("\nContinuing...", 'warning')
                                     
-                                    elif post_test_choice == '2':  # Run another test
+                                    elif post_test_choice == '3':  # Run another test
                                         self.print_color("\nRestarting chunk size test...", 'warning')
                                         post_test_loop = False  # Exit post-test loop to restart test selection
                                         # The outer continue will restart from dataset selection
@@ -5385,12 +5695,12 @@ class MemoryAwarePreprocessor:
                                 continue
                         
                         # Display selected file and current configuration
-                        self.print_color(f"\nSelected file:", 'success')
+                        self.print_color(f"\nDataset File Selected:", 'success')
                         self.print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{filepath}", 'success')
                         
                         preprocessing_config = self.config.get('preprocessing_config', {})
                         self.print_color(f"\nCurrent Preprocessing Configuration:", 'info')
-                        self.print_color(f"  ├─ Output directory: {Fore.CYAN + Style.BRIGHT}{preprocessing_config.get('default_output_dir', 'results')}", 'info')
+                        self.print_color(f"  ├─ Output directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_config.get('default_input_dir', 'datasets')}", 'info')
                         self.print_color(f"  ├─ Config source: {Fore.MAGENTA + Style.BRIGHT}{self.config.get('default_results_dir', 'results')}", 'info')
                         self.print_color(f"  ├─ Memory safety factor: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('memory_safety_factor', MEMORY_SAFETY_FACTOR)}", 'info')
                         self.print_color(f"  ├─ Hybrid feature count: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('hybrid_feature_count', HYBRID_FEATURE_COUNT)}", 'info')
@@ -5421,7 +5731,7 @@ class MemoryAwarePreprocessor:
                             continue
                         
                         # Initialize with current config values
-                        preprocess_output_dir = preprocessing_config.get('default_output_dir', 'results')
+                        preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
                         config_source = self.config.get('default_results_dir', 'results')
                         verbose_mode = True
                         
@@ -5434,10 +5744,10 @@ class MemoryAwarePreprocessor:
                             
                             for attempt in range(max_attempts):
                                 try:
-                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory [{preprocessing_config.get('default_output_dir', 'results')}]: " + Style.RESET_ALL).strip()
+                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory [{preprocessing_config.get('default_input_dir', 'datasets')}]: " + Style.RESET_ALL).strip()
                                     
                                     if not user_input:
-                                        preprocess_output_dir = preprocessing_config.get('default_output_dir', 'results')
+                                        preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
                                         output_dir_valid = True
                                         break
                                     
@@ -5483,7 +5793,7 @@ class MemoryAwarePreprocessor:
                             
                             if not output_dir_valid:
                                 self.print_color("\nUsing current output directory.", 'success')
-                                preprocess_output_dir = preprocessing_config.get('default_output_dir', 'results')
+                                preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
                             
                             # Get config source directory with validation
                             config_source_valid = False
@@ -5550,14 +5860,15 @@ class MemoryAwarePreprocessor:
                                     break
                         
                         # Confirm parameters before running preprocessing
-                        self.print_color("\nPreprocessing Parameters", 'highlight')
+                        verbose_mode_color = Fore.GREEN + Style.BRIGHT + "Enabled" + Style.RESET_ALL if verbose_mode else Fore.RED + Style.BRIGHT + "Disabled" + Style.RESET_ALL
+                        self.print_color("\nPreprocessing Parameters:", 'highlight')
                         self.print_color(f"  ├─ Input file: {Fore.MAGENTA + Style.BRIGHT}{filepath}", 'info')
-                        self.print_color(f"  ├─ Output directory: {Fore.CYAN + Style.BRIGHT}{preprocess_output_dir}", 'info')
+                        self.print_color(f"  ├─ Output directory: {Fore.WHITE + Style.BRIGHT}{preprocess_output_dir}", 'info')
                         self.print_color(f"  ├─ Config source: {Fore.MAGENTA + Style.BRIGHT}{config_source}", 'info')
                         self.print_color(f"  ├─ Memory safety factor: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('memory_safety_factor', MEMORY_SAFETY_FACTOR)}", 'info')
                         self.print_color(f"  ├─ Hybrid feature count: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('hybrid_feature_count', HYBRID_FEATURE_COUNT)}", 'info')
                         self.print_color(f"  ├─ Scaler range: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('scaler_range', SCALER_RANGE)}", 'info')
-                        self.print_color(f"  └─ Verbose mode: {Fore.YELLOW + Style.BRIGHT}{verbose_mode}", 'info')
+                        self.print_color(f"  └─ Verbose mode: {verbose_mode_color}", 'info')
                         
                         confirm_attempts = 3
                         confirmed = False
