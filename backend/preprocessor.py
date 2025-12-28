@@ -361,7 +361,8 @@ class MemoryAwarePreprocessor:
         )
         
         # Results directory (from config or default)
-        self.results_dir = Path(__file__).resolve().parent / "results"
+        #self.results_dir = Path(__file__).resolve().parent / "results"
+        self.results_dir = Path(__file__).resolve().parent / "results" / "preprocessing"
         self._create_and_validate_directory(
             self.results_dir,
             "Results directory",
@@ -383,17 +384,26 @@ class MemoryAwarePreprocessor:
             "Datasets directory",
             check_execute=False
         )
+        
+        # Preprocessing results directory
+        self.preprocessing_results_dir = Path(__file__).resolve().parent / "datasets" / "preprocessing"
+        self._create_and_validate_directory(
+            self.preprocessing_results_dir,
+            "Preprocessing results directory",
+            check_execute=False
+        )
 
     def _confirm_directory_creation(self) -> None:
         """Ask user to confirm directory creation with custom path option."""
         try:
             self.print_color("\nDirectory Setup Configuration:", 'info')
-            self.print_color("  ├─ config/     - Configuration files", 'info')
-            self.print_color("  ├─ logs/       - Log files", 'info')
-            self.print_color("  ├─ history/    - Test history", 'info')
-            self.print_color("  ├─ results/    - Test results and outputs", 'info')
-            self.print_color("  ├─ models/     - Preprocessing models and artifacts", 'info')
-            self.print_color("  └─ datasets/   - CSV datasets", 'info')
+            self.print_color("  ├─ config/                    - Configuration files", 'info')
+            self.print_color("  ├─ logs/                      - Log files", 'info')
+            self.print_color("  ├─ history/                   - Test history", 'info')
+            self.print_color("  ├─ results/preprocessing/     - Test results and outputs", 'info')
+            self.print_color("  ├─ models/                    - Preprocessing models and artifacts", 'info')
+            self.print_color("  ├─ datasets/                  - CSV datasets", 'info')
+            self.print_color("  └─ datasets/preprocessing/    - Preprocessing results and outputs", 'info')
             
             # Ask if user wants custom paths
             max_attempts = 3
@@ -456,11 +466,11 @@ class MemoryAwarePreprocessor:
                 self.history_dir = base_path / "history"
             
             # Results directory
-            results_input = input(Fore.YELLOW + Style.BRIGHT + f"\nResults directory [{base_path / 'results'}]: " + Style.RESET_ALL).strip()
+            results_input = input(Fore.YELLOW + Style.BRIGHT + f"\nResults directory [{base_path / 'results' / 'preprocessing'}]: " + Style.RESET_ALL).strip()
             if results_input:
                 self.results_dir = Path(results_input).resolve()
             else:
-                self.results_dir = base_path / "results"
+                self.results_dir = base_path / "results" / "preprocessing"
             
             # Models directory
             models_input = input(Fore.YELLOW + Style.BRIGHT + f"\nModels directory [{base_path / 'models'}]: " + Style.RESET_ALL).strip()
@@ -476,44 +486,46 @@ class MemoryAwarePreprocessor:
             else:
                 self.datasets_dir = base_path / "datasets"
             
+            # Preprocessing results directory
+            preprocessing_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing results directory [{base_path / 'datasets' / 'preprocessing'}]: " + Style.RESET_ALL).strip()
+            if preprocessing_input:
+                self.preprocessing_results_dir = Path(preprocessing_input).resolve()
+            else:
+                self.preprocessing_results_dir = base_path / "datasets" / "preprocessing"
+            
             # Confirm choices
-            self.print_color("\nPaths configured:", 'success')
-            self.print_color(f"  ├─ Config: {self.config_dir}", 'debug')
-            self.print_color(f"  ├─ Logs: {self.log_dir}", 'debug')
-            self.print_color(f"  ├─ History: {self.history_dir}", 'debug')
-            self.print_color(f"  ├─ Results: {self.results_dir}", 'debug')
-            self.print_color(f"  ├─ Models: {self.models_dir}", 'debug')
-            self.print_color(f"  └─ Datasets: {self.datasets_dir}", 'debug')
+            self.print_color("\nCustom paths configured:", 'success')
+            self.print_color(f"  ├─ Config directory: {self.config_dir}", 'debug')
+            self.print_color(f"  ├─ Log directory: {self.log_dir}", 'debug')
+            self.print_color(f"  ├─ History directory: {self.history_dir}", 'debug')
+            self.print_color(f"  ├─ Results directory: {self.results_dir}", 'debug')
+            self.print_color(f"  ├─ Models directory: {self.models_dir}", 'debug')
+            self.print_color(f"  ├─ Datasets directory: {self.datasets_dir}", 'debug')
+            self.print_color(f"  └─ Preprocessing results directory: {self.preprocessing_results_dir}", 'debug')
             
             # Ask for confirmation
-            confirm = input(Fore.YELLOW + Style.BRIGHT + "\nConfirm these paths? (Y/n): " + Style.RESET_ALL).strip().lower()
+            confirm = input(Fore.YELLOW + Style.BRIGHT + "\nConfirm these custom paths? (Y/n): " + Style.RESET_ALL).strip().lower()
             if confirm in ['n', 'no']:
-                self.print_color("\nReverting to default paths.", 'warning')
-                self.config_dir = base_path / "config"
-                self.log_dir = base_path / "logs"
-                self.history_dir = base_path / "history"
-                self.results_dir = base_path / "results"
-                self.models_dir = base_path / "models"
-                self.datasets_dir = base_path / "datasets"
-        
+                self.print_color("\nReverting to default directory paths.", 'warning')
+                self._reset_to_default_directories()
+            
         except KeyboardInterrupt:
             self.print_color("\nCustom directory setup cancelled. Using default paths.", 'warning')
-            base_path = Path(__file__).resolve().parent
-            self.config_dir = base_path / "config"
-            self.log_dir = base_path / "logs"
-            self.history_dir = base_path / "history"
-            self.results_dir = base_path / "results"
-            self.models_dir = base_path / "models"
-            self.datasets_dir = base_path / "datasets"
+            self._reset_to_default_directories()
         except Exception as e:
             self.print_color(f"\nError in custom directory setup: {str(e)} - Using default paths.", 'error')
-            base_path = Path(__file__).resolve().parent
-            self.config_dir = base_path / "config"
-            self.log_dir = base_path / "logs"
-            self.history_dir = base_path / "history"
-            self.results_dir = base_path / "results"
-            self.models_dir = base_path / "models"
-            self.datasets_dir = base_path / "datasets"
+            self._reset_to_default_directories()
+
+    def _reset_to_default_directories(self) -> None:
+        """Reset all directory paths to default values."""
+        base_path = Path(__file__).resolve().parent
+        self.config_dir = base_path / "config"
+        self.log_dir = base_path / "logs"
+        self.history_dir = base_path / "history"
+        self.results_dir = base_path / "results" / "preprocessing"
+        self.models_dir = base_path / "models"
+        self.datasets_dir = base_path / "datasets"
+        self.preprocessing_results_dir = base_path / "datasets" / "preprocessing"
 
     def _create_and_validate_directory(
         self,
@@ -675,7 +687,8 @@ class MemoryAwarePreprocessor:
                 'last_updated': datetime.now().isoformat(),
                 'preprocessing_config': {
                     #'default_output_dir': str(self.models_dir),
-                    'default_output_dir': str(self.results_dir),
+                    #'default_output_dir': str(self.results_dir),
+                    'default_output_dir': str(self.preprocessing_results_dir),
                     'default_input_dir': str(self.datasets_dir),
                     'default_results_dir': str(self.results_dir),
                     'memory_safety_factor': MEMORY_SAFETY_FACTOR,
@@ -838,7 +851,8 @@ class MemoryAwarePreprocessor:
                             self.config[key] = self.max_history_entries
                         elif key == 'preprocessing_config':
                             self.config[key] = {
-                                'default_output_dir': str(self.results_dir),
+                                #'default_output_dir': str(self.results_dir),
+                                'default_output_dir': str(self.preprocessing_results_dir),
                                 'default_input_dir': str(self.datasets_dir),
                                 'default_results_dir': str(self.results_dir),
                                 'memory_safety_factor': MEMORY_SAFETY_FACTOR,
@@ -860,6 +874,22 @@ class MemoryAwarePreprocessor:
             if self.config['max_history_entries'] <= 0:
                 validation_errors.append("Config 'max_history_entries' must be positive")
             
+            # Validate preprocessing_config structure
+            if 'preprocessing_config' not in self.config or not isinstance(self.config['preprocessing_config'], dict):
+                validation_errors.append("Config 'preprocessing_config' must be a dictionary")
+            else:
+                required_preprocessing_keys = [
+                    'default_output_dir',
+                    'default_input_dir',
+                    'default_results_dir',
+                    'memory_safety_factor',
+                    'hybrid_feature_count',
+                    'scaler_range'
+                ]
+                missing_preprocessing = [key for key in required_preprocessing_keys if key not in self.config['preprocessing_config']]
+                if missing_preprocessing:
+                    validation_errors.append(f"Missing keys in 'preprocessing_config': {missing_preprocessing}")
+            
             if validation_errors:
                 self.print_color(f"\nConfiguration validation errors: {validation_errors}", 'warning')
                 
@@ -871,6 +901,33 @@ class MemoryAwarePreprocessor:
                     
                     if self.config['max_history_entries'] <= 0:
                         self.config['max_history_entries'] = self.max_history_entries
+                    
+                    # Fix preprocessing_config structure if needed
+                    if 'preprocessing_config' not in self.config or not isinstance(self.config['preprocessing_config'], dict):
+                        self.config['preprocessing_config'] = {}
+                    
+                    required_preprocessing_keys = [
+                        'default_output_dir',
+                        'default_input_dir',
+                        'default_results_dir',
+                        'memory_safety_factor',
+                        'hybrid_feature_count',
+                        'scaler_range'
+                    ]
+                    for key in required_preprocessing_keys:
+                        if key not in self.config['preprocessing_config']:
+                            if key == 'default_output_dir':
+                                self.config['preprocessing_config'][key] = str(self.preprocessing_results_dir)
+                            elif key == 'default_input_dir':
+                                self.config['preprocessing_config'][key] = str(self.datasets_dir)
+                            elif key == 'default_results_dir':
+                                self.config['preprocessing_config'][key] = str(self.results_dir)
+                            elif key == 'memory_safety_factor':
+                                self.config['preprocessing_config'][key] = MEMORY_SAFETY_FACTOR
+                            elif key == 'hybrid_feature_count':
+                                self.config['preprocessing_config'][key] = HYBRID_FEATURE_COUNT
+                            elif key == 'scaler_range':
+                                self.config['preprocessing_config'][key] = SCALER_RANGE
                     
                     self.save_config(self.config)
                     self.print_color("\nConfiguration validation errors fixed.", 'success')
@@ -968,16 +1025,16 @@ class MemoryAwarePreprocessor:
         """
         default_config = {
             'version': self.VERSION,
-            'default_output_dir': 'results',
-            'default_results_dir': 'results',
+            'default_output_dir': str(self.results_dir),
+            'default_results_dir': str(self.results_dir),
             'default_target_mb': 256,
-            'default_min_chunk': 1000,
+            'default_min_chunk': self.min_chunk_size,
             'recent_files': [],
-            'max_history_entries': 10,
+            'max_history_entries': self.max_history_entries,
             'preprocessing_config': {
-                'default_output_dir': 'results',
-                'default_input_dir': 'datasets',
-                'default_results_dir': 'results',
+                'default_output_dir': str(self.preprocessing_results_dir),
+                'default_input_dir': str(self.datasets_dir),
+                'default_results_dir': str(self.results_dir),
                 'memory_safety_factor': MEMORY_SAFETY_FACTOR,
                 'hybrid_feature_count': HYBRID_FEATURE_COUNT,
                 'scaler_range': SCALER_RANGE
@@ -1082,24 +1139,47 @@ class MemoryAwarePreprocessor:
         """Save configuration to file with error handling and validation."""
         try:
             # Basic validation before saving
-            required_keys = ['default_output_dir', 'default_results_dir', 'default_target_mb', 'default_min_chunk', 'recent_files']
+            required_keys = [
+                'version',
+                'default_output_dir',
+                'default_results_dir',
+                'default_target_mb',
+                'default_min_chunk',
+                'recent_files',
+                'max_history_entries',
+                'preprocessing_config'
+            ]
+            
             missing_keys = [key for key in required_keys if key not in config]
             
             if missing_keys:
                 self.print_color(f"\nMissing required config keys: {missing_keys}", 'warning')
                 
-                # Try to fix missing keys
+                # Try to fix missing keys using current directory values
                 for key in missing_keys:
-                    if key == 'default_output_dir':
+                    if key == 'version':
+                        config[key] = self.VERSION
+                    elif key == 'default_output_dir':
                         config[key] = str(self.results_dir)
                     elif key == 'default_results_dir':
                         config[key] = str(self.results_dir)
                     elif key == 'default_target_mb':
                         config[key] = 256
                     elif key == 'default_min_chunk':
-                        config[key] = 1000
+                        config[key] = self.min_chunk_size
                     elif key == 'recent_files':
                         config[key] = []
+                    elif key == 'max_history_entries':
+                        config[key] = self.max_history_entries
+                    elif key == 'preprocessing_config':
+                        config[key] = {
+                            'default_output_dir': str(self.preprocessing_results_dir),
+                            'default_input_dir': str(self.datasets_dir),
+                            'default_results_dir': str(self.results_dir),
+                            'memory_safety_factor': MEMORY_SAFETY_FACTOR,
+                            'hybrid_feature_count': HYBRID_FEATURE_COUNT,
+                            'scaler_range': SCALER_RANGE
+                        }
             
             # Ensure numerical values are valid
             if not isinstance(config['default_target_mb'], int) or config['default_target_mb'] <= 0:
@@ -1110,13 +1190,45 @@ class MemoryAwarePreprocessor:
                 config['default_min_chunk'] = 1000
                 self.print_color("\nFixed invalid default_min_chunk value", 'warning')
             
+            if not isinstance(config['max_history_entries'], int) or config['max_history_entries'] <= 0:
+                config['max_history_entries'] = self.max_history_entries
+                self.print_color("\nFixed invalid max_history_entries value", 'warning')
+            
+            # Ensure preprocessing_config structure is complete
+            if 'preprocessing_config' not in config or not isinstance(config['preprocessing_config'], dict):
+                config['preprocessing_config'] = {}
+            
+            required_preprocessing_keys = [
+                'default_output_dir',
+                'default_input_dir',
+                'default_results_dir',
+                'memory_safety_factor',
+                'hybrid_feature_count',
+                'scaler_range'
+            ]
+            
+            for key in required_preprocessing_keys:
+                if key not in config['preprocessing_config']:
+                    if key == 'default_output_dir':
+                        config['preprocessing_config'][key] = str(self.preprocessing_results_dir)
+                    elif key == 'default_input_dir':
+                        config['preprocessing_config'][key] = str(self.datasets_dir)
+                    elif key == 'default_results_dir':
+                        config['preprocessing_config'][key] = str(self.results_dir)
+                    elif key == 'memory_safety_factor':
+                        config['preprocessing_config'][key] = MEMORY_SAFETY_FACTOR
+                    elif key == 'hybrid_feature_count':
+                        config['preprocessing_config'][key] = HYBRID_FEATURE_COUNT
+                    elif key == 'scaler_range':
+                        config['preprocessing_config'][key] = SCALER_RANGE
+            
             # Add metadata
             config['version'] = self.VERSION
             config['last_updated'] = datetime.now().isoformat()
             
             # Show summary before saving
             self.print_color("\nSaving configuration:", 'info')
-            self.config_keys = ['default_output_dir', 'default_results_dir', 'default_target_mb', 'default_min_chunk', 'max_history_entries']
+            self.config_keys = ['version', 'default_output_dir', 'default_results_dir', 'default_target_mb', 'default_min_chunk', 'max_history_entries']
             for i, key in enumerate(self.config_keys):
                 if key in config:
                     prefix = "  └─ " if i == len(self.config_keys) - 1 else "  ├─ "
@@ -1125,7 +1237,7 @@ class MemoryAwarePreprocessor:
             with open(self.config_file, 'w') as f:
                 json.dump(config, f, indent=2)
             
-            self.print_color(f"\nConfiguration saved to {Fore.CYAN + Style.BRIGHT}{self.config_file}", 'success')
+            self.print_color(f"\nConfiguration saved to {Fore.MAGENTA + Style.BRIGHT}{self.config_file}", 'success')
         
         except Exception as e:
             self.print_color(f"\nError saving config: {str(e)}", 'error')
@@ -1675,7 +1787,7 @@ class MemoryAwarePreprocessor:
             
             # Create output directory if needed
             if output_dir is None:
-                output_dir = Path(__file__).resolve().parent / "results"
+                output_dir = Path(__file__).resolve().parent / "results" / "preprocessing"
             elif isinstance(output_dir, str):
                 output_dir = Path(output_dir)
             else:
@@ -1781,7 +1893,7 @@ class MemoryAwarePreprocessor:
         
         # Create output directory if needed
         if output_dir is None:
-            output_dir = Path(__file__).resolve().parent / "results"
+            output_dir = Path(__file__).resolve().parent / "results" / "preprocessing"
         elif isinstance(output_dir, str):
             output_dir = Path(output_dir)
         
@@ -2969,7 +3081,7 @@ class MemoryAwarePreprocessor:
     def display_test_runs(self, results_dir: Optional[str] = None) -> None:
         """Display available test runs in a formatted table."""
         if results_dir is None:
-            results_dir = self.config.get('default_results_dir', 'results')
+            results_dir = self.config.get('default_results_dir', self.results_dir)
         
         results_path = Path(results_dir)
         
@@ -3043,7 +3155,7 @@ class MemoryAwarePreprocessor:
     def select_test_run_interactively(self, results_dir: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Allow user to select from available test runs."""
         if results_dir is None:
-            results_dir = self.config.get('default_results_dir', 'results')
+            results_dir = self.config.get('default_results_dir', self.results_dir)
         
         results_path = Path(results_dir)
         
@@ -3115,7 +3227,7 @@ class MemoryAwarePreprocessor:
         Returns (max_rows, chunk_size)
         """
         if config_path is None:
-            config_path = self.config.get('default_results_dir', 'results')
+            config_path = self.config.get('default_results_dir', self.results_dir)
         
         config_file = Path(config_path)
         
@@ -3517,10 +3629,10 @@ class MemoryAwarePreprocessor:
 
         if output_dir is None:
             preprocessing_config = self.config.get('preprocessing_config', {})
-            output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+            output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
         
         if config_path is None:
-            config_path = self.config.get('default_results_dir', 'results')
+            config_path = self.config.get('default_results_dir', self.results_dir)
         
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
@@ -4877,6 +4989,7 @@ class MemoryAwarePreprocessor:
         """Interactive console menu for the application."""
         config = self.load_config()
         datasets = self.get_available_datasets()
+        default_output_dir = config.get('default_output_dir', self.results_dir)
         
         while True:
             try:
@@ -5042,7 +5155,7 @@ class MemoryAwarePreprocessor:
                             
                             for attempt in range(max_attempts):
                                 try:
-                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nOutput directory [{config['default_output_dir']}]: " + Style.RESET_ALL).strip()
+                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nOutput directory ({default_output_dir}): " + Style.RESET_ALL).strip()
                                     
                                     if not user_input:
                                         output_dir = config['default_output_dir']
@@ -5379,7 +5492,7 @@ class MemoryAwarePreprocessor:
                                         try:
                                             # Get configuration values
                                             preprocessing_config = self.config.get('preprocessing_config', {})
-                                            preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                            preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
                                             config_source = str(run_output_dir)
                                             verbose_mode = True
                                             
@@ -5416,7 +5529,7 @@ class MemoryAwarePreprocessor:
                                         try:
                                             # Initialize with current config values
                                             preprocessing_config = self.config.get('preprocessing_config', {})
-                                            preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                            preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
                                             config_source = str(run_output_dir)
                                             verbose_mode = True
                                             
@@ -5429,10 +5542,10 @@ class MemoryAwarePreprocessor:
                                             
                                             for attempt in range(max_attempts):
                                                 try:
-                                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory [{preprocessing_config.get('default_input_dir', 'datasets')}]: " + Style.RESET_ALL).strip()
+                                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory ({preprocess_output_dir}): " + Style.RESET_ALL).strip()
                                                     
                                                     if not user_input:
-                                                        preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                                        preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
                                                         output_dir_valid = True
                                                         break
                                                     
@@ -5478,7 +5591,7 @@ class MemoryAwarePreprocessor:
                                             
                                             if not output_dir_valid:
                                                 self.print_color("\nUsing current output directory.", 'success')
-                                                preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                                preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
                                             
                                             # Get verbose mode preference
                                             for attempt in range(max_attempts):
@@ -5699,8 +5812,10 @@ class MemoryAwarePreprocessor:
                         self.print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{filepath}", 'success')
                         
                         preprocessing_config = self.config.get('preprocessing_config', {})
+                        preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
+
                         self.print_color(f"\nCurrent Preprocessing Configuration:", 'info')
-                        self.print_color(f"  ├─ Output directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_config.get('default_input_dir', 'datasets')}", 'info')
+                        self.print_color(f"  ├─ Output directory: {Fore.WHITE + Style.BRIGHT}{preprocess_output_dir}", 'info')
                         self.print_color(f"  ├─ Config source: {Fore.MAGENTA + Style.BRIGHT}{self.config.get('default_results_dir', 'results')}", 'info')
                         self.print_color(f"  ├─ Memory safety factor: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('memory_safety_factor', MEMORY_SAFETY_FACTOR)}", 'info')
                         self.print_color(f"  ├─ Hybrid feature count: {Fore.YELLOW + Style.BRIGHT}{preprocessing_config.get('hybrid_feature_count', HYBRID_FEATURE_COUNT)}", 'info')
@@ -5731,7 +5846,7 @@ class MemoryAwarePreprocessor:
                             continue
                         
                         # Initialize with current config values
-                        preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                        preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
                         config_source = self.config.get('default_results_dir', 'results')
                         verbose_mode = True
                         
@@ -5744,10 +5859,10 @@ class MemoryAwarePreprocessor:
                             
                             for attempt in range(max_attempts):
                                 try:
-                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory [{preprocessing_config.get('default_input_dir', 'datasets')}]: " + Style.RESET_ALL).strip()
+                                    user_input = input(Fore.YELLOW + Style.BRIGHT + f"\nPreprocessing output directory ({preprocess_output_dir}): " + Style.RESET_ALL).strip()
                                     
                                     if not user_input:
-                                        preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                        preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
                                         output_dir_valid = True
                                         break
                                     
@@ -5793,7 +5908,7 @@ class MemoryAwarePreprocessor:
                             
                             if not output_dir_valid:
                                 self.print_color("\nUsing current output directory.", 'success')
-                                preprocess_output_dir = preprocessing_config.get('default_input_dir', 'datasets')
+                                preprocess_output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
                             
                             # Get config source directory with validation
                             config_source_valid = False
@@ -5861,6 +5976,7 @@ class MemoryAwarePreprocessor:
                         
                         # Confirm parameters before running preprocessing
                         verbose_mode_color = Fore.GREEN + Style.BRIGHT + "Enabled" + Style.RESET_ALL if verbose_mode else Fore.RED + Style.BRIGHT + "Disabled" + Style.RESET_ALL
+
                         self.print_color("\nPreprocessing Parameters:", 'highlight')
                         self.print_color(f"  ├─ Input file: {Fore.MAGENTA + Style.BRIGHT}{filepath}", 'info')
                         self.print_color(f"  ├─ Output directory: {Fore.WHITE + Style.BRIGHT}{preprocess_output_dir}", 'info')
