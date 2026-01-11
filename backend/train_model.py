@@ -79,7 +79,10 @@ from sklearn.metrics import (
     roc_curve,
     silhouette_score,
     davies_bouldin_score,
+    calinski_harabasz_score,
 )
+from sklearn.metrics.pairwise import euclidean_distances, pairwise_distances, cosine_distances
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.model_selection import StratifiedShuffleSplit, train_test_split, StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from sklearn.decomposition import PCA, IncrementalPCA
@@ -88,9 +91,11 @@ from sklearn.exceptions import ConvergenceWarning
 from sklearn.neighbors import NearestNeighbors
 from sklearn.svm import SVC
 from sklearn.manifold import TSNE
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
+from sklearn.linear_model import SGDClassifier
+from sklearn.svm import LinearSVC
 
-from scipy.stats import entropy, ttest_ind, ttest_ind_from_stats, ks_2samp
+from scipy.stats import entropy, ttest_ind, ttest_ind_from_stats, ks_2samp, gaussian_kde
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from statsmodels.stats.multitest import multipletests
@@ -99,7 +104,6 @@ from plotly.subplots import make_subplots
 import plotly.express as px
 import plotly.graph_objects as go
 import umap
-from umap import UMAP
 
 # Imbalanced learning imports
 import imblearn
@@ -2099,7 +2103,7 @@ def configure_system() -> None:
 # Visualization configuration
 VIZ_CONFIG = {
     'interactive': False,
-    'max_samples': 5000,
+    'max_samples': 50000,
     'projections': ['pca', 'tsne', 'umap'],
     'dpi': 150,
     'style': 'seaborn-v0_8',
@@ -2192,7 +2196,7 @@ class UnicodeStreamHandler(logging.StreamHandler):
 # Global directory variables
 MODEL_DIR = LOG_DIR = DATA_DIR = FIGURE_DIR = TB_DIR = CHECKPOINT_DIR = None
 CONFIG_DIR = RESULTS_DIR = METRICS_DIR = REPORTS_DIR = LATEST_DIR = None
-INFO_DIR = ARTIFACTS_DIR = DOCS_DIR = None
+INFO_DIR = ARTIFACTS_DIR = DOCS_DIR = DATASETS_DIR = None
 
 def setup_logging(log_dir: Path = None) -> logging.Logger:
     """Configure logging with a single log file and proper handler management."""
@@ -2238,6 +2242,7 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
         'models': base_dir / "models",
         'logs': base_dir / "logs",
         'data': base_dir / "data",
+        'datasets': base_dir / "datasets",
         'figures': base_dir / "figures",
         'tensorboard': base_dir / "tensorboard",
         'checkpoints': base_dir / "checkpoints",
@@ -2308,7 +2313,7 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
     """
     global MODEL_DIR, LOG_DIR, DATA_DIR, FIGURE_DIR, TB_DIR, CHECKPOINT_DIR
     global CONFIG_DIR, RESULTS_DIR, METRICS_DIR, REPORTS_DIR, LATEST_DIR
-    global INFO_DIR, ARTIFACTS_DIR, DOCS_DIR
+    global INFO_DIR, ARTIFACTS_DIR, DOCS_DIR, DATASETS_DIR
 
     try:
         directories = setup_directories(logger)
@@ -2316,6 +2321,7 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
         MODEL_DIR = directories['models']
         LOG_DIR = directories['logs']
         DATA_DIR = directories['data']
+        DATASETS_DIR = directories['datasets']
         FIGURE_DIR = directories['figures']
         TB_DIR = directories['tensorboard']
         CHECKPOINT_DIR = directories['checkpoints']
@@ -2431,7 +2437,7 @@ def check_versions(logger: logging.Logger) -> Tuple[bool, List[Tuple[str, Option
         ))
 
     # Log the complete version info at DEBUG level
-    debug_output = ["=== Package Versions ==="]
+    debug_output = ["Package Versions"]
     for pkg, current_ver, min_ver, is_ok, error in version_data:
         if current_ver:
             status = "[OK]" if is_ok else f"[FAIL] (needs >= {min_ver})"
@@ -2556,8 +2562,8 @@ PRESET_CONFIGS = {
         'weight_decay': 1e-5,
         'fn_cost': 1.0,
         'batch_size': 32,
-        'epochs': 10,
-        'early_stopping': 5
+        'epochs': 5,
+        'early_stopping': 3
     }
 }
 
@@ -3351,7 +3357,7 @@ def initialize_system():
     set_seed(42)
     
     # Early logging setup
-    log_dir = Path("logs")
+    log_dir = Path(__file__).resolve().parent / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     logger = setup_logging(log_dir)
     
@@ -3622,14 +3628,507 @@ class ProgressHelper:
         Returns:
             Configured alive_bar context manager
         """
-        return alive_bar(total, title=title, unit=unit, length=25, elapsed=False, title_length=30)
+        return alive_bar(total, title=title, unit=unit, length=25, elapsed=True, title_length=30)
+
+def print_color(message: str, color: str = 'white', style: str = 'bright'):
+    """Helper function for colored output."""
+    color_map = {
+        'white': Fore.WHITE,
+        'red': Fore.RED,
+        'green': Fore.GREEN,
+        'yellow': Fore.YELLOW,
+        'blue': Fore.BLUE,
+        'magenta': Fore.MAGENTA,
+        'cyan': Fore.CYAN
+    }
+    style_map = {
+        'normal': Style.NORMAL,
+        'bright': Style.BRIGHT,
+        'dim': Style.DIM
+    }
+    color_code = color_map.get(color, Fore.WHITE)
+    style_code = style_map.get(style, Style.NORMAL)
+    print(f"{style_code}{color_code}{message}{Style.RESET_ALL}")
 
 # Data preprocessing and validation
+def get_preprocessing_outputs(
+    config_path: Optional[str] = None,
+    base_results_dir: Optional[Path] = None,
+    base_preprocessing_dir: Optional[Path] = None,
+    interactive: bool = True
+) -> Tuple[Optional[str], Optional[str], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Get preprocessing outputs location with support for run-based directory structure.
+    
+    This function helps locate preprocessing outputs including the preprocessed dataset .csv file
+    and the preprocessing artifacts .pkl file based on various input configurations.
+    
+    Args:
+        config_path: Path to either:
+                     - A specific test run directory (e.g., "results/preprocessing/run_001/")
+                     - A results directory (e.g., "results/preprocessing/")
+                     - A preprocessing run directory (e.g., "datasets/preprocessing/run_001/")
+                     - A specific summary file
+        base_results_dir: Base directory for test results (default: "results/preprocessing")
+        base_preprocessing_dir: Base directory for preprocessing outputs (default: "datasets/preprocessing")
+        interactive: If True, allows user to select from multiple matches
+    
+    Returns:
+        Tuple containing:
+        - Path to the preprocessed dataset CSV file (or None if not found)
+        - Path to the preprocessing artifacts PKL file (or None if not found)
+        - Configuration dictionary from the test run (or None if not found)
+        - Summary dictionary from preprocessing (or None if not found)
+    
+    Example usage in another script:
+        csv_path, pkl_path, test_config, preprocess_summary = get_preprocessing_outputs(
+            config_path="results/preprocessing/run_001/",
+            interactive=False
+        )
+        if csv_path:
+            print(f"Found preprocessed dataset: {csv_path}")
+            df = pd.read_csv(csv_path)
+        if pkl_path:
+            print(f"Found preprocessing artifacts: {pkl_path}")
+            artifacts = joblib.load(pkl_path)
+    """
+    try:
+        script_dir = Path(__file__).resolve().parent
+        max_rows_test_results_dir = script_dir / "results" / "preprocessing"
+        preprocessing_outputs_dir = script_dir / "datasets" / "preprocessing"
+        
+        if base_results_dir is None:
+            base_results_dir = max_rows_test_results_dir
+        
+        if base_preprocessing_dir is None:
+            base_preprocessing_dir = preprocessing_outputs_dir
+
+        if config_path is None:
+            config_path = base_results_dir
+        
+        config_file = Path(config_path)
+        
+        # Dictionary to store found configuration
+        test_config = None
+        preprocessing_summary = None
+        preprocessing_run_id = None
+        preprocessing_run_number = None
+        
+        # Check if the provided path is a specific test run directory
+        if config_file.is_dir() and (config_file.name.startswith('run_') or (config_file / f"max_rows_testing_summary_{config_file.name}.json").exists()):
+            # Direct test run directory provided
+            test_run_dir = config_file
+            run_id = test_run_dir.name
+            print_color("\nPREPROCESSING OUTPUTS LOCATOR", 'magenta')
+            print_color("-" * 50, 'magenta')
+            print_color(f"Processing test run directory:", 'magenta')
+            print_color(f"  ├─ Directory: {Fore.WHITE + Style.BRIGHT}{test_run_dir}", 'magenta')
+            print_color(f"  └─ Run ID: {Fore.YELLOW + Style.BRIGHT}{run_id}", 'magenta')
+            print_color("-" * 50, 'magenta')
+            
+            # Load test configuration from the test run
+            summary_file = test_run_dir / f"max_rows_testing_summary_{run_id}.json"
+            
+            if summary_file.exists():
+                with open(summary_file) as f:
+                    test_config = json.load(f)
+                
+                # Extract run information from test config
+                test_run_info = test_config.get('run_info', {})
+                test_run_id = test_run_info.get('run_id', run_id)
+                test_run_number = test_run_info.get('run_number', int(run_id.split('_')[1]) if '_' in run_id else 0)
+                
+                print_color(f"\nTest configuration loaded:", 'green')
+                print_color(f"  ├─ Test Run ID: {Fore.YELLOW + Style.BRIGHT}{test_run_id}", 'green')
+                print_color(f"  ├─ Test Run Number: {Fore.YELLOW + Style.BRIGHT}{test_run_number}", 'green')
+                print_color(f"  └─ Summary file: {Fore.MAGENTA + Style.BRIGHT}{summary_file}", 'green')
+                
+                # Look for corresponding preprocessing run
+                # Preprocessing runs are stored in base_preprocessing_dir with same run number
+                preprocessing_dir = Path(base_preprocessing_dir)
+                
+                if preprocessing_dir.exists():
+                    # Find preprocessing run with same number
+                    preprocessing_run_pattern = f"run_{test_run_number:03d}"
+                    preprocessing_run_dirs = list(preprocessing_dir.glob(f"{preprocessing_run_pattern}*"))
+                    
+                    if preprocessing_run_dirs:
+                        # Use the first match (should be only one)
+                        preprocessing_run_dir = preprocessing_run_dirs[0]
+                        preprocessing_run_id = preprocessing_run_dir.name
+                        
+                        print_color(f"\nFound corresponding preprocessing run:", 'green')
+                        print_color(f"  ├─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'green')
+                        print_color(f"  └─ Run ID: {Fore.YELLOW + Style.BRIGHT}{preprocessing_run_id}", 'green')
+                        
+                        # Look for preprocessing summary file
+                        dataset_name = Path(test_config['dataset_info']['filepath']).stem
+                        summary_pattern = f"{dataset_name}_preprocessing_summary_{preprocessing_run_id}.json"
+                        summary_files = list(preprocessing_run_dir.glob(f"*{summary_pattern}*"))
+                        
+                        if summary_files:
+                            # Load preprocessing summary
+                            with open(summary_files[0]) as f:
+                                preprocessing_summary = json.load(f)
+                            
+                            print_color(f"\nPreprocessing summary loaded:", 'green')
+                            print_color(f"  ├─ Dataset name: {Fore.YELLOW + Style.BRIGHT}{dataset_name}", 'green')
+                            print_color(f"  └─ Summary file: {Fore.MAGENTA + Style.BRIGHT}{summary_files[0]}", 'green')
+                            
+                            # Look for preprocessed dataset CSV
+                            csv_pattern = f"{dataset_name}_preprocessed_dataset.csv"
+                            csv_files = list(preprocessing_run_dir.glob(f"*{csv_pattern}*"))
+                            
+                            # Look for preprocessed dataset PKL
+                            pkl_pattern = f"{dataset_name}_preprocessing_artifacts.pkl"
+                            pkl_files = list(preprocessing_run_dir.glob(f"*{pkl_pattern}*"))
+                            
+                            if csv_files and pkl_files:
+                                csv_path = str(csv_files[0])
+                                pkl_path = str(pkl_files[0])
+                                
+                                print_color(f"\nPreprocessing outputs found:", 'green')
+                                print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+                                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+                                
+                                return csv_path, pkl_path, test_config, preprocessing_summary
+                            
+                            elif csv_files:
+                                csv_path = str(csv_files[0])
+                                print_color(f"\nWarning: CSV file found but PKL artifacts missing", 'yellow')
+                                print_color(f"  └─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'yellow')
+                                return csv_path, None, test_config, preprocessing_summary
+                            
+                            elif pkl_files:
+                                pkl_path = str(pkl_files[0])
+                                print_color(f"\nWarning: PKL artifacts found but CSV file missing", 'yellow')
+                                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'yellow')
+                                return None, pkl_path, test_config, preprocessing_summary
+                            
+                            else:
+                                print_color(f"\nError: No preprocessing outputs found in directory", 'red')
+                                print_color(f"  ├─ Searched for CSV pattern: {Fore.YELLOW + Style.BRIGHT}*{csv_pattern}*", 'red')
+                                print_color(f"  └─ Searched for PKL pattern: {Fore.YELLOW + Style.BRIGHT}*{pkl_pattern}*", 'red')
+                                return None, None, test_config, preprocessing_summary
+                        else:
+                            print_color(f"\nError: No preprocessing summary file found", 'red')
+                            print_color(f"  ├─ Expected pattern: {Fore.YELLOW + Style.BRIGHT}*{summary_pattern}*", 'red')
+                            print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'red')
+                            return None, None, test_config, None
+                    else:
+                        print_color(f"\nError: No corresponding preprocessing run found", 'red')
+                        print_color(f"  ├─ Test run number: {Fore.YELLOW + Style.BRIGHT}{test_run_number}", 'red')
+                        print_color(f"  ├─ Expected pattern: {Fore.YELLOW + Style.BRIGHT}{preprocessing_run_pattern}*", 'red')
+                        print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_dir}", 'red')
+                        return None, None, test_config, None
+                else:
+                    print_color(f"\nError: Preprocessing directory not found", 'red')
+                    print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{base_preprocessing_dir}", 'red')
+                    return None, None, test_config, None
+            else:
+                print_color(f"\nError: Test summary file not found", 'red')
+                print_color(f"  ├─ Expected file: {Fore.MAGENTA + Style.BRIGHT}{summary_file}", 'red')
+                print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{test_run_dir}", 'red')
+                return None, None, None, None
+        
+        # Check if path points to results directory (search for latest run)
+        elif config_file.is_dir():
+            results_dir = config_file
+            print_color("\nPREPROCESSING OUTPUTS LOCATOR", 'magenta')
+            print_color("-" * 50, 'magenta')
+            print_color(f"Processing results directory:", 'magenta')
+            print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{results_dir}", 'magenta')
+            print_color("-" * 50, 'magenta')
+            
+            # Find all test run directories
+            test_run_dirs = sorted(
+                [d for d in results_dir.iterdir() if d.is_dir() and d.name.startswith('run_')],
+                key=lambda x: int(x.name.split('_')[1]) if len(x.name.split('_')) > 1 and x.name.split('_')[1].isdigit() else 0,
+                reverse=True
+            )
+            
+            if not test_run_dirs:
+                print_color(f"\nError: No test runs found in directory", 'red')
+                print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{results_dir}", 'red')
+                return None, None, None, None
+            
+            total_test_runs = Fore.YELLOW + Style.BRIGHT + f"{len(test_run_dirs)}" + Style.RESET_ALL
+            print_color(f"\nTest Runs Found: {total_test_runs}", 'green')
+            
+            # If interactive mode, let user choose
+            if interactive and len(test_run_dirs) > 1:
+                for i, run_dir in enumerate(test_run_dirs[:10], 1):
+                    run_id = run_dir.name
+                    print_color(f"{i:2d}. {run_id}", 'white')
+                
+                if len(test_run_dirs) > 10:
+                    print_color(f"\n... and {len(test_run_dirs) - 10} more runs", 'cyan')
+                
+                print_color(f"\n{len(test_run_dirs) + 1:2d}. Use latest run", 'cyan')
+                print_color(f"0. Cancel", 'red')
+                
+                choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect test run (1-{len(test_run_dirs) + 1}, 0 to cancel): " + Style.RESET_ALL).strip()
+                
+                if choice == '0':
+                    print_color("\nSelection cancelled", 'yellow')
+                    return None, None, None, None
+                elif choice == str(len(test_run_dirs) + 1):
+                    # Use latest run
+                    selected_run_dir = test_run_dirs[0]
+                    print_color(f"\nUsing latest run: {Fore.YELLOW + Style.BRIGHT}{selected_run_dir.name}", 'green')
+                elif choice.isdigit() and 1 <= int(choice) <= len(test_run_dirs):
+                    selected_run_dir = test_run_dirs[int(choice) - 1]
+                    print_color(f"\nSelected run: {Fore.YELLOW + Style.BRIGHT}{selected_run_dir.name}", 'green')
+                else:
+                    print_color("\nInvalid selection, using latest run", 'yellow')
+                    selected_run_dir = test_run_dirs[0]
+            else:
+                # Use latest run
+                selected_run_dir = test_run_dirs[0]
+                print_color(f"\nUsing latest run: {Fore.YELLOW + Style.BRIGHT}{selected_run_dir.name}", 'green')
+            
+            # Recursively call with selected run directory
+            return get_preprocessing_outputs(
+                config_path=str(selected_run_dir),
+                base_results_dir=base_results_dir,
+                base_preprocessing_dir=base_preprocessing_dir,
+                interactive=False  # Don't recurse infinitely
+            )
+        
+        # Check if path is a preprocessing run directory directly
+        elif config_file.is_dir() and config_file.parent.name == "preprocessing":
+            # This might already be a preprocessing run directory
+            preprocessing_run_dir = config_file
+            preprocessing_run_id = preprocessing_run_dir.name
+            print_color("\nPREPROCESSING OUTPUTS LOCATOR", 'magenta')
+            print_color("-" * 50, 'magenta')
+            print_color(f"Processing preprocessing run directory directly:", 'magenta')
+            print_color(f"  ├─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'magenta')
+            print_color(f"  └─ Run ID: {Fore.YELLOW + Style.BRIGHT}{preprocessing_run_id}", 'magenta')
+            print_color("-" * 50, 'magenta')
+            
+            # Look for any preprocessing summary file
+            summary_files = list(preprocessing_run_dir.glob("*_preprocessing_summary_*.json"))
+            
+            if summary_files:
+                # Load the first summary file found
+                with open(summary_files[0]) as f:
+                    preprocessing_summary = json.load(f)
+                
+                print_color(f"\nPreprocessing summary loaded:", 'green')
+                print_color(f"  └─ Summary file: {Fore.MAGENTA + Style.BRIGHT}{summary_files[0]}", 'green')
+                
+                # Extract dataset name from summary
+                dataset_name = Path(preprocessing_summary['preprocessing_summary']['input_file']).stem
+                
+                print_color(f"\nDataset information:", 'green')
+                print_color(f"  ├─ Dataset name: {Fore.YELLOW + Style.BRIGHT}{dataset_name}", 'green')
+                print_color(f"  └─ Input file: {Fore.MAGENTA + Style.BRIGHT}{preprocessing_summary['preprocessing_summary']['input_file']}", 'green')
+                
+                # Look for preprocessed dataset CSV
+                csv_pattern = f"{dataset_name}_preprocessed_dataset.csv"
+                csv_files = list(preprocessing_run_dir.glob(f"*{csv_pattern}*"))
+
+                # Look for preprocessed dataset PKL
+                pkl_pattern = f"{dataset_name}_preprocessing_artifacts.pkl"
+                pkl_files = list(preprocessing_run_dir.glob(f"*{pkl_pattern}*"))
+                
+                if csv_files and pkl_files:
+                    csv_path = str(csv_files[0])
+                    pkl_path = str(pkl_files[0])
+                    
+                    print_color(f"\nPreprocessing outputs found:", 'green')
+                    print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+                    print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+                    
+                    # Try to find corresponding test run configuration
+                    test_run_number = preprocessing_summary['preprocessing_summary'].get('run_number')
+                    test_run_id = preprocessing_summary['preprocessing_summary'].get('run_id')
+                    
+                    if test_run_number:
+                        test_run_dir = Path(base_results_dir) / f"run_{test_run_number:03d}"
+                        test_summary_file = test_run_dir / f"max_rows_testing_summary_run_{test_run_number:03d}.json"
+                        
+                        if test_summary_file.exists():
+                            with open(test_summary_file) as f:
+                                test_config = json.load(f)
+                            
+                            print_color(f"\nCorresponding test run found:", 'green')
+                            print_color(f"  ├─ Test run number: {Fore.YELLOW + Style.BRIGHT}{test_run_number}", 'green')
+                            print_color(f"  ├─ Test run ID: {Fore.YELLOW + Style.BRIGHT}{test_run_id}", 'green')
+                            print_color(f"  └─ Test summary: {Fore.MAGENTA + Style.BRIGHT}{test_summary_file}", 'green')
+                    
+                    return csv_path, pkl_path, test_config, preprocessing_summary
+                
+                elif csv_files:
+                    csv_path = str(csv_files[0])
+                    print_color(f"\nWarning: CSV file found but PKL artifacts missing", 'yellow')
+                    print_color(f"  └─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'yellow')
+                    return csv_path, None, test_config, preprocessing_summary
+                
+                elif pkl_files:
+                    pkl_path = str(pkl_files[0])
+                    print_color(f"\nWarning: PKL artifacts found but CSV file missing", 'yellow')
+                    print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'yellow')
+                    return None, pkl_path, test_config, preprocessing_summary
+                
+                else:
+                    print_color(f"\nError: No preprocessing outputs found in directory", 'red')
+                    print_color(f"  ├─ Searched for CSV pattern: {Fore.YELLOW + Style.BRIGHT}*{csv_pattern}*", 'red')
+                    print_color(f"  └─ Searched for PKL pattern: {Fore.YELLOW + Style.BRIGHT}*{pkl_pattern}*", 'red')
+                    return None, None, test_config, preprocessing_summary
+            else:
+                print_color(f"\nError: No preprocessing summary file found", 'red')
+                print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'red')
+                return None, None, None, None
+        
+        # Check if path is a specific preprocessing summary file
+        elif config_file.exists() and config_file.is_file() and "_preprocessing_summary_" in config_file.name:
+            # Load preprocessing summary directly
+            with open(config_file) as f:
+                preprocessing_summary = json.load(f)
+            print_color("\nPREPROCESSING OUTPUTS LOCATOR", 'magenta')
+            print_color("-" * 50, 'magenta')
+            print_color(f"Processing preprocessing summary file directly:", 'magenta')
+            print_color(f"  └─ File: {Fore.MAGENTA + Style.BRIGHT}{config_file}", 'magenta')
+            print_color("-" * 50, 'magenta')
+            
+            # Extract output directory from summary
+            output_dir = preprocessing_summary['preprocessing_summary']['output_directory']
+            preprocessing_run_dir = Path(output_dir)
+            
+            print_color(f"\nOutput directory from summary:", 'green')
+            print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'green')
+            
+            # Look for preprocessed dataset CSV
+            dataset_name = Path(preprocessing_summary['preprocessing_summary']['input_file']).stem
+            csv_pattern = f"{dataset_name}_preprocessed_dataset.csv"
+            csv_files = list(preprocessing_run_dir.glob(f"*{csv_pattern}*"))
+
+            # Look for preprocessed dataset PKL
+            pkl_pattern = f"{dataset_name}_preprocessing_artifacts.pkl"
+            pkl_files = list(preprocessing_run_dir.glob(f"*{pkl_pattern}*"))
+            
+            if csv_files and pkl_files:
+                csv_path = str(csv_files[0])
+                pkl_path = str(pkl_files[0])
+                
+                print_color(f"\nPreprocessing outputs found:", 'green')
+                print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+                
+                # Try to find corresponding test run configuration
+                test_run_number = preprocessing_summary['preprocessing_summary'].get('run_number')
+                if test_run_number:
+                    test_run_dir = Path(base_results_dir) / f"run_{test_run_number:03d}"
+                    test_summary_file = test_run_dir / f"max_rows_testing_summary_run_{test_run_number:03d}.json"
+                    
+                    if test_summary_file.exists():
+                        with open(test_summary_file) as f:
+                            test_config = json.load(f)
+                        
+                        print_color(f"\nCorresponding test run found:", 'green')
+                        print_color(f"  └─ Test summary: {Fore.MAGENTA + Style.BRIGHT}{test_summary_file}", 'green')
+                
+                return csv_path, pkl_path, test_config, preprocessing_summary
+            
+            elif csv_files:
+                csv_path = str(csv_files[0])
+                print_color(f"\nWarning: CSV file found but PKL artifacts missing", 'yellow')
+                print_color(f"  └─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'yellow')
+                return csv_path, None, test_config, preprocessing_summary
+            
+            elif pkl_files:
+                pkl_path = str(pkl_files[0])
+                print_color(f"\nWarning: PKL artifacts found but CSV file missing", 'yellow')
+                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'yellow')
+                return None, pkl_path, test_config, preprocessing_summary
+            
+            else:
+                print_color(f"\nError: No preprocessing outputs found in directory", 'red')
+                print_color(f"  ├─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'red')
+                print_color(f"  ├─ CSV pattern: {Fore.YELLOW + Style.BRIGHT}*{csv_pattern}*", 'red')
+                print_color(f"  └─ PKL pattern: {Fore.YELLOW + Style.BRIGHT}*{pkl_pattern}*", 'red')
+                return None, None, test_config, preprocessing_summary
+        
+        # If we get here, we haven't found anything
+        print_color("\nCOULD NOT LOCATE PREPROCESSING OUTPUTS", 'red')
+        
+        print_color("\nPossible reasons:", 'yellow')
+        print_color("  ├─ No preprocessing has been run yet", 'yellow')
+        print_color("  ├─ The provided path doesn't contain valid run data", 'yellow')
+        print_color("  ├─ Directory structure doesn't match expected pattern", 'yellow')
+        print_color("  └─ Permissions issues accessing directories", 'yellow')
+        
+        print_color("\nExpected directory structure:", 'cyan')
+        print_color("  ├─ Test runs: {base_results_dir}/run_001/", 'white')
+        print_color("  ├─ Preprocessing runs: {base_preprocessing_dir}/run_001/", 'white')
+        print_color("  └─ Current path provided: {config_path}", 'white')
+        
+        if interactive:
+            # Offer to browse directories
+            response = input(Fore.YELLOW + Style.BRIGHT + "\nBrowse for preprocessing outputs manually? (Y/n): " + Style.RESET_ALL).strip().lower()
+            
+            if response in ['y', 'yes', '']:
+                print_color("\nLooking for preprocessing directories...", 'cyan')
+                
+                preprocessing_dir = Path(base_preprocessing_dir)
+                if preprocessing_dir.exists():
+                    preprocessing_runs = sorted(
+                        [d for d in preprocessing_dir.iterdir() if d.is_dir() and d.name.startswith('run_')],
+                        key=lambda x: int(x.name.split('_')[1]) if len(x.name.split('_')) > 1 and x.name.split('_')[1].isdigit() else 0,
+                        reverse=True
+                    )
+                    
+                    if preprocessing_runs:
+                        print_color(f"\nFound {len(preprocessing_runs)} preprocessing runs:", 'green')
+                        for i, run_dir in enumerate(preprocessing_runs[:10], 1):
+                            # Check what's inside each run
+                            csv_files = list(run_dir.glob("*_preprocessed_dataset.csv"))
+                            pkl_files = list(run_dir.glob("*_preprocessing_artifacts.pkl"))
+                            summary_files = list(run_dir.glob("*_preprocessing_summary_*.json"))
+                            
+                            csv_status = "CSV: Found" if csv_files else "CSV: Missing"
+                            pkl_status = "PKL: Found" if pkl_files else "PKL: Missing"
+                            summary_status = "Summary: Found" if summary_files else "Summary: Missing"
+                            
+                            print_color(f"{i:2d}. {run_dir.name} [{csv_status}, {pkl_status}, {summary_status}]", 'white')
+                        
+                        if len(preprocessing_runs) > 10:
+                            print_color(f"\n... and {len(preprocessing_runs) - 10} more runs", 'cyan')
+                        
+                        choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect preprocessing run (1-{min(10, len(preprocessing_runs))}, 0 to cancel): " + Style.RESET_ALL).strip()
+                        
+                        if choice.isdigit() and 1 <= int(choice) <= min(10, len(preprocessing_runs)):
+                            selected_run_dir = preprocessing_runs[int(choice) - 1]
+                            print_color(f"\nSelected run: {selected_run_dir.name}", 'green')
+                            return get_preprocessing_outputs(
+                                config_path=str(selected_run_dir),
+                                base_results_dir=base_results_dir,
+                                base_preprocessing_dir=base_preprocessing_dir,
+                                interactive=False  # Don't recurse
+                            )
+                        else:
+                            print_color("\nInvalid selection or cancelled", 'yellow')
+                    else:
+                        print_color(f"\nNo preprocessing runs found in directory:", 'red')
+                        print_color(f"  └─ {preprocessing_dir}", 'red')
+                else:
+                    print_color(f"\nPreprocessing directory does not exist:", 'red')
+                    print_color(f"  └─ {preprocessing_dir}", 'red')
+        
+        return None, None, None, None
+    
+    except Exception as e:
+        print_color(f"\nError locating preprocessing outputs:", 'red')
+        print_color(f"  ├─ Error type: {type(e).__name__}", 'red')
+        print_color(f"  └─ Error message: {str(e)}", 'red')
+        return None, None, None, None
+
 def check_preprocessing_outputs(
     logger: logging.Logger,
     verbose: Optional[bool] = False,
     strict: bool = False,
-    use_color: bool = True,
     min_csv_size: int = 1024,
     min_pkl_size: int = 128,
     validate_csv: bool = True,
@@ -3640,7 +4139,6 @@ def check_preprocessing_outputs(
     Args:
         logger: Configured logger instance for logging messages
         strict: Enable content validation (default: False)
-        use_color: Enable colored output (default: True)
         min_csv_size: Minimum CSV file size in bytes
         min_pkl_size: Minimum pickle file size in bytes
         validate_csv: Perform CSV content checks
@@ -3652,14 +4150,6 @@ def check_preprocessing_outputs(
     Raises:
         RuntimeWarning: For suspicious but accepted files
     """
-    # Color setup
-    red = Fore.RED if use_color else ""
-    yellow = Fore.YELLOW if use_color else ""
-    green = Fore.GREEN if use_color else ""
-    blue = Fore.BLUE if use_color else ""
-    cyan = Fore.CYAN if use_color else ""
-    reset = Style.RESET_ALL if use_color else ""
-    
     # Track validation progress and statistics
     validation_stats = {
         'stage': 'Initializing',
@@ -3674,513 +4164,545 @@ def check_preprocessing_outputs(
         'success_rate': 0.0
     }
     
-    required_files = {
-        "preprocessed_dataset.csv": {
-            "min_size": min_csv_size,
-            "checks": ["header", "delimiter"] if validate_csv else [],
-            "description": "Preprocessed dataset CSV",
-            "validation_stages": ["existence", "size", "header", "format", "sample_data"] if validate_csv else ["existence", "size"]
-        },
-        "preprocessing_artifacts.pkl": {
-            "min_size": min_pkl_size,
-            "required_keys": ["feature_names", "scaler"] if validate_pickle else [],
-            "description": "Preprocessing artifacts pickle",
-            "validation_stages": ["existence", "size", "load", "keys", "structure"] if validate_pickle else ["existence", "size"]
-        }
-    }
+    # Initialize return values
+    config_path = None
+    base_results_dir = None
+    base_preprocessing_dir = None
+    csv_path_return = None
+    pkl_path_return = None
     
-    all_valid = True
-    
-    if use_color:
-        print(f"{green}Starting preprocessing outputs validation...{reset}")
-    else:
-        print("Starting preprocessing outputs validation")
-    
-    if verbose:
-        logger.info("Starting preprocessing outputs validation")
-        logger.info(f"Validation mode: {'STRICT' if strict else 'BASIC'}")
-        logger.info(f"CSV validation: {'ENABLED' if validate_csv else 'DISABLED'}")
-        logger.info(f"Pickle validation: {'ENABLED' if validate_pickle else 'DISABLED'}")
-    
+    # Use get_preprocessing_outputs to locate files
     try:
-        # Progress helper: define all stage titles
-        titles = [
-            "Initializing Validation System",
-            "File Validation Loop",
-            "Finalization and Reporting"
-        ]
-        progress = ProgressHelper(titles)
+        print_color(f"\nStarting preprocessing outputs validation...", 'yellow')
         
-        # STAGE 1: Initialization and setup
-        with progress.bar("Initializing Validation System", total=2, unit="steps") as init_bar:
-            
-            # STAGE 1.1
-            init_bar.text = "Configuring validation parameters..."
-            config_start = time.time()
-            
-            # Calculate total work units for progress tracking
-            total_files = len(required_files)
-            total_stages = sum(len(file_info['validation_stages']) for file_info in required_files.values())
-            
-            # Initialize tracking for each file
-            for filename in required_files:
-                validation_stats['detailed_results'][filename] = {
-                    'stages_passed': [],
-                    'stages_failed': [],
-                    'warnings': [],
-                    'errors': [],
-                    'file_size': 0,
-                    'validation_time': 0
-                }
-            
-            config_time = time.time() - config_start
-            validation_stats['detailed_timings']['configuration'] = config_time
-            init_bar.text = f"{green}Validation system configured ({total_files} files, {total_stages} stages){reset}"
-            init_bar()
-            
-            # STAGE 1.2
-            init_bar.text = "Preparing file validation queues..."
-            queue_start = time.time()
-            
-            # Create a list of validation tasks
-            validation_tasks = []
-            for filepath, requirements in required_files.items():
-                for stage in requirements['validation_stages']:
-                    validation_tasks.append((filepath, stage))
-            
-            queue_time = time.time() - queue_start
-            validation_stats['detailed_timings']['queue_preparation'] = queue_time
-            init_bar.text = f"{green}Validation queues prepared ({len(validation_tasks)} tasks){reset}"
-            init_bar()
+        validation_stats['stage'] = 'Locating preprocessing outputs'
+
+        # Get preprocessing outputs using the helper function
+        csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(
+            config_path=config_path,
+            base_results_dir=base_results_dir,
+            base_preprocessing_dir=base_preprocessing_dir,
+            interactive=True
+        )
         
-        # STAGE 2: File validation loop
-        with progress.bar("File Validation Loop", total=len(validation_tasks), unit="stages") as file_bar:
+        # Store the paths for return
+        csv_path_return = csv_path
+        pkl_path_return = pkl_path
+        
+        # Check if we found the required files
+        if not csv_path and not pkl_path:
+            print_color("\nError: Could not locate preprocessing outputs", 'red')
+            print_color("Validation cannot proceed without locating files", 'red')
+            return False, None, None
+        
+        # Prepare required_files dictionary based on located files
+        required_files = {}
+        if csv_path:
+            required_files["preprocessed_dataset.csv"] = {
+                "path": Path(csv_path),
+                "min_size": min_csv_size,
+                "checks": ["header", "delimiter"] if validate_csv else [],
+                "description": "Preprocessed dataset CSV",
+                "validation_stages": ["existence", "size", "header", "format", "sample_data"] if validate_csv else ["existence", "size"]
+            }
+        
+        if pkl_path:
+            required_files["preprocessing_artifacts.pkl"] = {
+                "path": Path(pkl_path),
+                "min_size": min_pkl_size,
+                "required_keys": ["feature_names", "scaler"] if validate_pickle else [],
+                "description": "Preprocessing artifacts pickle",
+                "validation_stages": ["existence", "size", "load", "keys", "structure"] if validate_pickle else ["existence", "size"]
+            }
+        
+        if not required_files:
+            print_color("\nError: No preprocessing files to validate", 'red')
+            return False, None, None
+        
+        all_valid = True
+        
+        validation_mode = Fore.RED + Style.BRIGHT + 'STRICT' + Style.RESET_ALL if strict else Fore.YELLOW + Style.BRIGHT + 'BASIC' + Style.RESET_ALL
+        csv_validation = Fore.GREEN + Style.BRIGHT + 'ENABLED' + Style.RESET_ALL if validate_csv else Fore.RED + Style.BRIGHT + 'DISABLED' + Style.RESET_ALL
+        pkl_validation = Fore.GREEN + Style.BRIGHT + 'ENABLED' + Style.RESET_ALL if validate_pickle else Fore.RED + Style.BRIGHT + 'DISABLED' + Style.RESET_ALL
+
+        print_color(f"\nValidation mode: {validation_mode}", 'cyan')
+        print_color(f"CSV validation: {csv_validation}", 'cyan')
+        print_color(f"Pickle validation: {pkl_validation}", 'cyan')
+        if csv_path:
+            print_color(f"CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'cyan')
+        if pkl_path:
+            print_color(f"PKL file: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'cyan')
+        
+        try:
+            # Progress helper: define all stage titles
+            titles = [
+                "Initializing Validation System",
+                "File Validation Loop",
+                "Finalization and Reporting"
+            ]
+            progress = ProgressHelper(titles)
             
-            # Process each file validation task
-            for filepath, stage_name in validation_tasks:
-                requirements = required_files[filepath]
-                path = Path(MODEL_DIR / filepath)
+            # STAGE 1: Initialization and setup
+            with progress.bar("Initializing Validation System", total=2, unit="steps") as init_bar:
                 
-                # Track if this is the first stage for this file
-                is_first_stage = stage_name == requirements['validation_stages'][0]
-                if is_first_stage:
-                    validation_stats['files_checked'] += 1
-                    file_start_time = time.time()
-                    logger.debug(f"Checking {requirements['description']} at {path}")
+                # STAGE 1.1
+                init_bar.text = "Configuring validation parameters..."
+                config_start = time.time()
                 
-                # STAGE 2.1: File existence check
-                if stage_name == 'existence':
-                    file_bar.text = f"Checking existence: {filepath}"
-                    existence_start = time.time()
-                    
-                    if not path.exists():
-                        error_msg = f"Missing required file: {filepath}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('existence')
-                        validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        validation_stats['files_failed'] += 1
-                        file_bar.text = f"{red}Missing: {filepath}{reset}"
-                    else:
-                        validation_stats['detailed_results'][filepath]['stages_passed'].append('existence')
-                        validation_stats['validation_stages_passed'] += 1
-                        file_bar.text = f"{green}Exists: {filepath}{reset}"
-                    
-                    existence_time = time.time() - existence_start
-                    validation_stats['detailed_timings'][f'{filepath}_existence'] = existence_time
-                    file_bar()
-                    continue
+                # Calculate total work units for progress tracking
+                total_files = len(required_files)
+                total_stages = sum(len(file_info['validation_stages']) for file_info in required_files.values())
                 
-                # Skip remaining stages if file doesn't exist
-                if 'existence' in validation_stats['detailed_results'][filepath]['stages_failed']:
-                    validation_stats['detailed_results'][filepath]['stages_failed'].append(stage_name)
-                    validation_stats['validation_stages_failed'] += 1
-                    file_bar.text = f"{red}Skipping {stage_name}: {filepath}{reset}"
-                    file_bar()
-                    continue
+                # Initialize tracking for each file
+                for filename, file_info in required_files.items():
+                    validation_stats['detailed_results'][filename] = {
+                        'stages_passed': [],
+                        'stages_failed': [],
+                        'warnings': [],
+                        'errors': [],
+                        'file_size': 0,
+                        'validation_time': 0,
+                        'file_path': str(file_info['path'])
+                    }
                 
-                # STAGE 2.2: File size validation
-                if stage_name == 'size':
-                    file_bar.text = f"Checking size: {filepath}"
-                    size_start = time.time()
+                config_time = time.time() - config_start
+                validation_stats['detailed_timings']['configuration'] = config_time
+                init_bar.text = f"Validation system configured ({total_files} files, {total_stages} stages)"
+                init_bar()
+                
+                # STAGE 1.2
+                init_bar.text = "Preparing file validation queues..."
+                queue_start = time.time()
+                
+                # Create a list of validation tasks
+                validation_tasks = []
+                for filename, requirements in required_files.items():
+                    for stage in requirements['validation_stages']:
+                        validation_tasks.append((filename, stage))
+                
+                queue_time = time.time() - queue_start
+                validation_stats['detailed_timings']['queue_preparation'] = queue_time
+                init_bar.text = f"Validation queues prepared ({len(validation_tasks)} tasks)"
+                init_bar()
+            
+            # STAGE 2: File validation loop
+            with progress.bar("File Validation Loop", total=len(validation_tasks), unit="stages") as file_bar:
+                
+                # Process each file validation task
+                for filename, stage_name in validation_tasks:
+                    requirements = required_files[filename]
+                    filepath = requirements['path']
                     
-                    file_size = path.stat().st_size
-                    validation_stats['detailed_results'][filepath]['file_size'] = file_size
+                    # Track if this is the first stage for this file
+                    is_first_stage = stage_name == requirements['validation_stages'][0]
+                    if is_first_stage:
+                        validation_stats['files_checked'] += 1
+                        file_start_time = time.time()
+                        file_bar.text = f"Checking {requirements['description'][:20]} at {filepath.name}"
                     
-                    if file_size < requirements["min_size"]:
-                        msg = f"File appears small ({file_size} bytes): {filepath}"
-                        if strict:
-                            logger.error(f"{red}{msg}{reset}")
-                            validation_stats['detailed_results'][filepath]['errors'].append(msg)
-                            validation_stats['detailed_results'][filepath]['stages_failed'].append('size')
+                    # STAGE 2.1: File existence check
+                    if stage_name == 'existence':
+                        file_bar.text = f"Checking existence: {filename}"
+                        existence_start = time.time()
+                        
+                        if not filepath.exists():
+                            error_msg = f"Missing required file: {filename}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('existence')
                             validation_stats['validation_stages_failed'] += 1
                             all_valid = False
-                            file_bar.text = f"{red}Size issue: {filepath}{reset}"
+                            validation_stats['files_failed'] += 1
+                            file_bar.text = f"Missing: {filename}"
                         else:
-                            logger.warning(f"{yellow}{msg}{reset}")
-                            validation_stats['detailed_results'][filepath]['warnings'].append(msg)
-                            validation_stats['detailed_results'][filepath]['stages_passed'].append('size')
+                            validation_stats['detailed_results'][filename]['stages_passed'].append('existence')
                             validation_stats['validation_stages_passed'] += 1
-                            validation_stats['warnings_issued'] += 1
-                            file_bar.text = f"{yellow}Small file: {filepath}{reset}"
-                    else:
-                        validation_stats['detailed_results'][filepath]['stages_passed'].append('size')
-                        validation_stats['validation_stages_passed'] += 1
-                        file_bar.text = f"{green}Size OK: {filepath}{reset}"
+                            file_bar.text = f"Exists: {filename}"
+                        
+                        existence_time = time.time() - existence_start
+                        validation_stats['detailed_timings'][f'{filename}_existence'] = existence_time
+                        file_bar()
+                        continue
                     
-                    size_time = time.time() - size_start
-                    validation_stats['detailed_timings'][f'{filepath}_size'] = size_time
-                    file_bar()
-                    continue
-                
-                # Skip content validation in non-strict mode
-                if not strict:
-                    validation_stats['files_passed'] += 1
-                    file_bar.text = f"{green}Basic check passed: {filepath}{reset}"
-                    file_bar()
-                    continue
-                
-                # STAGE 2.3: CSV header validation
-                if stage_name == 'header' and filepath.endswith('.csv') and validate_csv:
-                    file_bar.text = f"Checking CSV header: {filepath}"
-                    header_start = time.time()
-                    
-                    try:
-                        with open(path, 'r', encoding='utf-8') as f:
-                            header = f.readline()
-                            if not header.strip():
-                                error_msg = f"Empty CSV file: {filepath}"
-                                logger.error(f"{red}{error_msg}{reset}")
-                                validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                                validation_stats['detailed_results'][filepath]['stages_failed'].append('header')
-                                validation_stats['validation_stages_failed'] += 1
-                                all_valid = False
-                                file_bar.text = f"{red}Empty CSV: {filepath}{reset}"
-                            else:
-                                validation_stats['detailed_results'][filepath]['stages_passed'].append('header')
-                                validation_stats['validation_stages_passed'] += 1
-                                file_bar.text = f"{green}Header OK: {filepath}{reset}"
-                    except UnicodeDecodeError:
-                        error_msg = f"Invalid CSV encoding: {filepath}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('header')
+                    # Skip remaining stages if file doesn't exist
+                    if 'existence' in validation_stats['detailed_results'][filename]['stages_failed']:
+                        validation_stats['detailed_results'][filename]['stages_failed'].append(stage_name)
                         validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        file_bar.text = f"{red}Encoding error: {filepath}{reset}"
-                    except Exception as e:
-                        error_msg = f"CSV header check failed: {filepath} - {str(e)}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('header')
-                        validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        file_bar.text = f"{red}Header check failed: {filepath}{reset}"
+                        file_bar.text = f"Skipping {stage_name}: {filename}"
+                        file_bar()
+                        continue
                     
-                    header_time = time.time() - header_start
-                    validation_stats['detailed_timings'][f'{filepath}_header'] = header_time
-                    file_bar()
-                    continue
-                
-                # STAGE 2.4: CSV format validation
-                if stage_name == 'format' and filepath.endswith('.csv') and validate_csv:
-                    file_bar.text = f"Checking CSV format: {filepath}"
-                    format_start = time.time()
-                    
-                    try:
-                        with open(path, 'r', encoding='utf-8') as f:
-                            header = f.readline()
-                            if len(header.split(',')) < 2:
-                                error_msg = f"Invalid CSV format in: {filepath}"
-                                logger.error(f"{red}{error_msg}{reset}")
-                                validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                                validation_stats['detailed_results'][filepath]['stages_failed'].append('format')
-                                validation_stats['validation_stages_failed'] += 1
-                                all_valid = False
-                                file_bar.text = f"{red}Format error: {filepath}{reset}"
-                            else:
-                                validation_stats['detailed_results'][filepath]['stages_passed'].append('format')
-                                validation_stats['validation_stages_passed'] += 1
-                                file_bar.text = f"{green}Format OK: {filepath}{reset}"
-                    except Exception as e:
-                        error_msg = f"CSV format check failed: {filepath} - {str(e)}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('format')
-                        validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        file_bar.text = f"{red}Format check failed: {filepath}{reset}"
-                    
-                    format_time = time.time() - format_start
-                    validation_stats['detailed_timings'][f'{filepath}_format'] = format_time
-                    file_bar()
-                    continue
-                
-                # STAGE 2.5: CSV sample data validation
-                if stage_name == 'sample_data' and filepath.endswith('.csv') and validate_csv:
-                    file_bar.text = f"Checking sample data: {filepath}"
-                    sample_start = time.time()
-                    
-                    try:
-                        sample_df = pd.read_csv(path, nrows=10)
-                        if sample_df.empty:
-                            error_msg = f"CSV contains no data: {filepath}"
-                            logger.error(f"{red}{error_msg}{reset}")
-                            validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                            validation_stats['detailed_results'][filepath]['stages_failed'].append('sample_data')
-                            validation_stats['validation_stages_failed'] += 1
-                            all_valid = False
-                            file_bar.text = f"{red}No data: {filepath}{reset}"
+                    # STAGE 2.2: File size validation
+                    if stage_name == 'size':
+                        file_bar.text = f"Checking size: {filename}"
+                        size_start = time.time()
+                        
+                        file_size = filepath.stat().st_size
+                        
+                        if file_size >= 1024**3:
+                            file_size_display = f"{file_size / 1024**3:.2f} GB"
+                        elif file_size >= 1024**2:
+                            file_size_display = f"{file_size / 1024**3:.2f} MB"
+                        elif file_size >= 1024:
+                            file_size_display = f"{file_size / 1024**3:.2f} KB"
                         else:
-                            validation_stats['detailed_results'][filepath]['stages_passed'].append('sample_data')
-                            validation_stats['validation_stages_passed'] += 1
-                            file_bar.text = f"{green}Sample data OK: {filepath}{reset}"
-                    except Exception as e:
-                        error_msg = f"CSV sample read failed: {filepath} - {str(e)}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('sample_data')
-                        validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        file_bar.text = f"{red}Sample read failed: {filepath}{reset}"
-                    
-                    sample_time = time.time() - sample_start
-                    validation_stats['detailed_timings'][f'{filepath}_sample_data'] = sample_time
-                    file_bar()
-                    continue
-                
-                # STAGE 2.6: Pickle load validation
-                if stage_name == 'load' and filepath.endswith('.pkl') and validate_pickle:
-                    file_bar.text = f"Loading pickle: {filepath}"
-                    load_start = time.time()
-                    
-                    try:
-                        with open(path, 'rb') as f:
-                            data = joblib.load(f)
-                            validation_stats['detailed_results'][filepath]['stages_passed'].append('load')
-                            validation_stats['validation_stages_passed'] += 1
-                            file_bar.text = f"{green}Pickle loaded: {filepath}{reset}"
-                    except Exception as e:
-                        error_msg = f"Pickle load failed: {filepath} - {str(e)}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('load')
-                        validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        file_bar.text = f"{red}Load failed: {filepath}{reset}"
-                    
-                    load_time = time.time() - load_start
-                    validation_stats['detailed_timings'][f'{filepath}_load'] = load_time
-                    file_bar()
-                    continue
-                
-                # STAGE 2.7: Pickle key validation
-                if stage_name == 'keys' and filepath.endswith('.pkl') and validate_pickle:
-                    file_bar.text = f"Checking required keys: {filepath}"
-                    keys_start = time.time()
-                    
-                    try:
-                        with open(path, 'rb') as f:
-                            data = joblib.load(f)
-                            missing_keys = []
-                            for key in requirements["required_keys"]:
-                                if key not in data:
-                                    missing_keys.append(key)
-                            
-                            if missing_keys:
-                                error_msg = f"Missing keys {missing_keys} in: {filepath}"
-                                logger.error(f"{red}{error_msg}{reset}")
-                                validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                                validation_stats['detailed_results'][filepath]['stages_failed'].append('keys')
+                            file_size_display = f"{file_size} bytes"
+                        
+                        validation_stats['detailed_results'][filename]['file_size'] = file_size
+                        validation_stats['detailed_results'][filename]['file_size_display'] = file_size_display
+                        
+                        if file_size < requirements["min_size"]:
+                            msg = f"File appears small: {filename} ({file_size_display})"
+                            if strict:
+                                validation_stats['detailed_results'][filename]['errors'].append(msg)
+                                validation_stats['detailed_results'][filename]['stages_failed'].append('size')
                                 validation_stats['validation_stages_failed'] += 1
                                 all_valid = False
-                                file_bar.text = f"{red}Missing keys: {filepath}{reset}"
+                                file_bar.text = f"Size issue: {file_size_display}"
                             else:
-                                validation_stats['detailed_results'][filepath]['stages_passed'].append('keys')
+                                validation_stats['detailed_results'][filename]['warnings'].append(msg)
+                                validation_stats['detailed_results'][filename]['stages_passed'].append('size')
                                 validation_stats['validation_stages_passed'] += 1
-                                file_bar.text = f"{green}Keys OK: {filepath}{reset}"
-                    except Exception as e:
-                        error_msg = f"Key validation failed: {filepath} - {str(e)}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('keys')
-                        validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        file_bar.text = f"{red}Key check failed: {filepath}{reset}"
+                                validation_stats['warnings_issued'] += 1
+                                file_bar.text = f"Small file: {file_size_display}"
+                        else:
+                            validation_stats['detailed_results'][filename]['stages_passed'].append('size')
+                            validation_stats['validation_stages_passed'] += 1
+                            file_bar.text = f"Size OK: {file_size_display}"
+                        
+                        size_time = time.time() - size_start
+                        validation_stats['detailed_timings'][f'{filename}_size'] = size_time
+                        file_bar()
+                        continue
                     
-                    keys_time = time.time() - keys_start
-                    validation_stats['detailed_timings'][f'{filepath}_keys'] = keys_time
-                    file_bar()
-                    continue
-                
-                # STAGE 2.8: Pickle structure validation
-                if stage_name == 'structure' and filepath.endswith('.pkl') and validate_pickle:
-                    file_bar.text = f"Checking structure: {filepath}"
-                    structure_start = time.time()
-                    
-                    try:
-                        with open(path, 'rb') as f:
-                            data = joblib.load(f)
-                            
-                            structure_valid = True
-                            
-                            # Validate feature_names
-                            if "feature_names" in data:
-                                if not isinstance(data["feature_names"], list) or len(data["feature_names"]) == 0:
-                                    error_msg = f"Invalid feature_names in: {filepath}"
-                                    logger.error(f"{red}{error_msg}{reset}")
-                                    validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                                    validation_stats['detailed_results'][filepath]['stages_failed'].append('structure')
-                                    validation_stats['validation_stages_failed'] += 1
-                                    all_valid = False
-                                    structure_valid = False
-                            
-                            # Validate scaler
-                            if "scaler" in data and data["scaler"] is not None:
-                                if not hasattr(data["scaler"], "transform"):
-                                    error_msg = f"Invalid scaler object in: {filepath}"
-                                    logger.error(f"{red}{error_msg}{reset}")
-                                    validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                                    validation_stats['detailed_results'][filepath]['stages_failed'].append('structure')
-                                    validation_stats['validation_stages_failed'] += 1
-                                    all_valid = False
-                                    structure_valid = False
-                            
-                            if structure_valid:
-                                validation_stats['detailed_results'][filepath]['stages_passed'].append('structure')
-                                validation_stats['validation_stages_passed'] += 1
-                                file_bar.text = f"{green}Structure OK: {filepath}{reset}"
-                            else:
-                                file_bar.text = f"{red}Structure invalid: {filepath}{reset}"
-                                
-                    except Exception as e:
-                        error_msg = f"Structure validation failed: {filepath} - {str(e)}"
-                        logger.error(f"{red}{error_msg}{reset}")
-                        validation_stats['detailed_results'][filepath]['errors'].append(error_msg)
-                        validation_stats['detailed_results'][filepath]['stages_failed'].append('structure')
-                        validation_stats['validation_stages_failed'] += 1
-                        all_valid = False
-                        file_bar.text = f"{red}Structure check failed: {filepath}{reset}"
-                    
-                    structure_time = time.time() - structure_start
-                    validation_stats['detailed_timings'][f'{filepath}_structure'] = structure_time
-                    file_bar()
-                    continue
-                
-                # Update file validation time if this is the last stage for this file
-                if stage_name == requirements['validation_stages'][-1]:
-                    validation_stats['detailed_results'][filepath]['validation_time'] = time.time() - file_start_time
-                    
-                    # Determine final file status
-                    if all_valid or (not strict and path.exists()):
+                    # Skip content validation in non-strict mode
+                    if not strict:
                         validation_stats['files_passed'] += 1
-                        file_bar.text = f"{green}Validation passed: {filepath}{reset}"
-                    else:
-                        validation_stats['files_failed'] += 1
-                        file_bar.text = f"{red}Validation failed: {filepath}{reset}"
-        
-        # STAGE 3: Finalization and reporting
-        with progress.bar("Finalization and Reporting", total=2, unit="steps") as final_bar:
+                        file_bar.text = f"Basic check passed: {filename}"
+                        file_bar()
+                        continue
+                    
+                    # STAGE 2.3: CSV header validation
+                    if stage_name == 'header' and filename.endswith('.csv') and validate_csv:
+                        file_bar.text = f"Checking CSV header: {filename}"
+                        header_start = time.time()
+                        
+                        try:
+                            with open(filepath, 'r', encoding='utf-8') as f:
+                                header = f.readline()
+                                if not header.strip():
+                                    error_msg = f"Empty CSV file: {filename}"
+                                    validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                                    validation_stats['detailed_results'][filename]['stages_failed'].append('header')
+                                    validation_stats['validation_stages_failed'] += 1
+                                    all_valid = False
+                                    file_bar.text = f"Empty CSV: {filename}"
+                                else:
+                                    validation_stats['detailed_results'][filename]['stages_passed'].append('header')
+                                    validation_stats['validation_stages_passed'] += 1
+                                    file_bar.text = f"Header OK: {filename}"
+                        except UnicodeDecodeError:
+                            error_msg = f"Invalid CSV encoding: {filename}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('header')
+                            validation_stats['validation_stages_failed'] += 1
+                            all_valid = False
+                            file_bar.text = f"Encoding error: {filename}"
+                        except Exception as e:
+                            error_msg = f"CSV header check failed: {filename} - {str(e)}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('header')
+                            validation_stats['validation_stages_failed'] += 1
+                            all_valid = False
+                            file_bar.text = f"Header check failed: {filename}"
+                        
+                        header_time = time.time() - header_start
+                        validation_stats['detailed_timings'][f'{filename}_header'] = header_time
+                        file_bar()
+                        continue
+                    
+                    # STAGE 2.4: CSV format validation
+                    if stage_name == 'format' and filename.endswith('.csv') and validate_csv:
+                        file_bar.text = f"Checking CSV format: {filename}"
+                        format_start = time.time()
+                        
+                        try:
+                            with open(filepath, 'r', encoding='utf-8') as f:
+                                header = f.readline()
+                                if len(header.split(',')) < 2:
+                                    error_msg = f"Invalid CSV format in: {filename}"
+                                    validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                                    validation_stats['detailed_results'][filename]['stages_failed'].append('format')
+                                    validation_stats['validation_stages_failed'] += 1
+                                    all_valid = False
+                                    file_bar.text = f"Format error: {filename}"
+                                else:
+                                    validation_stats['detailed_results'][filename]['stages_passed'].append('format')
+                                    validation_stats['validation_stages_passed'] += 1
+                                    file_bar.text = f"Format OK: {filename}"
+                        except Exception as e:
+                            error_msg = f"CSV format check failed: {filename} - {str(e)}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('format')
+                            validation_stats['validation_stages_failed'] += 1
+                            all_valid = False
+                            file_bar.text = f"Format check failed: {filename}"
+                        
+                        format_time = time.time() - format_start
+                        validation_stats['detailed_timings'][f'{filename}_format'] = format_time
+                        file_bar()
+                        continue
+                    
+                    # STAGE 2.5: CSV sample data validation
+                    if stage_name == 'sample_data' and filename.endswith('.csv') and validate_csv:
+                        file_bar.text = f"Checking sample data: {filename}"
+                        sample_start = time.time()
+                        
+                        try:
+                            sample_df = pd.read_csv(filepath, nrows=10)
+                            if sample_df.empty:
+                                error_msg = f"CSV contains no data: {filename}"
+                                validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                                validation_stats['detailed_results'][filename]['stages_failed'].append('sample_data')
+                                validation_stats['validation_stages_failed'] += 1
+                                all_valid = False
+                                file_bar.text = f"No data: {filename}"
+                            else:
+                                validation_stats['detailed_results'][filename]['stages_passed'].append('sample_data')
+                                validation_stats['validation_stages_passed'] += 1
+                                file_bar.text = f"Sample data OK: {filename}"
+                        except Exception as e:
+                            error_msg = f"CSV sample read failed: {filename} - {str(e)}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('sample_data')
+                            validation_stats['validation_stages_failed'] += 1
+                            all_valid = False
+                            file_bar.text = f"Sample read failed: {filename}"
+                        
+                        sample_time = time.time() - sample_start
+                        validation_stats['detailed_timings'][f'{filename}_sample_data'] = sample_time
+                        file_bar()
+                        continue
+                    
+                    # STAGE 2.6: Pickle load validation
+                    if stage_name == 'load' and filename.endswith('.pkl') and validate_pickle:
+                        file_bar.text = f"Loading pickle: {filename}"
+                        load_start = time.time()
+                        
+                        try:
+                            with open(filepath, 'rb') as f:
+                                data = joblib.load(f)
+                                validation_stats['detailed_results'][filename]['stages_passed'].append('load')
+                                validation_stats['validation_stages_passed'] += 1
+                                file_bar.text = f"Pickle loaded: {filename}"
+                        except Exception as e:
+                            error_msg = f"Pickle load failed: {filename} - {str(e)}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('load')
+                            validation_stats['validation_stages_failed'] += 1
+                            all_valid = False
+                            file_bar.text = f"Load failed: {filename}"
+                        
+                        load_time = time.time() - load_start
+                        validation_stats['detailed_timings'][f'{filename}_load'] = load_time
+                        file_bar()
+                        continue
+                    
+                    # STAGE 2.7: Pickle key validation
+                    if stage_name == 'keys' and filename.endswith('.pkl') and validate_pickle:
+                        file_bar.text = f"Checking required keys: {filename}"
+                        keys_start = time.time()
+                        
+                        try:
+                            with open(filepath, 'rb') as f:
+                                data = joblib.load(f)
+                                missing_keys = []
+                                for key in requirements["required_keys"]:
+                                    if key not in data:
+                                        missing_keys.append(key)
+                                
+                                if missing_keys:
+                                    error_msg = f"Missing keys {missing_keys} in: {filename}"
+                                    validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                                    validation_stats['detailed_results'][filename]['stages_failed'].append('keys')
+                                    validation_stats['validation_stages_failed'] += 1
+                                    all_valid = False
+                                    file_bar.text = f"Missing keys: {filename}"
+                                else:
+                                    validation_stats['detailed_results'][filename]['stages_passed'].append('keys')
+                                    validation_stats['validation_stages_passed'] += 1
+                                    file_bar.text = f"Keys OK: {filename}"
+                        except Exception as e:
+                            error_msg = f"Key validation failed: {filename} - {str(e)}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('keys')
+                            validation_stats['validation_stages_failed'] += 1
+                            all_valid = False
+                            file_bar.text = f"Key check failed: {filename}"
+                        
+                        keys_time = time.time() - keys_start
+                        validation_stats['detailed_timings'][f'{filename}_keys'] = keys_time
+                        file_bar()
+                        continue
+                    
+                    # STAGE 2.8: Pickle structure validation
+                    if stage_name == 'structure' and filename.endswith('.pkl') and validate_pickle:
+                        file_bar.text = f"Checking structure: {filename}"
+                        structure_start = time.time()
+                        
+                        try:
+                            with open(filepath, 'rb') as f:
+                                data = joblib.load(f)
+                                
+                                structure_valid = True
+                                
+                                # Validate feature_names
+                                if "feature_names" in data:
+                                    if not isinstance(data["feature_names"], list) or len(data["feature_names"]) == 0:
+                                        error_msg = f"Invalid feature_names in: {filename}"
+                                        validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                                        validation_stats['detailed_results'][filename]['stages_failed'].append('structure')
+                                        validation_stats['validation_stages_failed'] += 1
+                                        all_valid = False
+                                        structure_valid = False
+                                
+                                # Validate scaler
+                                if "scaler" in data and data["scaler"] is not None:
+                                    if not hasattr(data["scaler"], "transform"):
+                                        error_msg = f"Invalid scaler object in: {filename}"
+                                        validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                                        validation_stats['detailed_results'][filename]['stages_failed'].append('structure')
+                                        validation_stats['validation_stages_failed'] += 1
+                                        all_valid = False
+                                        structure_valid = False
+                                
+                                if structure_valid:
+                                    validation_stats['detailed_results'][filename]['stages_passed'].append('structure')
+                                    validation_stats['validation_stages_passed'] += 1
+                                    file_bar.text = f"Structure OK: {filename}"
+                                else:
+                                    validation_stats['detailed_results'][filename]['stages_failed'].append('structure')
+                                    validation_stats['validation_stages_failed'] += 1
+                                    file_bar.text = f"Structure invalid: {filename}"
+                        
+                        except Exception as e:
+                            error_msg = f"Structure validation failed: {filename} - {str(e)}"
+                            validation_stats['detailed_results'][filename]['errors'].append(error_msg)
+                            validation_stats['detailed_results'][filename]['stages_failed'].append('structure')
+                            validation_stats['validation_stages_failed'] += 1
+                            all_valid = False
+                            file_bar.text = f"Structure check failed: {filename}"
+                        
+                        structure_time = time.time() - structure_start
+                        validation_stats['detailed_timings'][f'{filename}_structure'] = structure_time
+                        file_bar()
+                        continue
+                    
+                    # Update file validation time if this is the last stage for this file
+                    if stage_name == requirements['validation_stages'][-1]:
+                        validation_stats['detailed_results'][filename]['validation_time'] = time.time() - file_start_time
+                        
+                        # Determine final file status
+                        if all_valid or (not strict and filepath.exists()):
+                            validation_stats['files_passed'] += 1
+                            file_bar.text = f"Validation passed: {filename}"
+                        else:
+                            validation_stats['files_failed'] += 1
+                            file_bar.text = f"Validation failed: {filename}"
             
-            # STAGE 3.1
-            final_bar.text = "Generating validation report..."
-            report_start = time.time()
-            
-            # Calculate overall statistics
-            total_stages_passed = validation_stats['validation_stages_passed']
-            total_stages_failed = validation_stats['validation_stages_failed']
-            total_stages = total_stages_passed + total_stages_failed
-            success_rate = (total_stages_passed / total_stages) * 100 if total_stages > 0 else 0
-            validation_stats['success_rate'] = success_rate
-            
-            # Log summary
-            if use_color:
-                print(f"{blue}Preprocessing outputs validation completed:{reset}")
-            else:
-                print("Preprocessing outputs validation completed:")
-            
-            if verbose:
-                logger.info("Preprocessing outputs validation completed:")
-                logger.info(f"  - Files checked: {validation_stats['files_checked']}")
-                logger.info(f"  - Files passed: {validation_stats['files_passed']}")
-                logger.info(f"  - Files failed: {validation_stats['files_failed']}")
-                logger.info(f"  - Validation stages: {total_stages_passed} passed, {total_stages_failed} failed")
-                logger.info(f"  - Overall success rate: {success_rate:.1f}%")
-                logger.info(f"  - Warnings issued: {validation_stats['warnings_issued']}")
-            
-            # Log detailed results for each file
-            for filename, results in validation_stats['detailed_results'].items():
-                status = "PASSED" if len(results['stages_failed']) == 0 else "FAILED"
-                color = green if status == "PASSED" else red
-                stage_count = len(results['stages_passed']) + len(results['stages_failed'])
-                logger.info(f"  - {filename}: {color}{status}{reset} ({len(results['stages_passed'])}/{stage_count} stages, {results['file_size']} bytes, {results['validation_time']:.2f}s)")
+            # STAGE 3: Finalization and reporting
+            with progress.bar("Finalization and Reporting", total=2, unit="steps") as final_bar:
                 
-                # Log individual stage results for failed files
-                if results['stages_failed']:
-                    logger.debug(f"    Failed stages: {', '.join(results['stages_failed'])}")
-                if results['warnings']:
-                    for warning in results['warnings']:
-                        logger.warning(f"    {yellow}Warning: {warning}{reset}")
-                if results['errors']:
-                    for error in results['errors']:
-                        logger.error(f"    {red}Error: {error}{reset}")
-            
-            report_time = time.time() - report_start
-            validation_stats['detailed_timings']['report_generation'] = report_time
-            final_bar.text = f"{green}Validation report generated{reset}"
-            final_bar()
-            
-            # STAGE 3.2
-            final_bar.text = "Finalizing validation process..."
-            finalize_start = time.time()
-            
-            if use_color:
+                # STAGE 3.1
+                final_bar.text = "Generating validation report..."
+                report_start = time.time()
+                
+                # Calculate overall statistics
+                total_stages_passed = validation_stats['validation_stages_passed']
+                total_stages_failed = validation_stats['validation_stages_failed']
+                total_stages = total_stages_passed + total_stages_failed
+                success_rate = (total_stages_passed / total_stages) * 100 if total_stages > 0 else 0
+                validation_stats['success_rate'] = success_rate
+                
+                # Display summary
+                print_color(f"\nPreprocessing outputs validation completed:", 'green')
+                print_color(f"  ├─ Files checked: {Fore.YELLOW + Style.BRIGHT}{validation_stats['files_checked']}", 'green')
+                print_color(f"  ├─ Files passed: {Fore.CYAN + Style.BRIGHT}{validation_stats['files_passed']}", 'green')
+                print_color(f"  ├─ Files failed: {Fore.RED + Style.BRIGHT}{validation_stats['files_failed']}", 'green')
+                print_color(f"  ├─ Validation stages: {Fore.YELLOW + Style.BRIGHT}{total_stages}", 'green')
+                print_color(f"  │   ├─ Passed stages: {Fore.CYAN + Style.BRIGHT}{total_stages_passed} passed", 'green')
+                print_color(f"  │   └─ Failed stages: {Fore.RED + Style.BRIGHT}{total_stages_failed} failed", 'green')
+                print_color(f"  ├─ Overall success rate: {Fore.CYAN + Style.BRIGHT}{success_rate:.1f}%", 'green')
+                print_color(f"  └─ Warnings issued: {Fore.YELLOW + Style.BRIGHT}{validation_stats['warnings_issued']}", 'green')
+                
+                # Display detailed results for each file
+                for filename, results in validation_stats['detailed_results'].items():
+                    status = Fore.GREEN + Style.BRIGHT + "PASSED" if len(results['stages_failed']) == 0 else Fore.RED + Style.BRIGHT + "FAILED"
+                    stage_count = len(results['stages_passed']) + len(results['stages_failed'])
+                    print_color(f"File checked: {Fore.MAGENTA + Style.BRIGHT}{filename} {status}", 'green')
+                    print_color(f"  ├─ File size: {Fore.CYAN + Style.BRIGHT}{results['file_size_display']}", 'green')
+                    print_color(f"  ├─ Passed stages: {Fore.YELLOW + Style.BRIGHT}{len(results['stages_passed'])}/{stage_count} stages", 'green')
+                    print_color(f"  └─ Validation time: {Fore.CYAN + Style.BRIGHT}{results['validation_time']:.2f}s", 'green')
+                    
+                    # Display individual stage results for failed files
+                    if results['stages_failed']:
+                        print_color(f"Failed stages: {Fore.RED + Style.BRIGHT}{', '.join(results['stages_failed'])}", 'green')
+                    if results['warnings']:
+                        for warning in results['warnings']:
+                            print_color(f"Warning: {Fore.YELLOW + Style.BRIGHT}{warning}", 'green')
+                    if results['errors']:
+                        for error in results['errors']:
+                            print_color(f"Error: {Fore.RED + Style.BRIGHT}{error}", 'green')
+                
+                report_time = time.time() - report_start
+                validation_stats['detailed_timings']['report_generation'] = report_time
+                final_bar.text = "Validation report generated"
+                final_bar()
+                
+                # STAGE 3.2
+                final_bar.text = "Finalizing validation process..."
+                finalize_start = time.time()
                 if all_valid:
-                    logger.info(f"{green}All preprocessing outputs validated successfully{reset}")
-                    final_bar.text = f"{green}All outputs validated successfully{reset}"
-                else:
-                    logger.error(f"{red}Preprocessing outputs validation failed{reset}")
-                    final_bar.text = f"{red}Validation failed{reset}"
-            else:
-                if all_valid:
-                    logger.info("All preprocessing outputs validated successfully")
                     final_bar.text = "All outputs validated successfully"
+                    print_color("\nAll preprocessing outputs validated successfully", 'green')
                 else:
-                    logger.error("Preprocessing outputs validation failed")
                     final_bar.text = "Validation failed"
+                    print_color("\nPreprocessing outputs validation failed", 'red')
+                
+                # Log detailed timings in debug mode
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Validation timings:")
+                    for stage, timing in validation_stats['detailed_timings'].items():
+                        logger.debug(f"├─ {stage}: {timing:.3f}s")
+                    total_time = sum(validation_stats['detailed_timings'].values())
+                    logger.debug(f"└─ Total validation time: {total_time:.3f}s")
+                
+                finalize_time = time.time() - finalize_start
+                validation_stats['detailed_timings']['finalization'] = finalize_time
+                final_bar()
+        
+        except Exception as e:
+            error_context = f"(stage: {validation_stats.get('stage', 'unknown')})"
+            logger.error(f"Validation process failed {error_context}: {str(e)}")
+            logger.error(f"Error details: {traceback.format_exc()}")
+            logger.error(f"Validation process failed at stage: {validation_stats.get('stage', 'unknown')}")
+            logger.error(f"Error: {str(e)}")
             
-            # Log detailed timings in debug mode
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug("Validation timings:")
-                for stage, timing in validation_stats['detailed_timings'].items():
-                    logger.debug(f"  - {stage}: {timing:.3f}s")
-                total_time = sum(validation_stats['detailed_timings'].values())
-                logger.debug(f"  - Total validation time: {total_time:.3f}s")
-            
-            finalize_time = time.time() - finalize_start
-            validation_stats['detailed_timings']['finalization'] = finalize_time
-            final_bar()
-    
+            raise RuntimeError("Preprocessing outputs validation failed") from e
+        
+        return all_valid, csv_path_return, pkl_path_return
+        
     except Exception as e:
-        error_context = f" (stage: {validation_stats.get('stage', 'unknown')})"
-        logger.error(f"Validation process failed{error_context}: {str(e)}")
-        logger.error(f"Error details: {traceback.format_exc()}")
-        
-        if use_color:
-            logger.error(f"{red}Validation process failed at stage: {validation_stats.get('stage', 'unknown')}{reset}")
-            logger.error(f"{red}Error: {str(e)}{reset}")
-        
-        raise RuntimeError("Preprocessing outputs validation failed") from e
-    
-    return all_valid
+        print_color(f"\nError during preprocessing outputs validation:", 'red')
+        print_color(f"  ├─ Error type: {type(e).__name__}", 'red')
+        print_color(f"  └─ Error message: {str(e)}", 'red')
+        logger.error(f"Preprocessing outputs validation failed: {str(e)}")
+        return False, None, None
 
 def run_preprocessing(
     logger: logging.Logger,
     verbose: Optional[bool] = False,
     timeout_minutes: float = 30.0,
-    cleanup: bool = True,
-    use_color: bool = True,
+    cleanup: bool = False,
     strict_output_check: bool = True,
     reproducible: bool = True,
     debug: bool = False
@@ -4192,26 +4714,17 @@ def run_preprocessing(
         verbose: Enable detailed logging
         timeout_minutes: Maximum runtime in minutes
         cleanup: Remove existing output files
-        use_color: Enable colored output
         strict_output_check: Use strict validation
         reproducible: Set PYTHONHASHSEED for reproducibility
         debug: Enable verbose debugging output
-        
+    
     Returns:
         bool: True if preprocessing succeeded
-        
+    
     Raises:
         RuntimeError: For unrecoverable failures
         FileNotFoundError: If script is missing
     """
-    # Configure output styling
-    red = Fore.RED if use_color else ""
-    yellow = Fore.YELLOW if use_color else ""
-    green = Fore.GREEN if use_color else ""
-    blue = Fore.BLUE if use_color else ""
-    cyan = Fore.CYAN if use_color else ""
-    reset = Style.RESET_ALL if use_color else ""
-
     # Track preprocessing progress and statistics
     preprocessing_stats = {
         'stage': 'Initializing',
@@ -4229,12 +4742,19 @@ def run_preprocessing(
         'memory_usage_mb': 0,
         'detailed_timings': {}
     }
+    
+    # Initialize return values
+    csv_path_return = None
+    pkl_path_return = None
 
     try:
-        if use_color:
-            print(f"\n{green}Starting Preprocessing Pipeline...{reset}")
-        else:
-            print("\nStarting Preprocessing Pipeline...")
+        print_color("\n" + "-" * 50, 'magenta')
+        print_color("PREPROCESSING PIPELINE", 'magenta')
+        print_color("-" * 50, 'magenta')
+        print_color(f"  ├─ Timeout: {Fore.GREEN + Style.BRIGHT}{timeout_minutes} minutes", 'magenta')
+        print_color(f"  ├─ Cleanup: {Fore.GREEN + Style.BRIGHT}{'Enabled' if cleanup else 'Disabled'}", 'magenta')
+        print_color(f"  ├─ Strict validation: {Fore.GREEN + Style.BRIGHT}{'Enabled' if strict_output_check else 'Disabled'}", 'magenta')
+        print_color(f"  └─ Reproducible: {Fore.GREEN + Style.BRIGHT}{'Enabled' if reproducible else 'Disabled'}", 'magenta')
         
         # Progress helper: define all stage titles
         titles = [
@@ -4244,10 +4764,6 @@ def run_preprocessing(
             "Final Summary"
         ]
         progress = ProgressHelper(titles)
-        
-        if verbose:
-            logger.info("Starting Preprocessing Pipeline")
-            logger.debug(f"Timeout: {timeout_minutes}min | Cleanup: {cleanup} | Strict: {strict_output_check} | Reproducible: {reproducible}")
 
         # STAGE 1: Initial Setup and Validation
         with progress.bar("Initial Setup and Validation", total=3, unit="steps") as setup_bar:
@@ -4260,19 +4776,19 @@ def run_preprocessing(
             preprocessing_stats['current_step'] = 1
             
             base_dir = Path(__file__).resolve().parent
-            script_path = Path(base_dir / "preprocessing.py")
+            script_path = Path(base_dir / "preprocessor.py")
             
             if not script_path.exists():
                 error_msg = f"Preprocessing script not found at {script_path.absolute()}"
-                logger.error(f"{red}{error_msg}{reset}")
                 preprocessing_stats['failed_steps'] += 1
-                setup_bar.text = f"{red}Script not found{reset}"
-                raise FileNotFoundError(f"preprocessing.py not found at {script_path.absolute()}")
+                setup_bar.text = "Script not found"
+                print_color(f"\nError: {error_msg}", 'red')
+                raise FileNotFoundError(f"preprocessor.py not found at {script_path.absolute()}")
             
             script_validation_time = time.time() - script_validation_start
             preprocessing_stats['detailed_timings']['script_validation'] = script_validation_time
             preprocessing_stats['successful_steps'] += 1
-            setup_bar.text = f"{green}Script validated{reset}"
+            setup_bar.text = "Script validated"
             setup_bar()
             
             # STAGE 1.2: Cleanup Preparation
@@ -4282,24 +4798,48 @@ def run_preprocessing(
             preprocessing_stats['stage'] = "Cleanup Preparation"
             preprocessing_stats['current_step'] = 2
             
-            output_files = [
-                Path(MODEL_DIR / "preprocessed_dataset.csv"),
-                Path(MODEL_DIR / "preprocessing_artifacts.pkl")
-            ]
-            
             files_to_cleanup = []
             
             if cleanup:
-                setup_bar.text = "Checking existing output files..."
+                setup_bar.text = "Checking existing preprocessing output files..."
+                
+                # Use get_preprocessing_outputs to locate the output files
+                csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(
+                    config_path=None,
+                    base_results_dir=None,
+                    base_preprocessing_dir=None,
+                    interactive=True
+                )
+                
+                # Add CSV file to cleanup list if found
+                if csv_path:
+                    csv_file = Path(csv_path)
+                    if csv_file.exists():
+                        files_to_cleanup.append(csv_file)
+                        setup_bar.text = f"Found existing CSV file for cleanup: {csv_file.name}"
+                
+                # Add PKL file to cleanup list if found
+                if pkl_path:
+                    pkl_file = Path(pkl_path)
+                    if pkl_file.exists():
+                        files_to_cleanup.append(pkl_file)
+                        setup_bar.text = f"Found existing PKL file for cleanup: {pkl_file.name}"
+                
+                # Also check default locations as fallback
+                output_files = [
+                    Path(DATASETS_DIR / "preprocessed_dataset.csv"),
+                    Path(DATASETS_DIR / "preprocessing_artifacts.pkl")
+                ]
+                
                 for fpath in output_files:
-                    if fpath.exists():
+                    if fpath.exists() and fpath not in files_to_cleanup:
                         files_to_cleanup.append(fpath)
-                        logger.debug(f"Found existing file for cleanup: {fpath}")
+                        setup_bar.text = f"Found additional file for cleanup: {fpath.name}"
             
             cleanup_prep_time = time.time() - cleanup_prep_start
             preprocessing_stats['detailed_timings']['cleanup_prep'] = cleanup_prep_time
             preprocessing_stats['successful_steps'] += 1
-            setup_bar.text = f"{green}Cleanup prepared ({len(files_to_cleanup)} files){reset}"
+            setup_bar.text = f"Cleanup prepared ({len(files_to_cleanup)} files)"
             setup_bar()
             
             # STAGE 1.3: Environment Setup
@@ -4314,15 +4854,14 @@ def run_preprocessing(
             
             if reproducible:
                 env["PYTHONHASHSEED"] = "42"
-                logger.debug("Set PYTHONHASHSEED=42 for reproducibility")
-                setup_bar.text = "Environment configured (reproducible)"
+                setup_bar.text = "Set PYTHONHASHSEED=42 (reproducible)"
             else:
                 setup_bar.text = "Environment configured (standard)"
             
             env_setup_time = time.time() - env_setup_start
             preprocessing_stats['detailed_timings']['env_setup'] = env_setup_time
             preprocessing_stats['successful_steps'] += 1
-            setup_bar.text = f"{green}Environment configured{reset}"
+            setup_bar.text = "Environment configured"
             setup_bar()
 
         # STAGE 2: Execution Phase
@@ -4340,14 +4879,14 @@ def run_preprocessing(
                         if fpath.exists():
                             fpath.unlink(missing_ok=True)
                             preprocessing_stats['files_cleaned'] += 1
-                            logger.info(f"Removed: {fpath}")
+                            exec_bar.text = f"Removed: {fpath.name}"
                     except Exception as e:
-                        logger.warning(f"{yellow}Failed to remove {fpath}: {e}{reset}")
                         preprocessing_stats['warnings_issued'] += 1
+                        print_color(f"\nWarning: Failed to remove {fpath.name}: {e}", 'yellow')
                 
                 cleanup_time = time.time() - cleanup_start
                 preprocessing_stats['detailed_timings']['file_cleanup'] = cleanup_time
-                exec_bar.text = f"{green}Cleanup completed ({preprocessing_stats['files_cleaned']} files){reset}"
+                exec_bar.text = f"Cleanup completed ({preprocessing_stats['files_cleaned']} files)"
                 exec_bar()
             else:
                 exec_bar.text = "No cleanup required"
@@ -4369,15 +4908,10 @@ def run_preprocessing(
                 'current_operation': 'Starting execution...'
             }
             
-            if use_color:
-                logger.info(f"{cyan}Executing preprocessing script with {timeout_minutes} minute timeout...{reset}")
-            else:
-                logger.info(f"Executing preprocessing script with {timeout_minutes} minute timeout...")
-            
             try:
                 # Start the subprocess
                 process = subprocess.Popen(
-                    [sys.executable, "preprocessing.py"],
+                    [sys.executable, script_path],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
@@ -4420,7 +4954,7 @@ def run_preprocessing(
                     # Check timeout
                     if time.time() > timeout_time:
                         process.terminate()
-                        raise subprocess.TimeoutExpired("preprocessing.py", timeout_seconds)
+                        raise subprocess.TimeoutExpired(script_path, timeout_seconds)
                     
                     # Read stdout
                     stdout_line = process.stdout.readline()
@@ -4432,16 +4966,14 @@ def run_preprocessing(
                         line = stdout_line.strip()
                         if line:
                             if line.startswith("ERROR"):
-                                logger.error(f"{red}{line}{reset}")
                                 preprocessing_stats['error_lines_found'] += 1
+                                print_color(f"\nError: {line}", 'red')
                             elif line.startswith("WARNING"):
-                                logger.warning(f"{yellow}{line}{reset}")
                                 preprocessing_stats['warning_lines_found'] += 1
                                 preprocessing_stats['warnings_issued'] += 1
+                                print_color(f"\nWarning: {line}", 'yellow')
                             else:
-                                logger.info(f"{green}{line[:200]}{reset}")
-                                if debug and len(line) > 200:
-                                    logger.debug(f"Full output: {line}")
+                                print_color(f"\nPassed: {line[:200]}", 'green')
                             
                             update_progress_from_output(line)
                     
@@ -4450,7 +4982,7 @@ def run_preprocessing(
                     if stderr_line:
                         stderr_lines.append(stderr_line)
                         execution_stats['stderr_lines'] += 1
-                        logger.error(f"{red}STDERR: {stderr_line.strip()}{reset}")
+                        print_color(f"\nSTDERR: {stderr_line.strip()}", 'red')
                     
                     time.sleep(0.1)
                 
@@ -4463,34 +4995,32 @@ def run_preprocessing(
                 
                 # Check return code
                 if process.returncode != 0:
-                    raise subprocess.CalledProcessError(process.returncode, "preprocessing.py", ''.join(stdout_lines), ''.join(stderr_lines))
+                    raise subprocess.CalledProcessError(process.returncode, script_path, ''.join(stdout_lines), ''.join(stderr_lines))
                 
                 # Execution completed successfully
                 execution_time = time.time() - execution_start
                 preprocessing_stats['execution_time'] = execution_time
                 preprocessing_stats['detailed_timings']['script_execution'] = execution_time
                 
-                exec_bar.text = f"{green}Execution completed ({execution_time:.1f}s){reset}"
+                exec_bar.text = f"Execution completed ({execution_time:.1f}s)"
                 exec_bar()
-                
-                logger.debug(f"Execution statistics: {execution_stats['stdout_lines']} stdout lines, {execution_stats['stderr_lines']} stderr lines, {execution_stats['progress_indicators']} progress indicators")
-                
+            
             except subprocess.TimeoutExpired:
                 execution_time = time.time() - execution_start
                 preprocessing_stats['execution_time'] = execution_time
                 preprocessing_stats['detailed_timings']['script_execution'] = execution_time
-                exec_bar.text = f"{red}Timeout after {execution_time:.1f}s{reset}"
+                exec_bar.text = f"Timeout after {execution_time:.1f}s"
                 exec_bar()
                 raise
-                
+            
             except Exception as e:
                 execution_time = time.time() - execution_start
                 preprocessing_stats['execution_time'] = execution_time
                 preprocessing_stats['detailed_timings']['script_execution'] = execution_time
-                exec_bar.text = f"{red}Execution failed{reset}"
+                exec_bar.text = f"Execution failed"
                 exec_bar()
                 raise
-
+        
         # STAGE 3: Post-Processing and Validation
         with progress.bar("Post-Processing and Validation", total=2, unit="steps") as post_bar:
             
@@ -4501,45 +5031,44 @@ def run_preprocessing(
             preprocessing_stats['stage'] = "Post-Processing"
             preprocessing_stats['current_step'] = 5
             
-            if use_color:
-                logger.info(f"{green}Preprocessing execution completed in {preprocessing_stats['execution_time']:.2f} seconds{reset}")
-            else:
-                logger.info(f"Preprocessing execution completed in {preprocessing_stats['execution_time']:.2f} seconds")
+            # Log information about located outputs
+            if csv_path:
+                csv_file = Path(csv_path)
+                if csv_file.exists():
+                    file_size = csv_file.stat().st_size
             
-            logger.debug(f"Output lines processed: {preprocessing_stats['output_lines_processed']}")
-            logger.debug(f"Warnings encountered: {preprocessing_stats['warning_lines_found']}")
-            logger.debug(f"Errors encountered: {preprocessing_stats['error_lines_found']}")
+            if pkl_path:
+                pkl_file = Path(pkl_path)
+                if pkl_file.exists():
+                    file_size = pkl_file.stat().st_size
             
             output_processing_time = time.time() - output_processing_start
             preprocessing_stats['detailed_timings']['output_processing'] = output_processing_time
             preprocessing_stats['successful_steps'] += 1
-            post_bar.text = f"{green}Output processed{reset}"
+            post_bar.text = f"Output processed"
             post_bar()
             
             # STAGE 3.2: Output Validation
             post_bar.text = "Validating preprocessing outputs..."
             validation_start = time.time()
             
-            logger.info("Validating preprocessing outputs...")
             validation_passed = check_preprocessing_outputs(
                 logger=logger,
-                strict=strict_output_check,
-                use_color=use_color
+                strict=strict_output_check
             )
             
             validation_time = time.time() - validation_start
             preprocessing_stats['detailed_timings']['output_validation'] = validation_time
             
             if not validation_passed:
-                logger.error(f"{red}Output validation failed{reset}")
                 preprocessing_stats['failed_steps'] += 1
-                post_bar.text = f"{red}Validation failed{reset}"
+                post_bar.text = f"Validation failed"
                 post_bar()
-                log_troubleshooting(logger, "validation")
-                return False
+                print_color(f"\nError: Output validation failed", 'red')
+                return False, None, None
             
             preprocessing_stats['successful_steps'] += 1
-            post_bar.text = f"{green}Validation passed{reset}"
+            post_bar.text = f"Validation passed"
             post_bar()
 
         # STAGE 4: Final Summary
@@ -4558,7 +5087,7 @@ def run_preprocessing(
             stats_time = time.time() - stats_start
             preprocessing_stats['detailed_timings']['stats_calculation'] = stats_time
             preprocessing_stats['successful_steps'] += 1
-            summary_bar.text = f"{green}Statistics calculated{reset}"
+            summary_bar.text = "Statistics calculated"
             summary_bar()
             
             # STAGE 4.2: Final Reporting
@@ -4566,105 +5095,98 @@ def run_preprocessing(
             report_start = time.time()
             
             # Log summary
-            if use_color:
-                logger.info(f"{green}Preprocessing completed successfully!{reset}")
-                logger.info(f"{blue}=== Preprocessing Summary ==={reset}")
-            else:
-                logger.info("Preprocessing completed successfully!")
-                logger.info("=== Preprocessing Summary ===")
+            print_color("\nPreprocessing completed successfully!", 'green')
+            print_color(f"  ├─ Total time: {Fore.YELLOW + Style.BRIGHT}{total_time:.2f}s", 'green')
+            print_color(f"  ├─ Steps completed: {Fore.CYAN + Style.BRIGHT}{preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}", 'green')
+            print_color(f"  ├─ Execution time: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['execution_time']:.2f}s", 'green')
+            print_color(f"  ├─ Files cleaned: {Fore.CYAN + Style.BRIGHT}{preprocessing_stats['files_cleaned']}", 'green')
+            print_color(f"  ├─ Output lines: {Fore.BLUE + Style.BRIGHT}{preprocessing_stats['output_lines_processed']}", 'green')
+            print_color(f"  ├─ Warnings: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['warning_lines_found']}", 'green')
+            print_color(f"  └─ Errors: {Fore.RED + Style.BRIGHT}{preprocessing_stats['error_lines_found']}", 'green')
             
-            logger.info(f"  - Total time: {total_time:.2f}s")
-            logger.info(f"  - Steps completed: {preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}")
-            logger.info(f"  - Execution time: {preprocessing_stats['execution_time']:.2f}s")
-            logger.info(f"  - Files cleaned: {preprocessing_stats['files_cleaned']}")
-            logger.info(f"  - Output lines: {preprocessing_stats['output_lines_processed']}")
-            logger.info(f"  - Warnings: {preprocessing_stats['warning_lines_found']}")
-            logger.info(f"  - Errors: {preprocessing_stats['error_lines_found']}")
+            # Get final output locations for summary
+            csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(
+                config_path=None,
+                base_results_dir=None,
+                base_preprocessing_dir=None,
+                interactive=False
+            )
+            
+            # Log output file locations
+            if csv_path:
+                csv_file = Path(csv_path)
+                if csv_file.exists():
+                    file_size = csv_file.stat().st_size
+                    print_color(f"\nPreprocessing outputs:", 'green')
+                    print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+                    print_color(f"  │   └─ Size: {Fore.YELLOW + Style.BRIGHT}{file_size} bytes", 'green')
+            
+            if pkl_path:
+                pkl_file = Path(pkl_path)
+                if pkl_file.exists():
+                    file_size = pkl_file.stat().st_size
+                    print_color(f"  └─ PKL file: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+                    print_color(f"      └─ Size: {Fore.YELLOW + Style.BRIGHT}{file_size} bytes", 'green')
             
             # Log detailed timings in debug mode
             if debug:
-                if use_color:
-                    logger.debug(f"{blue}Detailed timings:{reset}")
-                else:
-                    logger.debug("Detailed timings:")
-                for stage, timing in preprocessing_stats['detailed_timings'].items():
-                    logger.debug(f"  - {stage}: {timing:.2f}s")
+                print_color(f"\nDetailed timings:", 'green')
+                timing_items = list(preprocessing_stats['detailed_timings'].items())
+                for i, (stage, timing) in enumerate(timing_items):
+                    prefix = "  ├─ " if i < len(timing_items) - 1 else "  └─ "
+                    print_color(f"{prefix}{stage}: {Fore.WHITE + Style.BRIGHT}{timing:.2f}s", 'green')
             
             report_time = time.time() - report_start
             preprocessing_stats['detailed_timings']['final_report'] = report_time
             preprocessing_stats['successful_steps'] += 1
-            summary_bar.text = f"{green}Preprocessing pipeline completed{reset}"
+            summary_bar.text = f"Preprocessing pipeline completed"
             summary_bar()
         
-        return True
+        return True, csv_path_return, pkl_path_return
 
     except subprocess.TimeoutExpired:
         preprocessing_stats['failed_steps'] += 1
         preprocessing_stats['stage'] = "Timeout"
+        print_color(f"\nPreprocessing statistics error after timeout: {Fore.YELLOW + Style.BRIGHT}{timeout_minutes} minutes", 'red')
+        print_color(f"  ├─ Stage: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['stage']}", 'red')
+        print_color(f"  ├─ Steps completed: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}", 'red')
+        print_color(f"  ├─ Execution time: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats.get('execution_time', 0):.2f}s", 'red')
+        print_color(f"  └─ Output lines processed: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['output_lines_processed']}", 'red')
         
-        if use_color:
-            logger.error(f"{red}Timeout after {timeout_minutes} minutes{reset}")
-        else:
-            logger.error(f"Timeout after {timeout_minutes} minutes")
-        
-        log_troubleshooting(logger, "timeout")
-        
-        if use_color:
-            logger.error(f"{red}Preprocessing statistics at timeout:{reset}")
-        else:
-            logger.error("Preprocessing statistics at timeout:")
-        
-        logger.error(f"  - Steps completed: {preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}")
-        logger.error(f"  - Execution time: {preprocessing_stats.get('execution_time', 0):.2f}s")
-        logger.error(f"  - Output lines processed: {preprocessing_stats['output_lines_processed']}")
-        
-        return False
+        return False, None, None
 
     except subprocess.CalledProcessError as e:
         preprocessing_stats['failed_steps'] += 1
         preprocessing_stats['stage'] = "Execution Error"
         
-        if use_color:
-            logger.error(f"{red}Process failed with exit code {e.returncode}{reset}")
-            logger.error(f"{red}Error output:{reset}")
-        else:
-            logger.error(f"Process failed with exit code {e.returncode}")
-            logger.error("Error output:")
+        print_color(f"\nProcess failed with exit code {Fore.YELLOW + Style.BRIGHT}{e.returncode}", 'red')
+        print_color(f"  ├─ Error output:", 'red')
+        # Show last 20 lines
+        for line in e.stderr.splitlines()[-20:]:
+            # Truncate very long lines
+            if len(line) > 200:
+                print_color(f"  │   └─ {line[:200]}...", 'red')
+            else:
+                print_color(f"  │   └─ {line}", 'red')
         
-        # Log error output with progress context
-        log_error_output(logger, e.stderr, use_color)
+        print_color(f"  ├─ Failed at stage: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['stage']}", 'red')
+        print_color(f"  └─ Steps completed: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}", 'red')
         
-        if use_color:
-            logger.error(f"{red}Preprocessing failed at stage: {preprocessing_stats['stage']}{reset}")
-            logger.error(f"{red}Steps completed: {preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}{reset}")
-        else:
-            logger.error(f"Preprocessing failed at stage: {preprocessing_stats['stage']}")
-            logger.error(f"Steps completed: {preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}")
-        
-        log_troubleshooting(logger, "execution")
-        return False
+        return False, None, None
 
     except Exception as e:
         preprocessing_stats['failed_steps'] += 1
         preprocessing_stats['stage'] = "Unexpected Error"
         
-        if use_color:
-            logger.error(f"{red}Unexpected error: {type(e).__name__}{reset}")
-            logger.error(f"{red}Error details: {str(e)}{reset}")
-            logger.error(f"{red}Failed at stage: {preprocessing_stats['stage']}{reset}")
-        else:
-            logger.error(f"Unexpected error: {type(e).__name__}")
-            logger.error(f"Error details: {str(e)}")
-            logger.error(f"Failed at stage: {preprocessing_stats['stage']}")
+        print_color(f"\nUnexpected error: {Fore.YELLOW + Style.BRIGHT}{type(e).__name__}", 'red')
+        print_color(f"  ├─ Error details: {Fore.YELLOW + Style.BRIGHT}{str(e)}", 'red')
+        print_color(f"  ├─ Failed at stage: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['stage']}", 'red')
+        print_color(f"  └─ Steps completed: {Fore.YELLOW + Style.BRIGHT}{preprocessing_stats['successful_steps']}/{preprocessing_stats['total_steps']}", 'red')
         
         if debug:
-            if use_color:
-                logger.error(f"{red}Stack trace:{reset}")
-            else:
-                logger.error("Stack trace:")
+            print_color(f"\nStack trace:", 'red')
             logger.error(traceback.format_exc())
         
-        log_troubleshooting(logger, "unexpected")
         raise RuntimeError("Preprocessing failed") from e
 
 def log_troubleshooting(logger: logging.Logger, error_type: str) -> None:
@@ -4691,8 +5213,7 @@ def log_troubleshooting(logger: logging.Logger, error_type: str) -> None:
         "unexpected": [
             "1. Check system resource limits",
             "2. Verify Python environment consistency",
-            "3. Enable debug mode for details",
-            "4. Contact support with full logs"
+            "3. Enable debug mode for details"
         ]
     }
     logger.warning("Troubleshooting steps:")
@@ -4703,7 +5224,7 @@ def log_error_output(logger: logging.Logger, stderr: str, use_color: bool) -> No
     """Log error output with proper formatting and truncation."""
     red = Fore.RED if use_color else ""
     reset = Style.RESET_ALL if use_color else ""
-    logger.error(f"{red}=== Error Output ==={reset}")
+    logger.error(f"{red}Error Output{reset}")
     # Show last 20 lines
     for line in stderr.splitlines()[-20:]:
         # Truncate very long lines
@@ -4713,14 +5234,12 @@ def log_error_output(logger: logging.Logger, stderr: str, use_color: bool) -> No
             logger.error(f"{red}{line}{reset}")
 
 def display_data_loading_header(filepath: str) -> None:
-    """Display data loading header with rich formatting."""
-    console.print("\n")
-    console.print(Panel.fit(
-        f"[bold green]Data Loading Started[/bold green]\n"
-        f"[bold]Source:[/bold] [bold cyan]{filepath}",
-        title="[bold yellow]Data Processing Pipeline[/bold yellow]",
-        border_style="blue"
-    ))
+    """Display data loading header."""
+    print_color("\nDATA PREPROCESSING PIPELINE", 'magenta')
+    print_color("-" * 50, 'magenta')
+    print_color(f"Preprocessed dataset:", 'magenta')
+    print_color(f"  └─ {Fore.YELLOW + Style.BRIGHT}{filepath}", 'magenta')
+    print_color("-" * 50, 'magenta')
 
 def display_chunk_progress(stats: Dict[str, Any], history: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """
@@ -4990,7 +5509,7 @@ def load_preprocessing_artifacts(
     """
     # Determine filepath (default: script's directory / models/preprocessing_artifacts.pkl)
     if filepath is None:
-        filepath = Path(MODEL_DIR / "preprocessing_artifacts.pkl")
+        filepath = Path(DATASETS_DIR / "preprocessing_artifacts.pkl")
 
     # Setup styling
     red = Fore.RED if use_color else ""
@@ -5328,7 +5847,7 @@ def load_preprocessing_artifacts(
             }
 
 def load_and_clean_data(
-    filepath: str,
+    filepath: Path,
     feature_names: List[str],
     *,
     chunk_size: int = 100000,
@@ -5362,10 +5881,10 @@ def load_and_clean_data(
         sample_size: Number of rows to sample for dtype inference (default: 10000)
         on_bad_lines: How to handle bad CSV lines ('warn', 'skip', or 'error')
         float_precision: Float precision for CSV parsing ('high', 'round_trip')
-        
+    
     Returns:
         Cleaned DataFrame
-        
+    
     Raises:
         RuntimeError: For file/parsing issues
         ValueError: For data validation failures
@@ -5456,7 +5975,7 @@ def load_and_clean_data(
             dtypes_map = {}
             try:
                 sample_df = pd.read_csv(
-                    filepath, 
+                    filepath,
                     nrows=sample_size,
                     usecols=required_cols,
                     engine='c',
@@ -5817,21 +6336,21 @@ def auto_select_oversampler(
     
     Args:
         results: Dictionary containing evaluation results for each oversampling method
-                Format: {method_name: {metric1: value, metric2: value, ...}}
+                 Format: {method_name: {metric1: value, metric2: value, ...}}
         metric_weights: Optional dictionary to customize metric weighting
-                      Default: {'val_acc': 0.5, 'boundary_violation_rate': 0.3, 'silhouette_score': 0.2}
+                        Default: {'val_acc': 0.5, 'boundary_violation_rate': 0.3, 'silhouette_score': 0.2}
         min_validation_acc: Minimum validation accuracy threshold (methods below this are filtered out)
         verbose: Whether to print scoring details
-        
+    
     Returns:
         Tuple of (best_method_name, scoring_details) where scoring_details contains:
         - method_scores: Individual scores for each method
         - metric_weights: Actual weights used
         - filtered_methods: Methods removed due to failing min_validation_acc
-        
+    
     Raises:
         ValueError: If no valid methods are available after filtering
-        
+    
     Selection Criteria (prioritized):
     1. Must meet minimum validation accuracy threshold
     2. Weighted combination of:
@@ -5885,24 +6404,24 @@ def auto_select_oversampler(
         with progress.bar("Initial Setup and Method Filtering", total=4, unit="steps") as init_bar:
             
             # STAGE 1.1: Input Validation
-            init_bar.text = "Validating input results..."
+            init_bar.text = "Validating input results"
             validation_start = time.time()
             
             selection_stats['stage'] = "Input Validation"
             
             if not results:
-                init_bar.text = f"{red}No results provided{reset}"
+                init_bar.text = "No results provided"
                 init_bar()
                 raise ValueError("No evaluation results provided for oversampler selection")
             
             selection_stats['total_methods'] = len(results)
             validation_time = time.time() - validation_start
             selection_stats['detailed_timings']['input_validation'] = validation_time
-            init_bar.text = f"{green}Validated {len(results)} methods{reset}"
+            init_bar.text = f"Validated {len(results)} methods"
             init_bar()
             
             # STAGE 1.2: Method Filtering
-            init_bar.text = "Filtering methods by accuracy threshold..."
+            init_bar.text = "Filtering methods by accuracy threshold"
             filtering_start = time.time()
             
             selection_stats['stage'] = "Method Filtering"
@@ -5915,29 +6434,29 @@ def auto_select_oversampler(
                 if metrics.get('error'):
                     filtered_methods.append(method)
                     if verbose:
-                        logger.error(f"{yellow}Filtering {method}: has error flag{reset}")
+                        logger.error(f"Filtering {method}: has error flag")
                 elif metrics.get('val_acc', 0) >= min_validation_acc:
                     valid_methods[method] = metrics
                 else:
                     filtered_methods.append(method)
                     if verbose:
-                        logger.info(f"{yellow}Filtering {method}: val_acc {metrics.get('val_acc', 0):.3f} < {min_validation_acc}{reset}")
+                        logger.info(f"Filtering {method}: val_acc {metrics.get('val_acc', 0):.3f} < {min_validation_acc}")
             
             selection_stats['valid_methods'] = len(valid_methods)
             selection_stats['filtered_methods'] = len(filtered_methods)
             
             if not valid_methods:
-                init_bar.text = f"{red}No valid methods after filtering{reset}"
+                init_bar.text = "No valid methods after filtering"
                 init_bar()
                 raise ValueError(f"No methods met minimum validation accuracy of {min_validation_acc}")
             
             filtering_time = time.time() - filtering_start
             selection_stats['detailed_timings']['method_filtering'] = filtering_time
-            init_bar.text = f"{green}Filtered to {len(valid_methods)} valid methods{reset}"
+            init_bar.text = f"Filtered to {len(valid_methods)} valid methods"
             init_bar()
             
             # STAGE 1.3: Metric Statistics Collection
-            init_bar.text = "Collecting metric statistics..."
+            init_bar.text = "Collecting metric statistics"
             stats_collection_start = time.time()
             
             selection_stats['stage'] = "Statistics Collection"
@@ -5957,15 +6476,15 @@ def auto_select_oversampler(
                 }
                 
                 if verbose:
-                    logger.info(f"{blue}Metric {metric}: min={metric_stats[metric]['min']:.3f}, max={metric_stats[metric]['max']:.3f}, valid={metric_stats[metric]['valid_count']}/{len(values)}{reset}")
+                    logger.info(f"Metric {metric}: min={metric_stats[metric]['min']:.3f}, max={metric_stats[metric]['max']:.3f}, valid={metric_stats[metric]['valid_count']}/{len(values)}")
             
             stats_collection_time = time.time() - stats_collection_start
             selection_stats['detailed_timings']['stats_collection'] = stats_collection_time
-            init_bar.text = f"{green}Collected stats for {len(weights)} metrics{reset}"
+            init_bar.text = f"Collected stats for {len(weights)} metrics"
             init_bar()
             
             # STAGE 1.4: Weight Normalization
-            init_bar.text = "Normalizing metric weights..."
+            init_bar.text = "Normalizing metric weights"
             normalization_start = time.time()
             
             selection_stats['stage'] = "Weight Normalization"
@@ -5974,12 +6493,12 @@ def auto_select_oversampler(
             weight_sum = sum(abs(w) for w in weights.values())
             if weight_sum != 1.0:
                 if verbose:
-                    logger.info(f"{yellow}Normalizing weights from {weight_sum:.3f} to 1.0{reset}")
+                    logger.info(f"Normalizing weights from {weight_sum:.3f} to 1.0")
                 weights = {k: v / weight_sum for k, v in weights.items()}
             
             normalization_time = time.time() - normalization_start
             selection_stats['detailed_timings']['weight_normalization'] = normalization_time
-            init_bar.text = f"{green}Weights normalized{reset}"
+            init_bar.text = "Weights normalized"
             init_bar()
 
         # STAGE 2: Method Scoring
@@ -5996,7 +6515,7 @@ def auto_select_oversampler(
                 selection_stats['current_method'] = method
                 selection_stats['methods_scored'] = method_idx + 1
                 
-                scoring_bar.text = f"Scoring {method}..."
+                scoring_bar.text = f"Scoring {method}"
                 method_scoring_start = time.time()
                 
                 score = 0
@@ -6010,7 +6529,7 @@ def auto_select_oversampler(
                     if np.isnan(raw_value):
                         raw_value = metric_stats[metric]['mean']
                         if verbose:
-                            logger.info(f"{yellow}Using mean value for {metric} in {method} due to NaN{reset}")
+                            logger.info(f"Using mean value for {metric} in {method} due to NaN")
                     
                     # Normalize value between 0-1 (except for negative weights)
                     if weight > 0:  # Higher is better
@@ -6037,18 +6556,18 @@ def auto_select_oversampler(
                 }
                 
                 method_scoring_time = time.time() - method_scoring_start
-                scoring_bar.text = f"{green}Scored {method}: {score:.3f}{reset}"
+                scoring_bar.text = f"Scored {method}: {score:.3f}"
                 scoring_bar()
             
             scoring_time = time.time() - scoring_start
             selection_stats['detailed_timings']['method_scoring'] = scoring_time
-            scoring_bar.text = f"{green}All methods scored{reset}"
+            scoring_bar.text = "All methods scored"
 
         # STAGE 3: Final Selection and Reporting
         with progress.bar("Final Selection and Reporting", total=2, unit="steps") as final_bar:
             
             # STAGE 3.1: Best Method Selection
-            final_bar.text = "Selecting best method..."
+            final_bar.text = "Selecting best method"
             selection_start = time.time()
             
             selection_stats['stage'] = "Best Method Selection"
@@ -6059,11 +6578,11 @@ def auto_select_oversampler(
             
             selection_time = time.time() - selection_start
             selection_stats['detailed_timings']['final_selection'] = selection_time
-            final_bar.text = f"{green}Selected {best_method} (score: {best_score:.3f}){reset}"
+            final_bar.text = f"Selected {best_method} (score: {best_score:.3f})"
             final_bar()
             
             # STAGE 3.2: Results Compilation
-            final_bar.text = "Compiling results..."
+            final_bar.text = "Compiling results"
             compilation_start = time.time()
             
             selection_stats['stage'] = "Results Compilation"
@@ -6078,14 +6597,14 @@ def auto_select_oversampler(
             
             compilation_time = time.time() - compilation_start
             selection_stats['detailed_timings']['results_compilation'] = compilation_time
-            final_bar.text = f"{green}Results compiled{reset}"
+            final_bar.text = "Results compiled"
             final_bar()
 
         # STAGE 4: Final Summary
         with progress.bar("Final Summary", total=2, unit="steps") as summary_bar:
             
             # STAGE 4.1: Statistics Calculation
-            summary_bar.text = "Calculating final statistics..."
+            summary_bar.text = "Calculating final statistics"
             stats_start = time.time()
             
             selection_stats['stage'] = "Statistics Calculation"
@@ -6095,27 +6614,27 @@ def auto_select_oversampler(
             
             stats_time = time.time() - stats_start
             selection_stats['detailed_timings']['stats_calculation'] = stats_time
-            summary_bar.text = f"{green}Statistics calculated{reset}"
+            summary_bar.text = "Statistics calculated"
             summary_bar()
             
             # STAGE 4.2: Summary Reporting
-            summary_bar.text = "Generating final report..."
+            summary_bar.text = "Generating final report"
             report_start = time.time()
             
             selection_stats['stage'] = "Summary Reporting"
             
             if verbose:
                 # Print selection report
-                logger.info(f"\n{blue}Oversampler Selection Report{reset}")
-                logger.info(f"{cyan}Selection Summary:{reset}")
+                logger.info(f"\nOversampler Selection Report")
+                logger.info(f"Selection Summary:")
                 logger.info(f"  - Total methods evaluated: {selection_stats['total_methods']}")
                 logger.info(f"  - Valid methods after filtering: {selection_stats['valid_methods']}")
                 logger.info(f"  - Methods filtered out: {selection_stats['filtered_methods']}")
                 logger.info(f"  - Total selection time: {total_time:.3f}s")
-                logger.info(f"  - Selected method: {green}{best_method}{reset} (score: {best_score:.3f})")
+                logger.info(f"  - Selected method: {best_method} (score: {best_score:.3f})")
                 
                 # Print scoring breakdown table
-                logger.info(f"\n{cyan}Method Scoring Breakdown:{reset}")
+                logger.info(f"Method Scoring Breakdown:")
                 header = f"{'Method':<20} {'Total Score':<12}"
                 for metric in weights:
                     header += f" {metric:<15}"
@@ -6128,24 +6647,24 @@ def auto_select_oversampler(
                         raw_val = scores['details'][metric]['raw']
                         row += f" {raw_val:<15.3f}"
                     if method == best_method:
-                        logger.info(f"{green}{row}{reset}")
+                        logger.info(f"{row}")
                     else:
                         logger.info(row)
                 
                 # Print metric weights
-                logger.info(f"\n{cyan}Metric Weights Used:{reset}")
+                logger.info(f"Metric Weights Used:")
                 for metric, weight in weights.items():
                     direction = "higher better" if weight > 0 else "lower better"
                     logger.info(f"  - {metric}: {abs(weight):.3f} ({direction})")
                 
                 # Print detailed timings in verbose mode
-                logger.info(f"\n{cyan}Detailed Timings:{reset}")
+                logger.info(f"Detailed Timings:")
                 for stage, timing in selection_stats['detailed_timings'].items():
                     logger.info(f"  - {stage}: {timing:.3f}s")
             
             report_time = time.time() - report_start
             selection_stats['detailed_timings']['final_report'] = report_time
-            summary_bar.text = f"{green}Oversampler selection completed{reset}"
+            summary_bar.text = "Oversampler selection completed"
             summary_bar()
         
         return best_method, scoring_details
@@ -6156,11 +6675,11 @@ def auto_select_oversampler(
         error_context += f"method: {selection_stats.get('current_method', 'none')}, "
         error_context += f"metric: {selection_stats.get('current_metric', 'none')})"
         
-        logger.error(f"{red}Oversampler selection failed{error_context}: {str(e)}{reset}")
+        logger.error(f"Oversampler selection failed{error_context}: {str(e)}")
         
         # Log selection statistics for debugging
         if verbose:
-            logger.error(f"{red}Selection statistics:{reset}")
+            logger.error(f"Selection statistics:")
             logger.error(f"  - Total methods: {selection_stats.get('total_methods', 0)}")
             logger.error(f"  - Valid methods: {selection_stats.get('valid_methods', 0)}")
             logger.error(f"  - Methods scored: {selection_stats.get('methods_scored', 0)}")
@@ -6168,13 +6687,320 @@ def auto_select_oversampler(
         
         raise
 
+def calculate_optimal_imbalance_threshold(
+    df: pd.DataFrame,
+    label_col: str = "Label",
+    domain: str = "security",
+    model_type: str = "neural_network",
+    total_samples: Optional[int] = None,
+    min_class_samples: Optional[int] = None,
+    validation_split: float = 0.2,
+    optimize_for: str = "recall",
+    budget_constraint: Optional[float] = None,
+    verbose: bool = False
+) -> Dict[str, Any]:
+    """
+    Determine the optimal imbalance threshold using multiple factors.
+    
+    Args:
+        df: Input DataFrame containing features and labels
+        label_col: Name of label column
+        domain: Application domain (security, general, fraud, medical, recommender)
+        model_type: Type of model (neural_network, random_forest, svm, logistic_regression, xgboost)
+        total_samples: Total number of samples (None to compute from df)
+        min_class_samples: Minimum class sample count (None to compute from df)
+        validation_split: Fraction of data for validation
+        optimize_for: Optimization target (recall, precision, f1, balanced_accuracy)
+        budget_constraint: Maximum number of synthetic samples to add
+        verbose: Enable verbose output
+    
+    Returns:
+        Dictionary containing:
+        - optimal_threshold: Recommended imbalance ratio threshold
+        - current_ratio: Current imbalance ratio
+        - confidence: Confidence score (0-1)
+        - reasoning: Explanation of recommendation
+        - alternative_thresholds: Other viable options
+        - estimated_samples_added: Expected synthetic samples
+        - action_recommended: Whether to oversample
+        - factors_used: Breakdown of factors applied
+        - class_distribution: Current class distribution
+        - total_samples: Total sample count
+        - min_class_samples: Minimum class sample count
+    """
+    
+    # Get class distribution
+    class_counts = df[label_col].value_counts()
+    current_ratio = class_counts.max() / class_counts.min()
+    total_samples = total_samples or len(df)
+    min_class_samples = min_class_samples or class_counts.min()
+    
+    # Factor 1: Domain-Specific Baselines
+    domain_baselines = {
+        'security': 2.0,
+        'fraud': 3.0,
+        'medical': 2.5,
+        'general': 10.0,
+        'recommender': 20.0
+    }
+    base_threshold = domain_baselines.get(domain, 10.0)
+    
+    # Factor 2: Sample Size Adjustment
+    if total_samples < 1000:
+        size_factor = 0.5
+    elif total_samples < 10000:
+        size_factor = 0.75
+    elif total_samples < 100000:
+        size_factor = 1.0
+    else:
+        size_factor = 1.5
+    
+    # Factor 3: Minority Class Size
+    if min_class_samples < 50:
+        minority_factor = 0.3
+    elif min_class_samples < 200:
+        minority_factor = 0.5
+    elif min_class_samples < 1000:
+        minority_factor = 0.75
+    else:
+        minority_factor = 1.0
+    
+    # Factor 4: Model Type Sensitivity
+    model_sensitivity = {
+        'neural_network': 0.7,
+        'random_forest': 1.2,
+        'svm': 0.8,
+        'logistic_regression': 0.9,
+        'xgboost': 1.1
+    }
+    model_factor = model_sensitivity.get(model_type, 1.0)
+    
+    # Factor 5: Optimization Target
+    target_factors = {
+        'recall': 0.6,
+        'precision': 1.4,
+        'f1': 1.0,
+        'balanced_accuracy': 0.8
+    }
+    target_factor = target_factors.get(optimize_for, 1.0)
+    
+    # Calculate optimal threshold
+    optimal_threshold = (
+        base_threshold * 
+        size_factor * 
+        minority_factor * 
+        model_factor * 
+        target_factor
+    )
+    
+    # Clamp to reasonable range
+    optimal_threshold = max(1.5, min(optimal_threshold, 50.0))
+    
+    # Calculate confidence based on data characteristics
+    confidence = 1.0
+    
+    if total_samples < 500:
+        confidence *= 0.6
+    elif total_samples < 2000:
+        confidence *= 0.8
+    
+    if min_class_samples < 30:
+        confidence *= 0.5
+    elif min_class_samples < 100:
+        confidence *= 0.7
+    
+    if current_ratio > 100:
+        confidence *= 0.7
+    elif current_ratio > 50:
+        confidence *= 0.85
+    
+    num_classes = len(class_counts)
+    if num_classes > 5:
+        confidence *= 0.8
+    elif num_classes > 10:
+        confidence *= 0.6
+    
+    confidence = min(1.0, confidence)
+    
+    # Generate reasoning
+    reasoning = []
+    reasoning.append(f"Domain '{domain}' baseline: {base_threshold:.1f}")
+    
+    if size_factor < 1.0:
+        reasoning.append("Reduced for small dataset size")
+    elif size_factor > 1.0:
+        reasoning.append("Increased for large dataset (more robust)")
+    
+    if minority_factor < 1.0:
+        reasoning.append("Reduced for small minority class (needs aggressive balancing)")
+    
+    if model_factor < 1.0:
+        reasoning.append("Reduced for imbalance-sensitive model type")
+    elif model_factor > 1.0:
+        reasoning.append("Increased for imbalance-robust model type")
+    
+    if target_factor < 1.0:
+        reasoning.append("Reduced to optimize for recall/detection")
+    elif target_factor > 1.0:
+        reasoning.append("Increased to optimize for precision")
+    
+    if current_ratio > optimal_threshold:
+        reasoning.append(f"Current ratio ({current_ratio:.1f}) exceeds threshold - Oversampling recommended")
+    else:
+        reasoning.append(f"Current ratio ({current_ratio:.1f}) within threshold - No oversampling needed")
+    
+    reasoning_text = " | ".join(reasoning)
+    
+    # Calculate alternative thresholds
+    alternatives = {
+        'conservative': optimal_threshold * 0.7,
+        'aggressive': optimal_threshold * 1.3,
+        'minimal': 2.0,
+        'none': float('inf')
+    }
+    
+    # Estimate synthetic samples
+    estimated_additions = {}
+    for name, threshold in {**{'optimal': optimal_threshold}, **alternatives}.items():
+        if current_ratio > threshold:
+            majority_size = class_counts.max()
+            minority_size = class_counts.min()
+            target_size = int(majority_size / threshold)
+            additions = max(0, target_size - minority_size)
+            estimated_additions[name] = additions
+        else:
+            estimated_additions[name] = 0
+    
+    # Check budget constraint
+    if budget_constraint and estimated_additions['optimal'] > budget_constraint:
+        majority_size = class_counts.max()
+        minority_size = class_counts.min()
+        max_additions = int(budget_constraint)
+        target_minority_size = minority_size + max_additions
+        adjusted_threshold = majority_size / target_minority_size
+        adjusted_threshold = max(1.5, adjusted_threshold)
+        optimal_threshold = max(optimal_threshold, adjusted_threshold)
+    
+    result = {
+        'optimal_threshold': round(optimal_threshold, 2),
+        'current_ratio': round(current_ratio, 2),
+        'confidence': round(confidence, 3),
+        'reasoning': reasoning_text,
+        'alternative_thresholds': {k: round(v, 2) for k, v in alternatives.items()},
+        'estimated_samples_added': estimated_additions,
+        'action_recommended': 'oversample' if current_ratio > optimal_threshold else 'none',
+        'factors_used': {
+            'domain_baseline': base_threshold,
+            'size_adjustment': size_factor,
+            'minority_adjustment': minority_factor,
+            'model_sensitivity': model_factor,
+            'optimization_target': target_factor
+        },
+        'class_distribution': class_counts.to_dict(),
+        'total_samples': total_samples,
+        'min_class_samples': min_class_samples
+    }
+    
+    if verbose:
+        display_threshold_analysis(result)
+    
+    return result
+
+def display_threshold_analysis(result: Dict[str, Any]) -> None:
+    """Display threshold analysis in rich table format."""
+    # Main results table
+    table = Table(
+        title="\n[bold cyan]Intelligent Threshold Analysis[/]",
+        box=box.ROUNDED,
+        show_header=True,
+        header_style="bold yellow",
+        title_justify="left"
+    )
+    
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="magenta")
+    table.add_column("Interpretation", style="green")
+    
+    # Current state
+    table.add_row(
+        "Current Ratio",
+        f"{result['current_ratio']:.2f}:1",
+        "Existing imbalance"
+    )
+    
+    # Recommendation
+    action_color = "green" if result['action_recommended'] == 'none' else "yellow"
+    table.add_row(
+        "Optimal Threshold",
+        f"[{action_color}]{result['optimal_threshold']:.2f}:1[/{action_color}]",
+        f"Recommended maximum"
+    )
+    
+    # Confidence
+    conf_color = "green" if result['confidence'] > 0.8 else "yellow" if result['confidence'] > 0.6 else "red"
+    table.add_row(
+        "Confidence",
+        f"[{conf_color}]{result['confidence']:.1%}[/{conf_color}]",
+        "Recommendation certainty"
+    )
+    
+    # Action
+    table.add_row(
+        "Action",
+        f"[{action_color}]{result['action_recommended'].upper()}[/{action_color}]",
+        "Whether to oversample"
+    )
+    
+    console.print(table)
+    
+    # Factors table
+    factors_table = Table(
+        title="\n[bold cyan]Decision Factors[/]",
+        box=box.SIMPLE,
+        show_header=True,
+        title_justify="left"
+    )
+    factors_table.add_column("Factor", style="cyan")
+    factors_table.add_column("Multiplier", style="yellow", justify="right")
+    
+    for factor, value in result['factors_used'].items():
+        factors_table.add_row(factor.replace('_', ' ').title(), f"{value:.2f}x")
+    
+    console.print(factors_table)
+    
+    # Alternatives table
+    alt_table = Table(
+        title="\n[bold cyan]Alternative Thresholds[/]",
+        box=box.SIMPLE,
+        title_justify="left"
+    )
+    alt_table.add_column("Strategy", style="cyan")
+    alt_table.add_column("Threshold", style="yellow", justify="right")
+    alt_table.add_column("Samples Added", style="magenta", justify="right")
+    
+    for name, threshold in result['alternative_thresholds'].items():
+        samples = result['estimated_samples_added'].get(name, 0)
+        alt_table.add_row(
+            name.title(),
+            f"{threshold:.2f}:1",
+            f"+{samples:,}"
+        )
+    
+    console.print(alt_table)
+    
+    # Reasoning
+    console.print(f"\n[bold]Reasoning:[/] {result['reasoning']}")
+
 def handle_class_imbalance(
     df: pd.DataFrame,
     artifacts: Dict,
     *,
     oversampler: str = "SMOTE",
     apply_smote: bool = True,
-    imbalance_threshold: float = 10.0,
+    imbalance_threshold: Optional[float] = None,
+    auto_threshold: bool = True,
+    domain: str = "security",
+    optimize_for: str = "recall",
     label_col: str = "Label",
     sampling_strategy: Union[str, dict] = "auto",
     random_state: int = 42,
@@ -6185,14 +7011,17 @@ def handle_class_imbalance(
     verbose: Optional[bool] = False,
     debug: bool = False
 ) -> pd.DataFrame:
-    """Class imbalance handler with flexible controls and progress tracking.
+    """Class imbalance handler with threshold determination and flexible controls.
     
     Args:
         df: Input DataFrame
         artifacts: Preprocessing artifacts dict
         oversampler: Type of oversampler (see available_samplers)
         apply_smote: Whether to apply oversampling
-        imbalance_threshold: Ratio to consider imbalance
+        imbalance_threshold: Ratio to consider imbalance (None for auto-detection)
+        auto_threshold: Enable intelligent threshold determination
+        domain: Application domain (security, general, fraud, medical, recommender)
+        optimize_for: Optimization target (recall, precision, f1, balanced_accuracy)
         label_col: Name of label column
         sampling_strategy: Oversampling strategy
         random_state: Random seed (None uses class default)
@@ -6200,10 +7029,10 @@ def handle_class_imbalance(
         visualize: Whether to generate visualizations
         sample_metrics: Number of samples to use for metrics (None for all)
         debug: Enable verbose debugging
-        
+    
     Returns:
         Balanced DataFrame if oversampling applied, else original
-        
+    
     Raises:
         ValueError: For invalid inputs or single-class data
         RuntimeError: For SMOTE application failures
@@ -6216,7 +7045,7 @@ def handle_class_imbalance(
     cyan = Fore.CYAN
     reset = Style.RESET_ALL
     
-    # Track imbalance handling progress and statistics
+    # Initialize imbalance handling statistics
     imbalance_stats = {
         'stage': 'Initializing',
         'total_samples': len(df),
@@ -6245,7 +7074,7 @@ def handle_class_imbalance(
         with progress.bar("Initial Setup and Validation", total=4, unit="steps") as init_bar:
             
             # STAGE 1.1: Input Validation
-            init_bar.text = "Validating inputs..."
+            init_bar.text = "Validating inputs"
             validation_start = time.time()
             
             imbalance_stats['stage'] = "Input Validation"
@@ -6253,11 +7082,11 @@ def handle_class_imbalance(
             _validate_inputs(df, artifacts, label_col)
             validation_time = time.time() - validation_start
             imbalance_stats['detailed_timings']['input_validation'] = validation_time
-            init_bar.text = f"{green}Inputs validated{reset}"
+            init_bar.text = "Inputs validated"
             init_bar()
             
             # STAGE 1.2: Class Distribution Analysis
-            init_bar.text = "Analyzing class distribution..."
+            init_bar.text = "Analyzing class distribution"
             analysis_start = time.time()
             
             imbalance_stats['stage'] = "Distribution Analysis"
@@ -6274,51 +7103,84 @@ def handle_class_imbalance(
             
             analysis_time = time.time() - analysis_start
             imbalance_stats['detailed_timings']['distribution_analysis'] = analysis_time
-            init_bar.text = f"{green}Distribution analyzed ({len(class_counts)} classes, ratio: {imbalance_ratio:.1f}){reset}"
+            init_bar.text = f"Distribution analyzed ({len(class_counts)} classes, ratio: {imbalance_ratio:.1f})"
             init_bar()
             
-            # STAGE 1.3: Imbalance Threshold Check
-            init_bar.text = "Checking imbalance threshold..."
+            # STAGE 1.3: Threshold Determination
+            init_bar.text = "Determining optimal threshold"
             threshold_start = time.time()
             
-            imbalance_stats['stage'] = "Threshold Check"
+            imbalance_stats['stage'] = "Threshold Determination"
+            
+            # Intelligent threshold determination
+            if auto_threshold and imbalance_threshold is None:
+                threshold_analysis = calculate_optimal_imbalance_threshold(
+                    df=df,
+                    label_col=label_col,
+                    domain=domain,
+                    model_type="neural_network",
+                    optimize_for=optimize_for,
+                    verbose=verbose
+                )
+                
+                imbalance_threshold = threshold_analysis['optimal_threshold']
+                imbalance_stats['threshold_analysis'] = threshold_analysis
+                
+                if verbose:
+                    logger.info(f"Auto-determined threshold: {imbalance_threshold:.2f}")
+                    logger.info(f"Confidence: {threshold_analysis['confidence']:.1%}")
+                    logger.info(f"Reasoning: {threshold_analysis['reasoning']}")
+            
+            elif imbalance_threshold is None:
+                # Fallback to domain-specific default
+                domain_defaults = {
+                    'security': 2.0,
+                    'fraud': 3.0,
+                    'medical': 2.5,
+                    'general': 10.0
+                }
+                imbalance_threshold = domain_defaults.get(domain, 10.0)
+                if verbose:
+                    logger.info(f"Using domain-specific default threshold: {imbalance_threshold:.2f}")
+            
+            threshold_time = time.time() - threshold_start
+            imbalance_stats['detailed_timings']['threshold_determination'] = threshold_time
             
             # Display initial analysis
             _display_initial_analysis(class_counts, imbalance_threshold)
             
             # Check if imbalance exceeds threshold
             if imbalance_ratio <= imbalance_threshold:
-                threshold_time = time.time() - threshold_start
-                imbalance_stats['detailed_timings']['threshold_check'] = threshold_time
-                init_bar.text = f"{green}Class distribution within acceptable limits{reset}"
+                threshold_check_time = time.time() - threshold_start
+                imbalance_stats['detailed_timings']['threshold_check'] = threshold_check_time
+                init_bar.text = "Class distribution within acceptable limits"
                 init_bar()
                 
                 # STAGE 1.4: Early Exit
-                init_bar.text = "Preparing early exit..."
+                init_bar.text = "Preparing early exit"
                 early_exit_start = time.time()
                 
-                init_bar.text = f"{green}Skipping oversampling, returning original data{reset}"
+                init_bar.text = f"Skipping oversampling, returning original data"
                 early_exit_time = time.time() - early_exit_start
                 imbalance_stats['detailed_timings']['early_exit'] = early_exit_time
                 imbalance_stats['detailed_timings']['total'] = sum(imbalance_stats['detailed_timings'].values())
                 init_bar()
                 
                 if verbose:
-                    logger.info(f"{green}Class distribution balanced, skipping oversampling{reset}")
-                    logger.info(f"{blue}Class Distribution:{reset}")
+                    logger.info(f"Class distribution balanced, skipping oversampling")
+                    logger.info(f"Class Distribution: ratio {imbalance_ratio:.1f} <= {imbalance_threshold}")
                     for class_label, count in class_counts.items():
                         logger.info(f"  - Class {class_label}: {count:,} samples")
-                    logger.info(f"{blue}Imbalance Ratio:{reset} {imbalance_ratio:.1f}")
                 
                 return df
             
             threshold_time = time.time() - threshold_start
             imbalance_stats['detailed_timings']['threshold_check'] = threshold_time
-            init_bar.text = f"{yellow}Imbalance detected (ratio: {imbalance_ratio:.1f} > {imbalance_threshold}){reset}"
+            init_bar.text = f"Imbalance detected (ratio: {imbalance_ratio:.1f} > {imbalance_threshold})"
             init_bar()
             
             # STAGE 1.4: Oversampling Configuration
-            init_bar.text = "Checking oversampling configuration..."
+            init_bar.text = "Checking oversampling configuration"
             config_start = time.time()
             
             imbalance_stats['stage'] = "Configuration Check"
@@ -6326,19 +7188,19 @@ def handle_class_imbalance(
             if not apply_smote:
                 config_time = time.time() - config_start
                 imbalance_stats['detailed_timings']['config_check'] = config_time
-                init_bar.text = f"{yellow}Oversampling disabled by configuration{reset}"
+                init_bar.text = "Oversampling disabled by configuration"
                 init_bar()
                 
                 early_exit_start = time.time()
-                init_bar.text = f"{yellow}Returning original data (oversampling disabled){reset}"
+                init_bar.text = "Returning original data (oversampling disabled)"
                 early_exit_time = time.time() - early_exit_start
                 imbalance_stats['detailed_timings']['early_exit'] = early_exit_time
                 imbalance_stats['detailed_timings']['total'] = sum(imbalance_stats['detailed_timings'].values())
                 init_bar()
                 
                 if verbose:
-                    logger.info(f"{yellow}Oversampling disabled, returning original data{reset}")
-                    logger.info(f"{blue}Class Distribution:{reset}")
+                    logger.info(f"Oversampling disabled, returning original data")
+                    logger.info(f"Class Distribution: ratio {imbalance_ratio:.1f} > {imbalance_threshold}")
                     for class_label, count in class_counts.items():
                         logger.info(f"  - Class {class_label}: {count:,} samples")
                 
@@ -6346,9 +7208,9 @@ def handle_class_imbalance(
             
             config_time = time.time() - config_start
             imbalance_stats['detailed_timings']['config_check'] = config_time
-            init_bar.text = f"{green}Oversampling enabled, preparing {oversampler}{reset}"
+            init_bar.text = f"Oversampling enabled, preparing {oversampler}"
             init_bar()
-
+        
         # STAGE 2: Oversampling Application
         preparation_start = time.time()
         
@@ -6408,7 +7270,7 @@ def handle_class_imbalance(
                 visualization_time = time.time() - visualization_start
                 imbalance_stats['detailed_timings']['visualization_generation'] = visualization_time
                 if verbose:
-                    logger.error(f"{yellow}Visualization error: {str(viz_error)}{reset}")
+                    logger.error(f"Visualization error: {str(viz_error)}")
         else:
             visualization_time = time.time() - visualization_start
             imbalance_stats['detailed_timings']['visualization_generation'] = visualization_time
@@ -6431,13 +7293,13 @@ def handle_class_imbalance(
         with progress.bar("Final Reporting", total=2, unit="steps") as report_bar:
             
             # STAGE 3.1: Performance Reporting
-            report_bar.text = "Generating performance report..."
+            report_bar.text = "Generating performance report"
             reporting_start = time.time()
             
             imbalance_stats['stage'] = "Performance Reporting"
             
             # Report performance
-            elapsed = time.time() - validation_start  # Total time from start
+            elapsed = time.time() - validation_start
             imbalance_stats['processing_time'] = elapsed
             
             _report_results(
@@ -6450,11 +7312,11 @@ def handle_class_imbalance(
             
             reporting_time = time.time() - reporting_start
             imbalance_stats['detailed_timings']['performance_reporting'] = reporting_time
-            report_bar.text = f"{green}Performance report generated{reset}"
+            report_bar.text = "Performance report generated"
             report_bar()
             
             # STAGE 3.2: Final Summary
-            report_bar.text = "Generating final summary..."
+            report_bar.text = "Generating final summary"
             summary_start = time.time()
             
             imbalance_stats['stage'] = "Final Summary"
@@ -6464,8 +7326,8 @@ def handle_class_imbalance(
             imbalance_stats['detailed_timings']['total'] = total_time
             
             if verbose:
-                logger.info(f"\n{blue}Class Imbalance Handling Summary{reset}")
-                logger.info(f"{cyan}Processing Overview:{reset}")
+                logger.info(f"\nClass Imbalance Handling Summary")
+                logger.info(f"Processing Overview:")
                 logger.info(f"  - Original samples: {len(df):,}")
                 logger.info(f"  - Balanced samples: {len(balanced_df):,}")
                 logger.info(f"  - New samples generated: {imbalance_stats['new_samples_generated']:,}")
@@ -6475,7 +7337,7 @@ def handle_class_imbalance(
                 logger.info(f"  - Total processing time: {total_time:.2f}s")
                 
                 # Display class distribution changes
-                logger.info(f"\n{cyan}Class Distribution:{reset}")
+                logger.info(f"Class Distribution:")
                 for class_label, original_count in class_counts.items():
                     new_count = new_class_counts.get(class_label, 0)
                     change = new_count - original_count
@@ -6484,28 +7346,28 @@ def handle_class_imbalance(
                 
                 # Display quality metrics if available
                 if imbalance_stats['quality_metrics_calculated'] and metrics:
-                    logger.info(f"\n{cyan}Quality Metrics:{reset}")
+                    logger.info(f"Quality Metrics:")
                     for metric_name, metric_value in metrics.items():
                         if isinstance(metric_value, (int, float)):
                             logger.info(f"  - {metric_name}: {metric_value:.3f}")
             
             # Display detailed timings in debug mode
             if debug:
-                logger.debug(f"\n{cyan}Detailed Timings:{reset}")
+                logger.debug(f"Detailed Timings:")
                 for stage, timing in imbalance_stats['detailed_timings'].items():
                     logger.debug(f"  - {stage}: {timing:.2f}s")
             
             summary_time = time.time() - summary_start
             imbalance_stats['detailed_timings']['final_summary'] = summary_time
-            report_bar.text = f"{green}Class imbalance handling completed{reset}"
+            report_bar.text = "Class imbalance handling completed"
             report_bar()
         
         return balanced_df
         
     except Exception as e:
         # Log error with context
-        error_context = f" (stage: {imbalance_stats.get('stage', 'unknown')})"
-        logger.error(f"{red}Class imbalance handling failed{error_context}: {str(e)}{reset}")
+        error_context = f"(stage: {imbalance_stats.get('stage', 'unknown')})"
+        logger.error(f"Class imbalance handling failed {error_context}: {str(e)}")
         
         if debug:
             traceback.print_exc()
@@ -6560,14 +7422,29 @@ def _display_initial_analysis(
     
     imbalance_ratio = class_counts.max() / class_counts.min()
     if imbalance_ratio > imbalance_threshold:
-        console.print(Panel.fit(
-            f"Optimal Class Imbalance Ratio\Threshold: [bold green]{imbalance_threshold}:1[/bold green]\n"
-            f"Current Class Imbalance Ratio\Threshold: [bold red]{imbalance_ratio:.1f}:1[/bold red]",
-            title="[bold red]CLASS IMBALANCE DETECTED![/bold red]",
+        imbalance_table = Table(
+            title="\nClass Imbalance Detected!",
+            box=box.ROUNDED,
             style="bold yellow",
-            border_style="yellow"
-        ))
-        console.print()
+            title_style="bold red",
+            title_justify="left",
+            border_style="yellow",
+            show_lines=True,
+            show_header=False
+        )
+
+        imbalance_table.add_column("Metric", style="bold yellow")
+        imbalance_table.add_column("Details", style="bold yellow")
+        
+        imbalance_table.add_row(
+            "Current Imbalance Ratio",
+            f"[bold red]{imbalance_ratio:.1f}:1[/bold red]"
+        )
+        imbalance_table.add_row(
+            "Optimal Imbalance Ratio",
+            f"[bold green]{imbalance_threshold}:1[/bold green]"
+        )
+        console.print(imbalance_table)
 
 def _apply_oversampling(
     df: pd.DataFrame,
@@ -6602,10 +7479,10 @@ def _apply_oversampling(
         n_jobs: Number of parallel jobs
         auto_optimize: Whether to automatically optimize k_neighbors (default: False)
         optimize_params: Parameters for k_neighbors optimization
-        
+    
     Returns:
         Tuple of (balanced_df, metrics) where metrics is None if evaluate_quality=False
-        
+    
     Raises:
         ValueError: If invalid parameters or insufficient samples
     """
@@ -6638,7 +7515,7 @@ def _apply_oversampling(
         optimize_params = {}
     
     try:
-        print(f"\n{yellow}Starting Oversampler Application...{reset}")
+        print_color(f"\nStarting Oversampler Application...", 'yellow')
 
         # Progress helper: define all stage titles
         titles = [
@@ -6654,28 +7531,28 @@ def _apply_oversampling(
         with progress.bar("Initial Setup", total=4, unit="steps") as init_bar:
             
             # STAGE 1.1: Input Validation
-            init_bar.text = "Validating input data..."
+            init_bar.text = "Validating input data"
             validation_start = time.time()
             
             progress_stats['stage'] = "Input Validation"
             
             if len(df) == 0:
-                init_bar.text = f"{red}Empty DataFrame provided{reset}"
+                init_bar.text = f"Empty DataFrame provided"
                 init_bar()
                 raise ValueError("Input DataFrame is empty")
             
             if label_col not in df.columns:
-                init_bar.text = f"{red}Label column not found{reset}"
+                init_bar.text = f"Label column not found"
                 init_bar()
                 raise ValueError(f"Label column '{label_col}' not found in DataFrame")
             
             validation_time = time.time() - validation_start
             progress_stats['detailed_timings']['input_validation'] = validation_time
-            init_bar.text = f"{green}Validated {len(df)} samples{reset}"
+            init_bar.text = f"Validated {len(df)} samples"
             init_bar()
             
             # STAGE 1.2: k_neighbors Optimization
-            init_bar.text = "Configuring parameters..."
+            init_bar.text = "Configuring parameters"
             optimization_start = time.time()
             
             progress_stats['stage'] = "Parameter Optimization"
@@ -6716,18 +7593,13 @@ def _apply_oversampling(
                             'minority_count': minority_count,
                             'k_neighbors': k_neighbors
                         }
-                        init_bar.text = f"{yellow}Limited by minority class size: k={k_neighbors}{reset}"
+                        init_bar.text = f"Limited by minority class size: k={k_neighbors}"
                     else:
-                        init_bar.text = f"Optimizing k_neighbors (max_k={actual_max_k})..."
+                        init_bar.text = f"Optimizing k_neighbors (max_k={actual_max_k})"
                         init_bar()
                         
                         # Close current bar for optimization
-                        init_bar.text = f"{green}Starting k_neighbors optimization{reset}"
-                        init_bar()
-                        
-                        # Use a separate progress helper for optimization
-                        opt_titles = ["k_neighbors Optimization"]
-                        opt_progress = ProgressHelper(opt_titles)
+                        init_bar.text = f"k_neighbors optimization"
                         
                         # Initialize results storage
                         k_values = list(range(3, actual_max_k + 1))
@@ -6741,40 +7613,58 @@ def _apply_oversampling(
                         skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
                         total_folds = n_splits * len(k_values)
                         
-                        # Run optimization with separate progress bar
-                        with opt_progress.bar("k_neighbors Optimization", total=total_folds, unit="folds") as opt_bar:
-                            opt_bar.text = f"Evaluating {len(k_values)} k values across {n_splits} folds..."
+                        # Run optimization using existing progress bar
+                        init_bar.text = f"Evaluating {len(k_values)} k values across {n_splits} folds"
+                        
+                        # Initialize results storage
+                        k_values = list(range(3, actual_max_k + 1))
+                        results = {
+                            'silhouette': {k: [] for k in k_values},
+                            'davies_bouldin': {k: [] for k in k_values},
+                            'failed_runs': 0
+                        }
+                        
+                        # Cross-validated evaluation
+                        skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+                        total_folds = n_splits * len(k_values)
+                        
+                        # Update progress bar total and reset to track optimization progress
+                        init_bar.total = 4 + total_folds  # Original 4 steps + optimization folds
+                        init_bar.n = 4  # Already completed the first 4 steps
+                        init_bar.text = f"Evaluating {len(k_values)} k values across {n_splits} folds"
+                        init_bar.refresh()
+                        
+                        for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y)):
+                            X_train, X_val = X[train_idx], X[val_idx]
+                            y_train, y_val = y[train_idx], y[val_idx]
                             
-                            for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y)):
-                                X_train, X_val = X[train_idx], X[val_idx]
-                                y_train, y_val = y[train_idx], y[val_idx]
+                            for k_idx, k in enumerate(k_values):
+                                current_fold = fold_idx * len(k_values) + k_idx + 1
+                                init_bar.text = f"Fold {fold_idx+1}/{n_splits}, k={k}/{k_values[-1]} ({current_fold}/{total_folds})"
                                 
-                                for k_idx, k in enumerate(k_values):
-                                    opt_bar.text = f"Fold {fold_idx+1}/{n_splits}, k={k}/{k_values[-1]}..."
+                                try:
+                                    # Apply SMOTE only to training fold
+                                    smote = SMOTE(
+                                        k_neighbors=min(k, len(X_train) - 1),
+                                        random_state=random_state
+                                    )
+                                    X_res, y_res = smote.fit_resample(X_train, y_train)
                                     
-                                    try:
-                                        # Apply SMOTE only to training fold
-                                        smote = SMOTE(
-                                            k_neighbors=min(k, len(X_train) - 1),
-                                            random_state=random_state
-                                        )
-                                        X_res, y_res = smote.fit_resample(X_train, y_train)
-                                        
-                                        # Calculate metrics
-                                        if metric in ['silhouette', 'both']:
-                                            sil_score = silhouette_score(X_res, y_res)
-                                            results['silhouette'][k].append(sil_score)
-                                        
-                                        if metric in ['davies_bouldin', 'both']:
-                                            db_score = davies_bouldin_score(X_res, y_res)
-                                            results['davies_bouldin'][k].append(db_score)
-                                        
-                                    except Exception as e:
-                                        results['failed_runs'] += 1
-                                        if verbose:
-                                            logger.warning(f"Failed evaluation for k={k}: {str(e)}")
+                                    # Calculate metrics
+                                    if metric in ['silhouette', 'both']:
+                                        sil_score = silhouette_score(X_res, y_res)
+                                        results['silhouette'][k].append(sil_score)
                                     
-                                    opt_bar()
+                                    if metric in ['davies_bouldin', 'both']:
+                                        db_score = davies_bouldin_score(X_res, y_res)
+                                        results['davies_bouldin'][k].append(db_score)
+                                    
+                                except Exception as e:
+                                    results['failed_runs'] += 1
+                                    if verbose:
+                                        logger.warning(f"Failed evaluation for k={k}: {str(e)}")
+                                
+                                init_bar()
                         
                         # Calculate mean scores
                         mean_scores = {}
@@ -6832,32 +7722,30 @@ def _apply_oversampling(
                         'fallback_k': k_neighbors,
                         'error': str(e)
                     }
-                    init_bar.text = f"{yellow}Using fallback k={k_neighbors}{reset}"
+                    init_bar.text = f"Using fallback k={k_neighbors}"
             else:
                 k_neighbors = min(3, min_samples - 1)
                 progress_stats['optimization_info'] = {
                     'status': 'auto_optimize_disabled',
                     'k_neighbors': k_neighbors
                 }
-                init_bar.text = f"{green}Using default k={k_neighbors}{reset}"
+                init_bar.text = f"Using default k={k_neighbors}"
             
             optimization_time = time.time() - optimization_start
             progress_stats['detailed_timings']['parameter_optimization'] = optimization_time
             init_bar()
             
             # STAGE 1.3: Sampler Configuration
-            init_bar.text = "Configuring sampler..."
+            init_bar.text = "Configuring sampler"
             sampler_config_start = time.time()
             
             progress_stats['stage'] = "Sampler Configuration"
             
             # Safety check
             if k_neighbors < 1:
-                init_bar.text = f"{red}Cannot apply oversampling{reset}"
+                init_bar.text = f"Cannot apply oversampling"
                 init_bar()
-                raise ValueError(
-                    f"Cannot apply oversampling - minority class has only {min_samples} samples"
-                )
+                raise ValueError(f"Cannot apply oversampling - minority class has only {min_samples} samples")
             
             # Configure and create sampler
             samplers = {
@@ -6889,22 +7777,19 @@ def _apply_oversampling(
             }
             
             if oversampler not in samplers:
-                init_bar.text = f"{red}Unknown oversampler{reset}"
+                init_bar.text = f"Unknown oversampler"
                 init_bar()
-                raise ValueError(
-                    f"Unknown oversampler: {oversampler}. "
-                    f"Choose from {list(samplers.keys())}"
-                )
+                raise ValueError(f"Unknown oversampler: {oversampler}. Choose from {list(samplers.keys())}")
             
             sampler = samplers[oversampler]
             
             sampler_config_time = time.time() - sampler_config_start
             progress_stats['detailed_timings']['sampler_configuration'] = sampler_config_time
-            init_bar.text = f"{green}Configured {oversampler} sampler{reset}"
+            init_bar.text = f"Configured {oversampler} sampler"
             init_bar()
             
             # STAGE 1.4: Data Preparation
-            init_bar.text = "Preparing data for resampling..."
+            init_bar.text = "Preparing data for resampling"
             data_prep_start = time.time()
             
             progress_stats['stage'] = "Data Preparation"
@@ -6918,12 +7803,12 @@ def _apply_oversampling(
             
             data_prep_time = time.time() - data_prep_start
             progress_stats['detailed_timings']['data_preparation'] = data_prep_time
-            init_bar.text = f"{green}Data prepared{reset}"
+            init_bar.text = f"Data prepared"
             init_bar()
 
         # STAGE 2: Apply Oversampling
         with progress.bar("Apply Oversampling", total=1, unit="steps") as resample_bar:
-            resample_bar.text = f"Applying {oversampler}..."
+            resample_bar.text = f"Applying {oversampler}"
             resampling_start = time.time()
             
             progress_stats['stage'] = "Applying Oversampling"
@@ -6935,6 +7820,7 @@ def _apply_oversampling(
             )
             
             # Create balanced DataFrame
+            resample_bar.text = "Creating balanced DataFrame"
             balanced_df = pd.DataFrame(X_res, columns=artifacts['feature_names'])
             balanced_df[label_col] = y_res
             
@@ -6942,6 +7828,7 @@ def _apply_oversampling(
             progress_stats['detailed_timings']['resampling'] = resampling_time
             
             # Get new class distribution
+            resample_bar.text = "Calculating new class distribution"
             new_counts = np.bincount(y_res)
             progress_stats['new_distribution'] = {
                 'class_counts': new_counts.tolist(),
@@ -6949,147 +7836,861 @@ def _apply_oversampling(
                 'total_samples': len(y_res)
             }
             
-            resample_bar.text = f"{green}Generated {len(y_res)} samples{reset}"
+            resample_bar.text = f"Oversampling complete: {len(y_res)} samples generated"
             resample_bar()
         
+        # STAGE 3: Quality Evaluation
         metrics = None
         if evaluate_quality:
-            # STAGE 3: Quality Evaluation
             with progress.bar("Quality Evaluation", total=6, unit="metrics") as eval_bar:
-                
-                eval_bar.text = "Starting quality evaluation..."
+                eval_bar.text = "Starting quality evaluation"
                 evaluation_start = time.time()
-                
                 progress_stats['stage'] = "Quality Evaluation"
-                
                 metrics = {}
-                original_features = df[artifacts['feature_names']]
                 
-                # Subsample if requested for large datasets
-                if sample_metrics and len(X_res) > sample_metrics:
-                    eval_bar.text = f"Subsampling to {sample_metrics} samples..."
-                    rng = np.random.RandomState(random_state)
-                    idx = rng.choice(len(X_res), sample_metrics, replace=False)
-                    X_res_sampled = X_res[idx]
-                    y_res_sampled = y_res[idx]
-                    eval_bar.text = f"{green}Subsampled to {sample_metrics} samples{reset}"
+                # Get original features as numpy array for efficiency
+                eval_bar.text = "Preparing data"
+                original_features = df[artifacts['feature_names']].values
+                original_labels = df[label_col].values
+                
+                # Initialize random state
+                eval_bar.text = "Initializing random state"
+                rng = np.random.RandomState(random_state)
+                
+                # Determine sample size
+                eval_bar.text = "Determining sample size"
+                if sample_metrics:
+                    target_size = sample_metrics
+                else:
+                    # Use reasonable default based on dataset size
+                    if len(X_res) > 500000:
+                        target_size = 100000
+                    elif len(X_res) > 200000:
+                        target_size = 50000
+                    else:
+                        target_size = len(X_res)
+                
+                # Subsample resampled data if requested for large datasets
+                if sample_metrics and len(X_res) > target_size:
+                    eval_bar.text = f"Subsampling (resampled): {len(X_res):,} -> {target_size:,} samples"
+                    res_idx = rng.choice(len(X_res), target_size, replace=False)
+                    X_res_sampled = X_res[res_idx]
+                    y_res_sampled = y_res[res_idx]
                 else:
                     X_res_sampled = X_res
                     y_res_sampled = y_res
                 
+                # Subsample original data
+                if sample_metrics and len(original_features) > target_size:
+                    eval_bar.text = f"Subsampling (original): {len(original_features):,} -> {target_size:,} samples"
+                    orig_idx = rng.choice(len(original_features), target_size, replace=False)
+                    X_orig_sampled = original_features[orig_idx]
+                    y_orig_sampled = original_labels[orig_idx]
+                else:
+                    X_orig_sampled = original_features
+                    y_orig_sampled = original_labels
+                
+                eval_bar.text = "Data sampling complete"
                 eval_bar()
                 
                 # 1. Nearest Neighbor Analysis
-                eval_bar.text = "Nearest neighbor analysis..."
+                eval_bar.text = f"Nearest neighbor analysis: {len(X_res_sampled):,} samples"
                 nn_start = time.time()
-                
                 progress_stats['current_substep'] = "Nearest Neighbor Analysis"
                 
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    nbrs = NearestNeighbors(n_neighbors=2, n_jobs=n_jobs).fit(X_res_sampled)
-                    distances, _ = nbrs.kneighbors(X_res_sampled)
-                    metrics['avg_neighbor_distance'] = np.mean(distances[:, 1])
-                    metrics['neighbor_std'] = np.std(distances[:, 1])
+                try:
+                    # Use approximate nearest neighbors for large datasets
+                    if len(X_res_sampled) >= 1000000:
+                        eval_bar.text = "Approximate nearest neighbors (clustering)"
+                        # Determine number of clusters
+                        eval_bar.text = "Initializing MiniBatchKMeans model"
+                        n_clusters = int(min(50, len(X_res_sampled) // 1000000))
+                        n_features = X_res_sampled.shape[1]
+                        
+                        # Use MiniBatchKMeans for scalability
+                        eval_bar.text = f"Mini batch K-means: {n_clusters} clusters, {n_features} features"
+                        kmeans = MiniBatchKMeans(
+                            n_clusters=n_clusters,
+                            init='k-means++',
+                            random_state=random_state,
+                            batch_size=100000,
+                            n_init=3
+                        )
+                        eval_bar.text = "Predicting labels"
+                        cluster_labels = kmeans.fit_predict(X_res_sampled)
+
+                        eval_bar.text = "Computing cluster centers"
+                        cluster_centers = kmeans.cluster_centers_
+                        
+                        # Calculate average distance to cluster center
+                        eval_bar.text = "Calculating distances to cluster centers"
+                        distances_to_center = []
+                        for i in range(n_clusters):
+                            eval_bar.text = f"Processing cluster: {i+1}/{n_clusters}"
+                            cluster_points = X_res_sampled[cluster_labels == i]
+                            if len(cluster_points) > 0:
+                                center_dist = euclidean_distances(
+                                    cluster_points,
+                                    cluster_centers[i].reshape(1, -1)
+                                ).flatten()
+                                distances_to_center.extend(center_dist)
+                        
+                        eval_bar.text = "Calculating neighbor distances"
+                        metrics['avg_neighbor_distance'] = np.mean(distances_to_center)
+                        metrics['neighbor_std'] = np.std(distances_to_center)
+                        metrics['nn_samples'] = len(X_res_sampled)
+                        metrics['nn_method'] = 'cluster_approximation'
+                    else:
+                        # Use exact nearest neighbors for smaller datasets
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            eval_bar.text = "Nearest neighbors analysis (exact)"
+                            # Use float32 to save memory
+                            eval_bar.text = "Initializing float32 arrays"
+                            X_res_float32 = X_res_sampled.astype(np.float32)
+                            
+                            # Create NearestNeighbors model
+                            eval_bar.text = f"Building NearestNeighbors model"
+                            nbrs = NearestNeighbors(
+                                n_neighbors=min(2, len(X_res_sampled)),
+                                algorithm='ball_tree',
+                                n_jobs=n_jobs
+                            ).fit(X_res_float32)
+                            
+                            # Calculate distances to nearest neighbors
+                            eval_bar.text = f"Finding K-neighbors"
+                            distances, _ = nbrs.kneighbors(X_res_float32)
+                            
+                            eval_bar.text = "Calculating neighbor distances"
+                            metrics['avg_neighbor_distance'] = np.mean(distances[:, 1])  # Excluding self-distance
+                            metrics['neighbor_std'] = np.std(distances[:, 1])
+                            metrics['nn_samples'] = len(X_res_sampled)
+                            metrics['nn_method'] = 'exact'
+                
+                except Exception as e:
+                    logger.warning(f"Nearest neighbor analysis failed: {str(e)}")
+                    metrics['avg_neighbor_distance'] = float('nan')
+                    metrics['neighbor_std'] = float('nan')
+                    metrics['nn_samples'] = 0
+                    metrics['nn_method'] = 'failed'
                 
                 nn_time = time.time() - nn_start
                 progress_stats['detailed_timings']['nearest_neighbor_analysis'] = nn_time
-                eval_bar.text = f"{green}Neighbor analysis complete{reset}"
+                eval_bar.text = "Neighbor analysis complete"
                 eval_bar()
                 
                 # 2. Boundary Analysis
-                eval_bar.text = "Boundary analysis..."
+                eval_bar.text = f"Boundary analysis: {len(X_res_sampled):,} samples"
                 boundary_start = time.time()
-                
                 progress_stats['current_substep'] = "Boundary Analysis"
                 
                 try:
-                    clf = SVC(kernel='linear', random_state=random_state).fit(X_res_sampled, y_res_sampled)
-                    metrics['boundary_violations'] = sum(clf.predict(X_res_sampled) != y_res_sampled)
-                    metrics['boundary_violation_rate'] = metrics['boundary_violations'] / len(X_res_sampled)
+                    # Use full sampled dataset for boundary analysis
+                    X_boundary = X_res_sampled
+                    y_boundary = y_res_sampled
+                    
+                    # Train SGDClassifier to evaluate boundary violations
+                    eval_bar.text = "Training SGDClassifier"
+                    clf = SGDClassifier(
+                        loss='hinge',
+                        penalty='l2',
+                        alpha=0.0001,
+                        max_iter=1000,
+                        tol=1e-3,
+                        random_state=random_state,
+                        shuffle=True,
+                        n_jobs=n_jobs
+                    )
+                    eval_bar.text = "Fitting linear model"
+                    clf.fit(X_boundary.astype(np.float32), y_boundary)
+                    
+                    eval_bar.text = "Predicting class labels"
+                    predictions = clf.predict(X_boundary.astype(np.float32))
+                    
+                    eval_bar.text = "Evaluating boundary violations"
+                    metrics['boundary_violations'] = np.sum(predictions != y_boundary)
+                    metrics['boundary_violation_rate'] = metrics['boundary_violations'] / len(predictions)
+                    metrics['boundary_samples'] = len(X_boundary)
+                    metrics['boundary_method'] = 'sgd_svm_full'
+                
+                except MemoryError as e:
+                    # Fallback to linearSVC training
+                    try:
+                        # Train linearSVC to evaluate boundary violations
+                        eval_bar.text = "Training LinearSVC"
+                        clf = LinearSVC(
+                            random_state=random_state,
+                            max_iter=1000,
+                            tol=1e-3,
+                            dual=False
+                        )
+                        eval_bar.text = "Fitting LinearSVC model"
+                        clf.fit(X_boundary.astype(np.float32), y_boundary)
+                        
+                        eval_bar.text = "Predicting class labels"
+                        predictions = clf.predict(X_boundary.astype(np.float32))
+                        
+                        eval_bar.text = "Evaluating boundary violations"
+                        metrics['boundary_violations'] = np.sum(predictions != y_boundary)
+                        metrics['boundary_violation_rate'] = metrics['boundary_violations'] / len(predictions)
+                        metrics['boundary_samples'] = len(X_boundary)
+                        metrics['boundary_method'] = 'linear_svm'
+                    
+                    except Exception as inner_e:
+                        logger.warning(f"Incremental boundary analysis failed: {str(inner_e)}")
+                        metrics['boundary_violations'] = float('nan')
+                        metrics['boundary_violation_rate'] = float('nan')
+                        metrics['boundary_samples'] = 0
+                        metrics['boundary_method'] = 'failed'
+                        eval_bar.text = "Boundary analysis failed"
+                
                 except Exception as e:
                     logger.warning(f"Boundary analysis failed: {str(e)}")
                     metrics['boundary_violations'] = float('nan')
                     metrics['boundary_violation_rate'] = float('nan')
+                    metrics['boundary_samples'] = 0
+                    metrics['boundary_method'] = 'failed'
+                    eval_bar.text = "Boundary analysis failed"
                 
                 boundary_time = time.time() - boundary_start
                 progress_stats['detailed_timings']['boundary_analysis'] = boundary_time
-                eval_bar.text = f"{green}Boundary analysis complete{reset}"
+                eval_bar.text = "Boundary analysis complete"
                 eval_bar()
                 
                 # 3. Distribution Analysis
-                eval_bar.text = "Distribution analysis..."
+                eval_bar.text = "Distribution analysis"
                 distribution_start = time.time()
-                
                 progress_stats['current_substep'] = "Distribution Analysis"
                 
-                bins = np.histogram_bin_edges(original_features.values.ravel(), bins='auto')
-                p = np.histogram(original_features.values, bins=bins)[0] + 1e-10
-                q = np.histogram(X_res_sampled, bins=bins)[0] + 1e-10
-                metrics['distribution_divergence'] = entropy(p, q)
+                try:
+                    eval_bar.text = "Preparing feature distributions"
+                    # Compare distributions per feature using full sampled datasets
+                    js_divergences = []
+                    
+                    eval_bar.text = "Converting to numpy arrays"
+                    # Convert to numpy arrays if needed and ensure 2D shape
+                    if isinstance(X_orig_sampled, pd.DataFrame):
+                        X_orig_dist = X_orig_sampled.values
+                    else:
+                        X_orig_dist = np.asarray(X_orig_sampled)
+                    
+                    if isinstance(X_res_sampled, pd.DataFrame):
+                        X_res_dist = X_res_sampled.values
+                    else:
+                        X_res_dist = np.asarray(X_res_sampled)
+                    
+                    # Ensure arrays are 2D
+                    eval_bar.text = "Ensuring arrays are 2D shapes"
+                    if X_orig_dist.ndim == 1:
+                        X_orig_dist = X_orig_dist.reshape(-1, 1)
+                    if X_res_dist.ndim == 1:
+                        X_res_dist = X_res_dist.reshape(-1, 1)
+                    
+                    # Get number of features
+                    total_features = X_orig_dist.shape[1]
+                    
+                    # Calculate distributions feature by feature
+                    for i in range(total_features):
+                        eval_bar.text = f"Calculating distributions: {i+1}/{total_features} features"
+                        
+                        # Get feature values
+                        orig_feature = X_orig_dist[:, i].flatten()
+                        res_feature = X_res_dist[:, i].flatten()
+                        
+                        # Skip features with no variance
+                        combined = np.concatenate([orig_feature, res_feature])
+                        min_val = np.min(combined)
+                        max_val = np.max(combined)
+                        
+                        if max_val - min_val < 1e-10:
+                            js_divergences.append(0.0)
+                            continue
+                        
+                        # Create density histograms with common bins
+                        bins = np.linspace(min_val, max_val, 51)
+                        
+                        try:
+                            p_hist, _ = np.histogram(orig_feature, bins=bins, density=True)
+                            q_hist, _ = np.histogram(res_feature, bins=bins, density=True)
+                            
+                            # Add epsilon and normalize
+                            epsilon = 1e-10
+                            p_hist = (p_hist + epsilon) / (p_hist.sum() + epsilon * len(p_hist))
+                            q_hist = (q_hist + epsilon) / (q_hist.sum() + epsilon * len(q_hist))
+                            
+                            # Calculate Jensen-Shannon divergence
+                            m = 0.5 * (p_hist + q_hist)
+                            # Add epsilon to avoid log(0)
+                            m = m + epsilon
+                            kl_pm = np.sum(p_hist * np.log(p_hist / m))
+                            kl_qm = np.sum(q_hist * np.log(q_hist / m))
+                            js_div = 0.5 * (kl_pm + kl_qm)
+                            js_divergences.append(js_div)
+                        
+                        except MemoryError:
+                            # Fallback for large feature vectors: use kernel density estimation
+                            try:
+                                # Sample if feature vectors are too large
+                                sample_size = min(100000, len(orig_feature), len(res_feature))
+                                if len(orig_feature) > sample_size:
+                                    orig_idx = rng.choice(len(orig_feature), sample_size, replace=False)
+                                    orig_feature_sampled = orig_feature[orig_idx]
+                                else:
+                                    orig_feature_sampled = orig_feature
+                                
+                                if len(res_feature) > sample_size:
+                                    res_idx = rng.choice(len(res_feature), sample_size, replace=False)
+                                    res_feature_sampled = res_feature[res_idx]
+                                else:
+                                    res_feature_sampled = res_feature
+                                
+                                # Use kernel density estimation
+                                kde_orig = gaussian_kde(orig_feature_sampled)
+                                kde_res = gaussian_kde(res_feature_sampled)
+                                
+                                # Evaluate densities on common grid
+                                grid = np.linspace(min_val, max_val, 1000)
+                                p_dens = kde_orig(grid)
+                                q_dens = kde_res(grid)
+                                
+                                # Normalize
+                                p_dens = (p_dens + epsilon) / (p_dens.sum() + epsilon * len(p_dens))
+                                q_dens = (q_dens + epsilon) / (q_dens.sum() + epsilon * len(q_dens))
+                                
+                                m = 0.5 * (p_dens + q_dens) + epsilon
+                                kl_pm = np.sum(p_dens * np.log(p_dens / m))
+                                kl_qm = np.sum(q_dens * np.log(q_dens / m))
+                                js_div = 0.5 * (kl_pm + kl_qm)
+                                js_divergences.append(js_div)
+                            
+                            except Exception as kde_e:
+                                logger.warning(f"KDE fallback failed for feature {i}: {str(kde_e)}")
+                                js_divergences.append(float('nan'))
+                        
+                        except Exception as feature_e:
+                            logger.warning(f"Feature {i} distribution calculation failed: {str(feature_e)}")
+                            js_divergences.append(float('nan'))
+                    
+                    # Calculate summary statistics, ignoring NaN values
+                    valid_js_divergences = [js for js in js_divergences if not np.isnan(js)]
+                    
+                    if valid_js_divergences:
+                        metrics['js_divergence_mean'] = np.mean(valid_js_divergences)
+                        metrics['js_divergence_std'] = np.std(valid_js_divergences)
+                        metrics['js_divergence_median'] = np.median(valid_js_divergences)
+                        metrics['js_divergence_min'] = np.min(valid_js_divergences)
+                        metrics['js_divergence_max'] = np.max(valid_js_divergences)
+                        metrics['valid_features'] = len(valid_js_divergences)
+                        metrics['total_features_analyzed'] = total_features
+                        
+                        # Normalize JS divergence (range: 0 to log(2))
+                        metrics['distribution_divergence'] = min(metrics['js_divergence_mean'] / np.log(2), 1.0)
+                    else:
+                        metrics['distribution_divergence'] = float('nan')
+                        metrics['js_divergence_mean'] = float('nan')
+                        metrics['js_divergence_std'] = float('nan')
+                        metrics['valid_features'] = 0
+                        metrics['total_features_analyzed'] = total_features
+                    
+                    metrics['distribution_samples'] = len(X_orig_dist)
+                    metrics['distribution_method'] = 'full_distribution_js'
+                
+                except Exception as e:
+                    logger.warning(f"Distribution analysis failed: {str(e)}")
+                    metrics['distribution_divergence'] = float('nan')
+                    metrics['js_divergence_mean'] = float('nan')
+                    metrics['js_divergence_std'] = float('nan')
+                    metrics['distribution_samples'] = 0
+                    metrics['valid_features'] = 0
+                    metrics['total_features_analyzed'] = X_orig_sampled.shape[1] if 'X_orig_sampled' in locals() else 0
+                    metrics['distribution_method'] = 'failed'
+                    eval_bar.text = "Distribution analysis failed"
                 
                 distribution_time = time.time() - distribution_start
                 progress_stats['detailed_timings']['distribution_analysis'] = distribution_time
-                eval_bar.text = f"{green}Distribution analysis complete{reset}"
+                eval_bar.text = "Distribution analysis complete"
                 eval_bar()
                 
                 # 4. Cluster Quality
-                eval_bar.text = "Cluster quality analysis..."
+                eval_bar.text = f"Cluster quality analysis: {len(X_res_sampled):,} samples"
                 cluster_start = time.time()
-                
                 progress_stats['current_substep'] = "Cluster Analysis"
                 
                 try:
-                    metrics['silhouette_score'] = silhouette_score(X_res_sampled, y_res_sampled)
-                except:
+                    # Use full sampled dataset for cluster quality analysis
+                    X_cluster = X_res_sampled
+                    y_cluster = y_res_sampled
+                    cluster_size = len(X_cluster)
+                    
+                    # Validate minimum requirements for silhouette calculation
+                    eval_bar.text = "Validating minimum requirements"
+                    unique_classes = np.unique(y_cluster)
+                    n_classes = len(unique_classes)
+                    
+                    # Silhouette requires at least 2 clusters and samples >= clusters
+                    if n_classes < 2:
+                        logger.warning(f"Cannot calculate silhouette score: only {n_classes} class(es) present")
+                        metrics['silhouette_score'] = float('nan')
+                        metrics['silhouette_method'] = 'insufficient_classes'
+                        metrics['unique_classes'] = n_classes
+                        eval_bar.text = f"Skipped: only {n_classes} class"
+                    elif cluster_size < n_classes:
+                        logger.warning(f"Cannot calculate silhouette score: {cluster_size} samples < {n_classes} classes")
+                        metrics['silhouette_score'] = float('nan')
+                        metrics['silhouette_method'] = 'insufficient_samples'
+                        metrics['unique_classes'] = n_classes
+                        eval_bar.text = "Skipped: insufficient samples"
+                    else:
+                        # Calculate silhouette score
+                        try:
+                            # For large datasets, use sampling to speed up computation
+                            if cluster_size > 100000:
+                                eval_bar.text = "Calculating silhouette score: sampled"
+                                # Use sample_size parameter for large datasets
+                                actual_sample_size = min(100000, cluster_size)
+                                eval_bar.text = f"Using sample size: {actual_sample_size:,}"
+                                sil_score = silhouette_score(
+                                    X_cluster,
+                                    y_cluster,
+                                    metric='euclidean',
+                                    sample_size=actual_sample_size,
+                                    random_state=random_state
+                                )
+                                metrics['silhouette_score'] = sil_score
+                                metrics['silhouette_sample_size'] = actual_sample_size
+                                metrics['silhouette_method'] = 'sampled'
+                            
+                            else:
+                                eval_bar.text = "Calculating silhouette score: full"
+                                # Use full dataset for smaller datasets
+                                sil_score = silhouette_score(
+                                    X_cluster,
+                                    y_cluster,
+                                    metric='euclidean',
+                                    random_state=random_state
+                                )
+                                metrics['silhouette_score'] = sil_score
+                                metrics['silhouette_method'] = 'full'
+                        
+                        except MemoryError:
+                            # Fallback for extremely large datasets: use stratified sampling
+                            try:
+                                eval_bar.text = "Calculating silhouette score (stratified sampling)"
+                                # Use stratified sampling to ensure class representation
+                                sample_per_class = min(5000, cluster_size // n_classes)
+                                
+                                sampled_indices = []
+                                for cls in unique_classes:
+                                    cls_indices = np.where(y_cluster == cls)[0]
+                                    if len(cls_indices) > sample_per_class:
+                                        cls_sample = rng.choice(cls_indices, sample_per_class, replace=False)
+                                    else:
+                                        cls_sample = cls_indices
+                                    sampled_indices.extend(cls_sample)
+                                
+                                X_sampled = X_cluster[sampled_indices]
+                                y_sampled = y_cluster[sampled_indices]
+                                
+                                sil_score = silhouette_score(
+                                    X_sampled,
+                                    y_sampled,
+                                    metric='euclidean',
+                                    random_state=random_state
+                                )
+                                metrics['silhouette_score'] = sil_score
+                                metrics['silhouette_sample_size'] = len(sampled_indices)
+                                metrics['silhouette_method'] = 'stratified_sampling'
+                            
+                            except Exception as sampling_e:
+                                logger.warning(f"Stratified sampling failed: {str(sampling_e)}")
+                                metrics['silhouette_score'] = float('nan')
+                                metrics['silhouette_method'] = 'stratified_sampling_failed'
+                                eval_bar.text = "Stratified sampling failed"
+                        
+                        except ValueError as ve:
+                            # Handle specific ValueError cases (e.g., single sample per class)
+                            logger.warning(f"Silhouette calculation failed with ValueError: {str(ve)}")
+                            
+                            try:
+                                eval_bar.text = "Calculating silhouette score (cosine metric)"
+                                # Try cosine distance for high-dimensional data
+                                sil_score_cosine = silhouette_score(
+                                    X_cluster,
+                                    y_cluster,
+                                    metric='cosine',
+                                    random_state=random_state
+                                )
+                                metrics['silhouette_score'] = sil_score_cosine
+                                metrics['silhouette_method'] = 'cosine'
+                            
+                            except Exception as cosine_e:
+                                logger.warning(f"Cosine metric failed: {str(cosine_e)}")
+                                
+                                try:
+                                    eval_bar.text = "Calculating silhouette (precomputed sample)"
+                                    # Final fallback: use precomputed distances on smaller sample
+                                    sample_size_final = min(5000, cluster_size)
+                                    sample_idx = rng.choice(cluster_size, sample_size_final, replace=False)
+                                    X_sample = X_cluster[sample_idx]
+                                    y_sample = y_cluster[sample_idx]
+                                    
+                                    # Compute pairwise distances
+                                    distances = pairwise_distances(X_sample, metric='euclidean')
+                                    sil_score_precomputed = silhouette_score(
+                                        distances,
+                                        y_sample,
+                                        metric='precomputed'
+                                    )
+                                    metrics['silhouette_score'] = sil_score_precomputed
+                                    metrics['silhouette_sample_size'] = sample_size_final
+                                    metrics['silhouette_method'] = 'precomputed_sample'
+                                
+                                except Exception as precomp_e:
+                                    logger.warning(f"Precomputed fallback failed: {str(precomp_e)}")
+                                    metrics['silhouette_score'] = float('nan')
+                                    metrics['silhouette_method'] = 'all_methods_failed'
+                                    eval_bar.text = "All silhouette methods failed"
+                        
+                        except Exception as sil_e:
+                            # Catch-all for unexpected errors
+                            logger.warning(f"Unexpected error in silhouette calculation: {str(sil_e)}")
+                            metrics['silhouette_score'] = float('nan')
+                            metrics['silhouette_method'] = 'unexpected_error'
+                            eval_bar.text = "Silhouette calculation error"
+                    
+                    # Store cluster analysis metadata
+                    metrics['cluster_samples'] = cluster_size
+                    metrics['unique_classes'] = n_classes
+                    metrics['cluster_method'] = 'comprehensive'
+                
+                except Exception as e:
+                    logger.warning(f"Cluster analysis failed: {str(e)}")
                     metrics['silhouette_score'] = float('nan')
+                    metrics['cluster_samples'] = 0
+                    metrics['cluster_method'] = 'failed'
+                    metrics['unique_classes'] = 0
+                    metrics['error_message'] = str(e)
+                    eval_bar.text = "Cluster analysis failed"
                 
                 cluster_time = time.time() - cluster_start
                 progress_stats['detailed_timings']['cluster_analysis'] = cluster_time
-                eval_bar.text = f"{green}Cluster analysis complete{reset}"
+                eval_bar.text = "Cluster analysis complete"
                 eval_bar()
                 
                 # 5. Class Balance
-                eval_bar.text = "Class balance analysis..."
+                eval_bar.text = "Class balance analysis"
                 balance_start = time.time()
-                
                 progress_stats['current_substep'] = "Balance Analysis"
                 
-                new_counts = np.bincount(y_res_sampled)
-                metrics['new_imbalance_ratio'] = new_counts.max() / new_counts.min()
+                try:
+                    # Calculate on full resampled dataset
+                    eval_bar.text = "Balance analysis: resampled dataset"
+                    
+                    # Convert to integer type before bincount
+                    eval_bar.text = "Converting to integer type before bincount"
+                    y_res_sampled_int = y_res_sampled.astype(np.int64)
+                    full_new_counts = np.bincount(y_res_sampled_int)
+                    
+                    eval_bar.text = "Calculating imbalance ratio"
+                    if len(full_new_counts) > 1:
+                        metrics['new_imbalance_ratio'] = full_new_counts.max() / full_new_counts.min()
+                        metrics['new_class_counts'] = full_new_counts.tolist()
+                    else:
+                        metrics['new_imbalance_ratio'] = 1.0
+                        metrics['new_class_counts'] = full_new_counts.tolist()
+                    
+                    # Original dataset balance
+                    eval_bar.text = "Balance analysis: original dataset"
+                    
+                    # Convert to integer type before bincount
+                    eval_bar.text = "Converting to integer type before bincount"
+                    y_orig_sampled_int = y_orig_sampled.astype(np.int64)
+                    full_orig_counts = np.bincount(y_orig_sampled_int)
+                    
+                    eval_bar.text = "Calculating imbalance ratio"
+                    if len(full_orig_counts) > 1:
+                        metrics['original_imbalance_ratio'] = full_orig_counts.max() / full_orig_counts.min()
+                        metrics['original_class_counts'] = full_orig_counts.tolist()
+                    else:
+                        metrics['original_imbalance_ratio'] = 1.0
+                        metrics['original_class_counts'] = full_orig_counts.tolist()
+                    
+                    # Calculate balance improvement
+                    eval_bar.text = "Calculating balance improvement"
+                    if ('original_imbalance_ratio' in metrics and 'new_imbalance_ratio' in metrics and metrics['original_imbalance_ratio'] > 1.0):
+                        improvement = (metrics['original_imbalance_ratio'] - metrics['new_imbalance_ratio']) / metrics['original_imbalance_ratio']
+                        metrics['balance_improvement'] = max(0.0, min(1.0, improvement))
+                    else:
+                        metrics['balance_improvement'] = 0.0
+                
+                except Exception as e:
+                    logger.warning(f"Balance analysis failed: {str(e)}")
+                    metrics['new_imbalance_ratio'] = float('nan')
+                    metrics['original_imbalance_ratio'] = float('nan')
+                    metrics['balance_improvement'] = float('nan')
                 
                 balance_time = time.time() - balance_start
                 progress_stats['detailed_timings']['balance_analysis'] = balance_time
-                eval_bar.text = f"{green}Balance analysis complete{reset}"
+                eval_bar.text = "Balance analysis complete"
                 eval_bar()
                 
-                # 6. Feature Correlation Preservation
-                eval_bar.text = "Feature correlation analysis..."
+                # 6. Feature Correlation Analysis
+                eval_bar.text = f"Feature correlation analysis: {X_orig_sampled.shape[1]:,} features"
                 correlation_start = time.time()
-                
                 progress_stats['current_substep'] = "Correlation Analysis"
                 
-                orig_corr = np.corrcoef(original_features.T)
-                synth_corr = np.corrcoef(X_res_sampled.T)
-                metrics['feature_correlation_diff'] = np.nanmean(np.abs(orig_corr - synth_corr))
+                try:
+                    # Use full sampled datasets for correlation analysis
+                    X_orig_corr = X_orig_sampled
+                    X_res_corr = X_res_sampled
+                    
+                    # Check if datasets are large enough for meaningful correlation
+                    if len(X_orig_corr) < 2 or len(X_res_corr) < 2:
+                        metrics['feature_correlation_diff'] = float('nan')
+                        metrics['correlation_samples'] = 0
+                        metrics['correlation_method'] = 'insufficient_samples'
+                        eval_bar.text = f"Insufficient samples: {len(X_orig_corr):,} original, {len(X_res_corr):,} resampled"
+                    else:
+                        try:
+                            # Calculate correlations incrementally for large datasets: use batch processing
+                            eval_bar.text = "Feature correlation analysis: (Incremental)"
+                            n_features = X_orig_corr.shape[1]
+                            n_samples_orig = len(X_orig_corr)
+                            n_samples_res = len(X_res_corr)
+                            
+                            # Convert to numpy arrays if needed
+                            eval_bar.text = "Converting to numpy arrays"
+                            if isinstance(X_orig_corr, pd.DataFrame):
+                                X_orig_corr = X_orig_corr.values
+                            if isinstance(X_res_corr, pd.DataFrame):
+                                X_res_corr = X_res_corr.values
+                            
+                            # Use batched covariance calculation
+                            eval_bar.text = "Batched covariance calculation"
+                            batch_size = min(100000, n_samples_orig, n_samples_res)
+                            n_batches_orig = (n_samples_orig + batch_size - 1) // batch_size
+                            n_batches_res = (n_samples_res + batch_size - 1) // batch_size
+                            
+                            # Initialize covariance matrices
+                            eval_bar.text = "Initializing covariance matrices"
+                            cov_orig = np.zeros((n_features, n_features))
+                            cov_res = np.zeros((n_features, n_features))
+                            mean_orig = np.zeros(n_features)
+                            mean_res = np.zeros(n_features)
+                            
+                            # Calculate means for original data
+                            for batch_idx in range(n_batches_orig):
+                                eval_bar.text = f"Calculating means (original): {batch_idx+1}/{n_batches_orig}"
+                                start_idx = batch_idx * batch_size
+                                end_idx = min((batch_idx + 1) * batch_size, n_samples_orig)
+                                batch_orig = X_orig_corr[start_idx:end_idx]
+                                mean_orig += np.sum(batch_orig, axis=0)
+                            mean_orig /= n_samples_orig
+                            
+                            # Calculate means for resampled data
+                            for batch_idx in range(n_batches_res):
+                                eval_bar.text = f"Calculating means (resampled): {batch_idx+1}/{n_batches_res}"
+                                start_idx = batch_idx * batch_size
+                                end_idx = min((batch_idx + 1) * batch_size, n_samples_res)
+                                batch_res = X_res_corr[start_idx:end_idx]
+                                mean_res += np.sum(batch_res, axis=0)
+                            mean_res /= n_samples_res
+                            
+                            # Calculate covariances for original data
+                            for batch_idx in range(n_batches_orig):
+                                eval_bar.text = f"Calculating covariances (original): {batch_idx+1}/{n_batches_orig}"
+                                start_idx = batch_idx * batch_size
+                                end_idx = min((batch_idx + 1) * batch_size, n_samples_orig)
+                                batch_orig = X_orig_corr[start_idx:end_idx] - mean_orig
+                                
+                                # Update covariance matrix
+                                cov_orig += batch_orig.T @ batch_orig
+                            
+                            # Calculate covariances for resampled data
+                            for batch_idx in range(n_batches_res):
+                                eval_bar.text = f"Calculating covariances (resampled): {batch_idx+1}/{n_batches_res}"
+                                start_idx = batch_idx * batch_size
+                                end_idx = min((batch_idx + 1) * batch_size, n_samples_res)
+                                batch_res = X_res_corr[start_idx:end_idx] - mean_res
+                                
+                                # Update covariance matrix
+                                cov_res += batch_res.T @ batch_res
+                            
+                            # Normalize covariances
+                            eval_bar.text = "Normalizing covariance matrices"
+                            cov_orig /= (n_samples_orig - 1)
+                            cov_res /= (n_samples_res - 1)
+                            
+                            # Convert to correlation matrices
+                            eval_bar.text = "Converting to correlation matrices"
+                            std_orig = np.sqrt(np.diag(cov_orig))
+                            std_res = np.sqrt(np.diag(cov_res))
+                            
+                            # Avoid division by zero
+                            eval_bar.text = "Avoiding division by zero"
+                            std_orig[std_orig == 0] = 1
+                            std_res[std_res == 0] = 1
+                            
+                            # Calculate correlation matrices
+                            eval_bar.text = "Calculating correlation matrices"
+                            corr_orig = cov_orig / np.outer(std_orig, std_orig)
+                            corr_res = cov_res / np.outer(std_res, std_res)
+                            
+                            # Calculate absolute difference (ignore diagonal)
+                            eval_bar.text = "Calculating absolute difference"
+                            mask = ~np.eye(n_features, dtype=bool)
+                            corr_diff = np.abs(corr_orig[mask] - corr_res[mask])
+                            
+                            metrics['feature_correlation_diff'] = np.nanmean(corr_diff)
+                            metrics['feature_correlation_diff_std'] = np.nanstd(corr_diff)
+                            metrics['correlation_samples'] = n_samples_orig
+                            metrics['correlation_batches_orig'] = n_batches_orig
+                            metrics['correlation_batches_res'] = n_batches_res
+                            metrics['correlation_method'] = 'incremental_correlation'
+                        
+                        except Exception as inc_e:
+                            try:
+                                # Calculate correlation matrices on full datasets
+                                eval_bar.text = "Calculating on original dataset"
+                                corr_orig = np.corrcoef(X_orig_corr.T)
+                                
+                                eval_bar.text = "Calculating on resampled dataset"
+                                corr_res = np.corrcoef(X_res_corr.T)
+                                
+                                # Calculate absolute difference (ignore diagonal)
+                                eval_bar.text = "Calculating absolute difference"
+                                mask = ~np.eye(corr_orig.shape[0], dtype=bool)
+                                corr_diff = np.abs(corr_orig[mask] - corr_res[mask])
+                                
+                                # Calculate various statistics on the correlation differences
+                                eval_bar.text = "Calculating additional statistics"
+                                feature_correlation_diff = np.nanmean(corr_diff)
+                                feature_correlation_diff_std = np.nanstd(corr_diff)
+                                feature_correlation_diff_median = np.nanmedian(corr_diff)
+                                feature_correlation_diff_max = np.nanmax(corr_diff)
+                                feature_correlation_diff_min = np.nanmin(corr_diff)
+                                correlation_samples = len(X_orig_corr)
+                                
+                                # Store metrics
+                                metrics['feature_correlation_diff'] = feature_correlation_diff
+                                metrics['feature_correlation_diff_std'] = feature_correlation_diff_std
+                                metrics['feature_correlation_diff_median'] = feature_correlation_diff_median
+                                metrics['feature_correlation_diff_max'] = feature_correlation_diff_max
+                                metrics['feature_correlation_diff_min'] = feature_correlation_diff_min
+                                metrics['correlation_samples'] = correlation_samples
+                                metrics['correlation_method'] = 'full_correlation'
+                                
+                                # Calculate correlation preservation rate (differences < threshold)
+                                eval_bar.text = "Calculating correlation preservation rate"
+                                threshold = 0.1  # 10% difference threshold
+                                preserved_correlations = np.sum(corr_diff < threshold)
+                                total_correlations = len(corr_diff)
+                                correlation_preservation_rate = preserved_correlations / total_correlations
+                                correlation_differences_above_threshold = total_correlations - preserved_correlations
+                                
+                                metrics['correlation_preservation_rate'] = correlation_preservation_rate
+                                metrics['correlation_differences_above_threshold'] = correlation_differences_above_threshold
+                            
+                            except MemoryError:
+                                logger.warning(f"Full correlation calculation failed: {str(inc_e)}")
+                                metrics['feature_correlation_diff'] = float('nan')
+                                metrics['feature_correlation_diff_std'] = float('nan')
+                                metrics['correlation_samples'] = 0
+                                metrics['correlation_method'] = 'full_failed'
+                                eval_bar.text = "Full correlation analysis failed"
+                
+                except Exception as e:
+                    logger.warning(f"Correlation analysis failed: {str(e)}")
+                    metrics['feature_correlation_diff'] = float('nan')
+                    metrics['feature_correlation_diff_std'] = float('nan')
+                    metrics['feature_correlation_diff_median'] = float('nan')
+                    metrics['feature_correlation_diff_max'] = float('nan')
+                    metrics['feature_correlation_diff_min'] = float('nan')
+                    metrics['correlation_samples'] = 0
+                    metrics['correlation_method'] = 'failed'
+                    metrics['correlation_preservation_rate'] = float('nan')
+                    metrics['correlation_differences_above_threshold'] = float('nan')
+                    eval_bar.text = "Correlation analysis failed"
                 
                 correlation_time = time.time() - correlation_start
                 progress_stats['detailed_timings']['correlation_analysis'] = correlation_time
-                eval_bar.text = f"{green}Correlation analysis complete{reset}"
+                eval_bar.text = "Correlation analysis complete"
                 eval_bar()
+                
+                # Calculate overall quality metrics
+                additional_start = time.time()
+                
+                try:
+                    # Calculate overall quality score
+                    score_components = []
+                    weights = []
+                    
+                    # Cluster quality
+                    if not np.isnan(metrics.get('silhouette_score', float('nan'))):
+                        sil_norm = (metrics['silhouette_score'] + 1) / 2  # Convert from [-1, 1] to [0, 1]
+                        score_components.append(sil_norm)
+                        weights.append(25)
+                    
+                    # Distribution preservation
+                    if not np.isnan(metrics.get('distribution_divergence', float('nan'))):
+                        dist_score = 1.0 - min(metrics['distribution_divergence'], 1.0)
+                        score_components.append(dist_score)
+                        weights.append(20)
+                    
+                    # Balance improvement
+                    if not np.isnan(metrics.get('balance_improvement', float('nan'))):
+                        score_components.append(metrics['balance_improvement'])
+                        weights.append(25)
+                    
+                    # Feature correlation
+                    if not np.isnan(metrics.get('feature_correlation_diff', float('nan'))):
+                        corr_score = 1.0 - min(metrics['feature_correlation_diff'], 1.0)
+                        score_components.append(corr_score)
+                        weights.append(20)
+                    
+                    # Boundary quality
+                    if not np.isnan(metrics.get('boundary_violation_rate', float('nan'))):
+                        boundary_score = 1.0 - min(metrics['boundary_violation_rate'], 1.0)
+                        score_components.append(boundary_score)
+                        weights.append(10)
+                    
+                    # Calculate weighted average
+                    if score_components and weights:
+                        total_weight = sum(weights)
+                        weighted_sum = sum(comp * weight for comp, weight in zip(score_components, weights))
+                        metrics['overall_quality_score'] = (weighted_sum / total_weight) * 100
+                    else:
+                        metrics['overall_quality_score'] = float('nan')
+                    
+                    # Add evaluation metadata
+                    metrics['evaluation_sample_size'] = target_size
+                    metrics['total_features'] = X_res_sampled.shape[1]
+                
+                except Exception as e:
+                    logger.warning(f"Overall quality calculation failed: {str(e)}")
+                    metrics['overall_quality_score'] = float('nan')
+                    metrics['quality_assessment'] = 'Failed'
+                
+                additional_time = time.time() - additional_start
+                progress_stats['detailed_timings']['additional_metrics'] = additional_time
                 
                 evaluation_time = time.time() - evaluation_start
                 progress_stats['detailed_timings']['total_evaluation'] = evaluation_time
-
+                eval_bar.text = "Quality evaluation complete"
+                eval_bar()
+        
         # STAGE 4: Visualization
         if visualize:
             visualization_start = time.time()
             
             progress_stats['stage'] = "Visualization"
             
+            # Convert DataFrame back to numpy array for visualization
+            X_res_array = X_res.values if isinstance(X_res, pd.DataFrame) else X_res
+            
             _visualize_resampling(
                 original=df[artifacts['feature_names']],
-                resampled=X_res,
+                resampled=X_res_array,
                 labels=y_res,
                 sampler_name=oversampler,
                 show_plot=VIZ_CONFIG['interactive'],
@@ -7107,7 +8708,7 @@ def _apply_oversampling(
         with progress.bar("Final Summary", total=2, unit="steps") as summary_bar:
             
             # STAGE 5.1: Statistics Calculation
-            summary_bar.text = "Calculating final statistics..."
+            summary_bar.text = "Calculating final statistics"
             stats_start = time.time()
             
             progress_stats['stage'] = "Statistics Calculation"
@@ -7117,19 +8718,18 @@ def _apply_oversampling(
             
             stats_time = time.time() - stats_start
             progress_stats['detailed_timings']['stats_calculation'] = stats_time
-            summary_bar.text = f"{green}Statistics calculated{reset}"
+            summary_bar.text = f"Statistics calculated"
             summary_bar()
             
             # STAGE 5.2: Summary Reporting
-            summary_bar.text = "Generating final report..."
+            summary_bar.text = "Generating final report"
             report_start = time.time()
             
             progress_stats['stage'] = "Summary Reporting"
             
             if verbose or optimize_params.get('verbose', False):
                 # Print summary report
-                logger.info(f"\n{blue}Oversampling Complete{reset}")
-                logger.info(f"{cyan}Summary:{reset}")
+                logger.info(f"\nOversampling Completed Successfully!")
                 logger.info(f"  - Original samples: {len(df)}")
                 logger.info(f"  - Resampled samples: {len(balanced_df)}")
                 logger.info(f"  - Oversampler: {oversampler}")
@@ -7137,20 +8737,20 @@ def _apply_oversampling(
                 logger.info(f"  - Total time: {total_time:.3f}s")
                 
                 if evaluate_quality and metrics:
-                    logger.info(f"\n{cyan}Quality Metrics:{reset}")
+                    logger.info(f"\nQuality Metrics:")
                     for metric, value in metrics.items():
                         if not np.isnan(value):
                             logger.info(f"  - {metric}: {value:.4f}")
                 
                 # Print detailed timings in verbose mode
                 if optimize_params.get('verbose', False):
-                    logger.info(f"\n{cyan}Detailed Timings:{reset}")
+                    logger.info(f"\nDetailed Timings:")
                     for stage, timing in progress_stats['detailed_timings'].items():
                         logger.info(f"  - {stage}: {timing:.3f}s")
             
             report_time = time.time() - report_start
             progress_stats['detailed_timings']['final_report'] = report_time
-            summary_bar.text = f"{green}Oversampling completed successfully{reset}"
+            summary_bar.text = f"Oversampling completed successfully"
             summary_bar()
         
         return balanced_df, metrics
@@ -7160,7 +8760,7 @@ def _apply_oversampling(
         error_context = f" (stage: {progress_stats.get('stage', 'unknown')}, "
         error_context += f"substep: {progress_stats.get('current_substep', 'none')})"
         
-        logger.error(f"{red}Oversampling failed{error_context}: {str(e)}{reset}")
+        logger.error(f"Oversampling failed{error_context}: {str(e)}")
         raise
 
 def _visualize_resampling(
@@ -7170,12 +8770,12 @@ def _visualize_resampling(
     sampler_name: str,
     random_state: int = 42,
     figsize: tuple = (18, 6),
-    max_samples: int = 5000,
+    max_samples: int = 50000,
     dpi: int = 150,
     show_plot: bool = False,
     save_plot: bool = True,
     progress_bar: bool = True,
-    projections: List[str] = ['pca', 'tsne'],
+    projections: List[str] = ['pca', 'tsne', 'umap'],
     interactive_backend: str = 'matplotlib',
     dimensions: int = 2
 ) -> Optional[Union[plt.Figure, 'go.Figure']]:
@@ -7229,8 +8829,8 @@ def _visualize_resampling(
     }
     
     try:
-        print(f"\n{yellow}Starting visualization of resampling results...{reset}")
-
+        print_color(f"\nStarting visualization of resampling results...", 'yellow')
+        
         # Progress helper: define all stage titles
         titles = [
             "Visualization Setup",
@@ -7251,21 +8851,21 @@ def _visualize_resampling(
                 
                 # Validate dimensions parameter
                 if dimensions not in (2, 3):
-                    setup_bar.text = f"{red}Invalid dimensions: {dimensions}{reset}"
+                    setup_bar.text = f"Invalid dimensions: {dimensions}"
                     setup_bar()
                     raise ValueError("Dimensions must be 2 or 3")
                 
                 # Validate inputs
                 if not isinstance(original, pd.DataFrame):
-                    setup_bar.text = f"{red}Original data must be DataFrame{reset}"
+                    setup_bar.text = "Original data must be DataFrame"
                     setup_bar()
                     raise ValueError("original must be a pandas DataFrame")
                 if not isinstance(resampled, np.ndarray):
-                    setup_bar.text = f"{red}Resampled data must be numpy array{reset}"
+                    setup_bar.text = "Resampled data must be numpy array"
                     setup_bar()
                     raise ValueError("resampled must be a numpy array")
                 if len(original) == 0 or len(resampled) == 0:
-                    setup_bar.text = f"{red}Input data cannot be empty{reset}"
+                    setup_bar.text = "Input data cannot be empty"
                     setup_bar()
                     raise ValueError("Input data cannot be empty")
                 
@@ -7274,7 +8874,7 @@ def _visualize_resampling(
                 
                 validation_time = time.time() - validation_start
                 viz_stats['detailed_timings']['input_validation'] = validation_time
-                setup_bar.text = f"{green}Validated {len(original)} original, {len(resampled)} resampled samples{reset}"
+                setup_bar.text = f"Validated {len(original)} original, {len(resampled)} resampled samples"
                 setup_bar()
                 
                 # STAGE 1.2: Backend Setup
@@ -7299,7 +8899,7 @@ def _visualize_resampling(
                 
                 backend_time = time.time() - backend_start
                 viz_stats['detailed_timings']['backend_setup'] = backend_time
-                setup_bar.text = f"{green}Using {viz_stats['backend_used']} backend{reset}"
+                setup_bar.text = f"Using {viz_stats['backend_used']} backend"
                 setup_bar()
                 
                 # STAGE 1.3: Data Sampling
@@ -7328,13 +8928,13 @@ def _visualize_resampling(
                 sampling_time = time.time() - sampling_start
                 viz_stats['detailed_timings']['data_sampling'] = sampling_time
                 if viz_stats['sampling_applied']:
-                    setup_bar.text = f"{yellow}Applied sampling to large datasets{reset}"
+                    setup_bar.text = "Applied sampling to large datasets"
                 else:
-                    setup_bar.text = f"{green}No sampling needed{reset}"
+                    setup_bar.text = "No sampling needed"
                 setup_bar()
                 
                 # STAGE 1.4: Projection Setup
-                setup_bar.text = "Setting up projections..."
+                setup_bar.text = "Setting up projections"
                 projection_setup_start = time.time()
                 
                 viz_stats['stage'] = "Projection Setup"
@@ -7344,7 +8944,7 @@ def _visualize_resampling(
                 
                 projection_setup_time = time.time() - projection_setup_start
                 viz_stats['detailed_timings']['projection_setup'] = projection_setup_time
-                setup_bar.text = f"{green}Setup {len(projections)} projections{reset}"
+                setup_bar.text = f"Setup {len(projections)} projections"
                 setup_bar()
 
             # STAGE 2: Visualization Creation
@@ -7370,7 +8970,7 @@ def _visualize_resampling(
                     # Plotly Visualization
                     try:
                         if dimensions == 3:
-                            viz_bar.text = "Creating 3D Plotly visualization..."
+                            viz_bar.text = "Creating 3D Plotly visualization"
                             figure_start = time.time()
                             
                             # 3D visualization with Plotly
@@ -7383,7 +8983,7 @@ def _visualize_resampling(
                             viz_bar()
                             
                             # Project data to 3D using PCA
-                            viz_bar.text = "Computing 3D PCA projection..."
+                            viz_bar.text = "Computing 3D PCA projection"
                             pca_start = time.time()
                             
                             pca = PCA(n_components=3)
@@ -7392,11 +8992,11 @@ def _visualize_resampling(
                             
                             pca_time = time.time() - pca_start
                             viz_stats['detailed_timings']['3d_pca'] = pca_time
-                            viz_bar.text = f"{green}3D PCA computed{reset}"
+                            viz_bar.text = "3D PCA computed"
                             viz_bar()
                             
                             # Original data trace
-                            viz_bar.text = "Adding original data trace..."
+                            viz_bar.text = "Adding original data trace"
                             fig.add_trace(
                                 go.Scatter3d(
                                     x=orig_proj[:, 0],
@@ -7415,7 +9015,7 @@ def _visualize_resampling(
                             viz_bar()
                             
                             # Resampled data traces by class
-                            viz_bar.text = "Adding resampled data traces..."
+                            viz_bar.text = "Adding resampled data traces"
                             unique_labels = np.unique(labels)
                             colors = px.colors.qualitative.Plotly
                             
@@ -7441,7 +9041,7 @@ def _visualize_resampling(
                             viz_bar()
                             
                             # Layout configuration
-                            viz_bar.text = "Configuring layout..."
+                            viz_bar.text = "Configuring layout"
                             fig.update_layout(
                                 title_text=f"Oversampling Comparison: {sampler_name}",
                                 width=1200,
@@ -7450,13 +9050,13 @@ def _visualize_resampling(
                             
                             figure_time = time.time() - figure_start
                             viz_stats['detailed_timings']['plotly_3d_figure'] = figure_time
-                            viz_bar.text = f"{green}3D Plotly figure created{reset}"
+                            viz_bar.text = f"3D Plotly figure created"
                             viz_bar()
                             
                         else:
                             # 2D visualization with Plotly
                             n_cols = len(projections) + 1
-                            viz_bar.text = f"Creating 2D Plotly visualization with {n_cols} subplots..."
+                            viz_bar.text = f"Creating 2D Plotly visualization with {n_cols} subplots"
                             figure_start = time.time()
                             
                             fig = make_subplots(
@@ -7468,7 +9068,7 @@ def _visualize_resampling(
                             viz_bar()
                             
                             # Original data (PCA)
-                            viz_bar.text = "Projecting original data (PCA)..."
+                            viz_bar.text = "Projecting original data (PCA)"
                             pca_start = time.time()
                             
                             pca = PCA(n_components=2).fit_transform(original.values)
@@ -7484,30 +9084,30 @@ def _visualize_resampling(
                             
                             pca_time = time.time() - pca_start
                             viz_stats['detailed_timings']['original_pca'] = pca_time
-                            viz_bar.text = f"{green}Original PCA projected{reset}"
+                            viz_bar.text = "Original PCA projected"
                             viz_bar()
                             
                             # Resampled data projections
                             for i, method in enumerate(projections, 2):
                                 viz_stats['current_projection'] = method
-                                viz_bar.text = f"Computing {method.upper()} projection..."
+                                viz_bar.text = f"Computing {method.upper()} projection"
                                 projection_start = time.time()
                                 
                                 if method == 'pca':
                                     proj = PCA(n_components=2).fit_transform(resampled)
                                 elif method == 'tsne':
                                     proj = TSNE(n_components=2).fit_transform(resampled)
-                                elif method == 'umap':
-                                    proj = UMAP(n_components=2).fit_transform(resampled)
+                                else:
+                                    proj = umap.UMAP(n_components=2).fit_transform(resampled)
                                 
                                 projection_time = time.time() - projection_start
                                 viz_stats['detailed_timings'][f'{method}_projection'] = projection_time
                                 viz_stats['projections_processed'] += 1
-                                viz_bar.text = f"{green}{method.upper()} computed{reset}"
+                                viz_bar.text = f"{method.upper()} computed"
                                 viz_bar()
                                 
                                 # Add traces for each class
-                                viz_bar.text = f"Adding {method.upper()} traces..."
+                                viz_bar.text = f"Adding {method.upper()} traces"
                                 unique_labels = np.unique(labels)
                                 for label in unique_labels:
                                     mask = labels == label
@@ -7524,7 +9124,7 @@ def _visualize_resampling(
                                 viz_bar()
                             
                             # Layout configuration
-                            viz_bar.text = "Configuring layout..."
+                            viz_bar.text = "Configuring layout"
                             fig.update_layout(
                                 title_text=f"Oversampling Comparison: {sampler_name}",
                                 width=300 * n_cols,
@@ -7533,7 +9133,7 @@ def _visualize_resampling(
                             
                             figure_time = time.time() - figure_start
                             viz_stats['detailed_timings']['plotly_2d_figure'] = figure_time
-                            viz_bar.text = f"{green}2D Plotly figure created{reset}"
+                            viz_bar.text = f"2D Plotly figure created"
                             viz_bar()
                         
                         # Record total visualization time
@@ -7541,7 +9141,7 @@ def _visualize_resampling(
                         viz_stats['detailed_timings']['total_visualization'] = total_viz_time
                     
                     except Exception as e:
-                        viz_bar.text = f"{red}Plotly visualization failed{reset}"
+                        viz_bar.text = f"Plotly visualization failed"
                         logger.error(f"Plotly visualization failed: {str(e)}")
                         raise
                 
@@ -7549,7 +9149,7 @@ def _visualize_resampling(
                     # Matplotlib Visualization
                     try:
                         if dimensions == 3:
-                            viz_bar.text = "Creating 3D Matplotlib visualization..."
+                            viz_bar.text = "Creating 3D Matplotlib visualization"
                             figure_start = time.time()
                             
                             # Create figure with 2 columns (original and resampled)
@@ -7557,7 +9157,7 @@ def _visualize_resampling(
                             viz_bar()
                             
                             # Project data to 3D using PCA
-                            viz_bar.text = "Computing 3D PCA projection..."
+                            viz_bar.text = "Computing 3D PCA projection"
                             pca_start = time.time()
                             
                             pca = PCA(n_components=3, random_state=random_state)
@@ -7566,11 +9166,11 @@ def _visualize_resampling(
                             
                             pca_time = time.time() - pca_start
                             viz_stats['detailed_timings']['3d_pca'] = pca_time
-                            viz_bar.text = f"{green}3D PCA computed{reset}"
+                            viz_bar.text = "3D PCA computed"
                             viz_bar()
                             
                             # Original data plot
-                            viz_bar.text = "Creating original data subplot..."
+                            viz_bar.text = "Creating original data subplot"
                             ax1 = fig.add_subplot(121, projection='3d')
                             sc1 = ax1.scatter(
                                 orig_proj[:, 0], orig_proj[:, 1], orig_proj[:, 2],
@@ -7583,7 +9183,7 @@ def _visualize_resampling(
                             viz_bar()
                             
                             # Resampled data plot
-                            viz_bar.text = "Creating resampled data subplot..."
+                            viz_bar.text = "Creating resampled data subplot"
                             ax2 = fig.add_subplot(122, projection='3d')
                             unique_labels = np.unique(labels)
                             colors = plt.cm.get_cmap('tab10', len(unique_labels))
@@ -7606,20 +9206,20 @@ def _visualize_resampling(
                             
                             figure_time = time.time() - figure_start
                             viz_stats['detailed_timings']['matplotlib_3d_figure'] = figure_time
-                            viz_bar.text = f"{green}3D Matplotlib figure created{reset}"
+                            viz_bar.text = f"3D Matplotlib figure created"
                             viz_bar()
                             
                         else:
                             # 2D visualization
                             n_plots = len(projections) + 1
-                            viz_bar.text = f"Creating 2D Matplotlib visualization with {n_plots} subplots..."
+                            viz_bar.text = f"Creating 2D Matplotlib visualization: {n_plots} subplots"
                             figure_start = time.time()
                             
                             fig = plt.figure(figsize=(figsize[0] * n_plots/3, figsize[1]), dpi=dpi)
                             viz_bar()
                             
                             # Original data plot (always PCA)
-                            viz_bar.text = "Creating original data subplot (PCA)..."
+                            viz_bar.text = "Creating original data subplot (PCA)"
                             plt.subplot(1, n_plots, 1)
                             _plot_projection(
                                 original.values,
@@ -7633,7 +9233,7 @@ def _visualize_resampling(
                             # Resampled data plots
                             for i, method in enumerate(projections, 2):
                                 viz_stats['current_projection'] = method
-                                viz_bar.text = f"Creating {method.upper()} subplot..."
+                                viz_bar.text = f"Creating {method.upper()} subplot"
                                 projection_start = time.time()
                                 
                                 plt.subplot(1, n_plots, i)
@@ -7648,16 +9248,16 @@ def _visualize_resampling(
                                 projection_time = time.time() - projection_start
                                 viz_stats['detailed_timings'][f'{method}_projection'] = projection_time
                                 viz_stats['projections_processed'] += 1
-                                viz_bar.text = f"{green}{method.upper()} subplot created{reset}"
+                                viz_bar.text = f"{method.upper()} subplot created"
                                 viz_bar()
                             
                             figure_time = time.time() - figure_start
                             viz_stats['detailed_timings']['matplotlib_2d_figure'] = figure_time
-                            viz_bar.text = f"{green}2D Matplotlib figure created{reset}"
+                            viz_bar.text = f"2D Matplotlib figure created"
                             viz_bar()
                         
                         # Layout and finishing
-                        viz_bar.text = "Applying final layout..."
+                        viz_bar.text = "Applying final layout"
                         plt.tight_layout()
                         viz_bar()
                         
@@ -7666,7 +9266,7 @@ def _visualize_resampling(
                         viz_stats['detailed_timings']['total_visualization'] = total_viz_time
                     
                     except Exception as e:
-                        viz_bar.text = f"{red}Matplotlib visualization failed{reset}"
+                        viz_bar.text = "Matplotlib visualization failed"
                         logger.error(f"Matplotlib visualization failed: {str(e)}")
                         raise
 
@@ -7675,7 +9275,7 @@ def _visualize_resampling(
                 
                 # STAGE 3.1: Save Plot
                 if save_plot:
-                    final_bar.text = "Saving visualization..."
+                    final_bar.text = "Saving visualization"
                     save_start = time.time()
                     
                     viz_stats['stage'] = "Saving Plot"
@@ -7686,21 +9286,21 @@ def _visualize_resampling(
                     if interactive_backend.lower() == 'plotly':
                         filename += ".html"
                         fig.write_html(filename)
-                        final_bar.text = f"{green}Saved interactive plot to {filename}{reset}"
+                        final_bar.text = f"Saved interactive plot to {filename}"
                     else:
                         filename += ".png"
                         plt.savefig(filename, bbox_inches='tight', dpi=dpi)
-                        final_bar.text = f"{green}Saved static plot to {filename}{reset}"
+                        final_bar.text = f"Saved static plot to {filename}"
                     
                     save_time = time.time() - save_start
                     viz_stats['detailed_timings']['saving'] = save_time
                     final_bar()
                 else:
-                    final_bar.text = "Skipping save..."
+                    final_bar.text = "Skipping save"
                     final_bar()
                 
                 # STAGE 3.2: Display Plot
-                final_bar.text = "Finalizing visualization..."
+                final_bar.text = "Finalizing visualization"
                 display_start = time.time()
                 
                 viz_stats['stage'] = "Displaying Plot"
@@ -7708,15 +9308,15 @@ def _visualize_resampling(
                 if show_plot:
                     if interactive_backend.lower() == 'plotly':
                         fig.show()
-                        final_bar.text = f"{green}Interactive plot displayed{reset}"
+                        final_bar.text = "Interactive plot displayed"
                     else:
                         plt.show()
-                        final_bar.text = f"{green}Static plot displayed{reset}"
+                        final_bar.text = "Static plot displayed"
                     return_value = fig
                 else:
                     if interactive_backend.lower() == 'matplotlib':
                         plt.close(fig)
-                    final_bar.text = f"{green}Visualization completed{reset}"
+                    final_bar.text = "Visualization completed"
                     return_value = None
                 
                 display_time = time.time() - display_start
@@ -7847,8 +9447,8 @@ def _visualize_resampling(
                                 proj = PCA(n_components=2).fit_transform(resampled)
                             elif method == 'tsne':
                                 proj = TSNE(n_components=2).fit_transform(resampled)
-                            elif method == 'umap':
-                                proj = UMAP(n_components=2).fit_transform(resampled)
+                            else:
+                                proj = umap.UMAP(n_components=2).fit_transform(resampled)
                             
                             unique_labels = np.unique(labels)
                             for label in unique_labels:
@@ -7983,8 +9583,8 @@ def _visualize_resampling(
         viz_stats['detailed_timings']['total'] = total_time
         
         if logger.isEnabledFor(logging.INFO):
-            logger.info(f"{green}Visualization completed in {total_time:.2f}s{reset}")
-            logger.info(f"{blue}Visualization Statistics:{reset}")
+            logger.info(f"Visualization completed in {total_time:.2f}s")
+            logger.info(f"Visualization Statistics:")
             logger.info(f"  - Original samples: {viz_stats['original_samples']}")
             logger.info(f"  - Resampled samples: {viz_stats['resampled_samples']}")
             logger.info(f"  - Projections processed: {viz_stats['projections_processed']}")
@@ -7998,7 +9598,7 @@ def _visualize_resampling(
                     logger.info(f"    Resampled after sampling: {viz_stats['resampled_samples_after_sampling']}")
         
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"{blue}Detailed Timings:{reset}")
+            logger.debug(f"Detailed Timings:")
             for stage, timing in viz_stats['detailed_timings'].items():
                 logger.debug(f"  - {stage}: {timing:.2f}s")
         
@@ -8010,7 +9610,7 @@ def _visualize_resampling(
         error_context += f"projection: {viz_stats.get('current_projection', 'none')}, "
         error_context += f"backend: {viz_stats.get('backend_used', 'unknown')})"
         
-        logger.error(f"{red}Visualization failed{error_context}: {str(e)}{reset}")
+        logger.error(f"Visualization failed{error_context}: {str(e)}")
         raise
 
 def _plot_projection(
@@ -8028,21 +9628,24 @@ def _plot_projection(
         data: Input feature matrix
         labels: Target labels (None for unlabeled data)
         title: Plot title
-        method: Projection method ('pca' or 'tsne')
+        method: Projection method ('pca' or 'tsne' or 'umap)
         random_state: Random seed
         alpha: Point transparency
         legend: Whether to show legend
     """
     # Validate method
-    if method not in ['pca', 'tsne']:
-        raise ValueError(f"Invalid projection method: {method}. Choose 'pca' or 'tsne'")
+    if method not in ['pca', 'tsne', 'umap']:
+        raise ValueError(f"Invalid projection method: {method}. Choose 'pca', 'tsne', or 'umap'")
     
     # Perform projection
     if method == 'pca':
         proj = PCA(n_components=2, random_state=random_state).fit_transform(data)
-    else:
+    elif method == 'tsne':
         # t-SNE
         proj = TSNE(n_components=2, random_state=random_state).fit_transform(data)
+    else:
+        # UMAP
+        proj = umap.UMAP(n_components=2, random_state=random_state).fit_transform(data)
     
     # Create plot
     if labels is None:
@@ -8076,7 +9679,14 @@ def _report_results(
 ):
     """Display results report."""
     # Class distribution comparison
-    table = Table(title=f"Oversampling Results ({sampler_name})")
+    table = Table(
+        title=f"\n{sampler_name} Oversampling Results, Processing time: {elapsed_time:.2f}s",
+        box=box.ROUNDED,
+        style="bold green",
+        title_justify="left",
+        border_style="green",
+        show_lines=True
+    )
     table.add_column("Class")
     table.add_column("Original Count")
     table.add_column("New Count")
@@ -8085,23 +9695,29 @@ def _report_results(
     for cls in original_counts.index:
         orig = original_counts[cls]
         new = new_counts.get(cls, 0)
-        change = f"{(new-orig)/orig:+.1%}" if orig != 0 else "N/A"
-        table.add_row(str(cls), str(orig), str(new), change)
+        change = f"{(new-orig)/orig:+.2%}" if orig != 0 else "N/A"
+        table.add_row(str(cls), str(orig), str(new), change, style="bold yellow")
     
     console.print(table)
-    console.print(f"[italic]Processing time: {elapsed_time:.2f}s[/italic]")
     
     # Quality metrics if available
     if metrics:
-        metric_table = Table(title="Quality Metrics")
+        metric_table = Table(
+            title="\nQuality Metrics",
+            box=box.ROUNDED,
+            style="bold green",
+            title_justify="left",
+            border_style="green",
+            show_lines=True
+        )
         metric_table.add_column("Metric")
         metric_table.add_column("Value")
         
         for name, value in metrics.items():
             if isinstance(value, float):
-                metric_table.add_row(name, f"{value:.4f}")
+                metric_table.add_row(name, f"{value:.4f}", style="bold yellow")
             else:
-                metric_table.add_row(name, str(value))
+                metric_table.add_row(name, str(value), style="bold yellow")
         
         console.print(metric_table)
 
@@ -8351,114 +9967,600 @@ def _display_comparison(
 
 def load_and_validate_data(
     enhanced: bool = True,
-    use_color: bool = None,
+    csv_path: Optional[Path] = None,
+    pkl_path: Optional[Path] = None,
     **kwargs
 ) -> Tuple[pd.DataFrame, Dict]:
     """Load and validate training data with configurable enhancements.
     
     Args:
         enhanced: Use improved validation pipeline (default: True)
-        use_color: Enable colored output (None=auto-detect)
         **kwargs: Forwarded to helper functions
-        
+    
     Returns:
         Tuple of (cleaned DataFrame, preprocessing artifacts)
-        
+    
     Raises:
         RuntimeError: If loading fails, with troubleshooting info
     """
-    # Auto-detect color support if not specified
-    if use_color is None:
-        use_color = sys.stdout.isatty()
-    
-    # Setup styling for colored output
-    red = Fore.RED + Style.BRIGHT
-    yellow = Fore.YELLOW + Style.BRIGHT
-    green = Fore.GREEN + Style.BRIGHT
-    blue = Fore.BLUE + Style.BRIGHT
-    cyan = Fore.CYAN + Style.BRIGHT
-    magenta = Fore.MAGENTA + Style.BRIGHT
-    reset = Style.RESET_ALL if use_color else ""
-    color_kwargs = {'use_color': use_color, **kwargs}
-    
     try:
-        print(f"\n{green}Loading and Validating Training Data...{reset}")
-
+        print_color(f"\nStarting loading and validation of training data...", 'yellow')
+        
+        enhanced_mode = Fore.GREEN + Style.BRIGHT + 'ENABLED' + Style.RESET_ALL if enhanced else Fore.RED + Style.BRIGHT + 'DISABLED' + Style.RESET_ALL
+        
+        print_color("\nTRAINING DATA LOADING AND VALIDATION PIPELINE", 'magenta')
+        print_color(f"  └─ Enhanced mode: {enhanced_mode}", 'magenta')
+        print_color("-" * 50, 'magenta')
+        
+        # Use get_preprocessing_outputs to locate the output files
+        if csv_path or pkl_path is None:
+            csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(
+                config_path=None,
+                base_results_dir=None,
+                base_preprocessing_dir=None,
+                interactive=True
+            )
+        
+        if not csv_path or not pkl_path:
+            csv_status = Fore.GREEN + Style.BRIGHT + 'YES' + Style.RESET_ALL if csv_path else Fore.YELLOW + Style.BRIGHT + 'NO' + Style.RESET_ALL
+            pkl_status = Fore.GREEN + Style.BRIGHT + 'YES' + Style.RESET_ALL if pkl_path else Fore.YELLOW + Style.BRIGHT + 'NO' + Style.RESET_ALL
+            print_color(f"\nError: Could not locate preprocessing outputs", 'red')
+            print_color(f"  ├─ CSV file found: {csv_status}", 'red')
+            print_color(f"  └─ PKL file found: {pkl_status}", 'red')
+            raise RuntimeError("Preprocessing outputs not found. Run preprocessing first.")
+        
+        print_color(f"Located preprocessing outputs:", 'green')
+        print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+        print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+        
+        # Track loading progress and statistics
+        loading_stats = {
+            'stage': 'Initializing',
+            'start_time': time.time(),
+            'csv_size_bytes': 0,
+            'pkl_size_bytes': 0,
+            'rows_loaded': 0,
+            'features_count': 0,
+            'memory_usage_mb': 0,
+            'detailed_timings': {},
+            'warnings_issued': 0
+        }
+        
         if not enhanced:
             # Legacy mode
-            logger.info(f"\n{yellow}Starting data loading (legacy mode)...{reset}")
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", category=UserWarning)
-                artifacts = joblib.load(MODEL_DIR / "preprocessing_artifacts.pkl")
+            print_color(f"\nStarting data loading in legacy mode...", 'yellow')
             
-            feature_names = artifacts.get("feature_names", [])
-            if not feature_names:
-                raise ValueError("No feature names found in artifacts")
+            legacy_start = time.time()
             
-            # Chunked loading
-            chunksize = kwargs.get('chunk_size', 100000)
-            df_chunks = []
-            for chunk in pd.read_csv(MODEL_DIR / "preprocessed_dataset.csv", chunksize=chunksize):
-                chunk = chunk.drop_duplicates().dropna(subset=feature_names + ["Label"])
-                df_chunks.append(chunk)
-            
-            df = pd.concat(df_chunks, ignore_index=True)
-            return df, artifacts
+            try:
+                # Load artifacts
+                pkl_file = Path(pkl_path)
+                loading_stats['pkl_size_bytes'] = pkl_file.stat().st_size
+                
+                print_color(f"\nLoading preprocessing artifacts...", 'cyan')
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=UserWarning)
+                    artifacts = joblib.load(pkl_file)
+                
+                # Extract feature names
+                feature_names = artifacts.get("feature_names", [])
+                if not feature_names:
+                    print_color(f"\nError: No feature names found in artifacts", 'red')
+                    raise ValueError("No feature names found in artifacts")
+                
+                loading_stats['features_count'] = len(feature_names)
+                print_color(f"\nFound {Fore.YELLOW + Style.BRIGHT}{loading_stats['features_count']} features", 'green')
+                
+                # Chunked loading
+                csv_file = Path(csv_path)
+                loading_stats['csv_size_bytes'] = csv_file.stat().st_size
+                
+                chunksize = kwargs.get('chunk_size', 100000)
+                df_chunks = []
+                total_rows = 0
+                
+                print_color(f"\nLoading CSV data in chunks...", 'cyan')
+                for i, chunk in enumerate(pd.read_csv(csv_file, chunksize=chunksize)):
+                    rows_before = len(chunk)
+                    chunk = chunk.drop_duplicates().dropna(subset=feature_names + ["Label"])
+                    rows_after = len(chunk)
+                    rows_removed = rows_before - rows_after
+                    
+                    df_chunks.append(chunk)
+                    total_rows += rows_after
+                    
+                    if rows_removed > 0:
+                        loading_stats['warnings_issued'] += 1
+                        print_color(f"\nChunk {i+1}: Removed {Fore.YELLOW + Style.BRIGHT}{rows_removed} problematic rows", 'green')
+                
+                df = pd.concat(df_chunks, ignore_index=True)
+                loading_stats['rows_loaded'] = len(df)
+                
+                # Check memory usage
+                loading_stats['memory_usage_mb'] = df.memory_usage(deep=True).sum() / 1024**2
+                
+                legacy_time = time.time() - legacy_start
+                loading_stats['detailed_timings']['legacy_loading'] = legacy_time
+                
+                print_color(f"\nLegacy loading completed:", 'green')
+                print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_file}", 'green')
+                print_color(f"  |   └─ CSV file size: {Fore.YELLOW + Style.BRIGHT}{loading_stats['csv_size_bytes']:,} bytes", 'green')
+                print_color(f"  ├─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_file}", 'green')
+                print_color(f"  |   └─ PKL file size: {Fore.YELLOW + Style.BRIGHT}{loading_stats['pkl_size_bytes']:,} bytes", 'green')
+                print_color(f"  ├─ Total rows loaded: {Fore.YELLOW + Style.BRIGHT}{loading_stats['rows_loaded']:,}", 'green')
+                print_color(f"  ├─ Memory usage: {Fore.YELLOW + Style.BRIGHT}{loading_stats['memory_usage_mb']:.2f} MB", 'green')
+                print_color(f"  └─ Loading time: {Fore.YELLOW + Style.BRIGHT}{legacy_time:.2f}s", 'green')
+                
+                return df, artifacts
+                
+            except Exception as e:
+                print_color(f"\nError in legacy loading mode:", 'red')
+                print_color(f"  ├─ Error type: {Fore.YELLOW + Style.BRIGHT}{type(e).__name__}", 'red')
+                print_color(f"  └─ Error message: {Fore.WHITE + Style.BRIGHT}{str(e)}", 'red')
+                raise
         
         # Enhanced mode
-        logger.info(f"\n{yellow}Starting enhanced data loading...{reset}")
+        print_color(f"\nStarting data loading in enhanced mode...", 'yellow')
         
-        artifacts = load_preprocessing_artifacts(**kwargs)
-        df = load_and_clean_data(
-            MODEL_DIR / "preprocessed_dataset.csv",
-            artifacts["feature_names"],
-            **kwargs
-        )
-        df = handle_class_imbalance(df, artifacts, **kwargs)
+        # STAGE 1.1: File Validation
+        loading_stats['stage'] = "File Validation"
+        print_color(f"\nValidating preprocessing outputs...", 'cyan')
+        validation_start = time.time()
         
-        # Version-safe scaler handling
-        if "scaler" in artifacts:
-            feature_names = artifacts["feature_names"]
-            try:
-                if hasattr(artifacts['scaler'], 'feature_names_in_'):
-                    feature_map = dict(zip(feature_names, artifacts['scaler'].feature_names_in_))
-                    df = df.rename(columns=feature_map)
+        csv_file = Path(csv_path)
+        pkl_file = Path(pkl_path)
+        
+        if not csv_file.exists():
+            print_color(f"\nError: CSV file not found: {csv_path}", 'red')
+            raise FileNotFoundError(f"CSV file not found: {csv_path}")
+        
+        if not pkl_file.exists():
+            print_color(f"\nError: PKL file not found: {pkl_path}", 'red')
+            raise FileNotFoundError(f"PKL file not found: {pkl_path}")
+        
+        csv_file_size = csv_file.stat().st_size
+        pkl_file_size = pkl_file.stat().st_size
+        
+        if csv_file_size >= 1024**3:
+            csv_file_size_display = f"{csv_file_size / 1024**3:.2f} GB"
+        elif csv_file_size >= 1024**2:
+            csv_file_size_display = f"{csv_file_size / 1024**2:.2f} MB"
+        elif csv_file_size >= 1024:
+            csv_file_size_display = f"{csv_file_size / 1024:.2f} KB"
+        else:
+            csv_file_size_display = f"{csv_file_size} bytes"
+        
+        if pkl_file_size >= 1024**3:
+            pkl_file_size_display = f"{pkl_file_size / 1024**3:.2f} GB"
+        elif pkl_file_size >= 1024**2:
+            pkl_file_size_display = f"{pkl_file_size / 1024**2:.2f} MB"
+        elif pkl_file_size >= 1024:
+            pkl_file_size_display = f"{pkl_file_size / 1024:.2f} KB"
+        else:
+            pkl_file_size_display = f"{pkl_file_size} bytes"
+        
+        loading_stats['csv_size_bytes'] = csv_file_size
+        loading_stats['pkl_size_bytes'] = pkl_file_size
+        loading_stats['csv_file_size_display'] = csv_file_size_display
+        loading_stats['pkl_file_size_display'] = pkl_file_size_display
+        
+        print_color(f"\nPreprocessing outputs found:", 'green')
+        print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_file.name}", 'green')
+        print_color(f"  |   └─ CSV size: {Fore.CYAN + Style.BRIGHT}{csv_file_size_display}", 'green')
+        print_color(f"  └─ PKL file: {Fore.MAGENTA + Style.BRIGHT}{pkl_file.name}", 'green')
+        print_color(f"      └─ PKL size: {Fore.CYAN + Style.BRIGHT}{pkl_file_size_display}", 'green')
+        
+        validation_time = time.time() - validation_start
+        loading_stats['detailed_timings']['file_validation'] = validation_time
+        
+        # STAGE 1.2: Artifacts Loading
+        loading_stats['stage'] = "Artifacts Loading"
+        print_color(f"\nLoading preprocessing artifacts...", 'yellow')
+        artifacts_start = time.time()
+        
+        try:
+            artifacts = load_preprocessing_artifacts(pkl_file, **kwargs)
+            
+            # Validate artifacts structure
+            feature_names = artifacts.get("feature_names", [])
+            if not feature_names:
+                print_color(f"\nWarning: 'feature_names' not found in artifacts", 'yellow')
+                loading_stats['warnings_issued'] += 1
+                # Try to extract from other sources
+                if "columns" in artifacts:
+                    artifacts["feature_names"] = artifacts["columns"]
+                    feature_names = artifacts["feature_names"]
+            
+            loading_stats['features_count'] = len(feature_names)
+            
+            print_color(f"\nArtifacts loaded successfully", 'green')
+            print_color(f"  ├─ Features count: {Fore.YELLOW + Style.BRIGHT}{loading_stats['features_count']}", 'green')
+            print_color(f"  └─ Artifacts keys: {Fore.YELLOW + Style.BRIGHT}{', '.join(artifacts.keys())}", 'green')
+            
+        except Exception as e:
+            print_color(f"\nError loading artifacts:", 'red')
+            print_color(f"  ├─ Error type: {Fore.YELLOW + Style.BRIGHT}{type(e).__name__}", 'red')
+            print_color(f"  └─ Error message: {Fore.WHITE + Style.BRIGHT}{str(e)}", 'red')
+            raise
+        
+        artifacts_time = time.time() - artifacts_start
+        loading_stats['detailed_timings']['artifacts_loading'] = artifacts_time
+        
+        # STAGE 1.3: Configuration Setup
+        loading_stats['stage'] = "Configuration"
+        print_color(f"\nSetting up data configuration...", 'cyan')
+        config_start = time.time()
+        
+        # Get configuration from kwargs or use defaults
+        chunk_size = kwargs.get('chunk_size', 100000)
+        validation_mode = kwargs.get('validation_mode', 'strict')
+        
+        print_color(f"\nData configuration:", 'green')
+        print_color(f"  ├─ Chunk size: {Fore.YELLOW + Style.BRIGHT}{chunk_size:,}", 'green')
+        print_color(f"  └─ Validation mode: {Fore.YELLOW + Style.BRIGHT}{validation_mode}", 'green')
+        
+        config_time = time.time() - config_start
+        loading_stats['detailed_timings']['configuration'] = config_time
+        
+        # STAGE 2: Data Loading and Cleaning Phase
+        loading_stats['stage'] = "Data Loading and Cleaning"
+        print_color(f"\nLoading and cleaning data...", 'yellow')
+        data_loading_start = time.time()
+        
+        try:
+            df = load_and_clean_data(
+                csv_file,
+                artifacts["feature_names"],
+                **kwargs
+            )
+            
+            loading_stats['rows_loaded'] = len(df)
+            
+            print_color(f"\nData loaded and cleaned successfully:", 'green')
+            print_color(f"  └─ Rows loaded: {Fore.YELLOW + Style.BRIGHT}{loading_stats['rows_loaded']:,}", 'green')
+            
+        except Exception as e:
+            print_color(f"\nError loading and cleaning data:", 'red')
+            print_color(f"  ├─ Error type: {Fore.YELLOW + Style.BRIGHT}{type(e).__name__}", 'red')
+            print_color(f"  └─ Error message: {Fore.YELLOW + Style.BRIGHT}{str(e)}", 'red')
+            raise
+        
+        data_loading_time = time.time() - data_loading_start
+        loading_stats['detailed_timings']['data_loading_cleaning'] = data_loading_time
+        
+        # STAGE 2.1: Memory Optimization
+        loading_stats['stage'] = "Memory Optimization"
+        print_color(f"\nOptimizing memory usage...", 'yellow')
+        memory_start = time.time()
+        
+        try:
+            # Calculate initial memory usage
+            initial_memory = df.memory_usage(deep=True).sum() / 1024**2
+            
+            # Optimize numeric columns
+            for col in df.select_dtypes(include=['int64', 'float64']).columns:
+                if df[col].dtype == 'int64':
+                    df[col] = pd.to_numeric(df[col], downcast='integer')
+                elif df[col].dtype == 'float64':
+                    df[col] = pd.to_numeric(df[col], downcast='float')
+            
+            # Optimize categorical columns
+            for col in df.select_dtypes(include=['object']).columns:
+                if df[col].nunique() / len(df) < 0.5:  # Less than 50% unique values
+                    df[col] = df[col].astype('category')
+            
+            # Calculate optimized memory usage
+            optimized_memory = df.memory_usage(deep=True).sum() / 1024**2
+            memory_saved = initial_memory - optimized_memory
+            loading_stats['memory_usage_mb'] = optimized_memory
+            
+            print_color(f"\nMemory optimization completed successfully:", 'green')
+            print_color(f"  ├─ Initial memory: {Fore.YELLOW + Style.BRIGHT}{initial_memory:.3f} MB", 'green')
+            print_color(f"  ├─ Optimized memory: {Fore.CYAN + Style.BRIGHT}{optimized_memory:.3f} MB", 'green')
+            print_color(f"  └─ Memory saved: {Fore.GREEN + Style.BRIGHT}{memory_saved:.3f} MB", 'green')
+            
+        except Exception as e:
+            print_color(f"\nWarning: Memory optimization failed:", 'yellow')
+            print_color(f"  └─ Error: {Fore.YELLOW + Style.BRIGHT}{str(e)}", 'yellow')
+            loading_stats['warnings_issued'] += 1
+            loading_stats['memory_usage_mb'] = df.memory_usage(deep=True).sum() / 1024**2
+        
+        memory_time = time.time() - memory_start
+        loading_stats['detailed_timings']['memory_optimization'] = memory_time
+        
+        # STAGE 3: Handle Class Imbalance Phase
+        loading_stats['stage'] = "Class Imbalance Handling"
+        print_color(f"\nHandling class imbalance...", 'yellow')
+        imbalance_start = time.time()
+        
+        # Initialize imbalance-specific statistics
+        imbalance_stats = {
+            'original_distribution': {},
+            'balanced_distribution': {},
+            'original_ratio': 0.0,
+            'balanced_ratio': 0.0,
+            'threshold_used': None,
+            'threshold_method': None,
+            'samples_added': 0,
+            'balancing_applied': False,
+            'balancing_success': False,
+            'threshold_analysis': None
+        }
+        
+        try:
+            # Capture original distribution before balancing
+            if "Label" in df.columns:
+                original_counts = df["Label"].value_counts()
+                imbalance_stats['original_distribution'] = original_counts.to_dict()
                 
-                test_sample = df[feature_names].iloc[:1]
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    artifacts["scaler"].transform(test_sample)
-                    df[feature_names] = artifacts["scaler"].transform(df[feature_names])
-            except Exception as e:
-                logger.warning(f"{yellow}Warning: Scaler issue, recreating: {str(e)}{reset}")
-                new_scaler = MinMaxScaler().fit(df[feature_names])
-                artifacts["scaler"] = new_scaler
+                if len(original_counts) > 1:
+                    imbalance_stats['original_ratio'] = original_counts.max() / original_counts.min()
+                    
+                    print_color(f"\nOriginal class distribution:", 'cyan')
+                    print_color(f"  ├─ Total samples: {Fore.CYAN + Style.BRIGHT}{len(df):,}", 'cyan')
+                    print_color(f"  ├─ Classes: {Fore.YELLOW + Style.BRIGHT}{len(original_counts)}", 'cyan')
+                    print_color(f"  └─ Imbalance ratio: {Fore.YELLOW + Style.BRIGHT}{imbalance_stats['original_ratio']:.2f}:1", 'cyan')
+            
+            # Apply class imbalance handling
+            df = handle_class_imbalance(df, artifacts, **kwargs)
+            
+            # Check class distribution after handling
+            if "Label" in df.columns:
+                label_counts = df["Label"].value_counts()
+                total_samples = len(df)
+                
+                # Update imbalance statistics
+                imbalance_stats['balanced_distribution'] = label_counts.to_dict()
+                imbalance_stats['samples_added'] = total_samples - len(pd.DataFrame(imbalance_stats['original_distribution'], index=[0]).T.sum())
+                imbalance_stats['balancing_applied'] = imbalance_stats['samples_added'] > 0
+                
+                if len(label_counts) > 1:
+                    imbalance_stats['balanced_ratio'] = label_counts.max() / label_counts.min()
+                
+                print_color(f"\nTotal samples after balancing: {Fore.CYAN + Style.BRIGHT}{total_samples:,}", 'green')
+                
+                # Display class distribution with visual indicators
+                for idx, (label, count) in enumerate(label_counts.items()):
+                    percentage = (count / total_samples) * 100
+                    prefix = "  └─ " if idx == len(label_counts) - 1 else "  ├─ "
+                    
+                    # Add change indicator if balancing was applied
+                    if imbalance_stats['balancing_applied']:
+                        original_count = imbalance_stats['original_distribution'].get(label, 0)
+                        change = count - original_count
+                        change_str = f"({Fore.GREEN + Style.BRIGHT}+{change:,}{Style.RESET_ALL})" if change > 0 else ""
+                        print_color(f"{prefix}Label '{label}': {Fore.YELLOW + Style.BRIGHT}{count:,} samples ({percentage:.2f}%) {change_str}", 'green')
+                    else:
+                        print_color(f"{prefix}Label '{label}': {Fore.YELLOW + Style.BRIGHT}{count:,} samples ({percentage:.2f}%)", 'green')
+                
+                # Calculate balance improvement
+                if imbalance_stats['balancing_applied'] and imbalance_stats['original_ratio'] > 1.0:
+                    improvement = ((imbalance_stats['original_ratio'] - imbalance_stats['balanced_ratio']) / imbalance_stats['original_ratio']) * 100
+                    
+                    print_color(f"\nBalance improvement:", 'green')
+                    print_color(f"  ├─ Original ratio: {Fore.YELLOW + Style.BRIGHT}{imbalance_stats['original_ratio']:.2f}:1", 'green')
+                    print_color(f"  ├─ Balanced ratio: {Fore.CYAN + Style.BRIGHT}{imbalance_stats['balanced_ratio']:.2f}:1", 'green')
+                    print_color(f"  ├─ Improvement: {Fore.GREEN + Style.BRIGHT}{improvement:.1f}%", 'green')
+                    print_color(f"  └─ Samples added: {Fore.MAGENTA + Style.BRIGHT}{imbalance_stats['samples_added']:,}", 'green')
+                    
+                    imbalance_stats['balancing_success'] = True
+                
+                # Check for severe imbalance
+                min_percentage = (label_counts.min() / total_samples) * 100
+                max_percentage = (label_counts.max() / total_samples) * 100
+                
+                if min_percentage < 10:
+                    severity = "severe" if min_percentage < 5 else "moderate"
+                    print_color(f"\n{severity.capitalize()} class imbalance persists:", 'yellow')
+                    print_color(f"  ├─ Minority class: {Fore.RED + Style.BRIGHT}{min_percentage:.1f}%", 'yellow')
+                    print_color(f"  ├─ Majority class: {Fore.YELLOW + Style.BRIGHT}{max_percentage:.1f}%", 'yellow')
+                    print_color(f"  └─ Consider using class weights or additional balancing", 'yellow')
+                    loading_stats['warnings_issued'] += 1
+                elif imbalance_stats['balancing_applied']:
+                    print_color(f"\nClass imbalance addressed successfully", 'green')
+                    print_color(f"  ├─ Minority class: {Fore.GREEN + Style.BRIGHT}{min_percentage:.1f}%", 'green')
+                    print_color(f"  ├─ Majority class: {Fore.CYAN + Style.BRIGHT}{max_percentage:.1f}%", 'green')
+                    print_color(f"  └─ Distribution is now balanced", 'green')
+                else:
+                    print_color(f"\nNo balancing applied (ratio within threshold)", 'cyan')
+                    print_color(f"  ├─ Minority class: {Fore.CYAN + Style.BRIGHT}{min_percentage:.1f}%", 'cyan')
+                    print_color(f"  ├─ Majority class: {Fore.YELLOW + Style.BRIGHT}{max_percentage:.1f}%", 'cyan')
+                    print_color(f"  └─ Current distribution is acceptable", 'cyan')
+            else:
+                print_color(f"\n'Label' column not found in data", 'yellow')
+                loading_stats['warnings_issued'] += 1
+                imbalance_stats['balancing_success'] = False
         
-        logger.info(f"\n{green}Data validation completed successfully{reset}")
+        except Exception as e:
+            print_color(f"\nWarning: Class imbalance handling failed:", 'yellow')
+            print_color(f"  ├─ Error type: {Fore.RED + Style.BRIGHT}{type(e).__name__}", 'yellow')
+            print_color(f"  ├─ Error message: {Fore.YELLOW + Style.BRIGHT}{str(e)}", 'yellow')
+            print_color(f"  └─ Continuing without class balancing...", 'yellow')
+            loading_stats['warnings_issued'] += 1
+            imbalance_stats['balancing_success'] = False
+            
+            # Log detailed error if verbose mode
+            if kwargs.get('verbose', False):
+                logger.error(f"Class imbalance handling error details: {traceback.format_exc()}")
+        
+        imbalance_time = time.time() - imbalance_start
+        loading_stats['detailed_timings']['class_imbalance'] = imbalance_time
+        
+        # Store imbalance statistics in loading_stats for reporting
+        loading_stats['imbalance_handling'] = imbalance_stats
+        
+        # Summary logging
+        if kwargs.get('verbose', False) or kwargs.get('debug', False):
+            logger.info(f"\nClass Imbalance Handling Summary:")
+            logger.info(f"  - Processing time: {imbalance_time:.2f}s")
+            logger.info(f"  - Balancing applied: {imbalance_stats['balancing_applied']}")
+            logger.info(f"  - Balancing successful: {imbalance_stats['balancing_success']}")
+            if imbalance_stats['balancing_applied']:
+                logger.info(f"  - Samples added: {imbalance_stats['samples_added']:,}")
+                logger.info(f"  - Original ratio: {imbalance_stats['original_ratio']:.2f}:1")
+                logger.info(f"  - Balanced ratio: {imbalance_stats['balanced_ratio']:.2f}:1")
+        
+        # STAGE 3.1: Version-safe scaler handling
+        loading_stats['stage'] = "Scaler Handling"
+        print_color(f"\nHandling feature scaling...", 'yellow')
+        scaler_start = time.time()
+        
+        if "scaler" in artifacts:
+            try:
+                feature_names = artifacts["feature_names"]
+                
+                # Check if features exist in DataFrame
+                missing_features = [f for f in feature_names if f not in df.columns]
+                if missing_features:
+                    print_color(f"\nMissing features for scaling:", 'yellow')
+                    print_color(f"  └─ Missing: {Fore.RED + Style.BRIGHT}{', '.join(missing_features[:5])}", 'yellow')
+                    if len(missing_features) > 5:
+                        print_color(f"      ... and {len(missing_features) - 5} more", 'yellow')
+                    loading_stats['warnings_issued'] += 1
+                
+                # Version-safe scaler handling
+                try:
+                    if hasattr(artifacts['scaler'], 'feature_names_in_'):
+                        feature_map = dict(zip(feature_names, artifacts['scaler'].feature_names_in_))
+                        df = df.rename(columns=feature_map)
+                        print_color(f"\nRenamed features for scikit-learn scaler compatibility", 'green')
+                    
+                    test_sample = df[feature_names].iloc[:1]
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        artifacts["scaler"].transform(test_sample)
+                    
+                    # Apply transformation
+                    df[feature_names] = artifacts["scaler"].transform(df[feature_names])
+                    print_color(f"\nSuccessfully applied scaler transformation", 'green')
+                    print_color(f"  └─ Scaled features: {Fore.YELLOW + Style.BRIGHT}{len(feature_names)}", 'green')
+                
+                except Exception as e:
+                    print_color(f"\nScaler error: {str(e)}", 'red')
+                    print_color(f"  └─ Creating new scaler...", 'red')
+                    loading_stats['warnings_issued'] += 1
+                    
+                    new_scaler = MinMaxScaler().fit(df[feature_names])
+                    artifacts["scaler"] = new_scaler
+                    df[feature_names] = new_scaler.transform(df[feature_names])
+                    print_color(f"\nNew scaler created and applied successfully", 'yellow')
+            
+            except Exception as e:
+                print_color(f"\nScaler handling failed:", 'yellow')
+                print_color(f"  └─ Error: {Fore.YELLOW + Style.BRIGHT}{str(e)}", 'yellow')
+                loading_stats['warnings_issued'] += 1
+        
+        scaler_time = time.time() - scaler_start
+        loading_stats['detailed_timings']['scaler_handling'] = scaler_time
+        
+        # STAGE 3.2: Feature Validation
+        loading_stats['stage'] = "Feature Validation"
+        print_color(f"\nValidating features...", 'yellow')
+        validation_start = time.time()
+        
+        try:
+            # Check for NaN values in features
+            feature_columns = [col for col in feature_names if col in df.columns]
+            nan_counts = df[feature_columns].isna().sum()
+            total_nans = nan_counts.sum()
+            
+            if total_nans > 0:
+                print_color(f"\nFound NaN values in features: {Fore.YELLOW + Style.BRIGHT}{total_nans}", 'green')
+                
+                # Show columns with most NaNs
+                top_nan_cols = nan_counts.nlargest(5)
+                for col, count in top_nan_cols.items():
+                    percentage = (count / len(df)) * 100
+                    prefix = "  └─ " if col == top_nan_cols.index[-1] else "  ├─ "
+                    print_color(f"{prefix}{col}: {Fore.YELLOW + Style.BRIGHT}{count} NaNs ({percentage:.1f}%)", 'green')
+                
+                loading_stats['warnings_issued'] += 1
+            else:
+                print_color(f"\nNo NaN values found in features", 'white')
+            
+            # Check for infinite values
+            inf_cols = []
+            for col in feature_columns:
+                if df[col].dtype in ['float32', 'float64']:
+                    if np.isinf(df[col]).any():
+                        inf_cols.append(col)
+            
+            if inf_cols:
+                print_color(f"\nFound infinite values in features:", 'yellow')
+                print_color(f"  └─ Columns with infinite values: {Fore.YELLOW + Style.BRIGHT}{', '.join(inf_cols)}", 'yellow')
+                loading_stats['warnings_issued'] += 1
+            else:
+                print_color(f"\nNo infinite values found", 'white')
+            
+        except Exception as e:
+            print_color(f"\nFeature validation failed:", 'red')
+            print_color(f"  └─ Error: {Fore.YELLOW + Style.BRIGHT}{str(e)}", 'red')
+            loading_stats['warnings_issued'] += 1
+        
+        validation_time = time.time() - validation_start
+        loading_stats['detailed_timings']['feature_validation'] = validation_time
+        
+        # STAGE 4: Final Validation and Summary
+        loading_stats['stage'] = "Final Checks"
+        print_color(f"\nPerforming final checks...", 'yellow')
+        final_start = time.time()
+        
+        # Calculate total time
+        total_time = time.time() - loading_stats['start_time']
+        loading_stats['detailed_timings']['total'] = total_time
+        
+        # Summarize warnings
+        if loading_stats['warnings_issued'] > 0:
+            print_color(f"\nWarning summary:", 'green')
+            print_color(f"  └─ Total warnings issued: {Fore.YELLOW + Style.BRIGHT}{loading_stats['warnings_issued']}", 'green')
+        else:
+            print_color(f"\nNo warnings issued during loading", 'green')
+        
+        final_time = time.time() - final_start
+        loading_stats['detailed_timings']['final_checks'] = final_time
+        
+        # STAGE 4.1: Summary Report
+        loading_stats['stage'] = "Summary Report"
+        print_color(f"\nGenerating summary report...", 'yellow')
+        report_start = time.time()
+        
+        print_color(f"\nData validation completed successfully!", 'green')
+        print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_file}", 'green')
+        print_color(f"  |   └─ CSV file size: {Fore.YELLOW + Style.BRIGHT}{loading_stats['csv_size_bytes']:,} bytes", 'green')
+        print_color(f"  ├─ PKL artifacts file: {Fore.MAGENTA + Style.BRIGHT}{pkl_file}", 'green')
+        print_color(f"  |   └─ PKL file size: {Fore.YELLOW + Style.BRIGHT}{loading_stats['pkl_size_bytes']:,} bytes", 'green')
+        print_color(f"  ├─ Total time: {Fore.CYAN + Style.BRIGHT}{total_time:.2f}s", 'green')
+        print_color(f"  ├─ Rows loaded: {Fore.YELLOW + Style.BRIGHT}{loading_stats['rows_loaded']:,}", 'green')
+        print_color(f"  ├─ Features count: {Fore.BLUE + Style.BRIGHT}{loading_stats['features_count']}", 'green')
+        print_color(f"  └─ Memory usage: {Fore.YELLOW + Style.BRIGHT}{loading_stats['memory_usage_mb']:.3f} MB", 'green')
+        
+        # Show detailed timings if debug mode
+        if kwargs.get('debug', False):
+            print_color(f"\nDetailed timings:", 'green')
+            timing_items = list(loading_stats['detailed_timings'].items())
+            for i, (stage, timing) in enumerate(timing_items):
+                prefix = "  ├─ " if i < len(timing_items) - 1 else "  └─ "
+                print_color(f"{prefix}{stage}: {Fore.YELLOW + Style.BRIGHT}{timing:.2f}s", 'green')
+        
+        report_time = time.time() - report_start
+        loading_stats['detailed_timings']['report_generation'] = report_time
         
         return df, artifacts
         
     except Exception as e:
-        logger.error(f"\n{red}Data loading failed: {str(e)}{reset}")
-        
-        # Troubleshooting
-        troubleshooting = Table(
-            title="[bold]Troubleshooting Steps[/bold]",
-            box=box.SIMPLE,
-            show_header=False,
-            show_lines=False,
-            padding=(0, 2)
-        )
-        troubleshooting.add_column("Step", style="cyan")
-        troubleshooting.add_column("Action", style="white")
-        
-        troubleshooting.add_row("1", "Verify preprocessing outputs exist:")
-        troubleshooting.add_row("", "   - models/preprocessed_dataset.csv")
-        troubleshooting.add_row("", "   - models/preprocessing_artifacts.pkl")
-        troubleshooting.add_row("2", "Check file permissions and disk space")
-        troubleshooting.add_row("3", "Test with enhanced=False for legacy loader")
-        
-        console.print(troubleshooting)
+        print_color(f"\nData loading failed:", 'red')
+        print_color(f"  ├─ Error type: {Fore.YELLOW + Style.BRIGHT}{type(e).__name__}", 'red')
+        print_color(f"  ├─ Error message: {Fore.WHITE + Style.BRIGHT}{str(e)}", 'red')
+        print_color(f"  └─ Stage: {Fore.YELLOW + Style.BRIGHT}{locals().get('loading_stats', {}).get('stage', 'unknown')}", 'red')
+        print_color(f"\nTroubleshooting steps:", 'yellow')
+        print_color(f"  ├─ 1. Verify preprocessing outputs exist:", 'yellow')
+        print_color(f"  │   ├─ Run get_preprocessing_outputs() to locate files", 'yellow')
+        print_color(f"  │   └─ Check file permissions and paths", 'yellow')
+        print_color(f"  ├─ 2. Test with enhanced=False for legacy loader", 'yellow')
+        print_color(f"  ├─ 3. Check CSV and PKL file integrity:", 'yellow')
+        print_color(f"  │   ├─ Verify CSV can be read with pd.read_csv()", 'yellow')
+        print_color(f"  │   └─ Verify PKL can be loaded with joblib.load()", 'yellow')
+        print_color(f"  └─ 4. Ensure sufficient memory and disk space", 'yellow')
         
         raise RuntimeError("Data loading failed") from e
 
@@ -11995,7 +14097,7 @@ def train_model(
                     # Log LR changes
                     new_lr = optimizer.param_groups[0]['lr']
                     if new_lr != current_lr:
-                        print(f"{cyan}Learning rate reduced: {yellow}Epoch {epoch+1}, Current {current_lr:.2e} → {green}New{new_lr:.2e}{reset}")
+                        print(f"{cyan}Learning rate reduced: {yellow}Epoch {epoch+1}, Current learning rate{current_lr:.2e} → {green}New learning rate {new_lr:.2e}{reset}")
                 
                 # Update best metrics (prioritize security metrics)
                 is_best = False
@@ -12088,7 +14190,7 @@ def train_model(
                 
                 # Early stopping
                 if patience_counter >= early_stop_patience:
-                    print(f"{cyan}\nEarly Stopping Triggered at: Epoch {yellow}{epoch+1}{cyan}after Patience {yellow}{early_stop_patience}{cyan} without improvement{reset}")
+                    print(f"{cyan}\nEarly Stopping Triggered at: Epoch {yellow}{epoch+1}{cyan} after Patience {yellow}{early_stop_patience}{cyan} without improvement{reset}")
                     break
         
         except TrainingExecutionError:
@@ -14709,7 +16811,7 @@ if __name__ == "__main__":
         # Handle SMOTE comparison mode
         if args.compare_oversamplers:
             try:
-                logger.info(Fore.CYAN + Style.BRIGHT + "\n=== Oversampler Comparison Mode ===")
+                logger.info(Fore.CYAN + Style.BRIGHT + "\nOversampler Comparison Mode")
                 df, artifacts = load_and_validate_data()
                 results = compare_oversamplers(
                     df=df,
@@ -14741,7 +16843,7 @@ if __name__ == "__main__":
                 sys.exit(1)
         else:
             # Command-line mode execution
-            logger.info(Fore.CYAN + Style.BRIGHT + "\n=== Enhanced Network Intrusion Detection Model Trainer ===")
+            logger.info(Fore.CYAN + Style.BRIGHT + "\nEnhanced Network Intrusion Detection Model Trainer")
             logger.info(Fore.GREEN + Style.BRIGHT + f"Starting training at {timestamp}")
             
             # Enhanced configuration logging
@@ -14778,12 +16880,11 @@ if __name__ == "__main__":
                 )
                 
                 # Enhanced final report
-                logger.info(Fore.GREEN + Style.BRIGHT + "\n=== Training Completed Successfully ===")
+                logger.info(Fore.GREEN + Style.BRIGHT + "\nTraining Completed Successfully")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Best validation accuracy: {results['metrics']['val_acc']:.2%}")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Best validation AUC: {results['metrics']['val_auc']:.4f}")
                 if 'smote_metrics' in results['metrics']:
-                    logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + 
-                              f"SMOTE quality score: {results['metrics']['smote_metrics'].get('quality_score', 'N/A')}")
+                    logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"SMOTE quality score: {results['metrics']['smote_metrics'].get('quality_score', 'N/A')}")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Artifacts saved to: {results['artifacts_dir']}")
                 logger.info(Fore.LIGHTGREEN_EX + Style.BRIGHT + f"Training time: {results['meta']['training_time']:.2f} seconds")
                 

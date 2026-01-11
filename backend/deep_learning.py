@@ -332,7 +332,7 @@ except ImportError:
     MEMORY_PROFILER_AVAILABLE = False
 
 try:
-    import nvidia_ml_py3 as nvml
+    import pynvml as nvml
     NVML_AVAILABLE = True
 except ImportError:
     NVML_AVAILABLE = False
@@ -372,13 +372,6 @@ try:
 except ImportError:
     STATSMODELS_AVAILABLE = False
 
-# Advanced numerical computation
-try:
-    from numba import jit, cuda
-    NUMBA_AVAILABLE = True
-except ImportError:
-    NUMBA_AVAILABLE = False
-
 # Profiling tools
 try:
     from line_profiler import LineProfiler
@@ -395,7 +388,6 @@ OPTIONAL_DEPENDENCIES = {
     'database': DATABASE_AVAILABLE,
     'sklearn_anomaly': SKLEARN_ANOMALY_AVAILABLE,
     'statsmodels': STATSMODELS_AVAILABLE,
-    'numba': NUMBA_AVAILABLE,
     'memory_profiler': MEMORY_PROFILER_AVAILABLE,
     'line_profiler': LINE_PROFILER_AVAILABLE,
     'packaging': PACKAGING_AVAILABLE,
@@ -531,8 +523,6 @@ LEARNING_RATE = 0.001
 WEIGHT_DECAY = 1e-4
 GRADIENT_CLIP = 1.0
 GRADIENT_ACCUMULATION_STEPS = 4
-#DEVICE = 'cpu' if not torch.cuda.is_available() else 'cuda'
-#MIXED_PRECISION = False if not torch.cuda.is_available() else True
 DEVICE, MIXED_PRECISION = configure_device('auto')
 
 # Model Architecture Constants
@@ -542,9 +532,6 @@ DROPOUT_RATES = [0.2, 0.15]
 ACTIVATION = 'leaky_relu'
 ACTIVATION_PARAM = 0.2
 NORMALIZATION_OPTIONS = ['batch', 'layer', 'instance', 'group', 'none', None]
-#NORMALIZATION = 'batch'
-#USE_BATCH_NORM = True
-#USE_LAYER_NORM = False
 NORMALIZATION, USE_BATCH_NORM, USE_LAYER_NORM = configure_normalization('batch')
 
 DIVERSITY_FACTOR = 0.1
@@ -566,8 +553,7 @@ SECURITY_METRICS = True
 # System Constants
 NUM_WORKERS = min(4, os.cpu_count() or 1)
 MAX_MEMORY_PERCENT = 80
-# Cache timeout for model artifacts in seconds
-CACHE_TIMEOUT = 3600
+CACHE_TIMEOUT = 3600  # Cache timeout for model artifacts in seconds
 
 # Forward declarations for classes that will be defined later
 class SimpleAutoencoder:
@@ -2005,7 +1991,6 @@ def check_versions(include_optional: bool = True) -> Dict[str, Dict[str, Any]]:
         'Database': ('Available' if OPTIONAL_DEPENDENCIES.get('database', False) else 'N/A', None, False),
         'Sklearn Anomaly': ('Available' if OPTIONAL_DEPENDENCIES.get('sklearn_anomaly', False) else 'N/A', None, False),
         'Statsmodels': (safe_version('statsmodels') if OPTIONAL_DEPENDENCIES.get('statsmodels', False) else 'N/A', None, False),
-        'Numba': (safe_version('numba') if OPTIONAL_DEPENDENCIES.get('numba', False) else 'N/A', None, False),
         'Memory Profiler': (safe_version('memory-profiler') if OPTIONAL_DEPENDENCIES.get('memory_profiler', False) else 'N/A', None, False),
         'Line Profiler': (safe_version('line-profiler') if OPTIONAL_DEPENDENCIES.get('line_profiler', False) else 'N/A', None, False),
         'Packaging': ('Available' if OPTIONAL_DEPENDENCIES.get('packaging', False) else 'N/A', None, False),
@@ -5165,8 +5150,8 @@ def configure_system() -> Dict[str, Any]:
         'optimizations': {},
         'detected_capabilities': {}
     }
-
-    # Get comprehensive system information
+    
+    # Get system information
     try:
         version_info = check_versions(include_optional=True)
         hardware_data = check_hardware(min_disk_gb=1.0, include_memory_usage=True)
@@ -5191,7 +5176,7 @@ def configure_system() -> Dict[str, Any]:
             'gpu_count': gpu_count,
             'hyperthreading': cpu_info.get('hyperthreading', False)
         }
-        
+    
     except Exception as e:
         # Fallback to basic detection
         logical_cores = os.cpu_count() or 1
@@ -5199,7 +5184,7 @@ def configure_system() -> Dict[str, Any]:
         cuda_available = torch.cuda.is_available()
         gpu_count = torch.cuda.device_count() if cuda_available else 0
         config['validation']['error'] = str(e)
-
+    
     # Intelligent thread configuration based on detected hardware
     # Conservative approach
     optimal_threads = min(4, max(1, logical_cores // 2))
@@ -5212,18 +5197,12 @@ def configure_system() -> Dict[str, Any]:
     
     # Environment variable configurations
     env_vars = {
-        # TensorFlow logging
-        'TF_CPP_MIN_LOG_LEVEL': '3',
-        # Intel MKL warnings
-        'KMP_WARNINGS': '0',
-        # OpenMP threads - now optimized based on hardware
-        'OMP_NUM_THREADS': str(optimal_threads),
-        # MKL threads - now optimized based on hardware
-        'MKL_NUM_THREADS': str(optimal_threads),
-        # For CUDA reproducibility
-        'CUBLAS_WORKSPACE_CONFIG': ':4096:8',
-        # Disable TensorFlow GPU if CUDA not available
-        'CUDA_VISIBLE_DEVICES': '' if not cuda_available else None
+        'TF_CPP_MIN_LOG_LEVEL': '3',  # TensorFlow logging
+        'KMP_WARNINGS': '0',  # Intel MKL warnings
+        'OMP_NUM_THREADS': str(optimal_threads),  # OpenMP threads based on hardware
+        'MKL_NUM_THREADS': str(optimal_threads),  # MKL threads based on hardware
+        'CUBLAS_WORKSPACE_CONFIG': ':4096:8',  # For CUDA reproducibility
+        'CUDA_VISIBLE_DEVICES': '' if not cuda_available else None  # Disable TensorFlow GPU if CUDA not available
     }
     
     # Add memory-aware configurations
@@ -5237,12 +5216,11 @@ def configure_system() -> Dict[str, Any]:
         if value is not None:
             os.environ[key] = value
             config['environment'][key] = value
-
+    
     # PyTorch configuration
     torch_config = {
         'deterministic': True,
-        # Enable benchmark if CUDA available
-        'benchmark': cuda_available and gpu_count > 0,
+        'benchmark': cuda_available and gpu_count > 0,  # Enable benchmark if CUDA available
         'float32_matmul_precision': 'high' if cuda_available else 'highest',
         'num_threads': optimal_threads,
         'precision': 4,
@@ -5270,13 +5248,12 @@ def configure_system() -> Dict[str, Any]:
     )
     
     config['torch'].update(torch_config)
-
+    
     # NumPy configuration
     np_config = {
         'precision': 4,
         'suppress': True,
-        # More output if more RAM
-        'threshold': 1000 if total_ram_gb > 8 else 100,
+        'threshold': 1000 if total_ram_gb > 8 else 100,  # More output if more RAM
         'linewidth': 120,
         'float_division_warning': False
     }
@@ -5288,7 +5265,7 @@ def configure_system() -> Dict[str, Any]:
         linewidth=np_config['linewidth']
     )
     config['numpy'].update(np_config)
-
+    
     # Warning configurations
     warning_config = {
         'ignored_categories': {
@@ -5326,7 +5303,7 @@ def configure_system() -> Dict[str, Any]:
         'memory_optimization': f"Configured for {total_ram_gb:.1f}GB RAM",
         'version_optimizations': f"Applied optimizations for {len([v for v in version_info.values() if v.get('available', False)])} available packages"
     }
-
+    
     return config
 
 # Reproducibility configuration
@@ -5337,7 +5314,7 @@ def set_seed(seed: int = 42, hardware_info: Optional[Dict[str, Any]] = None) -> 
     Args:
         seed: Base seed value
         hardware_info: Hardware information from check_hardware() (optional)
-        
+    
     Returns:
         Dictionary containing the seed configuration with hardware context
     """
@@ -9139,11 +9116,10 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             loaded_config['metadata']['last_loaded'] = datetime.now().isoformat()
             loaded_config['metadata']['loaded_from'] = str(config_path)
             
-            # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
             # Aggressive cleanup after configuration loading completion
             try:
                 final_clear_results = enhanced_clear_memory(
-                    aggressive=True,  # Aggressive final cleanup
+                    aggressive=True,
                     hardware_data=hardware_data
                 )
                 
@@ -9210,10 +9186,10 @@ def load_configs(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
     
     Args:
         config_path: Path to the configuration file or name of saved/named configuration
-        
+    
     Returns:
         Dictionary containing the loaded configuration
-        
+    
     Raises:
         ValueError: If configuration format is invalid
         FileNotFoundError: If configuration file not found
@@ -10640,7 +10616,7 @@ def get_current_config() -> Dict[str, Any]:
     Returns:
         Dictionary containing all configuration parameters with metadata,
         respecting any active preset configuration and system optimizations.
-        
+    
     Raises:
         RuntimeError: If configuration cannot be retrieved or validated
     """
@@ -10794,9 +10770,6 @@ def get_current_config() -> Dict[str, Any]:
     _cached_config = base_config
     _config_cache_time = current_time
     
-    # Log success with comprehensive statistics
-    
-    #return deepcopy(base_config)
     return base_config
 
 def list_saved_configs() -> Dict[str, Any]:
@@ -12037,23 +12010,22 @@ def convert_legacy_config(
 
 def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool, List[str], List[str]]:
     """
-    Comprehensive configuration validation with enhanced preset compatibility,
-    hardware requirement validation, automatic error correction capabilities,
-    and intelligent memory management for optimal performance.
+    Configuration validation with preset compatibility, hardware requirement validation, automatic
+    error correction capabilities, and intelligent memory management for optimal performance.
     
-    This function provides deep validation of all configuration sections including
-    the new preset features, enhanced model configurations, and system-aware validation.
+    This function provides deep validation of all configuration sections including the new preset
+    features, model configurations, and system-aware validation.
     
     Args:
         config: Configuration dictionary to validate
         strict: If True, apply stricter validation rules and fail on warnings
-        
+    
     Returns:
         Tuple containing:
         - bool: True if configuration is valid (or auto-corrected)
         - List[str]: List of validation errors found
         - List[str]: List of validation warnings and recommendations
-        
+    
     Raises:
         ValueError: Only if configuration is fundamentally invalid and cannot be auto-corrected
     """
@@ -12094,7 +12066,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
             }
         }
         
-        # MEMORY OPTIMIZATION - Clear memory before intensive validation for large configs
+        # Clear memory before validation for large configs
         config_size_mb = len(str(config)) / (1024 * 1024)
         if config_size_mb > 1.0 or total_ram_gb < 8:
             try:
@@ -12198,7 +12170,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                     else:
                         warnings.append("Compatibility field should be a list of model types")
         
-        # MEMORY OPTIMIZATION - Clear memory after metadata validation for large configs
+        # Clear memory after metadata validation for large configs
         if len(str(metadata)) > 50000 and total_ram_gb < 16:
             try:
                 metadata_clear = enhanced_clear_memory(
@@ -12337,7 +12309,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
             if not isinstance(model, dict):
                 errors.append("Model section must be a dictionary")
             else:
-                # MEMORY OPTIMIZATION - Clear memory before intensive model validation for complex models
+                # Clear memory before intensive model validation for complex models
                 model_complexity = len(str(model))
                 if model_complexity > 10000 and total_ram_gb < 16:
                     try:
@@ -12631,7 +12603,6 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                     warnings.append(f"High combined split ratio ({total_split:.2f}) leaves little training data")
                 
                 # Normalization validation
-                #normalization = data.get('normalization', 'standard')
                 normalization = data.get('data_normalization', 'standard')
                 valid_normalizations = ['standard', 'minmax', 'robust', 'quantile', 'none']
                 if normalization not in valid_normalizations:
@@ -12668,7 +12639,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                         elif outlier_threshold > 5:
                             warnings.append("Very high outlier threshold may not remove outliers effectively")
         
-        # MEMORY OPTIMIZATION - Clear memory before hardware validation for low-memory systems
+        # Clear memory before hardware validation for low-memory systems
         if total_ram_gb < 8:
             try:
                 mid_validation_clear = enhanced_clear_memory(
@@ -12891,7 +12862,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
             if normal_samples < total_params:
                 warnings.append(f"Small dataset ({normal_samples}) for model complexity (~{total_params} params)")
         
-        # MEMORY OPTIMIZATION - Clear memory before strict mode validation for low-memory systems
+        # Clear memory before strict mode validation for low-memory systems
         if strict and total_ram_gb < 8:
             try:
                 strict_mode_clear = enhanced_clear_memory(
@@ -12968,8 +12939,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
             )
         })
         
-        # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
-        # Aggressive cleanup after validation completion
+        # Cleanup after validation completion
         try:
             final_clear_results = enhanced_clear_memory(
                 aggressive=True,  # Aggressive final cleanup
@@ -12978,7 +12948,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
             
             if final_clear_results.get('success'):
                 logger.debug(f"Final validation memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-                
+        
         except Exception as e:
             logger.debug(f"Final validation memory optimization failed: {e}")
         
@@ -12999,7 +12969,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         # Return results
         is_valid = error_count == 0
         return is_valid, errors, warnings
-        
+    
     except Exception as e:
         error_msg = f"Configuration validation failed with exception: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -13016,17 +12986,17 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
 
 def validate_model_preset_compatibility(model_type: str, config: Dict[str, Any]) -> bool:
     """
-    Comprehensive validation of model type compatibility with preset configurations.
+    Validate model type compatibility with preset configurations.
     
-    This function has been updated to work harmoniously with initialize_model_variants() and 
-    validate_model_variants(), providing thorough compatibility validation for all preset 
-    configurations including DEFAULT_PRESET, STABILITY_PRESET, PERFORMANCE_PRESET, and 
+    This function has been updated to work harmoniously with initialize_model_variants() and
+    validate_model_variants(), providing thorough compatibility validation for all preset
+    configurations including DEFAULT_PRESET, STABILITY_PRESET, PERFORMANCE_PRESET, and
     custom configurations while maintaining consistency with the validation approach.
     
     Args:
         model_type: The model type to validate (e.g., 'SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble')
         config: Configuration dictionary (can be preset or full config structure)
-        
+    
     Returns:
         bool: True if compatible, False otherwise with detailed logging of incompatibility reasons
     """
@@ -13499,7 +13469,7 @@ def validate_config_interactive(silent: bool = False):
     """
     Interactive configuration validation with comprehensive analysis and recommendations.
     
-    This enhanced implementation provides:
+    This implementation provides:
     - Interactive validation with detailed progress tracking
     - Comprehensive system analysis and recommendations
     - Preset compatibility checking and suggestions
@@ -17780,14 +17750,15 @@ def handle_validation_failure(error: ValueError, failed_config: Dict, default_co
     return True
 
 def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
-    """Initialize or load configuration with preset awareness, validation, fallback handling, and intelligent memory management.
+    """Initialize or load configuration with preset awareness, validation,
+    fallback handling, and intelligent memory management.
     
     Args:
         config_path: Path to the configuration file
-        
+    
     Returns:
         Dictionary containing the initialized configuration
-        
+    
     Raises:
         ValueError: If configuration cannot be initialized
         RuntimeError: If configuration initialization fails
@@ -18047,7 +18018,7 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                         })
                 except Exception as e:
                     logger.debug(f"Post-template memory optimization failed: {e}")
-                    
+        
         except Exception as e:
             logger.warning(f"Failed to get current config template: {e}")
             
@@ -18194,7 +18165,7 @@ def initialize_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                             })
                     except Exception as e:
                         logger.debug(f"Post-merge memory optimization failed: {e}")
-                
+            
             except Exception as merge_error:
                 logger.error(f"Configuration merge failed: {merge_error}")
                 
@@ -20995,7 +20966,7 @@ def save_initialization_report(system_status: Dict[str, Any], report_dir: Path) 
     Args:
         system_status: Complete system status dictionary from initialize_system
         report_dir: Directory to save the report (should be a Path object)
-        
+    
     Raises:
         Exception: If report saving fails (logged but not re-raised to avoid interrupting initialization)
     """
@@ -23317,11 +23288,19 @@ Sequence: {time_str} (Total today: {report_data['metadata']['total_reports']})
         except Exception as fallback_error:
             logger.critical(f"Failed to save even minimal error report: {fallback_error}")
 
-def _generate_inline_dashboard_fallback(enhanced_status: Dict, compact_status: Dict, 
-                                     system_health_score: float, dashboard_json_file_data: Dict,
-                                     consolidated_files: Dict, report_data: Dict, 
-                                     status_data: Dict, diagnostics_data: Dict,
-                                     timestamp_obj: datetime, date_str: str, time_str: str) -> str:
+def _generate_inline_dashboard_fallback(
+    enhanced_status: Dict,
+    compact_status: Dict,
+    system_health_score: float,
+    dashboard_json_file_data: Dict,
+    consolidated_files: Dict,
+    report_data: Dict,
+    status_data: Dict,
+    diagnostics_data: Dict,
+    timestamp_obj: datetime,
+    date_str: str,
+    time_str: str
+) -> str:
     """
     Generate inline HTML dashboard as fallback when template renderer is not available.
     
@@ -37636,6 +37615,471 @@ def create_autoencoder_from_config(
         logger.error(f"Failed to create {model_type}: {e}")
         raise RuntimeError(f"Model creation failed: {str(e)}")
 
+def print_color(message: str, color: str = 'white', style: str = 'bright'):
+    """Helper function for colored output."""
+    color_map = {
+        'white': Fore.WHITE,
+        'red': Fore.RED,
+        'green': Fore.GREEN,
+        'yellow': Fore.YELLOW,
+        'blue': Fore.BLUE,
+        'magenta': Fore.MAGENTA,
+        'cyan': Fore.CYAN
+    }
+    style_map = {
+        'normal': Style.NORMAL,
+        'bright': Style.BRIGHT,
+        'dim': Style.DIM
+    }
+    color_code = color_map.get(color, Fore.WHITE)
+    style_code = style_map.get(style, Style.NORMAL)
+    print(f"{style_code}{color_code}{message}{Style.RESET_ALL}")
+
+def get_preprocessing_outputs(
+    config_path: Optional[str] = None,
+    base_results_dir: Optional[Path] = None,
+    base_preprocessing_dir: Optional[Path] = None,
+    interactive: bool = True
+) -> Tuple[Optional[str], Optional[str], Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Get preprocessing outputs location with support for run-based directory structure.
+    
+    This function helps locate preprocessing outputs including the preprocessed dataset .csv file
+    and the preprocessing artifacts .pkl file based on various input configurations.
+    
+    Args:
+        config_path: Path to either:
+                     - A specific test run directory (e.g., "results/preprocessing/run_001/")
+                     - A results directory (e.g., "results/preprocessing/")
+                     - A preprocessing run directory (e.g., "datasets/preprocessing/run_001/")
+                     - A specific summary file
+        base_results_dir: Base directory for test results (default: "results/preprocessing")
+        base_preprocessing_dir: Base directory for preprocessing outputs (default: "datasets/preprocessing")
+        interactive: If True, allows user to select from multiple matches
+    
+    Returns:
+        Tuple containing:
+        - Path to the preprocessed dataset CSV file (or None if not found)
+        - Path to the preprocessing artifacts PKL file (or None if not found)
+        - Configuration dictionary from the test run (or None if not found)
+        - Summary dictionary from preprocessing (or None if not found)
+    
+    Example usage in another script:
+        csv_path, pkl_path, test_config, preprocess_summary = get_preprocessing_outputs(
+            config_path="results/preprocessing/run_001/",
+            interactive=False
+        )
+        if csv_path:
+            print(f"Found preprocessed dataset: {csv_path}")
+            df = pd.read_csv(csv_path)
+        if pkl_path:
+            print(f"Found preprocessing artifacts: {pkl_path}")
+            artifacts = joblib.load(pkl_path)
+    """
+    try:
+        script_dir = Path(__file__).resolve().parent
+        max_rows_test_results_dir = script_dir / "results" / "preprocessing"
+        preprocessing_outputs_dir = script_dir / "datasets" / "preprocessing"
+        
+        if base_results_dir is None:
+            base_results_dir = max_rows_test_results_dir
+        
+        if base_preprocessing_dir is None:
+            base_preprocessing_dir = preprocessing_outputs_dir
+
+        if config_path is None:
+            config_path = base_results_dir
+        
+        config_file = Path(config_path)
+        
+        # Dictionary to store found configuration
+        test_config = None
+        preprocessing_summary = None
+        preprocessing_run_id = None
+        preprocessing_run_number = None
+        
+        # Check if the provided path is a specific test run directory
+        if config_file.is_dir() and (config_file.name.startswith('run_') or (config_file / f"max_rows_testing_summary_{config_file.name}.json").exists()):
+            # Direct test run directory provided
+            test_run_dir = config_file
+            run_id = test_run_dir.name
+            
+            # Load test configuration from the test run
+            summary_file = test_run_dir / f"max_rows_testing_summary_{run_id}.json"
+            
+            if summary_file.exists():
+                with open(summary_file) as f:
+                    test_config = json.load(f)
+                
+                # Extract run information from test config
+                test_run_info = test_config.get('run_info', {})
+                test_run_id = test_run_info.get('run_id', run_id)
+                test_run_number = test_run_info.get('run_number', int(run_id.split('_')[1]) if '_' in run_id else 0)
+                
+                print_color(f"\nMax rows testing summary file loaded:", 'green')
+                print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{summary_file}", 'green')
+                
+                # Look for corresponding preprocessing run
+                # Preprocessing runs are stored in base_preprocessing_dir with same run number
+                preprocessing_dir = Path(base_preprocessing_dir)
+                
+                if preprocessing_dir.exists():
+                    # Find preprocessing run with same number
+                    preprocessing_run_pattern = f"run_{test_run_number:03d}"
+                    preprocessing_run_dirs = list(preprocessing_dir.glob(f"{preprocessing_run_pattern}*"))
+                    
+                    if preprocessing_run_dirs:
+                        # Use the first match (should be only one)
+                        preprocessing_run_dir = preprocessing_run_dirs[0]
+                        preprocessing_run_id = preprocessing_run_dir.name
+                        
+                        print_color(f"\nFound corresponding preprocessing run:", 'green')
+                        print_color(f"  └─ {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'green')
+                        
+                        # Look for preprocessing summary file
+                        dataset_name = Path(test_config['dataset_info']['filepath']).stem
+                        summary_pattern = f"{dataset_name}_preprocessing_summary_{preprocessing_run_id}.json"
+                        summary_files = list(preprocessing_run_dir.glob(f"*{summary_pattern}*"))
+                        
+                        if summary_files:
+                            # Load preprocessing summary
+                            with open(summary_files[0]) as f:
+                                preprocessing_summary = json.load(f)
+                            
+                            print_color(f"\nPreprocessing summary file loaded:", 'green')
+                            print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{summary_files[0]}", 'green')
+                            
+                            # Look for preprocessed dataset CSV
+                            csv_pattern = f"{dataset_name}_preprocessed_dataset.csv"
+                            csv_files = list(preprocessing_run_dir.glob(f"*{csv_pattern}*"))
+                            
+                            # Look for preprocessed dataset PKL
+                            pkl_pattern = f"{dataset_name}_preprocessing_artifacts.pkl"
+                            pkl_files = list(preprocessing_run_dir.glob(f"*{pkl_pattern}*"))
+                            
+                            if csv_files and pkl_files:
+                                csv_path = str(csv_files[0])
+                                pkl_path = str(pkl_files[0])
+                                
+                                print_color(f"\nPreprocessing outputs found:", 'green')
+                                print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+                                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+                                
+                                return csv_path, pkl_path, test_config, preprocessing_summary
+                            
+                            elif csv_files:
+                                csv_path = str(csv_files[0])
+                                print_color(f"\nWarning: CSV file found but PKL artifacts missing", 'yellow')
+                                print_color(f"  └─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'yellow')
+                                return csv_path, None, test_config, preprocessing_summary
+                            
+                            elif pkl_files:
+                                pkl_path = str(pkl_files[0])
+                                print_color(f"\nWarning: PKL artifacts found but CSV file missing", 'yellow')
+                                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'yellow')
+                                return None, pkl_path, test_config, preprocessing_summary
+                            
+                            else:
+                                print_color(f"\nError: No preprocessing outputs found in directory", 'red')
+                                print_color(f"  ├─ Searched for CSV pattern: {Fore.YELLOW + Style.BRIGHT}*{csv_pattern}*", 'red')
+                                print_color(f"  └─ Searched for PKL pattern: {Fore.YELLOW + Style.BRIGHT}*{pkl_pattern}*", 'red')
+                                return None, None, test_config, preprocessing_summary
+                        else:
+                            print_color(f"\nError: No preprocessing summary file found", 'red')
+                            print_color(f"  ├─ Expected pattern: {Fore.YELLOW + Style.BRIGHT}*{summary_pattern}*", 'red')
+                            print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'red')
+                            return None, None, test_config, None
+                    else:
+                        print_color(f"\nError: No corresponding preprocessing run found", 'red')
+                        print_color(f"  ├─ Test run number: {Fore.YELLOW + Style.BRIGHT}{test_run_number}", 'red')
+                        print_color(f"  ├─ Expected pattern: {Fore.YELLOW + Style.BRIGHT}{preprocessing_run_pattern}*", 'red')
+                        print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_dir}", 'red')
+                        return None, None, test_config, None
+                else:
+                    print_color(f"\nError: Preprocessing directory not found", 'red')
+                    print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{base_preprocessing_dir}", 'red')
+                    return None, None, test_config, None
+            else:
+                print_color(f"\nError: Test summary file not found", 'red')
+                print_color(f"  ├─ Expected file: {Fore.MAGENTA + Style.BRIGHT}{summary_file}", 'red')
+                print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{test_run_dir}", 'red')
+                return None, None, None, None
+        
+        # Check if path points to results directory (search for latest run)
+        elif config_file.is_dir():
+            results_dir = config_file
+            
+            # Find all test run directories
+            test_run_dirs = sorted(
+                [d for d in results_dir.iterdir() if d.is_dir() and d.name.startswith('run_')],
+                key=lambda x: int(x.name.split('_')[1]) if len(x.name.split('_')) > 1 and x.name.split('_')[1].isdigit() else 0,
+                reverse=True
+            )
+            
+            if not test_run_dirs:
+                print_color(f"\nError: No test runs found in directory", 'red')
+                print_color(f"  └─ {Fore.WHITE + Style.BRIGHT}{results_dir}", 'red')
+                return None, None, None, None
+            
+            total_test_runs = Fore.YELLOW + Style.BRIGHT + f"{len(test_run_dirs)}" + Style.RESET_ALL
+            print_color(f"\nTest Runs Found: {total_test_runs}", 'green')
+            
+            # If interactive mode, let user choose
+            if interactive and len(test_run_dirs) > 1:
+                for i, run_dir in enumerate(test_run_dirs[:10], 1):
+                    run_id = run_dir.name
+                    print_color(f"{i:2d}. {run_id}", 'white')
+                
+                if len(test_run_dirs) > 10:
+                    print_color(f"\n... and {len(test_run_dirs) - 10} more runs", 'cyan')
+                
+                print_color(f"\n{len(test_run_dirs) + 1:2d}. Use latest run", 'cyan')
+                print_color(f"0. Cancel", 'red')
+                
+                choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect test run (1-{len(test_run_dirs) + 1}, 0 to cancel): " + Style.RESET_ALL).strip()
+                
+                if choice == '0':
+                    print_color("\nSelection cancelled", 'yellow')
+                    return None, None, None, None
+                elif choice == str(len(test_run_dirs) + 1):
+                    # Use latest run
+                    selected_run_dir = test_run_dirs[0]
+                    print_color(f"\nUsing latest run: {Fore.YELLOW + Style.BRIGHT}{selected_run_dir.name}", 'green')
+                elif choice.isdigit() and 1 <= int(choice) <= len(test_run_dirs):
+                    selected_run_dir = test_run_dirs[int(choice) - 1]
+                    print_color(f"\nSelected run: {Fore.YELLOW + Style.BRIGHT}{selected_run_dir.name}", 'green')
+                else:
+                    print_color("\nInvalid selection, using latest run", 'yellow')
+                    selected_run_dir = test_run_dirs[0]
+            else:
+                # Use latest run
+                selected_run_dir = test_run_dirs[0]
+                print_color(f"\nUsing latest run: {Fore.YELLOW + Style.BRIGHT}{selected_run_dir.name}", 'green')
+            
+            # Recursively call with selected run directory
+            return get_preprocessing_outputs(
+                config_path=str(selected_run_dir),
+                base_results_dir=base_results_dir,
+                base_preprocessing_dir=base_preprocessing_dir,
+                interactive=False  # Don't recurse infinitely
+            )
+        
+        # Check if path is a preprocessing run directory directly
+        elif config_file.is_dir() and config_file.parent.name == "preprocessing":
+            # This might already be a preprocessing run directory
+            preprocessing_run_dir = config_file
+            preprocessing_run_id = preprocessing_run_dir.name
+            
+            # Look for any preprocessing summary file
+            summary_files = list(preprocessing_run_dir.glob("*_preprocessing_summary_*.json"))
+            
+            if summary_files:
+                # Load the first summary file found
+                with open(summary_files[0]) as f:
+                    preprocessing_summary = json.load(f)
+                
+                print_color(f"\nPreprocessing summary file loaded:", 'green')
+                print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{summary_files[0]}", 'green')
+                
+                # Extract dataset name from summary
+                dataset_name = Path(preprocessing_summary['preprocessing_summary']['input_file']).stem
+                
+                print_color(f"\nDataset information:", 'green')
+                print_color(f"  └─ {Fore.YELLOW + Style.BRIGHT}{dataset_name}", 'green')
+                
+                # Look for preprocessed dataset CSV
+                csv_pattern = f"{dataset_name}_preprocessed_dataset.csv"
+                csv_files = list(preprocessing_run_dir.glob(f"*{csv_pattern}*"))
+
+                # Look for preprocessed dataset PKL
+                pkl_pattern = f"{dataset_name}_preprocessing_artifacts.pkl"
+                pkl_files = list(preprocessing_run_dir.glob(f"*{pkl_pattern}*"))
+                
+                if csv_files and pkl_files:
+                    csv_path = str(csv_files[0])
+                    pkl_path = str(pkl_files[0])
+                    
+                    print_color(f"\nPreprocessing outputs found:", 'green')
+                    print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+                    print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+                    
+                    # Try to find corresponding test run configuration
+                    test_run_number = preprocessing_summary['preprocessing_summary'].get('run_number')
+                    test_run_id = preprocessing_summary['preprocessing_summary'].get('run_id')
+                    
+                    if test_run_number:
+                        test_run_dir = Path(base_results_dir) / f"run_{test_run_number:03d}"
+                        test_summary_file = test_run_dir / f"max_rows_testing_summary_run_{test_run_number:03d}.json"
+                        
+                        if test_summary_file.exists():
+                            with open(test_summary_file) as f:
+                                test_config = json.load(f)
+                            
+                            print_color(f"\nCorresponding max rows test run found:", 'green')
+                            print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{test_summary_file}", 'green')
+                    
+                    return csv_path, pkl_path, test_config, preprocessing_summary
+                
+                elif csv_files:
+                    csv_path = str(csv_files[0])
+                    print_color(f"\nWarning: CSV file found but PKL artifacts missing", 'yellow')
+                    print_color(f"  └─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'yellow')
+                    return csv_path, None, test_config, preprocessing_summary
+                
+                elif pkl_files:
+                    pkl_path = str(pkl_files[0])
+                    print_color(f"\nWarning: PKL artifacts found but CSV file missing", 'yellow')
+                    print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'yellow')
+                    return None, pkl_path, test_config, preprocessing_summary
+                
+                else:
+                    print_color(f"\nError: No preprocessing outputs found in directory", 'red')
+                    print_color(f"  ├─ Searched for CSV pattern: {Fore.YELLOW + Style.BRIGHT}*{csv_pattern}*", 'red')
+                    print_color(f"  └─ Searched for PKL pattern: {Fore.YELLOW + Style.BRIGHT}*{pkl_pattern}*", 'red')
+                    return None, None, test_config, preprocessing_summary
+            else:
+                print_color(f"\nError: No preprocessing summary file found", 'red')
+                print_color(f"  └─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'red')
+                return None, None, None, None
+        
+        # Check if path is a specific preprocessing summary file
+        elif config_file.exists() and config_file.is_file() and "_preprocessing_summary_" in config_file.name:
+            # Load preprocessing summary directly
+            with open(config_file) as f:
+                preprocessing_summary = json.load(f)
+            
+            # Extract output directory from summary
+            output_dir = preprocessing_summary['preprocessing_summary']['output_directory']
+            preprocessing_run_dir = Path(output_dir)
+            
+            print_color(f"\nOutput directory from summary:", 'green')
+            print_color(f"  └─ {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'green')
+            
+            # Look for preprocessed dataset CSV
+            dataset_name = Path(preprocessing_summary['preprocessing_summary']['input_file']).stem
+            csv_pattern = f"{dataset_name}_preprocessed_dataset.csv"
+            csv_files = list(preprocessing_run_dir.glob(f"*{csv_pattern}*"))
+
+            # Look for preprocessed dataset PKL
+            pkl_pattern = f"{dataset_name}_preprocessing_artifacts.pkl"
+            pkl_files = list(preprocessing_run_dir.glob(f"*{pkl_pattern}*"))
+            
+            if csv_files and pkl_files:
+                csv_path = str(csv_files[0])
+                pkl_path = str(pkl_files[0])
+                
+                print_color(f"\nPreprocessing outputs found:", 'green')
+                print_color(f"  ├─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'green')
+                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'green')
+                
+                # Try to find corresponding test run configuration
+                test_run_number = preprocessing_summary['preprocessing_summary'].get('run_number')
+                if test_run_number:
+                    test_run_dir = Path(base_results_dir) / f"run_{test_run_number:03d}"
+                    test_summary_file = test_run_dir / f"max_rows_testing_summary_run_{test_run_number:03d}.json"
+                    
+                    if test_summary_file.exists():
+                        with open(test_summary_file) as f:
+                            test_config = json.load(f)
+                        
+                        print_color(f"\nCorresponding max rows test run found:", 'green')
+                        print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{test_summary_file}", 'green')
+                
+                return csv_path, pkl_path, test_config, preprocessing_summary
+            
+            elif csv_files:
+                csv_path = str(csv_files[0])
+                print_color(f"\nWarning: CSV file found but PKL artifacts missing", 'yellow')
+                print_color(f"  └─ CSV file: {Fore.MAGENTA + Style.BRIGHT}{csv_path}", 'yellow')
+                return csv_path, None, test_config, preprocessing_summary
+            
+            elif pkl_files:
+                pkl_path = str(pkl_files[0])
+                print_color(f"\nWarning: PKL artifacts found but CSV file missing", 'yellow')
+                print_color(f"  └─ PKL artifacts: {Fore.MAGENTA + Style.BRIGHT}{pkl_path}", 'yellow')
+                return None, pkl_path, test_config, preprocessing_summary
+            
+            else:
+                print_color(f"\nError: No preprocessing outputs found in directory", 'red')
+                print_color(f"  ├─ Directory: {Fore.WHITE + Style.BRIGHT}{preprocessing_run_dir}", 'red')
+                print_color(f"  ├─ CSV pattern: {Fore.YELLOW + Style.BRIGHT}*{csv_pattern}*", 'red')
+                print_color(f"  └─ PKL pattern: {Fore.YELLOW + Style.BRIGHT}*{pkl_pattern}*", 'red')
+                return None, None, test_config, preprocessing_summary
+        
+        # If we get here, we haven't found anything
+        print_color("\nCOULD NOT LOCATE PREPROCESSING OUTPUTS", 'red')
+        
+        print_color("\nPossible reasons:", 'yellow')
+        print_color("  ├─ No preprocessing has been run yet", 'yellow')
+        print_color("  ├─ The provided path doesn't contain valid run data", 'yellow')
+        print_color("  ├─ Directory structure doesn't match expected pattern", 'yellow')
+        print_color("  └─ Permissions issues accessing directories", 'yellow')
+        
+        print_color("\nExpected directory structure:", 'cyan')
+        print_color("  ├─ Test runs: {base_results_dir}/run_001/", 'white')
+        print_color("  ├─ Preprocessing runs: {base_preprocessing_dir}/run_001/", 'white')
+        print_color("  └─ Current path provided: {config_path}", 'white')
+        
+        if interactive:
+            # Offer to browse directories
+            response = input(Fore.YELLOW + Style.BRIGHT + "\nBrowse for preprocessing outputs manually? (Y/n): " + Style.RESET_ALL).strip().lower()
+            
+            if response in ['y', 'yes', '']:
+                print_color("\nLooking for preprocessing directories...", 'cyan')
+                
+                preprocessing_dir = Path(base_preprocessing_dir)
+                if preprocessing_dir.exists():
+                    preprocessing_runs = sorted(
+                        [d for d in preprocessing_dir.iterdir() if d.is_dir() and d.name.startswith('run_')],
+                        key=lambda x: int(x.name.split('_')[1]) if len(x.name.split('_')) > 1 and x.name.split('_')[1].isdigit() else 0,
+                        reverse=True
+                    )
+                    
+                    if preprocessing_runs:
+                        print_color(f"\nFound {len(preprocessing_runs)} preprocessing runs:", 'green')
+                        for i, run_dir in enumerate(preprocessing_runs[:10], 1):
+                            # Check what's inside each run
+                            csv_files = list(run_dir.glob("*_preprocessed_dataset.csv"))
+                            pkl_files = list(run_dir.glob("*_preprocessing_artifacts.pkl"))
+                            summary_files = list(run_dir.glob("*_preprocessing_summary_*.json"))
+                            
+                            csv_status = "CSV: Found" if csv_files else "CSV: Missing"
+                            pkl_status = "PKL: Found" if pkl_files else "PKL: Missing"
+                            summary_status = "Summary: Found" if summary_files else "Summary: Missing"
+                            
+                            print_color(f"{i:2d}. {run_dir.name} [{csv_status}, {pkl_status}, {summary_status}]", 'white')
+                        
+                        if len(preprocessing_runs) > 10:
+                            print_color(f"\n... and {len(preprocessing_runs) - 10} more runs", 'cyan')
+                        
+                        choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect preprocessing run (1-{min(10, len(preprocessing_runs))}, 0 to cancel): " + Style.RESET_ALL).strip()
+                        
+                        if choice.isdigit() and 1 <= int(choice) <= min(10, len(preprocessing_runs)):
+                            selected_run_dir = preprocessing_runs[int(choice) - 1]
+                            print_color(f"\nSelected run: {selected_run_dir.name}", 'green')
+                            return get_preprocessing_outputs(
+                                config_path=str(selected_run_dir),
+                                base_results_dir=base_results_dir,
+                                base_preprocessing_dir=base_preprocessing_dir,
+                                interactive=False  # Don't recurse
+                            )
+                        else:
+                            print_color("\nInvalid selection or cancelled", 'yellow')
+                    else:
+                        print_color(f"\nNo preprocessing runs found in directory:", 'red')
+                        print_color(f"  └─ {preprocessing_dir}", 'red')
+                else:
+                    print_color(f"\nPreprocessing directory does not exist:", 'red')
+                    print_color(f"  └─ {preprocessing_dir}", 'red')
+        
+        return None, None, None, None
+    
+    except Exception as e:
+        print_color(f"\nError locating preprocessing outputs:", 'red')
+        print_color(f"  ├─ Error type: {type(e).__name__}", 'red')
+        print_color(f"  └─ Error message: {str(e)}", 'red')
+        return None, None, None, None
+
 def load_and_validate_data(
     # Core Data Parameters
     data_path: Optional[Union[str, Path]] = None,
@@ -44691,7 +45135,7 @@ def train_epoch(
                     spectral_norm_layers = spectral_norm_applied
                 else:
                     spectral_normalization_applied = False
-                    
+            
             except Exception as e:
                 logger.warning(f"Failed to apply spectral normalization: {e}")
                 spectral_normalization_applied = False
@@ -46935,7 +47379,7 @@ def _default_security_metrics(inputs, outputs, targets, loss):
         outputs (torch.Tensor): Model reconstructions (shape: [batch_size, features])
         targets (torch.Tensor): Target samples (typically same as inputs for autoencoders)
         loss (torch.Tensor): Current batch loss value
-        
+    
     Returns:
         dict: Security-focused metrics including:
             - max_reconstruction_error: Worst-case error for attack detection
@@ -47036,10 +47480,10 @@ def _default_adaptive_threshold(reconstruction_errors: np.ndarray) -> float:
     
     Args:
         reconstruction_errors (np.ndarray): Array of reconstruction errors from validation
-        
+    
     Returns:
         float: Conservative threshold value for anomaly detection
-        
+    
     Note:
         - Returns 95th percentile for small datasets (< 10 samples)
         - Combines percentile-based, IQR-based, and statistical methods for robustness
@@ -47146,7 +47590,7 @@ def _default_validation_analysis(model, predictions, targets, reconstruction_err
         targets (np.ndarray): Target values (shape: [n_samples, features])
         reconstruction_errors (np.ndarray): Per-sample MSE values (shape: [n_samples,])
         metrics_tracker (dict): Validation metrics collected during validate()
-        
+    
     Returns:
         dict: Analysis including:
             - error_distribution: Statistical analysis of reconstruction errors
@@ -47481,7 +47925,7 @@ def _default_validation_callbacks():
     """
     callbacks = []
     
-    # === CALLBACK 1: CRITICAL ERROR ALERTING ===
+    # CALLBACK 1: CRITICAL ERROR ALERTING
     def critical_error_alert(batch_idx, inputs, outputs, loss, model, metrics):
         """
         Alert on critically high loss values that may indicate model failure
@@ -47520,7 +47964,7 @@ def _default_validation_callbacks():
     
     callbacks.append(critical_error_alert)
     
-    # === CALLBACK 2: MEMORY LEAK DETECTION ===
+    # CALLBACK 2: MEMORY LEAK DETECTION
     def memory_leak_monitor(batch_idx, inputs, outputs, loss, model, metrics):
         """
         Monitor memory usage to detect leaks and trigger cleanup when needed.
@@ -47586,7 +48030,7 @@ def _default_validation_callbacks():
     
     callbacks.append(memory_leak_monitor)
     
-    # === CALLBACK 3: ATTACK PATTERN DETECTION ===
+    # CALLBACK 3: ATTACK PATTERN DETECTION
     def attack_pattern_detector(batch_idx, inputs, outputs, loss, model, metrics):
         """
         Detect sudden loss spikes that may indicate attack samples in validation data.
@@ -47635,7 +48079,7 @@ def _default_validation_callbacks():
     
     callbacks.append(attack_pattern_detector)
     
-    # === CALLBACK 4: VALIDATION CHECKPOINTING ===
+    # CALLBACK 4: VALIDATION CHECKPOINTING
     def validation_checkpointing(batch_idx, inputs, outputs, loss, model, metrics):
         """
         Track validation progress and log checkpoints for long-running validations.
@@ -47687,7 +48131,7 @@ def _default_validation_callbacks():
     
     callbacks.append(validation_checkpointing)
     
-    # === CALLBACK 5: GRADIENT MONITORING (if model requires_grad) ===
+    # CALLBACK 5: GRADIENT MONITORING (if model requires_grad)
     def gradient_monitor(batch_idx, inputs, outputs, loss, model, metrics):
         """
         Monitor gradient flow even during validation (useful for debug).
@@ -50746,7 +51190,7 @@ def train_model(
     Args:
         All parameters supported by the autoencoder model classes and their
         helper functions (_initialize_autoencoder_config, _structure_kwargs_into_config_sections)
-        
+    
     Returns:
         Dictionary containing training results and metadata
     """
@@ -50834,8 +51278,6 @@ def train_model(
             logger.debug(f"Extracting parameters from '{active_preset_name}' preset")
             
             # Step 4: Create a mapping of parameter names to their section locations
-            # This helps us track where parameters are defined across different configurations
-            # Build parameter location map for current config
             current_param_locations = {}
             for section_name, section_data in config.items():
                 if isinstance(section_data, dict):
@@ -51129,8 +51571,8 @@ def train_model(
     attack_samples = data_config.setdefault('attack_samples', ATTACK_SAMPLES)
     features = data_config.setdefault('features', FEATURES)
     use_real_data = data_config.setdefault('use_real_data', False)
-    data_path = data_config.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")
-    artifacts_path = data_config.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")
+    preprocessed_dataset = Path(data_config.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"))
+    preprocessing_artifacts = Path(data_config.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"))
     data_preprocessing = data_config.setdefault('preprocessing', {}).get('enabled', True)
     
     # Security defaults
@@ -51516,6 +51958,32 @@ def train_model(
         data = None
         data_metadata = {}
         
+        if data_path is None:
+            data_path = preprocessed_dataset
+        
+        if artifacts_path is None:
+            artifacts_path = preprocessing_artifacts
+        
+        if data_path.exists() and artifacts_path.exists():
+            if data_path.is_file() and artifacts_path.is_file():
+                preprocessing_outputs = True
+            else:
+                preprocessing_outputs = False
+        else:
+            preprocessing_outputs = False
+        
+        if not preprocessing_outputs:
+            # Get preprocessing outputs using the helper function
+            csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(interactive=True)
+            data_path = csv_path
+            artifacts_path = pkl_path
+        else:
+            data_path = data_path
+            artifacts_path = artifacts_path
+        
+        data_config['data_path'] = data_path
+        data_config['artifacts_path'] = artifacts_path
+        
         if use_real_data:
             try:
                 logger.info("Loading real data...")
@@ -51711,7 +52179,7 @@ def train_model(
             model = model.to(device)
             
             logger.info(f"Created {model_type} successfully using factory pattern")
-            
+        
         except Exception as e:
             logger.error(f"Model creation failed: {e}")
             
@@ -53094,11 +53562,6 @@ def train_model_interactive(
             device_config = hardware_config.get('device', system_config.get('device', 'auto'))
             encoding_dim = model_config.get('encoding_dim', DEFAULT_ENCODING_DIM)
             hidden_dims = model_config.get('hidden_dims', HIDDEN_LAYER_SIZES)
-            
-            # Configuration display
-            # print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-            # print(Fore.GREEN + Style.BRIGHT + "CONFIGURATION SUMMARY")
-            # print(Fore.YELLOW + Style.BRIGHT + "-" * 40)
             
             # Core configuration
             print(Fore.YELLOW + Style.BRIGHT + "Core Configuration:")
@@ -57576,7 +58039,7 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
                         print(f"   Best Loss: {partial_metrics.get('best_val_loss', 'N/A')}")
         
         return results
-        
+    
     except Exception as e:
         logger.error(f"Training launch failed: {e}", exc_info=True)
         print(f"\nFailed to launch training: {str(e)}")
@@ -58726,14 +59189,6 @@ def train_model_quick(
                 print(Fore.RED + Style.BRIGHT + "\nQuick training cancelled by user")
                 return {'success': False, 'cancelled': True, 'message': 'Quick training cancelled by user'}
         
-        # Set up logging level
-        # if verbose and not minimal_logging:
-        #     original_level = logger.level
-        #     logger.setLevel(logging.INFO)
-        # elif minimal_logging:
-        #     original_level = logger.level
-        #     logger.setLevel(logging.WARNING)
-        
         # Set up logging
         if verbose:
             handlers_to_suppress = []
@@ -58743,9 +59198,8 @@ def train_model_quick(
                     handler.setLevel(logging.CRITICAL)  # Temporarily suppress console output
         
         try:
-            # Display quick training header with enhanced styling
+            # Display quick training header
             if verbose:
-                
                 print(Fore.YELLOW + Style.BRIGHT + "\nConfiguration:")
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.YELLOW + Style.BRIGHT + f"{quick_model_type}")
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{quick_epochs}")
@@ -58756,7 +59210,6 @@ def train_model_quick(
             # Prepare training configuration optimized for speed
             comprehensive_config = {
                 # Model architecture - simplified for speed
-                #'model_architecture': {
                 'model': {
                     'model_type': quick_model_type,
                     'input_dim': quick_features,
@@ -58776,7 +59229,6 @@ def train_model_quick(
                 },
                 
                 # Training configuration - optimized for speed
-                #'training_config': {
                 'training': {
                     'batch_size': quick_batch_size,
                     'epochs': quick_epochs,
@@ -58798,7 +59250,6 @@ def train_model_quick(
                 },
                 
                 # Data configuration - synthetic for speed
-                #'data_config': {
                 'data': {
                     'normal_samples': quick_normal_samples,
                     'attack_samples': quick_attack_samples,
@@ -58817,7 +59268,6 @@ def train_model_quick(
                 },
                 
                 # Security configuration - simplified for speed
-                #'security_config': {
                 'security': {
                     'percentile': 95.0,  # Standard percentile
                     'attack_threshold': None,  # Will be calculated
@@ -58828,7 +59278,6 @@ def train_model_quick(
                 },
                 
                 # System configuration - optimized for speed
-                #'system_config': {
                 'system': {
                     'model_dir': Path(model_dir),
                     'log_dir': Path(model_dir) / "logs",
@@ -58842,7 +59291,6 @@ def train_model_quick(
                 },
                 
                 # Monitoring configuration - minimal for speed
-                #'monitoring_config': {
                 'monitoring': {
                     'verbose': verbose and not minimal_logging,
                     'debug_mode': False,
@@ -58857,7 +59305,6 @@ def train_model_quick(
                 },
                 
                 # Export configuration - minimal for speed
-                #'export_config': {
                 'export': {
                     'export_onnx': export_onnx,
                     'save_model': save_results,
@@ -58877,7 +59324,6 @@ def train_model_quick(
                 },
                 
                 # Validation configuration - minimal for speed
-                #'validation_config': {
                 'validation': {
                     'calculate_detailed_metrics': not fast_mode,
                     'cross_validation': False,  # Disabled for speed
@@ -60644,7 +61090,7 @@ def run_stability_test(
                     
                     # Store the complete hardware_data for reference
                     system_info['hardware_data_complete'] = hw_info
-                    
+                
                 except Exception as e:
                     logger.warning(f"Failed to extract hardware info from hardware_data: {e}")
                     system_info['hardware_error'] = str(e)
@@ -60751,7 +61197,7 @@ def run_stability_test(
                     else:
                         # Close the tree structure if no process memory
                         print()
-                
+            
             except Exception as e:
                 error_msg = f"System information collection failed: {e}"
                 logger.error(error_msg)
@@ -60834,7 +61280,7 @@ def run_stability_test(
                         print(Fore.GREEN + Style.BRIGHT + f"   Device: " + Fore.YELLOW + Style.BRIGHT + f"{device}")
                         print(Fore.GREEN + Style.BRIGHT + f"     └─ Mixed precision: " + Fore.YELLOW + Style.BRIGHT + f"{hw_test_results['details'].get('mixed_precision', 'N/A')}")
                     print("\n")
-                
+            
             except Exception as e:
                 hw_test_results['status'] = 'FAILED'
                 hw_test_results['error'] = str(e)
@@ -62002,7 +62448,7 @@ def hyperparameter_search(
     **kwargs
 ) -> Dict[str, Any]:
     """
-    Comprehensive hyperparameter search that integrates with the current train_model() implementation.
+    Hyperparameter search that integrates with the current train_model() implementation.
     
     Returns:
         Dictionary containing optimization results, best parameters, and study information.
@@ -62040,6 +62486,7 @@ def hyperparameter_search(
     
     # Set up HPO configuration with intelligent defaults
     hpo_config_section = final_config.setdefault('hyperparameter_optimization', {})
+    data_config = final_config.setdefault('data', {})
     
     # Core HPO parameters
     n_trials = hpo_config_section.setdefault('n_trials', cleaned_params.get('n_trials', 100))
@@ -62088,7 +62535,10 @@ def hyperparameter_search(
     # Advanced parameters
     parallel_jobs = hpo_config_section.setdefault('parallel_jobs', cleaned_params.get('parallel_jobs', 1))
     memory_limit = hpo_config_section.setdefault('memory_limit', cleaned_params.get('memory_limit', None))
-
+    
+    preprocessed_dataset = Path(data_config.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"))
+    preprocessing_artifacts = Path(data_config.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"))
+    
     # Set up logging
     if verbose:
         original_level = logger.level
@@ -62119,6 +62569,32 @@ def hyperparameter_search(
         'errors': [],
         'warnings': []
     }
+    
+    if data_path is None:
+        data_path = preprocessed_dataset
+    
+    if artifacts_path is None:
+        artifacts_path = preprocessing_artifacts
+    
+    if data_path.exists() and artifacts_path.exists():
+        if data_path.is_file() and artifacts_path.is_file():
+            preprocessing_outputs = True
+        else:
+            preprocessing_outputs = False
+    else:
+        preprocessing_outputs = False
+    
+    if not preprocessing_outputs:
+        # Get preprocessing outputs using the helper function
+        csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(interactive=True)
+        data_path = csv_path
+        artifacts_path = pkl_path
+    else:
+        data_path = data_path
+        artifacts_path = artifacts_path
+    
+    data_config['data_path'] = data_path
+    data_config['artifacts_path'] = artifacts_path
     
     try:
         # Display HPO header
@@ -63558,17 +64034,17 @@ def setup_hyperparameter_optimization(
     )
     hpo_section['use_real_data'] = use_real_data
 
-    data_path = _extract_with_preset_fallback(
-        'data_path', data_config.get('data_path', Path(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")), ['data', 'data_path'],
+    preprocessed_dataset = _extract_with_preset_fallback(
+        'data_path', Path(data_config.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")), ['data', 'data_path'],
         None
     )
-    hpo_section['data_path'] = data_path
+    hpo_section['data_path'] = preprocessed_dataset
 
-    artifacts_path = _extract_with_preset_fallback(
-        'artifacts_path', data_config.get('artifacts_path', Path(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")), ['data', 'artifacts_path'],
+    preprocessing_artifacts = _extract_with_preset_fallback(
+        'artifacts_path', Path(data_config.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")), ['data', 'artifacts_path'],
         None
     )
-    hpo_section['artifacts_path'] = artifacts_path
+    hpo_section['artifacts_path'] = preprocessing_artifacts
 
     normal_samples = _extract_with_preset_fallback(
         'normal_samples', data_config.get('normal_samples', 10000), ['data', 'normal_samples'],
@@ -63996,6 +64472,32 @@ def setup_hyperparameter_optimization(
         'warnings': [],
         'errors': []
     }
+    
+    if data_path is None:
+        data_path = preprocessed_dataset
+    
+    if artifacts_path is None:
+        artifacts_path = preprocessing_artifacts
+    
+    if data_path.exists() and artifacts_path.exists():
+        if data_path.is_file() and artifacts_path.is_file():
+            preprocessing_outputs = True
+        else:
+            preprocessing_outputs = False
+    else:
+        preprocessing_outputs = False
+    
+    if not preprocessing_outputs:
+        # Get preprocessing outputs using the helper function
+        csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(interactive=True)
+        data_path = csv_path
+        artifacts_path = pkl_path
+    else:
+        data_path = data_path
+        artifacts_path = artifacts_path
+    
+    data_config['data_path'] = data_path
+    data_config['artifacts_path'] = artifacts_path
     
     try:
         # Display setup header
@@ -67242,7 +67744,7 @@ def run_hyperparameter_optimization(
     **kwargs
 ) -> Optional[Dict[str, Any]]:
     """
-    Run comprehensive hyperparameter optimization with full express setup compatibility.
+    Run hyperparameter optimization with full express setup compatibility.
     
     Enhanced to fully support express setup configurations including:
     - Optimization focus strategies (balanced/speed/accuracy/efficiency)
@@ -67330,6 +67832,7 @@ def run_hyperparameter_optimization(
     
     # Set up defaults with proper None handling
     hpo_section = final_config.setdefault('hyperparameter_optimization', {})
+    data_config = final_config.setdefault('data', {})
     
     # Extract express setup configuration if available
     express_config = hpo_section.get('express_setup', {})
@@ -67378,8 +67881,8 @@ def run_hyperparameter_optimization(
     
     # Data parameters with None checks
     use_real_data = hpo_section.setdefault('use_real_data', cleaned_params.get('use_real_data', None))
-    data_path = hpo_section.setdefault('data_path', cleaned_params.get('data_path', Path(DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")))
-    artifacts_path = hpo_section.setdefault('artifacts_path', cleaned_params.get('artifacts_path', Path(DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")))
+    preprocessed_dataset = Path(hpo_section.setdefault('data_path', cleaned_params.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")))
+    preprocessing_artifacts = Path(hpo_section.setdefault('artifacts_path', cleaned_params.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")))
     
     # Ensure numeric parameters are properly handled
     normal_samples = cleaned_params.get('normal_samples')
@@ -67545,6 +68048,32 @@ def run_hyperparameter_optimization(
         'analysis_completed': False,
         'final_training_completed': False
     }
+    
+    if data_path is None:
+        data_path = preprocessed_dataset
+    
+    if artifacts_path is None:
+        artifacts_path = preprocessing_artifacts
+    
+    if data_path.exists() and artifacts_path.exists():
+        if data_path.is_file() and artifacts_path.is_file():
+            preprocessing_outputs = True
+        else:
+            preprocessing_outputs = False
+    else:
+        preprocessing_outputs = False
+    
+    if not preprocessing_outputs:
+        # Get preprocessing outputs using the helper function
+        csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(interactive=True)
+        data_path = csv_path
+        artifacts_path = pkl_path
+    else:
+        data_path = data_path
+        artifacts_path = artifacts_path
+    
+    hpo_section['data_path'] = data_path
+    hpo_section['artifacts_path'] = artifacts_path
     
     try:
         # Update final configuration
@@ -71322,7 +71851,7 @@ def _run_hpo_model_comparison(
         optimization_focus: Optimization focus for comparison
         operation_mode: Operation mode compatibility
         **kwargs: Additional parameters
-        
+    
     Returns:
         Dictionary with comparison results or None if cancelled/failed
     """
@@ -71561,27 +72090,27 @@ def _run_hpo_model_comparison(
             # Set parameters based on choice with configurations
             trial_configs = {
                 '1': {
-                    'trials': 10, 
-                    'epochs': 5, 
-                    'timeout': 60, 
+                    'trials': 10,
+                    'epochs': 5,
+                    'timeout': 60,
                     'name': 'Quick',
                     'description': 'Fast comparison for initial assessment',
                     'cv_folds': 3,
                     'color': Fore.GREEN
                 },
                 '2': {
-                    'trials': 50, 
-                    'epochs': 20, 
-                    'timeout': 120, 
+                    'trials': 50,
+                    'epochs': 20,
+                    'timeout': 120,
                     'name': 'Standard',
                     'description': 'Balanced comparison for reliable results',
                     'cv_folds': 5,
                     'color': Fore.CYAN
                 }, 
                 '3': {
-                    'trials': 100, 
-                    'epochs': 25, 
-                    'timeout': 180, 
+                    'trials': 100,
+                    'epochs': 25,
+                    'timeout': 180,
                     'name': 'Thorough',
                     'description': 'Comprehensive comparison for production use',
                     'cv_folds': 5,
@@ -71627,7 +72156,7 @@ def _run_hpo_model_comparison(
                     config_name = "Custom"
                     config_description = "User-defined comparison parameters"
                     config_color = Fore.BLUE
-                    
+                
                 except ValueError as ve:
                     print(Fore.RED + Style.BRIGHT + f"\nInvalid input value: {str(ve)}")
                     print(Fore.YELLOW + Style.BRIGHT + "\nUsing standard configuration as fallback.")
@@ -78845,7 +79374,7 @@ def _estimate_hpo_time(
 
 def _display_hpo_results(results: Dict[str, Any]) -> None:
     """
-    Display comprehensive HPO results in a user-friendly format with complete integrated functionality.
+    Display HPO results in a user-friendly format with complete integrated functionality.
     Handles all result types from updated HPO functions with rich formatting and detailed analysis.
     """
     try:
@@ -79477,7 +80006,7 @@ def _display_hpo_results(results: Dict[str, Any]) -> None:
                 if normal_samples > 0 or attack_samples > 0:
                     total_samples = normal_samples + attack_samples
                     attack_ratio = (attack_samples / total_samples * 100) if total_samples > 0 else 0
-                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Dataset Size: " + Fore.GREEN + Style.BRIGHT + f"{total_samples:,} samples")
+                    print(Fore.CYAN + Style.BRIGHT + f"  ├─ Sample Size: " + Fore.GREEN + Style.BRIGHT + f"{total_samples:,} samples")
                     print(Fore.CYAN + Style.BRIGHT + f"  ├─ Normal Samples: " + Fore.GREEN + Style.BRIGHT + f"{normal_samples:,}")
                     print(Fore.CYAN + Style.BRIGHT + f"  ├─ Attack Samples: " + Fore.GREEN + Style.BRIGHT + f"{attack_samples:,}")
                     print(Fore.CYAN + Style.BRIGHT + f"  ├─ Attack Ratio: " + Fore.GREEN + Style.BRIGHT + f"{attack_ratio:.1f}%")
@@ -80486,9 +81015,8 @@ def export_to_onnx(
         memory_stats[f'{stage}_ram'] = mem.used / (1024**3)
         if torch.cuda.is_available():
             memory_stats[f'{stage}_vram'] = torch.cuda.memory_allocated() / (1024**3)
-        logger.debug(f"Memory at {stage}: RAM {memory_stats[f'{stage}_ram']:.2f}GB | "
-                    f"VRAM {memory_stats.get(f'{stage}_vram', 0):.2f}GB")
-
+        logger.debug(f"Memory at {stage}: RAM {memory_stats[f'{stage}_ram']:.2f}GB | VRAM {memory_stats.get(f'{stage}_vram', 0):.2f}GB")
+    
     try:
         # Load configuration with memory limits
         if config is None:
@@ -80504,7 +81032,7 @@ def export_to_onnx(
         max_ram_usage = export_config.get('max_ram_gb', 8)
         max_vram_usage = export_config.get('max_vram_gb', 2) if torch.cuda.is_available() else 0
         chunk_size = export_config.get('chunk_size', min(128, input_dim))
-
+        
         # Verify system resources before starting
         current_ram = psutil.virtual_memory().used / (1024**3)
         current_vram = torch.cuda.memory_allocated() / (1024**3) if torch.cuda.is_available() else 0
@@ -80513,7 +81041,7 @@ def export_to_onnx(
             raise MemoryError(f"High RAM usage detected: {current_ram:.1f}/{max_ram_usage}GB")
         if current_vram > max_vram_usage * 0.8:
             raise MemoryError(f"High VRAM usage detected: {current_vram:.1f}/{max_vram_usage}GB")
-
+        
         # Apply configuration with parameter precedence
         if model_dir is None:
             model_dir = Path(system_config.get('model_dir', DEFAULT_MODEL_DIR))
@@ -80525,7 +81053,7 @@ def export_to_onnx(
         
         logger.info(f"Exporting model to ONNX format at {onnx_path}")
         log_memory_usage('pre_export')
-
+        
         # Memory protection context
         with torch.no_grad(), torch.cuda.amp.autocast(enabled=False):
             # Prepare directory and inputs with memory cleanup
@@ -80547,9 +81075,9 @@ def export_to_onnx(
                     if dummy_input is not None:
                         del dummy_input
                     raise MemoryError(f"Input creation failed: {str(e)}")
-
+                
                 log_memory_usage('post_input_creation')
-
+                
                 # Export with memory monitoring
                 try:
                     torch.onnx.export(
@@ -80569,9 +81097,9 @@ def export_to_onnx(
                 finally:
                     del dummy_input
                     torch.cuda.empty_cache() if torch.cuda.is_available() else None
-
+                
                 log_memory_usage('post_export')
-
+                
                 # Validation with memory protection
                 validation_result = None
                 if export_config.get('runtime_validation', True) and ONNXRUNTIME_AVAILABLE:
@@ -80589,7 +81117,7 @@ def export_to_onnx(
                 save_metadata(metadata, model_dir / "onnx_export_metadata.json")
                 logger.info(f"Export completed: {onnx_path}")
                 return onnx_path
-
+            
             except Exception as e:
                 # Cleanup any partial files
                 if onnx_path.exists():
@@ -80598,7 +81126,7 @@ def export_to_onnx(
                     except:
                         pass
                 raise
-
+    
     except MemoryError as e:
         logger.error(f"Memory error during export: {str(e)}")
         log_memory_usage('error')
@@ -80617,8 +81145,8 @@ def export_to_onnx(
             torch.cuda.empty_cache()
 
 def validate_onnx_model(
-    model: nn.Module, 
-    onnx_path: Path, 
+    model: nn.Module,
+    onnx_path: Path,
     device: torch.device,
     tolerance: float = 1e-5,
     strict: bool = False
@@ -86198,13 +86726,9 @@ def compare_configs_interactive():
 
 def main(logger: logging.Logger):
     """Main entry point with comprehensive argument parsing and system orchestration."""
-    # Initialize basic logger first (fallback)
-    #logger = logging.getLogger(__name__)
-    
     # Initialize system to set up logging and configuration
     try:
         system_status, config, logger = initialize_system()
-        #validate_config(config)
     except Exception as e:
         # Use fallback logger since initialize_system failed
         logger.warning(f"Configuration initialization failed, using defaults: {e}")
@@ -86214,8 +86738,6 @@ def main(logger: logging.Logger):
     if len(sys.argv) == 1:
         interactive_main()
         return
-
-    # Initialize configuration system early
     
     # Extract configuration sections for defaults
     training_config = config.get('training', {})

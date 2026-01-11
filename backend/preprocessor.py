@@ -180,7 +180,7 @@ class MemoryAwarePreprocessor:
             console.print("\n[bold green]Running system checks and Preprocessor initialization...[/bold green]")
             
             # Show loading animation
-            with console.status("[bold cyan]Initializing MemoryAwarePreprocessor...[/bold cyan]", spinner="dots"):
+            with console.status("[bold cyan]Initializing Memory-Aware Preprocessor...[/bold cyan]", spinner="dots"):
                 time.sleep(1.5)
         
         except Exception:
@@ -286,11 +286,9 @@ class MemoryAwarePreprocessor:
             try:
                 # Small delay for any pending I/O
                 time.sleep(0.1)
-
                 # Flush streams
                 sys.stdout.flush()
                 sys.stderr.flush()
-
                 # Windows-specific input buffer clearing
                 if sys.platform == 'win32':
                     try:
@@ -299,7 +297,6 @@ class MemoryAwarePreprocessor:
                             msvcrt.getch()
                     except Exception:
                         pass
-                
                 # Final flush
                 sys.stdin.flush()
             except Exception as cleanup_error:
@@ -329,7 +326,6 @@ class MemoryAwarePreprocessor:
 
     def _initialize_directories(self) -> None:
         """Initialize and validate all required directories with interactive prompts."""
-        
         # Display directory initialization status
         self.print_color("\nSetting up required directories...", 'warning')
         
@@ -361,7 +357,6 @@ class MemoryAwarePreprocessor:
         )
         
         # Results directory (from config or default)
-        #self.results_dir = Path(__file__).resolve().parent / "results"
         self.results_dir = Path(__file__).resolve().parent / "results" / "preprocessing"
         self._create_and_validate_directory(
             self.results_dir,
@@ -661,54 +656,47 @@ class MemoryAwarePreprocessor:
 
     def _initialize_files(self) -> None:
         """Initialize required files with default content if needed."""
-
         self.print_color("\nInitializing required files...", 'warning')
         
-        # Show progress
-        with console.status("[bold cyan]Setting up configuration files...[/bold cyan]", spinner="dots"):
-            time.sleep(0.5)
-            
-            # Initialize history file
-            self._initialize_file(
-                self.history_file,
-                [],
-                "History file"
-            )
-            
-            # Initialize config file
-            default_config = {
-                'version': self.VERSION,
-                'default_output_dir': str(self.results_dir),
+        # Initialize history file
+        self._initialize_file(
+            self.history_file,
+            [],
+            "History file"
+        )
+        
+        # Initialize config file
+        default_config = {
+            'version': self.VERSION,
+            'default_output_dir': str(self.results_dir),
+            'default_results_dir': str(self.results_dir),
+            'default_target_mb': 256,
+            'default_min_chunk': self.min_chunk_size,
+            'recent_files': [],
+            'max_history_entries': self.max_history_entries,
+            'last_updated': datetime.now().isoformat(),
+            'preprocessing_config': {
+                'default_output_dir': str(self.preprocessing_results_dir),
+                'default_input_dir': str(self.datasets_dir),
                 'default_results_dir': str(self.results_dir),
-                'default_target_mb': 256,
-                'default_min_chunk': self.min_chunk_size,
-                'recent_files': [],
-                'max_history_entries': self.max_history_entries,
-                'last_updated': datetime.now().isoformat(),
-                'preprocessing_config': {
-                    #'default_output_dir': str(self.models_dir),
-                    #'default_output_dir': str(self.results_dir),
-                    'default_output_dir': str(self.preprocessing_results_dir),
-                    'default_input_dir': str(self.datasets_dir),
-                    'default_results_dir': str(self.results_dir),
-                    'memory_safety_factor': MEMORY_SAFETY_FACTOR,
-                    'hybrid_feature_count': HYBRID_FEATURE_COUNT,
-                    'scaler_range': SCALER_RANGE
-                }
+                'memory_safety_factor': MEMORY_SAFETY_FACTOR,
+                'hybrid_feature_count': HYBRID_FEATURE_COUNT,
+                'scaler_range': SCALER_RANGE
             }
-            self._initialize_file(
-                self.config_file,
-                default_config,
-                "Config file"
-            )
-            
-            # Initialize log file
-            self._initialize_file(
-                self.log_file,
-                f"Memory-Aware Chunk Tester Log - {datetime.now().isoformat()}\n",
-                "Log file",
-                is_json=False
-            )
+        }
+        self._initialize_file(
+            self.config_file,
+            default_config,
+            "Config file"
+        )
+        
+        # Initialize log file
+        self._initialize_file(
+            self.log_file,
+            f"Preprocessor Log - {datetime.now().isoformat()}\n",
+            "Log file",
+            is_json=False
+        )
 
     def _initialize_file(
         self,
@@ -720,7 +708,7 @@ class MemoryAwarePreprocessor:
         """Helper method to initialize a file with default content with user interaction."""
         try:
             if not file_path.exists():
-                self.print_color(f"\n{name} does not exist: {file_path}", 'info')
+                self.print_color(f"\n{name} does not exist: {file_path}", 'error')
                 
                 response = input(Fore.YELLOW + Style.BRIGHT + f"\nCreate {name}? (Y/n): " + Style.RESET_ALL).strip().lower()
                 
@@ -3622,11 +3610,10 @@ class MemoryAwarePreprocessor:
         run_info: Optional[Dict[str, Any]] = None
     ) -> None:
         """Main preprocessing pipeline with memory-aware chunked processing and run selection."""
-        
         # Setup experiment tracking - use provided run_info or create default
         start_time = datetime.now()
         timestamp = start_time.strftime("%Y%m%d_%H%M%S")
-
+        
         if output_dir is None:
             preprocessing_config = self.config.get('preprocessing_config', {})
             output_dir = preprocessing_config.get('default_output_dir', self.preprocessing_results_dir)
@@ -4716,7 +4703,6 @@ class MemoryAwarePreprocessor:
         self.print_color("\n" + "-" * 40, 'highlight')
         self.print_color("MODIFY CONFIGURATION", 'highlight')
         self.print_color("-" * 40, 'highlight')
-        
         self.print_color("Current Configuration:", 'info')
         for key, value in self.config.items():
             if key != 'recent_files' and key != 'preprocessing_config':
@@ -5341,7 +5327,8 @@ class MemoryAwarePreprocessor:
                         # Get next sequential run number for this output directory
                         def get_next_run_number(output_dir: Path) -> int:
                             """Get the next sequential run number for the tracking directory with error handling."""
-                            run_tracker_file = Path(output_dir) / ".preprocessor_run_tracker"
+                            #run_tracker_file = Path(output_dir) / ".preprocessor_run_tracker"
+                            run_tracker_file = output_dir / ".preprocessor_run_tracker"
                             max_retries = 3
                             retry_delay = 0.1
                             
