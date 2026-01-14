@@ -911,7 +911,7 @@ def loading_screen(
             
             try:
                 if supports_color and banner_width > 60:
-                    console.print(Panel.fit(
+                    console.print("\n", Panel.fit(
                         f"Running {check_type_info}\n"
                         "Please wait while we validate your system...",
                         border_style="cyan",
@@ -972,11 +972,9 @@ def loading_screen(
                 if system_error or system_status == "CRITICAL_FAILURE" or critical_failed > 0:
                     # Critical failure - system cannot continue
                     failed_critical_checks = [
-                        name.replace("_", " ").title() 
-                        for name, result in results.items() 
-                        if (result and hasattr(result, 'level') and hasattr(result, 'passed') and
-                            result.level == CheckLevel.CRITICAL and not result.passed and 
-                            name != "system_summary")
+                        name.replace("_", " ").title()
+                        for name, result in results.items()
+                        if (result and hasattr(result, 'level') and hasattr(result, 'passed') and result.level == CheckLevel.CRITICAL and not result.passed and name != "system_summary")
                     ]
                     
                     error_message = (
@@ -988,7 +986,7 @@ def loading_screen(
                     
                     try:
                         if supports_color and banner_width > 60:
-                            console.print(Panel.fit(
+                            console.print("\n", Panel.fit(
                                 f"{error_message}",
                                 border_style="red",
                                 style="bold red",
@@ -1035,11 +1033,11 @@ def loading_screen(
             
             #return return_value
             return return_value, results if return_value else None
-            
+        
         except KeyboardInterrupt:
             # Thread-safe interrupt handling
             try:
-                console.print(Panel.fit(
+                console.print("\n", Panel.fit(
                     "System initialization was interrupted by user (Ctrl+C).",
                     border_style="yellow" if supports_color else "ascii",
                     title="INITIALIZATION INTERRUPTED",
@@ -1053,7 +1051,7 @@ def loading_screen(
                 logger.warning("System initialization interrupted by user (Ctrl+C).")
             
             sys.exit(0)
-            
+        
         except Exception as e:
             # Thread-safe error handling
             error_msg = (
@@ -1064,7 +1062,7 @@ def loading_screen(
             
             try:
                 if supports_color:
-                    console.print(Panel.fit(
+                    console.print("\n", Panel.fit(
                         f"{error_msg}",
                         border_style="red",
                         style="bold red",
@@ -1104,10 +1102,11 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             try:
                 if supports_color and banner_width > 80:
                     fail_table = Table(
-                        title="[bold yellow]Failed Non-Critical Checks[/bold yellow]",
+                        title="\nFailed Non-Critical Checks",
                         box=box.SIMPLE,
                         header_style="bold magenta",
                         title_justify="left",
+                        title_style="bold yellow",
                         show_header=True,
                         show_lines=True,
                         width=min(100, console_width - 4)
@@ -1136,7 +1135,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                         console.print(f"  - {check['name']}: {check['message']} ({check['level']})")
                 
                 console.print()
-                
+            
             except Exception as table_error:
                 # Ultra-safe fallback
                 print(Fore.YELLOW + Style.BRIGHT + "\nSome non-critical checks failed:")
@@ -1163,7 +1162,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
         )
         try:
             if supports_color and banner_width > 60:
-                console.print(Panel.fit(
+                console.print("\n", Panel.fit(
                     f"[bold {status_color}]{prompt_text}[/bold {status_color}]",
                     border_style=status_color,
                     title="User Decision Required",
@@ -1183,7 +1182,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
         
         for attempt in range(max_attempts):
             try:
-                response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (Y/n/q): ").strip().lower()
+                response = input(Fore.YELLOW + Style.BRIGHT + f"\nContinue anyway? (Y/n/q): " + Style.RESET_ALL).strip().lower()
                 
                 # Default to yes
                 if response in ['y', 'yes', '']:
@@ -1195,7 +1194,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
                 else:
                     if attempt < max_attempts - 1:
                         print(Fore.YELLOW + Style.BRIGHT + "\nPlease enter 'y' for yes or 'n' for no or 'q' for quit.")
-                    
+            
             except (EOFError, KeyboardInterrupt):
                 user_choice = False
                 break
@@ -1214,12 +1213,12 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
         if user_choice is False:
             try:
                 cancel_message = (
-                    "USER CANCELLED INITIALIZATION\n\n"
+                    "USER CANCELLED INITIALIZATION\n"
                     "You chose to quit and resolve the issues.\n"
                     "Please check the logs and fix the failed checks."
                 )
                 if supports_color and banner_width > 60:
-                    console.print(Panel.fit(
+                    console.print("\n", Panel.fit(
                         f"{cancel_message}",
                         border_style="red",
                         title="CANCELLED",
@@ -1247,12 +1246,12 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
         # User chose to continue
         try:
             continue_message = (
-                "CONTINUING WITH WARNINGS\n\n"
-                "You chose to continue despite the warnings.\n"
+                "CONTINUING WITH WARNINGS\n"
+                "Continuing despite the warnings.\n"
                 "Some functionality may be limited."
             )
             if supports_color and banner_width > 60:
-                console.print(Panel.fit(
+                console.print("\n", Panel.fit(
                     f"{continue_message}",
                     border_style="green",
                     title="CONTINUING",
@@ -1273,7 +1272,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
         time.sleep(2)
         
         return True
-        
+    
     except Exception as decision_error:
         if logger:
             logger.error(f"Error in user decision handling: {decision_error}")
@@ -1309,7 +1308,7 @@ def _handle_user_decision_safe(results, system_status, important_failed, informa
             
             # Final flush
             sys.stdin.flush()
-            
+        
         except Exception as cleanup_error:
             if logger:
                 logger.debug(f"Input buffer cleanup failed: {cleanup_error}")
@@ -1337,7 +1336,7 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         
         try:
             if supports_color and banner_width > 60:
-                console.print(Panel.fit(
+                console.print("\n", Panel.fit(
                     f"{success_message}",
                     border_style="green",
                     style="bold green",
@@ -1356,7 +1355,7 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         
         for attempt in range(max_attempts):
             try:
-                response = input(Fore.YELLOW + Style.BRIGHT + "\nYour choice: ").strip().lower()
+                response = input(Fore.YELLOW + Style.BRIGHT + f"\nYour choice (Y/n): " + Style.RESET_ALL).strip().lower()
                 
                 # Default to yes (continue)
                 if response in ['y', 'yes', '']:
@@ -1368,7 +1367,7 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
                 else:
                     if attempt < max_attempts - 1:
                         print(Fore.YELLOW + Style.BRIGHT + "\nPlease enter 'y' for yes or 'n' for no.")
-                    
+            
             except (EOFError, KeyboardInterrupt):
                 user_choice = False
                 break
@@ -1387,12 +1386,12 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         if user_choice is False:
             try:
                 quit_message = (
-                    "USER CHOSE TO QUIT\n\n"
-                    "You chose to quit despite all checks passing.\n"
+                    "USER CHOSE TO QUIT\n"
+                    "Quiting despite all checks passing.\n"
                     "System initialization cancelled."
                 )
                 if supports_color and banner_width > 60:
-                    console.print(Panel.fit(
+                    console.print("\n", Panel.fit(
                         f"{quit_message}",
                         border_style="red",
                         style="bold red",
@@ -1416,12 +1415,12 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         # User chose to continue
         try:
             continue_message = (
-                "CONTINUING TO SYSTEM\n\n"
+                "CONTINUING TO SYSTEM\n"
                 "All checks passed - proceeding to main system."
             )
             
             if supports_color and banner_width > 60:
-                console.print(Panel.fit(
+                console.print("\n", Panel.fit(
                     f"{continue_message}",
                     border_style="green",
                     title="PROCEEDING",
@@ -1444,7 +1443,7 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
         time.sleep(2)
         
         return True
-        
+    
     except Exception as success_error:
         if logger:
             logger.error(f"Error in success scenario: {success_error}")
@@ -1477,7 +1476,7 @@ def _handle_success_scenario(summary, elapsed_time, supports_color, banner_width
             
             # Final flush
             sys.stdin.flush()
-            
+        
         except Exception as cleanup_error:
             if logger:
                 logger.debug(f"Input buffer cleanup failed: {cleanup_error}")
@@ -1684,11 +1683,11 @@ def display_check_results(
         report_type = "Extended" if extended else "Basic"
         if include_performance:
             report_type += " (Performance)"
-            
+        
         table = Table(
-            title=f"\n[bold]SYSTEM DIAGNOSTICS REPORT - {report_type}[/bold]",
+            title=f"\nSYSTEM DIAGNOSTICS REPORT - {report_type}",
             box=box.ROUNDED,
-            header_style="bold white",
+            header_style="bold magenta",
             border_style="white",
             title_style="bold yellow",
             title_justify="left",
@@ -1707,19 +1706,18 @@ def display_check_results(
         for level in [CheckLevel.CRITICAL, CheckLevel.IMPORTANT, CheckLevel.INFORMATIONAL]:
             # Filter checks for this level, excluding summary/error entries
             level_rows = [
-                (name, result) for name, result in results.items() 
-                if result.level == level 
-                and name not in ["system_summary", "system_error"]
+                (name, result) for name, result in results.items()
+                if result.level == level and name not in ["system_summary", "system_error"]
             ]
             
             if not level_rows:
                 continue
-                
+            
             # Add section header with colored background
             level_style = {
-                CheckLevel.CRITICAL: "bold white on red",
-                CheckLevel.IMPORTANT: "bold white on yellow",
-                CheckLevel.INFORMATIONAL: "bold white on blue"
+                CheckLevel.CRITICAL: "bold black on red",
+                CheckLevel.IMPORTANT: "bold black on yellow",
+                CheckLevel.INFORMATIONAL: "bold black on blue"
             }[level]
             
             table.add_row(
@@ -1804,14 +1802,14 @@ def display_check_results(
         # Add summary/error rows if present
         if "system_summary" in results:
             summary = results["system_summary"]
-            summary_style = "bold white on green" if summary.passed else "bold white on red"
+            summary_style = "bold black on green" if summary.passed else "bold black on red"
             checks_run = summary.details.get('total_checks', 0)
             passed_checks = summary.details.get('passed_checks', 0)
             checks_critical = summary.details.get('critical_failures', 0)
             summary_status = summary.details.get('system_status', 'UNKNOWN')
             
             table.add_row(
-                Text("SUMMARY", style="bold white on yellow"),
+                Text("SUMMARY", style="bold black on yellow"),
                 Text("PASS" if summary.passed else "FAIL", style=summary_style),
                 "",
                 Text(
@@ -1829,13 +1827,13 @@ def display_check_results(
             error_message = (f"{error.message}\n"
                              f"[bold yellow]{error_details}[/bold yellow]")
             table.add_row(
-                Text("FATAL ERROR", style="bold white on red"),
-                Text("ERROR", style="bold white on red"),
+                Text("FATAL ERROR", style="bold black on red"),
+                Text("ERROR", style="bold black on red"),
                 "",
                 Text(
                     f"{error_message}\n"
                     f"Completed checks: {', '.join(checks_completed)}",
-                    style="bold white on red"
+                    style="bold black on red"
                 )
             )
         
@@ -4348,7 +4346,7 @@ def display_configuration_details(config_result: CheckResult) -> None:
 def check_model_variants() -> CheckResult:
     """Check if model variants are properly initialized with enhanced detail collection."""
     try:
-        # Initialize model variants silently using the enhanced function
+        # Initialize model variants
         initialize_model_variants(silent=True)
         
         if not MODEL_VARIANTS:
@@ -4367,7 +4365,7 @@ def check_model_variants() -> CheckResult:
                 }
             )
         
-        # Validate model variants silently using the enhanced function
+        # Validate model variants
         variant_status = validate_model_variants(logger, silent=True)
         
         # Enhanced status categorization based on updated validation function
@@ -6893,7 +6891,6 @@ DEBUG_PRESET = {
         'compatibility': ['SimpleAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            #'architecture': platform.machine(),
             'architecture': platform.architecture(),
             'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
@@ -7398,6 +7395,52 @@ PRESET_CONFIGS.update({
 
 _cached_config = None
 _config_cache_time = None
+
+def print_color(message: str, color: str = 'white', style: str = 'bright'):
+    """Helper function for colored output."""
+    color_map = {
+        'white': Fore.WHITE,
+        'red': Fore.RED,
+        'green': Fore.GREEN,
+        'yellow': Fore.YELLOW,
+        'blue': Fore.BLUE,
+        'magenta': Fore.MAGENTA,
+        'cyan': Fore.CYAN
+    }
+    style_map = {
+        'normal': Style.NORMAL,
+        'bright': Style.BRIGHT,
+        'dim': Style.DIM
+    }
+    color_code = color_map.get(color, Fore.WHITE)
+    style_code = style_map.get(style, Style.NORMAL)
+    print(f"{style_code}{color_code}{message}{Style.RESET_ALL}")
+
+class ProgressHelper:
+    """Reusable factory for creating consistent alive_progress bars."""
+    def __init__(self, titles: list[str] = None):
+        """
+        Initialize helper with optional list of titles.
+        
+        Args:
+            titles: Optional list of title strings (not needed for simple approach)
+        """
+        # Titles parameter is kept for backward compatibility but not used
+        self.titles = titles if titles else []
+    
+    def bar(self, title: str, total: int, unit: str):
+        """
+        Return a configured alive_progress bar with consistent formatting.
+        
+        Args:
+            title: The title to display
+            total: Total number of items to process
+            unit: Unit name for the progress bar
+        
+        Returns:
+            Configured alive_bar context manager
+        """
+        return alive_bar(total, title=title, unit=unit, length=25, elapsed=True, title_length=25)
 
 def invalidate_config_cache():
     """Invalidate the configuration cache to force reload with enhanced logging."""
@@ -9179,356 +9222,6 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
         # Re-raise the original exception
         raise
 
-def load_configs(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
-    """Load config file with enhanced validation, error recovery, migration support,
-    integrated named configuration functionality, and intelligent memory management 
-    for optimal performance during large file processing.
-    
-    Args:
-        config_path: Path to the configuration file or name of saved/named configuration
-    
-    Returns:
-        Dictionary containing the loaded configuration
-    
-    Raises:
-        ValueError: If configuration format is invalid
-        FileNotFoundError: If configuration file not found
-    """
-    try:
-        # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
-        hardware_data = None
-        total_ram_gb = 8.0  # Conservative default
-        
-        try:
-            hardware_data = check_hardware(include_memory_usage=True)
-            total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
-        except Exception as e:
-            logger.debug(f"Hardware detection failed during load_config: {e}")
-        
-        # Handle named configuration loading
-        if isinstance(config_path, str) or (isinstance(config_path, Path) and not config_path.exists()):
-            config_name = str(config_path)
-            
-            # First check if it's a named configuration
-            registry_path = CONFIG_DIR / "named_configs_registry.json"
-            if registry_path.exists():
-                try:
-                    with open(registry_path, 'r', encoding='utf-8') as f:
-                        registry = json.load(f)
-                    named_configs = registry.get("configs", {})
-                    
-                    if config_name in named_configs:
-                        actual_config_path = Path(named_configs[config_name]["path"])
-                        
-                        if not actual_config_path.exists():
-                            raise FileNotFoundError(f"Named configuration file not found: {actual_config_path}")
-                        
-                        # MEMORY OPTIMIZATION - Clear memory before recursive call
-                        if total_ram_gb < 8:
-                            try:
-                                pre_recursive_clear = enhanced_clear_memory(
-                                    aggressive=True,
-                                    hardware_data=hardware_data
-                                )
-                                if pre_recursive_clear.get('success'):
-                                    logger.debug("Memory optimized before named config recursive load")
-                            except Exception as e:
-                                logger.debug(f"Pre-recursive memory optimization failed: {e}")
-                        
-                        # Update last accessed time in registry
-                        try:
-                            update_named_config_registry(config_name, actual_config_path, {
-                                "created": named_configs[config_name].get("created"),
-                                "modified": named_configs[config_name].get("modified"),
-                                "config": {
-                                    "preset_used": named_configs[config_name].get("preset_used"),
-                                    "model_type": named_configs[config_name].get("model_type"),
-                                    "checksum": named_configs[config_name].get("checksum")
-                                }
-                            })
-                        except Exception as e:
-                            logger.debug(f"Failed to update access time for {config_name}: {e}")
-                        
-                        # Load the actual config file
-                        return load_config(actual_config_path)
-                        
-                except Exception as e:
-                    logger.warning(f"Failed to check named config registry: {e}")
-            
-            # If not a named config, try regular saved config
-            regular_config_path = CONFIG_DIR / f"{config_name}.json"
-            if regular_config_path.exists():
-                return load_config(regular_config_path)
-            
-            raise FileNotFoundError(f"Configuration '{config_name}' not found")
-        
-        # Standard file loading logic with memory optimization
-        try:
-            if not config_path.exists():
-                logger.info(f"No configuration file found at {config_path}")
-                return {}
-            
-            # Check file size and basic validity with memory considerations
-            file_size = config_path.stat().st_size
-            if file_size == 0:
-                logger.warning(f"Configuration file {config_path} is empty")
-                return {}
-            
-            # 10MB limit
-            if file_size > 10 * 1024 * 1024:
-                logger.warning(f"Configuration file {config_path} is unusually large ({file_size} bytes)")
-            
-            # MEMORY OPTIMIZATION - Clear memory before loading large files
-            large_file_threshold = 1024 * 1024  # 1MB
-            if file_size > large_file_threshold or total_ram_gb < 8:
-                try:
-                    pre_load_clear = enhanced_clear_memory(
-                        aggressive=file_size > large_file_threshold * 5 or total_ram_gb < 4,
-                        hardware_data=hardware_data
-                    )
-                    if pre_load_clear.get('success'):
-                        logger.debug(f"Memory optimized before loading {file_size} byte config file")
-                except Exception as e:
-                    logger.debug(f"Pre-load memory optimization failed: {e}")
-            
-            # Load with enhanced error handling
-            logger.debug(f"Loading configuration from {config_path} ({file_size} bytes)")
-            
-            with open(config_path, 'r', encoding='utf-8') as f:
-                try:
-                    config_data = json.load(f)
-                except json.JSONDecodeError as e:
-                    # Try to recover from common JSON errors
-                    logger.error(f"JSON decode error in {config_path}: {e}")
-                    
-                    # MEMORY OPTIMIZATION - Clear memory before intensive recovery operations
-                    try:
-                        recovery_clear = enhanced_clear_memory(
-                            aggressive=total_ram_gb < 8,
-                            hardware_data=hardware_data
-                        )
-                        if recovery_clear.get('success'):
-                            logger.debug("Memory optimized before JSON recovery")
-                    except Exception as e:
-                        logger.debug(f"Pre-recovery memory optimization failed: {e}")
-                    
-                    # Attempt basic recovery
-                    f.seek(0)
-                    content = f.read()
-                    
-                    # Try to fix common issues
-                    recovered_config = attempt_json_recovery(content, config_path)
-                    if recovered_config:
-                        config_data = recovered_config
-                        logger.warning("Configuration recovered from JSON errors")
-                    else:
-                        raise ValueError(f"Cannot parse configuration file: {e}")
-            
-            # MEMORY OPTIMIZATION - Clear memory after file loading for large configs
-            if file_size > large_file_threshold and total_ram_gb < 16:
-                try:
-                    post_load_clear = enhanced_clear_memory(
-                        aggressive=file_size > large_file_threshold * 10,
-                        hardware_data=hardware_data
-                    )
-                    if post_load_clear.get('success'):
-                        logger.debug("Memory optimized after config file loading")
-                except Exception as e:
-                    logger.debug(f"Post-load memory optimization failed: {e}")
-            
-            # Validate basic structure
-            if not isinstance(config_data, dict):
-                raise ValueError("Configuration file must contain a JSON object")
-            
-            # Handle different configuration formats with memory optimization for large configs
-            if 'config' in config_data and 'metadata' in config_data:
-                # New format with metadata
-                loaded_config = config_data['config']
-                metadata = config_data['metadata']
-                
-                # MEMORY OPTIMIZATION - Clear memory before intensive metadata processing
-                if len(str(metadata)) > 10000 and total_ram_gb < 16:
-                    try:
-                        metadata_clear = enhanced_clear_memory(
-                            aggressive=False,
-                            hardware_data=hardware_data
-                        )
-                        if metadata_clear.get('success'):
-                            logger.debug("Memory optimized before metadata processing")
-                    except Exception as e:
-                        logger.debug(f"Metadata memory optimization failed: {e}")
-                
-                logger.debug(f"Loaded configuration with metadata: version={metadata.get('version', 'unknown')}")
-                
-                # Check version compatibility
-                file_version = metadata.get('version', '1.0')
-                if file_version != '2.1':
-                    logger.info(f"Configuration version {file_version} detected, may need migration")
-                    # The migration will be handled by the caller if needed
-                
-                # Verify checksum if present
-                expected_checksum = metadata.get('config', {}).get('checksum')
-                if expected_checksum:
-                    actual_checksum = generate_config_checksum(loaded_config)
-                    if actual_checksum != expected_checksum:
-                        logger.warning("Configuration checksum mismatch - file may have been modified externally")
-                
-                # MEMORY OPTIMIZATION - Clear memory before preset information update
-                if len(str(loaded_config)) > 50000 and total_ram_gb < 16:
-                    try:
-                        preset_clear = enhanced_clear_memory(
-                            aggressive=False,
-                            hardware_data=hardware_data
-                        )
-                        if preset_clear.get('success'):
-                            logger.debug("Memory optimized before preset information update")
-                    except Exception as e:
-                        logger.debug(f"Preset memory optimization failed: {e}")
-                
-                # Ensure preset information is current
-                if 'presets' in loaded_config:
-                    try:
-                        loaded_config['presets']['available_presets'] = get_available_presets()
-                        loaded_config['presets']['preset_configs'] = get_preset_descriptions()
-                        loaded_config['presets']['custom_presets_available'] = get_safe_custom_presets()
-                    except Exception as e:
-                        logger.debug(f"Failed to update preset information: {e}")
-                
-            else:
-                # Legacy format - assume it's the configuration directly
-                loaded_config = config_data
-                logger.info("Loaded legacy configuration format")
-                
-                # MEMORY OPTIMIZATION - Clear memory before legacy format processing
-                if len(str(loaded_config)) > 25000 and total_ram_gb < 16:
-                    try:
-                        legacy_clear = enhanced_clear_memory(
-                            aggressive=len(str(loaded_config)) > 50000,
-                            hardware_data=hardware_data
-                        )
-                        if legacy_clear.get('success'):
-                            logger.debug("Memory optimized before legacy format processing")
-                    except Exception as e:
-                        logger.debug(f"Legacy format memory optimization failed: {e}")
-                
-                # Attempt to add current preset information to legacy configs
-                try:
-                    if 'presets' not in loaded_config:
-                        loaded_config['presets'] = {}
-                    loaded_config['presets']['available_presets'] = get_available_presets()
-                    loaded_config['presets']['preset_configs'] = get_preset_descriptions()
-                    loaded_config['presets']['custom_presets_available'] = get_safe_custom_presets()
-                except Exception as e:
-                    logger.debug(f"Failed to add preset information to legacy config: {e}")
-            
-            # Validate loaded configuration structure
-            if not isinstance(loaded_config, dict):
-                raise ValueError("Invalid configuration structure")
-            
-            # Basic sanity checks
-            if not loaded_config:
-                logger.warning("Configuration is empty")
-                return {}
-            
-            # Enhanced validation for critical sections
-            required_sections = ['training', 'model', 'security', 'data']
-            missing_sections = [section for section in required_sections if section not in loaded_config]
-            if missing_sections:
-                logger.warning(f"Missing required sections: {missing_sections}")
-                # Don't fail loading, but warn - these will be filled by defaults
-            
-            # Validate model type compatibility with current MODEL_VARIANTS
-            model_config = loaded_config.get('model', {})
-            model_type = model_config.get('model_type')
-            if model_type and MODEL_VARIANTS and model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available in current MODEL_VARIANTS")
-                # Don't modify the loaded config, let the caller handle this
-            
-            # MEMORY OPTIMIZATION - Clear memory before final processing steps
-            if len(str(loaded_config)) > 75000 and total_ram_gb < 16:
-                try:
-                    final_processing_clear = enhanced_clear_memory(
-                        aggressive=len(str(loaded_config)) > 150000,
-                        hardware_data=hardware_data
-                    )
-                    if final_processing_clear.get('success'):
-                        logger.debug("Memory optimized before final config processing")
-                except Exception as e:
-                    logger.debug(f"Final processing memory optimization failed: {e}")
-            
-            # Log loading statistics
-            section_count = len([k for k, v in loaded_config.items() if isinstance(v, dict)])
-            total_params = sum(len(v) if isinstance(v, dict) else 1 for v in loaded_config.values())
-            
-            logger.debug(f"Successfully loaded configuration: {section_count} sections, {total_params} parameters")
-            logger.debug(f"Configuration sections: {list(loaded_config.keys())}")
-            
-            # Add load metadata
-            if 'metadata' not in loaded_config:
-                loaded_config['metadata'] = {}
-            loaded_config['metadata']['last_loaded'] = datetime.now().isoformat()
-            loaded_config['metadata']['loaded_from'] = str(config_path)
-            
-            # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
-            # Aggressive cleanup after configuration loading completion
-            try:
-                final_clear_results = enhanced_clear_memory(
-                    aggressive=True,  # Aggressive final cleanup
-                    hardware_data=hardware_data
-                )
-                
-                if final_clear_results.get('success'):
-                    logger.debug(f"Final load memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-                    
-            except Exception as e:
-                logger.debug(f"Final load memory optimization failed: {e}")
-            
-            return loaded_config
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON in config file {config_path}: {str(e)}")
-            raise ValueError(f"Configuration file contains invalid JSON: {e}")
-        except FileNotFoundError:
-            logger.info(f"Configuration file not found: {config_path}")
-            return {}
-        except PermissionError as e:
-            logger.error(f"Permission denied reading config file {config_path}: {e}")
-            raise ValueError(f"Cannot read configuration file: permission denied")
-        except Exception as e:
-            logger.error(f"Error loading config from {config_path}: {str(e)}", exc_info=True)
-            
-            # MEMORY OPTIMIZATION - Clear memory before backup loading attempt
-            try:
-                backup_clear = enhanced_clear_memory(
-                    aggressive=total_ram_gb < 8,
-                    hardware_data=hardware_data
-                )
-                if backup_clear.get('success'):
-                    logger.debug("Memory optimized before backup loading attempt")
-            except Exception as cleanup_error:
-                logger.debug(f"Pre-backup memory optimization failed: {cleanup_error}")
-            
-            # Try to load from backup if available
-            backup_config = try_load_from_backup(config_path)
-            if backup_config:
-                logger.warning("Loaded configuration from backup due to primary file error")
-                return backup_config
-            
-            raise ValueError(f"Failed to load configuration: {str(e)}")
-            
-    except Exception as e:
-        logger.error(f"Critical error in load_config: {e}", exc_info=True)
-        
-        # Emergency memory cleanup on error
-        try:
-            emergency_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
-            logger.debug("Emergency memory cleanup performed after load_config error")
-        except Exception as cleanup_error:
-            logger.debug(f"Emergency cleanup failed: {cleanup_error}")
-        
-        # Re-raise the original exception
-        raise
-
 def update_named_config_registry(name: str, config_path: Path, metadata: Dict[str, Any]) -> None:
     """Update the named configuration registry for easier management with enhanced error handling."""
     try:
@@ -10744,8 +10437,8 @@ def get_current_config() -> Dict[str, Any]:
                 logger.warning(f"Model type '{model_type}' not available in MODEL_VARIANTS")
                 # Try to initialize model variants
                 try:
-                    #initialize_model_variants(silent=True)
-                    initialize_model_variants(silent=False)
+                    initialize_model_variants(silent=True)
+                    #initialize_model_variants(silent=False)
                     if model_type not in MODEL_VARIANTS:
                         # Fallback to available model type
                         available_types = list(MODEL_VARIANTS.keys())
@@ -13027,8 +12720,8 @@ def validate_model_preset_compatibility(model_type: str, config: Dict[str, Any])
         if not MODEL_VARIANTS:
             logger.debug("MODEL_VARIANTS not initialized, attempting initialization for compatibility check")
             try:
-                #initialize_model_variants(silent=True)
-                initialize_model_variants(silent=False)
+                initialize_model_variants(silent=True)
+                #initialize_model_variants(silent=False)
             except Exception as e:
                 validation_details['warnings'].append(f'MODEL_VARIANTS initialization failed: {str(e)}')
                 logger.warning(f"Failed to initialize model variants for compatibility check: {e}")
@@ -14870,8 +14563,8 @@ def get_default_config() -> Dict[str, Any]:
         if not MODEL_VARIANTS:
             try:
                 logger.debug("MODEL_VARIANTS not initialized, attempting initialization")
-                #initialize_model_variants(silent=True)
-                initialize_model_variants(silent=False)
+                initialize_model_variants(silent=True)
+                #initialize_model_variants(silent=False)
             except Exception as e:
                 logger.warning(f"Failed to initialize model variants: {e}")
         
@@ -15178,7 +14871,8 @@ def reset_config() -> None:
         
         # Re-initialize model variants with the new configuration
         try:
-            initialize_model_variants(silent=False)
+            initialize_model_variants(silent=True)
+            #initialize_model_variants(silent=False)
             logger.debug("Successfully re-initialized model variants")
         except Exception as e:
             logger.warning(f"Failed to re-initialize model variants: {e}")
@@ -18891,7 +18585,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
     
     # Create initialization status table with enhanced styling
     init_table = Table(
-        title=f"\n[bold]DEEP LEARNING SYSTEM INITIALIZATION[/bold]",
+        title=f"\nDEEP LEARNING SYSTEM INITIALIZATION",
         box=box.DOUBLE_EDGE,
         header_style="bold yellow",
         border_style="bold cyan",
@@ -18904,14 +18598,14 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
     
     init_table.add_column("Step", style="bold cyan", width=28, no_wrap=True)
     init_table.add_column("Status", width=8, justify="left")
-    init_table.add_column("Duration", width=8, justify="left", style="bold magenta")
-    init_table.add_column("Details", style="bold", min_width=60)
+    init_table.add_column("Duration", width=8, justify="left", style="bold yellow")
+    init_table.add_column("Details", style="bold white", min_width=60)
     init_table.add_column("Health", width=10, justify="left", style="bold")
     
     initialization_steps = []
     
     def add_step(step_name: str, status: str, duration: float, details: str, health_score: Optional[float] = None):
-        """Add a step to the initialization tracking with enhanced metadata."""
+        """Add a step to the initialization tracking with metadata."""
         status_styles = {
             "SUCCESS": "bold green",
             "FAILED": "bold red", 
@@ -19063,7 +18757,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             early_health
         )
         
-        # Logging initialization 
+        # Logging initialization
         logger.info("=" * 80)
         logger.info("DEEP LEARNING SYSTEM INITIALIZATION STARTING")
         logger.info("=" * 80)
@@ -19189,7 +18883,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     
                     # Interactive error handling
                     if sys.stdin.isatty():
-                        console.print(Panel.fit(
+                        console.print("\n", Panel.fit(
                             f"Configuration Validation Issue\n"
                             f"Issue detected: {str(validation_error)}\n\n"
                             f"Available options:\n"
@@ -19236,7 +18930,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         config_details.append("Applied default configuration (non-interactive mode)")
                         # Partial recovery
                         config_health = 85
-                
+            
             except Exception as config_error:
                 # Ensure logging level is restored
                 config_health -= 50
@@ -19287,7 +18981,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 "\n".join(config_details),
                 config_health
             )
-            
+        
         except Exception as e:
             step_duration = time.time() - step_start
             config = get_default_config()
@@ -19317,7 +19011,6 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 raise RuntimeError("No model variants could be initialized")
             
             # Validation of model variants
-            #model_status = validate_model_variants(logger, silent=True)
             variant_status = validate_model_variants(logger, silent=True)
             available_variants = [name for name, status in variant_status.items() if status == 'available']
             failed_variants = [name for name, status in variant_status.items() if status != 'available']
@@ -19383,7 +19076,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 "\n".join(model_details),
                 model_health
             )
-            
+        
         except Exception as e:
             step_duration = time.time() - step_start
             system_state['errors_encountered'].append(f"Model initialization failed: {e}")
@@ -19491,7 +19184,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 "\n".join(baseline_details),
                 max(0, performance_health)
             )
-            
+        
         except Exception as e:
             step_duration = time.time() - step_start
             performance_metrics = {'baseline_failed': str(e)}
@@ -19594,7 +19287,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 "\n".join(integration_details),
                 max(0, integration_health)
             )
-            
+        
         except Exception as e:
             step_duration = time.time() - step_start
             system_state['errors_encountered'].append(f"System integration failed: {e}")
@@ -19629,23 +19322,23 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         # Add initialization table rows
         for step_name, status, duration, details, status_style, health_display in initialization_steps:
             init_table.add_row(
-                Text(step_name, style="bold cyan"),
+                Text(step_name),
                 Text(status, style=status_style),
-                Text(f"{duration:.2f}s", style="dim"),
-                Text(details, style="dim"),
+                Text(f"{duration:.2f}s"),
+                Text(details),
                 health_display
             )
         
         # Add summary row
         summary_status = "SUCCESS" if overall_health >= 80 else "PARTIAL" if overall_health >= 60 else "WARNING"
-        summary_style = "bold white on green" if overall_health >= 80 else "bold white on yellow" if overall_health >= 60 else "bold white on red"
+        summary_style = "bold black on green" if overall_health >= 80 else "bold black on yellow" if overall_health >= 60 else "bold black on red"
         
         init_table.add_row(
-            Text("SYSTEM INITIALIZATION", style="bold white on yellow"),
+            Text("SYSTEM INITIALIZATION", style="bold black on yellow"),
             Text(summary_status, style=summary_style),
-            Text(f"{initialization_time:.2f}s", style="bold white on yellow"),
+            Text(f"{initialization_time:.2f}s", style="bold black on yellow"),
             Text(f"Overall system health: {overall_health:.1f}% | Ready for deep learning operations", style=summary_style),
-            f"[bold white on {'green' if overall_health >= 80 else 'yellow' if overall_health >= 60 else 'red'}]{overall_health:.0f}%[/]"
+            f"[bold black on {'green' if overall_health >= 80 else 'yellow' if overall_health >= 60 else 'red'}]{overall_health:.0f}%[/]"
         )
         
         # Display the initialization table
@@ -19668,11 +19361,11 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     f"The system is ready for deep learning operations.\n\n"
                     f"Duration: {overall_duration}\n"
                     f"Model Variants Available: {model_variants_available}\n"
-                    f"Hardware: {hardware}\n\n"
+                    f"Hardware: {hardware}"
                 )
                 try:
                     if supports_color and banner_width > 60:
-                        console.print(Panel.fit(
+                        console.print("\n", Panel.fit(
                             f"{success_message}",
                             border_style="green",
                             title="SUCCESS",
@@ -19691,7 +19384,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 
                 for attempt in range(max_attempts):
                     try:
-                        response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue to system? (Y/n/q): ").strip().lower()
+                        response = input(Fore.YELLOW + Style.BRIGHT + f"\nContinue to system? (Y/n/q): " + Style.RESET_ALL).strip().lower()
                         
                         if response in ['y', 'yes', '']:
                             user_choice = True
@@ -19702,7 +19395,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         else:
                             if attempt < max_attempts - 1:
                                 print(Fore.YELLOW + Style.BRIGHT + "\nPlease enter 'y' for yes or 'n' for no or 'q' for quit.")
-                            
+                    
                     except (EOFError, KeyboardInterrupt):
                         user_choice = False
                         break
@@ -19721,12 +19414,12 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 if user_choice is False:
                     try:
                         quit_message = (
-                            "USER CHOSE TO QUIT\n\n"
+                            "USER CHOSE TO QUIT\n"
                             "You chose to quit despite successful initialization.\n"
                             "System initialization cancelled."
                         )
                         if supports_color and banner_width > 60:
-                            console.print(Panel.fit(
+                            console.print("\n", Panel.fit(
                                 f"{quit_message}",
                                 border_style="red",
                                 style="bold red",
@@ -19749,11 +19442,11 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 # User chose to continue
                 try:
                     continue_message = (
-                        "CONTINUING TO SYSTEM\n\n"
+                        "CONTINUING TO SYSTEM\n"
                         "All systems initialized successfully - proceeding to main system."
                     )
                     if supports_color and banner_width > 60:
-                        console.print(Panel.fit(
+                        console.print("\n", Panel.fit(
                             f"{continue_message}",
                             border_style="green",
                             title="PROCEEDING",
@@ -19768,22 +19461,22 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 if logger:
                     logger.info(f"All systems initialized successfully (health: {overall_health:.1f}%) - user chose to continue")
                     logger.info(f"Model variants available: {system_state.get('model_variants', {}).get('available', 0)}")
-                
+            
             elif overall_health >= 60:
                 # Partial success - some issues but system can continue
                 warning_message = (
-                    f"SYSTEM INITIALIZATION COMPLETED WITH WARNINGS\n\n"
+                    f"SYSTEM INITIALIZATION COMPLETED WITH WARNINGS\n"
                     f"Overall Health Score: {overall_health:.1f}%\n"
                     f"Some components have issues but the system can operate.\n"
                     f"Review the warnings above for details.\n\n"
                     f"Duration: {initialization_time:.2f} seconds\n"
                     f"Errors: {len(system_state.get('errors_encountered', []))}\n"
-                    f"Warnings: {len(system_state.get('warnings_issued', []))}\n\n"
+                    f"Warnings: {len(system_state.get('warnings_issued', []))}"
                 )
                 
                 try:
                     if supports_color and banner_width > 60:
-                        console.print(Panel.fit(
+                        console.print("\n", Panel.fit(
                             f"{warning_message}",
                             border_style="yellow",
                             title="WARNING",
@@ -19803,7 +19496,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 
                 for attempt in range(max_attempts):
                     try:
-                        response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue with reduced functionality? (Y/n/q): ").strip().lower()
+                        response = input(Fore.YELLOW + Style.BRIGHT + f"\nContinue with reduced functionality? (Y/n/q): " + Style.RESET_ALL).strip().lower()
                         
                         if response in ['y', 'yes', '']:
                             user_choice = True
@@ -19814,7 +19507,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         else:
                             if attempt < max_attempts - 1:
                                 print(Fore.YELLOW + Style.BRIGHT + "\nPlease enter 'y' for yes or 'n' for no or 'q' for quit.")
-                            
+                    
                     except (EOFError, KeyboardInterrupt):
                         user_choice = False
                         break
@@ -19832,12 +19525,12 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 if not user_choice:
                     try:
                         cancel_message = (
-                            "INITIALIZATION CANCELLED\n\n"
+                            "INITIALIZATION CANCELLED\n"
                             "You chose to exit due to initialization warnings.\n"
                             "Please review the issues and try again."
                         )
                         if supports_color and banner_width > 60:
-                            console.print(Panel.fit(
+                            console.print("\n", Panel.fit(
                                 f"{cancel_message}",
                                 border_style="red",
                                 title="CANCELLED",
@@ -19860,12 +19553,12 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 # User chose to continue
                 try:
                     continue_message = (
-                        "CONTINUING WITH WARNINGS\n\n"
+                        "CONTINUING WITH WARNINGS\n"
                         "You chose to continue despite the warnings.\n"
                         "Some functionality may be limited."
                     )
                     if supports_color and banner_width > 60:
-                        console.print(Panel.fit(
+                        console.print("\n", Panel.fit(
                             f"{continue_message}",
                             border_style="green",
                             title="CONTINUING",
@@ -19885,17 +19578,17 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             else:
                 # Critical issues - system health too low
                 critical_message = (
-                    f"CRITICAL SYSTEM INITIALIZATION ISSUES\n\n"
+                    f"CRITICAL SYSTEM INITIALIZATION ISSUES\n"
                     f"Overall Health Score: {overall_health:.1f}%\n"
                     f"The system has significant issues that may affect operation.\n"
                     f"Critical errors: {len([e for e in system_state.get('errors_encountered', []) if 'failed' in e.lower()])}\n"
                     f"Total errors: {len(system_state.get('errors_encountered', []))}\n"
                     f"Warnings: {len(system_state.get('warnings_issued', []))}\n\n"
-                    f"It is strongly recommended to resolve these issues before continuing.\n\n"
+                    f"It is strongly recommended to resolve these issues before continuing."
                 )
                 try:
                     if supports_color and banner_width > 60:
-                        console.print(Panel.fit(
+                        console.print("\n", Panel.fit(
                             f"{critical_message}",
                             border_style="red",
                             title="WARNING",
@@ -19915,7 +19608,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 
                 for attempt in range(max_attempts):
                     try:
-                        response = input(Fore.YELLOW + Style.BRIGHT + "\nContinue anyway? (y/N/q): ").strip().lower()
+                        response = input(Fore.YELLOW + Style.BRIGHT + f"\nContinue anyway? (y/N/q): " + Style.RESET_ALL).strip().lower()
                         
                         if response in ['y', 'yes']:
                             user_choice = True
@@ -19926,7 +19619,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         else:
                             if attempt < max_attempts - 1:
                                 print(Fore.YELLOW + Style.BRIGHT + "\nPlease enter 'y' for yes or 'n' for no or 'q' for quit. Default is 'n'.")
-                            
+                    
                     except (EOFError, KeyboardInterrupt):
                         user_choice = False
                         break
@@ -19944,13 +19637,13 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 if not user_choice:
                     try:
                         quit_message = (
-                            "INITIALIZATION TERMINATED\n\n"
-                            "You chose to exit due to critical initialization issues.\n"
+                            "INITIALIZATION TERMINATED\n"
+                            "Exiting due to critical initialization issues.\n"
                             "Please review the error messages above and resolve the issues.\n\n"
                             "Check the logs and initialization report for detailed information."
                         )
                         if supports_color and banner_width > 60:
-                            console.print(Panel.fit(
+                            console.print("\n", Panel.fit(
                                 f"{quit_message}",
                                 border_style="red",
                                 title="TERMINATED",
@@ -19976,13 +19669,13 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 # User chose to continue despite critical issues
                 try:
                     risky_continue_message = (
-                        "CONTINUING WITH CRITICAL ISSUES\n\n"
+                        "CONTINUING WITH CRITICAL ISSUES\n"
                         "You chose to continue despite critical system issues.\n"
                         "The system may not function correctly.\n\n"
                         "Proceed with caution and monitor for errors."
                     )
                     if supports_color and banner_width > 60:
-                        console.print(Panel.fit(
+                        console.print("\n", Panel.fit(
                             f"{risky_continue_message}",
                             border_style="red",
                             title="PROCEEDING",
@@ -20029,7 +19722,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 pass
             
             sys.stdin.flush()
-            
+        
         except Exception as cleanup_error:
             if logger:
                 logger.debug(f"Input buffer cleanup failed: {cleanup_error}")
@@ -20184,12 +19877,12 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         console.print(init_table)
         logger.warning("System initialization interrupted by user (Ctrl+C)")
         sys.exit(0)
-        
+    
     except SystemExit:
         # User chose to quit during loading_screen or configuration
         logger.debug("System initialization cancelled by user choice")
         raise
-        
+    
     except Exception as e:
         # Handle critical initialization failures
         initialization_time = time.time() - initialization_start
@@ -20205,8 +19898,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             )
         
         init_table.add_row(
-            Text("SYSTEM INITIALIZATION", style="bold white on red"),
-            Text("CRITICAL FAILURE", style="bold white on red"),
+            Text("SYSTEM INITIALIZATION", style="bold black on red"),
+            Text("CRITICAL FAILURE", style="bold black on red"),
             Text(f"{initialization_time:.2f}s", style="bold white"),
             Text(f"Critical error: {str(e)}\nType: {type(e).__name__}\nSystem cannot continue", style="bright_white"),
             "[bold red]0%[/]"
@@ -20321,7 +20014,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     'recovery_possible': False,
                     'suggested_actions': [
                         "Check system requirements",
-                        "Verify Python environment", 
+                        "Verify Python environment",
                         "Check available disk space and memory",
                         "Review error logs for specific issues",
                         "Check for conflicting dependencies"
@@ -23848,9 +23541,9 @@ def model_instantiation(
     logger: logging.Logger = None
 ) -> Tuple[Any, str, List[str], List[str], Dict[str, Any]]:
     """
-    Enhanced helper function for model instantiation with comprehensive error handling and fallback support.
+    Helper function for model instantiation with error handling and fallback support.
     
-    This function can be used by validate_model_variants(), initialize_model_variants() and other functions 
+    This function can be used by validate_model_variants(), initialize_model_variants() and other functions
     that need to instantiate model variants with robust error handling and configuration fallbacks.
     
     Args:
@@ -23863,7 +23556,7 @@ def model_instantiation(
         hardware_data: Hardware information for adaptive configuration (optional)
         silent: If True, suppress detailed logging
         logger: Logger instance for reporting results
-        
+    
     Returns:
         Tuple containing:
         - model_instance: Instantiated model or None if failed
@@ -24017,10 +23710,10 @@ def model_instantiation_with_validation(
     logger: logging.Logger = None
 ) -> Tuple[Any, Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """
-    Enhanced model instantiation with built-in validation tests optimized for initialize_model_variants().
+    Model instantiation with built-in validation tests optimized for initialize_model_variants().
     
-    This function combines instantiation with comprehensive validation and is useful for
-    functions that need both instantiation and immediate validation, especially initialize_model_variants().
+    This function combines instantiation with validation and is useful for functions that need both
+    instantiation and immediate validation, especially initialize_model_variants().
     
     Args:
         variant_class: The model class to instantiate
@@ -24099,7 +23792,7 @@ def model_instantiation_with_validation(
                 test_results['basic'] = 'warning'
             else:
                 test_results['basic'] = 'passed'
-            
+        
         except Exception as e:
             validation_results['errors'].append(f'Basic validation failed: {str(e)}')
             test_results['basic'] = 'failed'
@@ -24137,7 +23830,7 @@ def model_instantiation_with_validation(
                     else:
                         validation_results['errors'].append(f'Shape mismatch: {output.shape} vs {expected_shape} (batch_size={batch_size})')
                         forward_pass_results[f'batch_{batch_size}'] = 'failed'
-                        
+                
                 except Exception as batch_error:
                     validation_results['warnings'].append(f'Forward pass failed for batch_size={batch_size}: {str(batch_error)}')
                     forward_pass_results[f'batch_{batch_size}'] = 'failed'
@@ -24149,9 +23842,9 @@ def model_instantiation_with_validation(
                 test_results['forward_pass'] = 'failed'
             else:
                 test_results['forward_pass'] = 'warning'
-                
+            
             performance_metrics['forward_pass_results'] = forward_pass_results
-                
+        
         except Exception as e:
             validation_results['errors'].append(f'Forward pass test failed: {str(e)}')
             test_results['forward_pass'] = 'failed'
@@ -24192,7 +23885,7 @@ def model_instantiation_with_validation(
                 test_results['parameters'] = 'failed'
             else:
                 test_results['parameters'] = 'passed'
-            
+        
         except Exception as e:
             validation_results['errors'].append(f'Parameter validation failed: {str(e)}')
             test_results['parameters'] = 'failed'
@@ -24230,7 +23923,7 @@ def model_instantiation_with_validation(
             ) else 'warning'
             
             performance_metrics['config_validation'] = config_validation
-            
+        
         except Exception as e:
             validation_results['errors'].append(f'Configuration methods test failed: {str(e)}')
             test_results['config_methods'] = 'failed'
@@ -24257,14 +23950,14 @@ def model_instantiation_with_validation(
                 
             # Return to eval mode
             model_instance.eval()
-            
+        
         except Exception as e:
             validation_results['warnings'].append(f'Training mode test failed: {str(e)}')
             test_results['training_mode'] = 'failed'
     
     if comprehensive_validation and model_instance is not None:
         try:
-            # Additional comprehensive validation tests
+            # Additional validation tests
             comprehensive_results = {}
             
             # Encode/decode functionality if available
@@ -24309,7 +24002,7 @@ def model_instantiation_with_validation(
             test_results['comprehensive'] = 'passed' if all(
                 result == 'passed' for result in comprehensive_results.values()
             ) else 'warning'
-            
+        
         except Exception as e:
             validation_results['warnings'].append(f'Comprehensive validation failed: {str(e)}')
             test_results['comprehensive'] = 'failed'
@@ -25014,16 +24707,10 @@ def _create_model_test_definition(
     available_count = len(model_definitions)
     unavailable_count = len(unavailable_models)
     
-    logger.info(
-        f"Model test definitions created successfully: "
-        f"{available_count} available, {unavailable_count} unavailable"
-    )
+    logger.info(f"Model test definitions created successfully: {available_count} available, {unavailable_count} unavailable")
     
     if unavailable_models:
-        logger.warning(
-            f"The following models were not available and were skipped: "
-            f"{', '.join(unavailable_models)}"
-        )
+        logger.warning(f"The following models were not available and were skipped: {', '.join(unavailable_models)}")
     
     # Add metadata to the definitions dictionary
     model_definitions['_metadata'] = {
@@ -25358,15 +25045,17 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
     Args:
         input_dim: Input dimension for comparison (uses config/default if None)
         silent: If True, suppress detailed logging messages during validation
-        
+    
     Returns:
         Dictionary containing detailed comparison results, recommendations, and optimization guidance
     """
+    print_color("\nComparing Model Architectures...", 'yellow')
+    
     comparison_start_time = time.time()
     
     # Initialize progress tracking
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'successful_analyses': 0,
         'failed_analyses': 0,
         'current_model': None,
@@ -25374,13 +25063,24 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
         'memory_optimizations': 0
     }
     
+    # Define all stage titles for ProgressHelper
+    titles = [
+        "System Analysis",
+        "Loading Configuration",
+        "Validating Model Variants",
+        "Extracting Parameters",
+        "Creating Test Configurations",
+        "Model Analysis",
+        "Generating Summary",
+        "Finalizing"
+    ]
+    
     try:
         if not silent:
-            logger.debug("Starting model architecture comparison using helper functions")
+            logger.debug("Starting model architecture comparison")
         
-        # Calculate total work units for progress tracking
-        total_stages = 8  # System, Config, Validation, Parameters, Configs, Analysis, Summary, Finalization
-        total_models = len(MODEL_VARIANTS) if MODEL_VARIANTS else 0
+        # Create ProgressHelper instance with all stage titles
+        progress = ProgressHelper(titles)
         
         # Initialize results structure
         results = {
@@ -25396,7 +25096,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 'comparison_duration_seconds': 0,
                 'helper_functions_utilized': [
                     '_get_system_context()',
-                    '_optimize_memory_if_needed()', 
+                    '_optimize_memory_if_needed()',
                     '_extract_and_validate_config_param()',
                     '_validate_and_adjust_parameters()',
                     '_create_model_test_definition()',
@@ -25438,12 +25138,14 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 'scalability_metrics': {}
             }
         }
-
-        with alive_bar(total_stages, title='Model Architecture Comparison\t', unit='stages') as bar:
+        
+        # STAGE 1: System Analysis
+        progress_data['current_stage'] = "System Analysis"
+        
+        with progress.bar("System Analysis", total=1, unit="analysis") as bar:
             
-            # STAGE 1: System Analysis
-            progress_data['current_stage'] = "System Analysis"
-            bar.text = "Analyzing system hardware..."
+            bar.text = "Analyzing system hardware"
+            system_start = time.time()
             
             try:
                 system_context = _get_system_context(silent=silent)
@@ -25470,11 +25172,16 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 system_class = 'unknown'
                 bar.text = "System analysis (using defaults)"
             
+            system_time = time.time() - system_start
             bar()
+        
+        # STAGE 2: Configuration Loading
+        progress_data['current_stage'] = "Loading Configuration"
+        
+        with progress.bar("Loading Configuration", total=1, unit="configs") as bar:
             
-            # STAGE 2: Configuration Loading
-            progress_data['current_stage'] = "Loading Configuration"
-            bar.text = "Loading configuration..."
+            bar.text = "Loading configuration"
+            config_start = time.time()
             
             try:
                 current_config = get_current_config()
@@ -25520,11 +25227,16 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 results['_metadata']['memory_optimization_summary']['optimizations_performed'] += 1
                 progress_data['memory_optimizations'] += 1
             
+            config_time = time.time() - config_start
             bar()
+        
+        # STAGE 3: Model Variants Validation
+        progress_data['current_stage'] = "Validating Model Variants"
+        
+        with progress.bar("Validating Model Variants", total=1, unit="validations") as bar:
             
-            # STAGE 3: Model Variants Validation
-            progress_data['current_stage'] = "Validating Model Variants"
-            bar.text = "Validating model variants..."
+            bar.text = "Validating model variants"
+            validation_start = time.time()
             
             if not MODEL_VARIANTS:
                 if not silent:
@@ -25533,8 +25245,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                     initialize_model_variants(silent=silent)
                     if MODEL_VARIANTS:
                         validation_results = validate_model_variants(logger, silent=silent)
-                        valid_variants = [name for name, status in validation_results.items() 
-                                        if name != '_validation_summary' and (status == 'available' or status.startswith('warning'))]
+                        valid_variants = [name for name, status in validation_results.items() if name != '_validation_summary' and (status == 'available' or status.startswith('warning'))]
                         results['_metadata']['validation_checks_performed'] = ['model_variants_validation']
                         results['_metadata']['valid_variants'] = valid_variants
                         if not silent:
@@ -25556,13 +25267,16 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
             results['_metadata']['available_variants'] = len(MODEL_VARIANTS)
             total_models = len(MODEL_VARIANTS)
             
+            validation_time = time.time() - validation_start
             bar()
-            
-            # STAGE 4: Parameter Extraction
-            progress_data['current_stage'] = "Extracting Parameters"
-            bar.text = "Extracting configuration parameters..."
+        
+        # STAGE 4: Parameter Extraction
+        progress_data['current_stage'] = "Extracting Parameters"
+        
+        with progress.bar("Extracting Parameters", total=24, unit="parameters") as bar:
             
             # Validate input dimension
+            bar.text = "Validating input dimension"
             if input_dim is None:
                 input_dim = _extract_and_validate_config_param(
                     data_config, 'features', 20, 'FEATURES',
@@ -25582,137 +25296,183 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                     logger.warning(f"Very large input dimension ({input_dim}) detected - analysis may be memory intensive")
             
             results['_metadata']['input_dimension'] = input_dim
+            bar()
             
             # Extract all configuration parameters
+            bar.text = "Extracting encoding dimension"
             encoding_dim = _extract_and_validate_config_param(
                 model_config, 'encoding_dim', 16, 'DEFAULT_ENCODING_DIM',
                 lambda x: isinstance(x, int) and x > 0,
                 "latent encoding dimension", silent
             )
+            bar()
             
+            bar.text = "Extracting hidden layer dimensions"
             hidden_dims = _extract_and_validate_config_param(
                 model_config, 'hidden_dims', [128, 64], 'HIDDEN_LAYER_SIZES',
                 lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(d, int) and d > 0 for d in x),
                 "hidden layer dimensions", silent
             )
+            bar()
             
+            bar.text = "Extracting dropout rates"
             dropout_rates = _extract_and_validate_config_param(
                 model_config, 'dropout_rates', [0.2, 0.15], 'DROPOUT_RATES',
                 lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in x),
                 "dropout rates", silent
             )
+            bar()
             
+            bar.text = "Extracting activation function"
             activation = _extract_and_validate_config_param(
                 model_config, 'activation', 'leaky_relu', 'ACTIVATION',
                 lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
                 "activation function", silent
             )
+            bar()
             
+            bar.text = "Extracting activation parameter"
             activation_param = _extract_and_validate_config_param(
                 model_config, 'activation_param', 0.2, 'ACTIVATION_PARAM',
                 lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
                 "activation parameter", silent
             )
+            bar()
             
+            bar.text = "Extracting normalization type"
             normalization = _extract_and_validate_config_param(
                 model_config, 'normalization', 'batch', 'NORMALIZATION',
                 lambda x: x in ['batch', 'layer', 'instance', 'group', 'none', None],
                 "normalization type", silent
             )
+            bar()
             
+            bar.text = "Extracting batch normalization flag"
             use_batch_norm = _extract_and_validate_config_param(
                 model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
                 lambda x: isinstance(x, bool),
                 "batch normalization flag", silent
             )
+            bar()
             
+            bar.text = "Extracting layer normalization flag..."
             use_layer_norm = _extract_and_validate_config_param(
                 model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
                 lambda x: isinstance(x, bool),
                 "layer normalization flag", silent
             )
+            bar()
             
+            bar.text = "Extracting attention mechanism flag"
             use_attention = _extract_and_validate_config_param(
                 model_config, 'use_attention', True, 'USE_ATTENTION',
                 lambda x: isinstance(x, bool),
                 "attention mechanism flag", silent
             )
+            bar()
             
+            bar.text = "Extracting residual blocks flag"
             residual_blocks = _extract_and_validate_config_param(
                 model_config, 'residual_blocks', True, 'RESIDUAL_BLOCKS',
                 lambda x: isinstance(x, bool),
                 "residual blocks flag", silent
             )
+            bar()
             
+            bar.text = "Extracting skip connections flag"
             skip_connection = _extract_and_validate_config_param(
                 model_config, 'skip_connection', True, 'SKIP_CONNECTION',
                 lambda x: isinstance(x, bool),
                 "skip connections flag", silent
             )
+            bar()
             
+            bar.text = "Extracting ensemble size"
             num_models = _extract_and_validate_config_param(
                 model_config, 'num_models', 3, 'NUM_MODELS',
                 lambda x: isinstance(x, int) and 1 <= x <= 20,
                 "ensemble size", silent
             )
+            bar()
             
+            bar.text = "Extracting ensemble diversity factor"
             diversity_factor = _extract_and_validate_config_param(
                 model_config, 'diversity_factor', 0.3, 'DIVERSITY_FACTOR',
                 lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
                 "ensemble diversity factor", silent
             )
+            bar()
             
+            bar.text = "Extracting training batch size"
             batch_size = _extract_and_validate_config_param(
                 training_config, 'batch_size', 32, 'DEFAULT_BATCH_SIZE',
                 lambda x: isinstance(x, int) and x > 0,
                 "training batch size", silent
             )
+            bar()
             
+            bar.text = "Extracting mixed precision training flag"
             mixed_precision = _extract_and_validate_config_param(
                 training_config, 'mixed_precision', True, 'MIXED_PRECISION',
                 lambda x: isinstance(x, bool),
                 "mixed precision training", silent
             )
+            bar()
             
+            bar.text = "Extracting learning rate"
             learning_rate = _extract_and_validate_config_param(
                 training_config, 'learning_rate', 0.001, 'LEARNING_RATE',
                 lambda x: isinstance(x, (int, float)) and x > 0,
                 "learning rate", silent
             )
+            bar()
             
+            bar.text = "Extracting optimizer type"
             optimizer_type = _extract_and_validate_config_param(
                 training_config, 'optimizer', 'AdamW', 'OPTIMIZER',
                 lambda x: x in ['Adam', 'AdamW', 'SGD', 'RMSprop', 'Adagrad'],
                 "optimizer type", silent
             )
+            bar()
             
+            bar.text = "Extracting compute device"
             device_setting = _extract_and_validate_config_param(
                 hardware_config, 'device', 'auto', 'DEVICE',
                 lambda x: isinstance(x, str) and x in ['auto', 'cpu', 'cuda'] or x.startswith('cuda:'),
                 "compute device", silent
             )
+            bar()
             
+            bar.text = "Extracting random seed"
             random_seed = _extract_and_validate_config_param(
                 system_config, 'random_seed', 42, 'RANDOM_SEED',
                 lambda x: isinstance(x, int),
                 "random seed", silent
             )
+            bar()
             
+            bar.text = "Extracting legacy compatibility mode"
             legacy_mode = _extract_and_validate_config_param(
                 model_config, 'legacy_mode', False, 'LEGACY_MODE',
                 lambda x: isinstance(x, bool),
                 "legacy compatibility mode", silent
             )
+            bar()
             
             # Validate and adjust parameters
+            bar.text = "Validating and adjusting parameters"
             hidden_dims, dropout_rates = _validate_and_adjust_parameters(hidden_dims, dropout_rates, silent)
             
             bar.text = "Parameters extracted and validated"
             bar()
+        
+        # STAGE 5: Test Configuration Creation with ALL required parameters
+        progress_data['current_stage'] = "Creating Test Configurations"
+        
+        with progress.bar("Creating Test Configurations", total=1, unit="configs") as bar:
             
-            # STAGE 5: Test Configuration Creation with ALL required parameters
-            progress_data['current_stage'] = "Creating Test Configurations"
-            bar.text = "Creating test configurations..."
+            bar.text = "Creating test configurations"
+            config_creation_start = time.time()
             
             # Generate test definitions with ALL required parameters
             model_test_definitions = _create_model_test_definition(
@@ -25726,7 +25486,6 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 num_models=num_models,
                 diversity_factor=diversity_factor,
                 mixed_precision=mixed_precision,
-                # ADDED: Pass all the missing parameters that are now required
                 input_dim=input_dim,
                 activation=activation,
                 activation_param=activation_param,
@@ -25809,30 +25568,15 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                         'training_speed': 'moderate'
                     }
             
+            config_creation_time = time.time() - config_creation_start
             bar.text = f"Created {len(test_configurations)} test configurations"
             bar()
-            
-            # Close main progress bar and start model analysis bar
-            bar.text = "Starting model analysis..."
         
-        # STAGE 6: Comprehensive Model Analysis
+        # STAGE 6: Model Analysis
         progress_data['current_stage'] = "Model Analysis"
+        total_models = len(MODEL_VARIANTS)
         
-        # Status symbols for visual feedback
-        status_symbols = {
-            'success': '[OK]',
-            'failure': '[FAIL]',
-            'skip': '[SKIP]'
-        }
-        
-        method_symbols = {
-            'primary': '[PRIMARY]',
-            'fallback': '[FALLBACK]',
-            'minimal': '[MINIMAL]',
-            'adaptive': '[ADAPTIVE]'
-        }
-        
-        with alive_bar(total_models, title='Analyzing Models\t\t', unit='models') as model_bar:
+        with progress.bar("Model Analysis", total=total_models, unit="models") as model_bar:
             
             for model_name, model_class in MODEL_VARIANTS.items():
                 progress_data['current_model'] = model_name
@@ -25840,13 +25584,13 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 # Update progress bar with current model info
                 successful_count = progress_data['successful_analyses']
                 failed_count = progress_data['failed_analyses']
-                model_bar.text = f"Analyzing {model_name}... ({successful_count} passed, {failed_count} failed)"
+                model_bar.text = f"Analyzing {model_name} ({successful_count} passed, {failed_count} failed)"
                 
                 if model_name not in test_configurations:
                     if not silent:
                         logger.warning(f"No test configuration for {model_name}, skipping analysis")
                     progress_data['failed_analyses'] += 1
-                    model_bar.text = f"{status_symbols['skip']} {model_name} skipped"
+                    model_bar.text = f"{model_name} skipped"
                     model_bar()
                     continue
                 
@@ -25862,7 +25606,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 
                 try:
                     if not silent:
-                        logger.debug(f"Starting comprehensive analysis for {model_name} using helper functions")
+                        logger.debug(f"Starting analysis of {model_name}")
                     
                     # Model instantiation
                     model_results['helper_functions_used'].append('model_instantiation_with_validation')
@@ -25889,7 +25633,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                         progress_data['failed_analyses'] += 1
                         if not silent:
                             logger.error(f"Skipping analysis for {model_name} due to instantiation failure")
-                        model_bar.text = f"{status_symbols['failure']} {model_name} instantiation failed"
+                        model_bar.text = f"{model_name} instantiation failed"
                         model_bar()
                         continue
                     
@@ -26037,15 +25781,11 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                     results['_metadata']['successful_comparisons'] += 1
                     progress_data['successful_analyses'] += 1
                     
-                    method_symbol = method_symbols.get(instantiation_method, '[UNKNOWN]')
-                    test_def_status = "TestDef" if model_name in model_test_definitions else "Adaptive"
-                    model_bar.text = f"{status_symbols['success']} {model_name} {method_symbol} ({total_params:,} params)"
+                    model_bar.text = f"{model_name} analyzed ({total_params:,} params)"
                     
                     if not silent:
-                        logger.info(f"{status_symbols['success']} {model_name}: Comprehensive analysis completed "
-                                  f"({test_def_status}, {instantiation_method}, {total_params:,} params, "
-                                  f"score: {validation_score:.1%})")
-                    
+                        logger.info(f"{model_name}: analysis completed ({instantiation_method}, {total_params:,} params, score: {validation_score:.1%})")
+                
                 except Exception as e:
                     error_msg = f"Analysis failed: {str(e)}"
                     if not silent:
@@ -26061,7 +25801,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                     results[model_name] = model_results
                     results['_metadata']['failed_comparisons'] += 1
                     progress_data['failed_analyses'] += 1
-                    model_bar.text = f"{status_symbols['failure']} {model_name} analysis failed"
+                    model_bar.text = f"{model_name} analysis failed"
                 
                 finally:
                     # Cleanup and memory optimization between models
@@ -26090,14 +25830,15 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
             # Final update for model analysis
             successful_count = progress_data['successful_analyses']
             failed_count = progress_data['failed_analyses']
-            model_bar.text = f"Analysis: {successful_count} passed, {failed_count} failed"
+            model_bar.text = f"Analysis complete: {successful_count} passed, {failed_count} failed"
         
         # STAGE 7: Comparative Summary
         progress_data['current_stage'] = "Generating Summary"
         
-        with alive_bar(1, title='Generating Summary\t\t') as summary_bar:
+        with progress.bar("Generating Summary", total=1, unit="summaries") as summary_bar:
             
             summary_bar.text = "Generating comparative analysis..."
+            summary_start = time.time()
             
             # Memory optimization before comparative summary
             pre_summary_optimized = _optimize_memory_if_needed(
@@ -26113,21 +25854,23 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
             # Generate comparative analysis using helper function
             results['_summary'] = generate_comparative_summary(results, hardware_data)
             
+            summary_time = time.time() - summary_start
             summary_bar.text = "Summary generated"
             summary_bar()
         
         # STAGE 8: Finalization
         progress_data['current_stage'] = "Finalizing"
         
-        with alive_bar(1, title='Finalizing\t\t\t') as final_bar:
+        with progress.bar("Finalizing", total=1, unit="steps") as final_bar:
             
-            final_bar.text = "Finalizing comparison..."
+            final_bar.text = "Finalizing comparison"
+            final_start = time.time()
             
             # Final Metadata and Timing
             results['_metadata']['comparison_duration_seconds'] = time.time() - comparison_start_time
             results['_metadata']['analysis_completion_timestamp'] = datetime.now().isoformat()
             
-            # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
+            # Final memory optimization
             final_optimized = _optimize_memory_if_needed(
                 condition=True,
                 hardware_data=hardware_data,
@@ -26161,7 +25904,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
             test_def_count = sum(1 for m in MODEL_VARIANTS if m in model_test_definitions)
             
             if not silent:
-                logger.debug("Model architecture comparison completed using enhanced helper functions:")
+                logger.debug("Model architecture comparison completed:")
                 logger.debug(f"  - Total models analyzed: {successful}/{total}")
                 logger.debug(f"  - Comparison duration: {duration:.2f} seconds")
                 logger.debug(f"  - Helper functions utilized: {helper_count}")
@@ -26182,7 +25925,8 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
                 if results['_metadata']['failed_comparisons'] > 0:
                     logger.warning(f"  - Failed analyses: {results['_metadata']['failed_comparisons']}")
             
-            final_bar.text = "Comparison complete!"
+            final_time = time.time() - final_start
+            final_bar.text = "Model Architecture Comparison Complete!"
             final_bar()
     
     except Exception as e:
@@ -26233,7 +25977,7 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
             'integration_status': 'failed_but_helper_functions_available'
         }
         return error_result
-
+    
     return results
 
 def analyze_model_layers(model: torch.nn.Module) -> Dict[str, Any]:
@@ -30921,64 +30665,94 @@ def initialize_model_variants(silent: bool = False) -> None:
     """Initialize MODEL_VARIANTS dictionary with validation and error recovery.
     
     This function has been updated to leverage the model_instantiation_with_validation() helper
-    for comprehensive model initialization with built-in validation and error handling.
+    for model initialization with built-in validation and error handling.
     
     Args:
         silent: If True, suppress detailed logging messages and progress bars during system checks
     """
     global MODEL_VARIANTS
     
+    print_color("\nInitializing Model Variants...", 'green')
+    
     if not silent:
-        logger.info("Initializing model variants using helper functions")
+        logger.info("\nInitializing model variants")
     
     # Initialize progress tracking
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'successful_models': 0,
         'failed_models': 0,
         'current_model': None,
         'instantiation_method': None
     }
     
-    # Calculate total work units for progress bar
-    total_stages = 6  # System, Config, Params, Definitions, Models, Finalization
-    total_models = 0  # Will be set after model_definitions is created
+    # Define all stage titles for ProgressHelper
+    titles = [
+        "System Preparation",
+        "Parameter Validation",
+        "Creating Model Definitions",
+        "Model Initialization",
+        "Post-Initialization Validation",
+        "Final Cleanup"
+    ]
     
     try:
-        # STAGE 1: System Preparation
-        progress_data['current_stage'] = "System Preparation"
+        # Create ProgressHelper instance with all stage titles
+        progress = ProgressHelper(titles)
         
         hardware_data = None
         total_ram_gb = 8.0
         
-        with alive_bar(total_stages, title='Initializing Model Variants\t', unit='stages') as bar:
+        # STAGE 1: System Preparation
+        progress_data['current_stage'] = "System Preparation"
+        
+        with progress.bar("System Preparation", total=4, unit="stages") as main_bar:
+            
+            # STAGE 1.1: Hardware Check
+            main_bar.text = "Checking system hardware"
+            hardware_check_start = time.time()
             
             try:
-                bar.text = "Checking system hardware..."
                 hardware_data = check_hardware(include_memory_usage=True)
                 total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
-                
-                # Initial memory cleanup for memory-constrained systems
-                _optimize_memory_if_needed(
-                    condition=total_ram_gb < 8,
-                    hardware_data=hardware_data,
-                    aggressive=total_ram_gb < 4,
-                    silent=silent
-                )
-                bar.text = "System check complete"
+                main_bar.text = f"System check completed ({total_ram_gb:.1f} GB RAM)"
             except Exception as e:
                 if not silent:
                     logger.debug(f"Hardware detection failed: {e}")
                 hardware_data = {}
-                bar.text = "System check (using defaults)"
+                main_bar.text = "System check failed, using defaults"
             
-            # Clear existing variants
+            hardware_check_time = time.time() - hardware_check_start
+            main_bar()
+            
+            # STAGE 1.2: Memory Optimization
+            main_bar.text = "Optimizing memory for initialization"
+            memory_start = time.time()
+            
+            _optimize_memory_if_needed(
+                condition=total_ram_gb < 8,
+                hardware_data=hardware_data,
+                aggressive=total_ram_gb < 4,
+                silent=silent
+            )
+            
+            memory_time = time.time() - memory_start
+            main_bar.text = "Memory optimization completed"
+            main_bar()
+            
+            # STAGE 1.3: Clear existing variants
+            main_bar.text = "Clearing existing model variants"
+            clear_start = time.time()
+            
             MODEL_VARIANTS = {}
-            bar()
             
-            # STAGE 2: Configuration Loading
-            progress_data['current_stage'] = "Loading Configuration"
-            bar.text = "Loading configuration..."
+            clear_time = time.time() - clear_start
+            main_bar.text = "Existing variants cleared"
+            main_bar()
+            
+            # STAGE 1.4: Configuration Loading
+            main_bar.text = "Loading configuration files"
+            config_start = time.time()
             
             # Get current configuration with fallbacks
             try:
@@ -30992,9 +30766,7 @@ def initialize_model_variants(silent: bool = False) -> None:
                 hardware_config = current_config.get('hardware', {})
                 system_config = current_config.get('system', {})
                 
-                if not silent:
-                    logger.debug("Loaded configuration for model variant initialization")
-                bar.text = "Configuration loaded"
+                main_bar.text = "Configuration loaded successfully"
             except Exception as e:
                 if not silent:
                     logger.warning(f"Could not load current config, using defaults: {e}")
@@ -31004,169 +30776,192 @@ def initialize_model_variants(silent: bool = False) -> None:
                 training_config = {}
                 hardware_config = {}
                 system_config = {}
-                bar.text = "Configuration (using defaults)"
+                main_bar.text = "Using default configuration"
             
-            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory after config processing for large configs
-            config_size_estimate = len(str(current_config))
-            _optimize_memory_if_needed(
-                condition=config_size_estimate > 50000 and total_ram_gb < 16,
-                hardware_data=hardware_data,
-                aggressive=config_size_estimate > 100000,
-                silent=silent
-            )
-            
-            bar()
-            
-            # STAGE 3: Parameter Extraction & Validation
-            progress_data['current_stage'] = "Validating Parameters"
-            bar.text = "Extracting parameters..."
+            config_time = time.time() - config_start
+            main_bar()
+        
+        # STAGE 2: Parameter Extraction & Validation
+        progress_data['current_stage'] = "Validating Parameters"
+        
+        with progress.bar("Parameter Validation", total=21, unit="parameters") as param_bar:
             
             # Extract configuration values using helper function
+            param_bar.text = "Validating input feature dimension"
             test_input_dim = _extract_and_validate_config_param(
                 data_config, 'features', 20, 'FEATURES',
                 lambda x: isinstance(x, int) and x > 0,
                 "input feature dimension", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating latent encoding dimension"
             base_encoding_dim = _extract_and_validate_config_param(
                 model_config, 'encoding_dim', 16, 'DEFAULT_ENCODING_DIM',
                 lambda x: isinstance(x, int) and x > 0,
                 "latent encoding dimension", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating hidden layer dimensions"
             base_hidden_dims = _extract_and_validate_config_param(
                 model_config, 'hidden_dims', [128, 64], 'HIDDEN_LAYER_SIZES',
                 lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(d, int) and d > 0 for d in x),
                 "hidden layer dimensions", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating dropout rates"
             base_dropout_rates = _extract_and_validate_config_param(
                 model_config, 'dropout_rates', [0.2, 0.15], 'DROPOUT_RATES',
                 lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in x),
                 "dropout rates", silent
             )
+            param_bar()
             
-            # Activation and normalization
+            param_bar.text = "Validating activation function"
             activation = _extract_and_validate_config_param(
                 model_config, 'activation', 'leaky_relu', 'ACTIVATION',
                 lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
                 "activation function", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating activation parameter"
             activation_param = _extract_and_validate_config_param(
                 model_config, 'activation_param', 0.2, 'ACTIVATION_PARAM',
                 lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
                 "activation parameter", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating normalization type"
             normalization = _extract_and_validate_config_param(
                 model_config, 'normalization', 'batch', 'NORMALIZATION',
                 lambda x: x in ['batch', 'layer', 'instance', 'group', 'none', None],
                 "normalization type", silent
             )
+            param_bar()
             
-            # Architecture features
+            param_bar.text = "Validating batch normalization flag"
             use_batch_norm = _extract_and_validate_config_param(
                 model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
                 lambda x: isinstance(x, bool),
                 "batch normalization flag", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating layer normalization flag"
             use_layer_norm = _extract_and_validate_config_param(
                 model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
                 lambda x: isinstance(x, bool),
                 "layer normalization flag", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating skip connections flag"
             skip_connection = _extract_and_validate_config_param(
                 model_config, 'skip_connection', True, 'SKIP_CONNECTION',
                 lambda x: isinstance(x, bool),
                 "skip connections flag", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating residual blocks flag"
             residual_blocks = _extract_and_validate_config_param(
                 model_config, 'residual_blocks', False, 'RESIDUAL_BLOCKS',
                 lambda x: isinstance(x, bool),
                 "residual blocks flag", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating attention mechanism flag"
             use_attention = _extract_and_validate_config_param(
                 model_config, 'use_attention', False, 'USE_ATTENTION',
                 lambda x: isinstance(x, bool),
                 "attention mechanism flag", silent
             )
+            param_bar()
             
-            # Ensemble parameters
+            param_bar.text = "Validating ensemble size..."
             num_models = _extract_and_validate_config_param(
                 model_config, 'num_models', 3, 'NUM_MODELS',
                 lambda x: isinstance(x, int) and 1 <= x <= 10,
                 "ensemble size", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating ensemble diversity factor"
             diversity_factor = _extract_and_validate_config_param(
                 model_config, 'diversity_factor', 0.2, 'DIVERSITY_FACTOR',
                 lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
                 "ensemble diversity factor", silent
             )
+            param_bar()
             
-            # Training parameters
+            param_bar.text = "Validating mixed precision training"
             mixed_precision = _extract_and_validate_config_param(
                 training_config, 'mixed_precision', False, 'MIXED_PRECISION',
                 lambda x: isinstance(x, bool),
                 "mixed precision training", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating learning rate"
             learning_rate = _extract_and_validate_config_param(
                 training_config, 'learning_rate', 0.001, 'LEARNING_RATE',
                 lambda x: isinstance(x, (int, float)) and x > 0,
                 "learning rate", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating batch size"
             batch_size = _extract_and_validate_config_param(
                 training_config, 'batch_size', 32, 'BATCH_SIZE',
                 lambda x: isinstance(x, int) and x > 0,
                 "batch size", silent
             )
+            param_bar()
             
-            # Hardware parameters
+            param_bar.text = "Validating compute device"
             device = _extract_and_validate_config_param(
                 hardware_config, 'device', 'auto', 'DEVICE',
                 lambda x: isinstance(x, str) and x in ['auto', 'cpu', 'cuda'] or x.startswith('cuda:'),
                 "compute device", silent
             )
+            param_bar()
             
-            # System parameters
+            param_bar.text = "Validating random seed"
             random_seed = _extract_and_validate_config_param(
                 system_config, 'random_seed', 42, 'RANDOM_SEED',
                 lambda x: isinstance(x, int),
                 "random seed", silent
             )
+            param_bar()
             
+            param_bar.text = "Validating legacy compatibility mode"
             legacy_mode = _extract_and_validate_config_param(
                 model_config, 'legacy_mode', False, 'LEGACY_MODE',
                 lambda x: isinstance(x, bool),
                 "legacy compatibility mode", silent
             )
+            param_bar()
             
             # Validate and adjust parameters using helper function
+            param_bar.text = "Adjusting parameters for hardware constraints"
             base_hidden_dims, base_dropout_rates = _validate_and_adjust_parameters(
                 base_hidden_dims, base_dropout_rates, silent
             )
+            param_bar.text = f"Parameters adjusted: {len(base_hidden_dims)} hidden layers, encoding_dim={base_encoding_dim}"
+            param_bar()
+        
+        # STAGE 3: Model Definitions Creation
+        progress_data['current_stage'] = "Creating Model Definitions"
+        
+        with progress.bar("Creating Model Definitions", total=1, unit="definitions") as def_bar:
             
-            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before intensive model testing
-            _optimize_memory_if_needed(
-                condition=len(str(base_hidden_dims) + str(base_dropout_rates)) > 1000 or total_ram_gb < 8,
-                hardware_data=hardware_data,
-                aggressive=total_ram_gb < 4,
-                silent=silent
-            )
-            
-            bar.text = "Parameters validated"
-            bar()
-            
-            # STAGE 4: Model Definitions
-            progress_data['current_stage'] = "Creating Model Definitions"
-            bar.text = "Creating model definitions..."
+            def_bar.text = "Creating model test definitions"
+            definitions_start = time.time()
             
             # Create model test definitions using helper function with ALL required parameters
             model_definitions = _create_model_test_definition(
@@ -31187,15 +30982,13 @@ def initialize_model_variants(silent: bool = False) -> None:
                 use_batch_norm=use_batch_norm,
                 use_layer_norm=use_layer_norm
             )
-            
             total_models = len(model_definitions)
-            bar.text = f"Created {total_models} model definitions"
-            bar()
             
-            # Close the main progress bar and start model initialization bar
-            bar.text = "Starting model initialization..."
+            definitions_time = time.time() - definitions_start
+            def_bar.text = f"Created {total_models} model definitions"
+            def_bar()
         
-        # STAGE 5: Model Initialization with detailed progress
+        # STAGE 4: Model Initialization
         progress_data['current_stage'] = "Model Initialization"
         
         # Track initialization statistics
@@ -31216,21 +31009,7 @@ def initialize_model_variants(silent: bool = False) -> None:
             'detailed_metrics': {}
         }
         
-        # Status symbols for visual feedback
-        status_symbols = {
-            'success': '[OK]',
-            'failure': '[FAIL]',
-            'skip': '[SKIP]'
-        }
-        
-        method_symbols = {
-            'primary': '[PRIMARY]',
-            'fallback': '[FALLBACK]',
-            'minimal': '[MINIMAL]',
-            'adaptive': '[ADAPTIVE]'
-        }
-        
-        with alive_bar(total_models, title='Initializing Models\t\t', unit='models') as model_bar:
+        with progress.bar("Model Initialization", total=total_models, unit="models") as model_bar:
             
             # Initialize each model variant using the helper function
             for name, definition in model_definitions.items():
@@ -31240,7 +31019,8 @@ def initialize_model_variants(silent: bool = False) -> None:
                 # Update progress bar with current model info
                 successful_count = len(initialization_stats['successful'])
                 failed_count = len(initialization_stats['failed'])
-                model_bar.text = f"Testing {name}... ({successful_count} passed, {failed_count} failed)"
+                skipped_count = len(initialization_stats['skipped'])
+                model_bar.text = f"Model {initialization_stats['attempted']}/{total_models}: {name} | OK:{successful_count} FAIL:{failed_count} SKIP:{skipped_count}"
                 
                 try:
                     if not silent:
@@ -31253,8 +31033,8 @@ def initialize_model_variants(silent: bool = False) -> None:
                             logger.warning(f"{name}: {error_msg}")
                         initialization_stats['errors'].append(f"{name}: {error_msg}")
                         initialization_stats['skipped'].append(name)
-                        model_bar.text = f"{status_symbols['skip']} {name} skipped"
                         progress_data['failed_models'] += 1
+                        model_bar.text = f"{name} skipped (class unavailable)"
                         model_bar()
                         continue
                     
@@ -31334,143 +31114,76 @@ def initialize_model_variants(silent: bool = False) -> None:
                             if total_params > 0:
                                 initialization_stats['performance_tests_passed'] += 1
                             
-                            # Test device compatibility
-                            device_str = str(test_model.device if hasattr(test_model, 'device') else 'cpu')
-                            if 'cuda' in device_str and not torch.cuda.is_available():
-                                if not silent:
-                                    logger.warning(f"{name}: Model on CUDA device but CUDA not available")
-                            
                             # Success - register the model variant
                             MODEL_VARIANTS[name] = model_class
                             initialization_stats['successful'].append(name)
                             initialization_stats['validation_passed'] += 1
                             progress_data['successful_models'] += 1
                             
-                            method_symbol = method_symbols.get(instantiation_method, '[UNKNOWN]')
-                            model_bar.text = f"{status_symbols['success']} {name} {method_symbol} ({total_params:,} params)"
+                            model_bar.text = f"{name} initialized ({instantiation_method}, {total_params:,} params)"
                             
                             if not silent:
-                                logger.info(f"{status_symbols['success']} {name}: Successfully initialized and validated "
-                                          f"({instantiation_method}, {total_params:,} params, "
-                                          f"score: {validation_results.get('overall_score', 0):.1%})")
-                            
+                                logger.info(f"{name}: Successfully initialized ({instantiation_method}, {total_params:,} params, score: {validation_results.get('overall_score', 0):.1%})")
+                        
                         except Exception as validation_error:
                             error_msg = f"Post-instantiation validation failed: {str(validation_error)}"
                             if not silent:
-                                logger.error(f"{status_symbols['failure']} {name}: {error_msg}")
+                                logger.error(f"{name}: {error_msg}")
                             initialization_stats['errors'].append(f"{name}: {error_msg}")
                             initialization_stats['failed'].append(name)
                             progress_data['failed_models'] += 1
-                            model_bar.text = f"{status_symbols['failure']} {name} validation failed"
+                            model_bar.text = f"{name} validation failed"
                     else:
                         # Instantiation failed
                         error_msg = f"Instantiation failed: {', '.join(validation_results.get('errors', []))}"
                         if not silent:
-                            logger.error(f"{status_symbols['failure']} {name}: {error_msg}")
+                            logger.error(f"{name}: {error_msg}")
                         initialization_stats['errors'].append(f"{name}: {error_msg}")
                         initialization_stats['failed'].append(name)
                         progress_data['failed_models'] += 1
-                        model_bar.text = f"{status_symbols['failure']} {name} instantiation failed"
+                        model_bar.text = f"{name} instantiation failed"
                     
                     # Cleanup test model and free memory
                     if test_model is not None:
                         del test_model
                     
-                    # MEMORY OPTIMIZATION CHECKPOINT - Cleanup between model tests
-                    if _optimize_memory_if_needed(
-                        condition=True,  # Always aggressive between models
+                    # Cleanup between model tests
+                    optimize_memory = _optimize_memory_if_needed(
+                        condition=True,
                         hardware_data=hardware_data,
                         aggressive=True,
                         silent=silent
-                    ):
+                    )
+                    if optimize_memory:
                         initialization_stats['memory_optimizations_performed'] += 1
                     
                     torch.cuda.empty_cache() if torch.cuda.is_available() else None
-                    
+                
                 except Exception as e:
                     if not silent:
-                        logger.error(f"{status_symbols['failure']} Failed to initialize model variant {name}: {e}")
+                        logger.error(f"Failed to initialize model variant {name}: {e}")
                     initialization_stats['errors'].append(f"{name}: Unexpected error: {str(e)}")
                     initialization_stats['failed'].append(name)
                     progress_data['failed_models'] += 1
-                    model_bar.text = f"{status_symbols['failure']} {name} unexpected error"
+                    model_bar.text = f"{name} unexpected error"
                 
-                # Update progress bar
                 model_bar()
             
             # Final update for model initialization
             successful_count = len(initialization_stats['successful'])
-            failed_count = len(initialization_stats['failed'])
-            model_bar.text = f"Models: {successful_count} passed, {failed_count} failed"
+            model_bar.text = f"Initialized {successful_count}/{total_models} models successfully"
         
-        # STAGE 6: Finalization
-        progress_data['current_stage'] = "Finalizing"
+        # STAGE 5: Post-Initialization Validation
+        progress_data['current_stage'] = "Post-Initialization Validation"
         
-        with alive_bar(1, title='Finalizing\t\t\t') as final_bar:
+        with progress.bar("Post-Initialization Validation", total=2, unit="checks") as post_bar:
             
-            final_bar.text = "Finalizing setup..."
+            # STAGE 5.1: Ensure at least one model variant is available
+            post_bar.text = "Checking model availability"
+            availability_start = time.time()
             
-            # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before post-processing
-            _optimize_memory_if_needed(
-                condition=len(MODEL_VARIANTS) > 2,
-                hardware_data=hardware_data,
-                aggressive=len(MODEL_VARIANTS) > 2,
-                silent=silent
-            )
-            
-            # Log initialization summary
-            total_attempted = initialization_stats['attempted']
-            successful_count = len(initialization_stats['successful'])
-            failed_count = len(initialization_stats['failed'])
-            fallback_count = len(initialization_stats['fallback_used'])
-            minimal_count = len(initialization_stats['minimal_used'])
-            adaptive_count = len(initialization_stats['adaptive_used'])
-            memory_opts = initialization_stats['memory_optimizations_performed']
-            
-            if not silent:
-                logger.info("Model variants initialization completed using helper functions:")
-                logger.info(f"  - Total attempted: {total_attempted}")
-                logger.info(f"  - Successful: {successful_count}")
-                logger.info(f"  - Failed: {failed_count}")
-                logger.info(f"  - Using primary config: {successful_count - fallback_count - minimal_count - adaptive_count}")
-                logger.info(f"  - Using fallback config: {fallback_count}")
-                logger.info(f"  - Using minimal config: {minimal_count}")
-                logger.info(f"  - Using adaptive config: {adaptive_count}")
-                logger.info(f"  - Configuration validation passed: {initialization_stats['config_validation_passed']}")
-                logger.info(f"  - Architecture tests passed: {initialization_stats['architecture_tests_passed']}")
-                logger.info(f"  - Performance tests passed: {initialization_stats['performance_tests_passed']}")
-                logger.info(f"  - Memory optimizations performed: {memory_opts}")
-                
-                # Log detailed metrics for successful models
-                if initialization_stats['detailed_metrics']:
-                    logger.info("  - Detailed metrics available for successful models")
-                    for model_name, metrics in initialization_stats['detailed_metrics'].items():
-                        score = metrics['validation_results'].get('overall_score', 0)
-                        params = metrics['performance_metrics'].get('total_parameters', 0)
-                        logger.debug(f"    {model_name}: {score:.1%} score, {params:,} params, {metrics['instantiation_method']} config")
-                
-                if initialization_stats['successful']:
-                    logger.info(f"  - Available models: {', '.join(initialization_stats['successful'])}")
-                
-                if initialization_stats['failed']:
-                    logger.warning(f"  - Failed models: {', '.join(initialization_stats['failed'])}")
-                
-                # Log critical errors for debugging
-                if initialization_stats['errors']:
-                    logger.warning("Initialization errors encountered (showing first 5):")
-                    for error in initialization_stats['errors'][:5]:
-                        logger.warning(f"  - {error}")
-                    if len(initialization_stats['errors']) > 5:
-                        logger.warning(f"  ... and {len(initialization_stats['errors']) - 5} more errors")
-            
-            # Ensure at least one model variant is available
             if not MODEL_VARIANTS:
-                error_msg = "No model variants could be initialized"
-                if not silent:
-                    logger.error(error_msg)
-                    logger.error("This indicates a serious configuration or dependency issue")
-                
-                final_bar.text = "No models - emergency fallback"
+                post_bar.text = "No models available - activating emergency fallback"
                 
                 # Emergency fallback using the helper function
                 try:
@@ -31518,25 +31231,29 @@ def initialize_model_variants(silent: bool = False) -> None:
                             initialization_stats['memory_optimizations_performed'] += 1
                             initialization_stats['successful'].append('SimpleAutoencoder')
                             progress_data['successful_models'] += 1
-                            final_bar.text = "Emergency fallback activated"
+                            post_bar.text = "Emergency fallback activated"
                             if not silent:
                                 logger.warning("Emergency fallback: Ultra-minimal SimpleAutoencoder available")
                         else:
                             raise RuntimeError("Emergency fallback instantiation failed")
                     else:
-                        raise RuntimeError(error_msg)
+                        raise RuntimeError("No model variants could be initialized")
                         
                 except Exception as e:
                     if not silent:
                         logger.critical(f"Emergency fallback failed: {e}")
-                    raise RuntimeError(f"{error_msg}: {str(e)}")
+                    raise RuntimeError(f"No model variants available: {str(e)}")
+            else:
+                post_bar.text = f"Model variants available: {len(MODEL_VARIANTS)}"
             
-            # Run post-initialization validation if available
+            availability_time = time.time() - availability_start
+            post_bar()
+            
+            # STAGE 5.2: Run post-initialization validation
+            post_bar.text = "Running post-initialization validation"
+            validation_start = time.time()
+            
             try:
-                if not silent:
-                    final_bar.text = "Running final validation"
-                
-                # Use the validation function if available
                 if 'validate_model_variants' in globals():
                     variant_validation_results = validate_model_variants(logger, silent=silent)
                     
@@ -31547,38 +31264,98 @@ def initialize_model_variants(silent: bool = False) -> None:
                     
                     if fully_validated:
                         if not silent:
-                            logger.info(f"-SUCCESS- Fully validated model variants: {', '.join(fully_validated)}")
+                            logger.info(f"Fully validated model variants: {', '.join(fully_validated)}")
+                        post_bar.text = f"Validation: {len(fully_validated)} models fully validated"
                     else:
                         if not silent:
-                            logger.warning("-WARN- No model variants passed comprehensive post-validation")
-                    final_bar.text = "Final validation complete"
+                            logger.warning("No model variants passed post-validation")
+                        post_bar.text = "Validation: No models fully validated"
                 else:
                     if not silent:
                         logger.debug("Post-initialization validation function not available")
+                    post_bar.text = "Validation: Function not available"
                     
             except Exception as validation_error:
                 if not silent:
                     logger.error(f"Post-initialization validation failed: {validation_error}")
+                post_bar.text = "Validation: Error during validation"
             
-            # FINAL MEMORY OPTIMIZATION
+            validation_time = time.time() - validation_start
+            post_bar()
+        
+        # STAGE 6: Final Cleanup
+        progress_data['current_stage'] = "Final Cleanup"
+        
+        with progress.bar("Final Cleanup", total=2, unit="tasks") as cleanup_bar:
+            
+            cleanup_bar.text = "Performing final memory optimization"
+            cleanup_start = time.time()
+            
             _optimize_memory_if_needed(
-                condition=True,  # Always aggressive final cleanup
+                condition=True,
                 hardware_data=hardware_data,
                 aggressive=True,
                 silent=silent
             )
             
-            final_bar.text = "Initialization complete!"
-            final_bar()
+            cleanup_time = time.time() - cleanup_start
+            cleanup_bar.text = "Memory optimization completed"
+            cleanup_bar()
+            
+            cleanup_bar.text = "Initialization complete!"
+            cleanup_bar()
     
     except Exception as e:
-        # If we were using progress bars, they're already closed by the context managers
-        raise e
+        if not silent:
+            logger.error(f"Initialization failed during stage: {progress_data.get('current_stage', 'unknown')}")
+            logger.error(f"Error: {str(e)}")
+        raise
     
+    # Log final summary
     if not silent:
-        logger.info(f"Model variants initialization completed successfully with "
-                   f"{len(MODEL_VARIANTS)} available variants")
-        logger.info(f"Memory optimizations: {initialization_stats['memory_optimizations_performed']} operations performed")
+        total_attempted = initialization_stats.get('attempted', 0)
+        successful_count = len(initialization_stats.get('successful', []))
+        failed_count = len(initialization_stats.get('failed', []))
+        skipped_count = len(initialization_stats.get('skipped', []))
+        fallback_count = len(initialization_stats.get('fallback_used', []))
+        minimal_count = len(initialization_stats.get('minimal_used', []))
+        adaptive_count = len(initialization_stats.get('adaptive_used', []))
+        memory_opts = initialization_stats.get('memory_optimizations_performed', 0)
+        
+        logger.info("Model variants initialization completed:")
+        logger.info(f"  - Total attempted: {total_attempted}")
+        logger.info(f"  - Successful: {successful_count}")
+        logger.info(f"  - Failed: {failed_count}")
+        logger.info(f"  - Using primary config: {successful_count - fallback_count - minimal_count - adaptive_count}")
+        logger.info(f"  - Using fallback config: {fallback_count}")
+        logger.info(f"  - Using minimal config: {minimal_count}")
+        logger.info(f"  - Using adaptive config: {adaptive_count}")
+        logger.info(f"  - Configuration validation passed: {initialization_stats['config_validation_passed']}")
+        logger.info(f"  - Architecture tests passed: {initialization_stats['architecture_tests_passed']}")
+        logger.info(f"  - Performance tests passed: {initialization_stats['performance_tests_passed']}")
+        logger.info(f"  - Memory optimizations performed: {memory_opts}")
+        
+        # Log detailed metrics for successful models
+        if initialization_stats['detailed_metrics']:
+            logger.info("  - Detailed metrics available for successful models")
+            for model_name, metrics in initialization_stats['detailed_metrics'].items():
+                score = metrics['validation_results'].get('overall_score', 0)
+                params = metrics['performance_metrics'].get('total_parameters', 0)
+                logger.debug(f"    {model_name}: {score:.1%} score, {params:,} params, {metrics['instantiation_method']} config")
+        
+        if initialization_stats['successful']:
+            logger.info(f"  - Available models: {', '.join(initialization_stats['successful'])}")
+        
+        if initialization_stats['failed']:
+            logger.warning(f"  - Failed models: {', '.join(initialization_stats['failed'])}")
+        
+        # Log critical errors for debugging
+        if initialization_stats['errors']:
+            logger.warning("Initialization errors encountered (showing first 5):")
+            for error in initialization_stats['errors'][:5]:
+                logger.warning(f"  - {error}")
+            if len(initialization_stats['errors']) > 5:
+                logger.warning(f"  ... and {len(initialization_stats['errors']) - 5} more errors")
         
         # Log final summary of available capabilities
         capabilities_summary = []
@@ -31604,16 +31381,21 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
     Args:
         logger: Logger instance for reporting validation results
         silent: If True, suppress detailed logging messages and progress bars during validation
-        
+    
     Returns:
         Dictionary mapping model names to their validation status
     """
+    print_color("\nValidating Model Variants...", 'green')
+    
+    if not silent:
+        logger.info("\nValidating model variants")
+    
     variant_status = {}
     validation_start_time = time.time()
     
     # Initialize progress tracking
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'models_tested': 0,
         'models_passed': 0,
         'models_failed': 0,
@@ -31621,12 +31403,27 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         'current_test': None
     }
     
+    # Define all stage titles for ProgressHelper
+    titles = [
+        "Initial Setup",
+        "Hardware Check",
+        "Configuration Loading",
+        "Parameter Extraction",
+        "Creating Test Definitions",
+        "Model Validation",
+        "Finalizing"
+    ]
+    
+    # Create ProgressHelper instance with all stage titles
+    progress = ProgressHelper(titles)
+    
     # Phase 1: Check if MODEL_VARIANTS exists and initialize if needed
     progress_data['current_stage'] = "Initial Setup"
     
-    with alive_bar(1, title='Validation Setup\t\t') as setup_bar:
+    with progress.bar("Initial Setup", total=1, unit="steps") as setup_bar:
         
-        setup_bar.text = "Checking model variants..."
+        setup_bar.text = "Checking model variants"
+        setup_start = time.time()
         
         if not MODEL_VARIANTS:
             if not silent:
@@ -31639,6 +31436,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                 if not silent:
                     logger.error(f"Failed to initialize model variants for validation: {e}")
                 setup_bar.text = "Initialization failed"
+                setup_time = time.time() - setup_start
                 return {'error': error_msg}
         
         if not MODEL_VARIANTS:
@@ -31646,17 +31444,20 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             if not silent:
                 logger.error("No model variants available after initialization attempt")
             setup_bar.text = "No models available"
+            setup_time = time.time() - setup_start
             return {'error': error_msg}
         
+        setup_time = time.time() - setup_start
         setup_bar.text = f"Found {len(MODEL_VARIANTS)} model variants"
         setup_bar()
     
     # Phase 2: Get hardware context for memory optimization
     progress_data['current_stage'] = "Hardware Check"
     
-    with alive_bar(1, title='Hardware Check\t\t\t') as hardware_bar:
+    with progress.bar("Hardware Check", total=1, unit="checks") as hardware_bar:
         
-        hardware_bar.text = "Checking hardware..."
+        hardware_bar.text = "Checking hardware"
+        hardware_start = time.time()
         
         try:
             hardware_data = check_hardware(include_memory_usage=True)
@@ -31677,14 +31478,16 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             total_ram_gb = 8.0
             hardware_bar.text = "Hardware check (using defaults)"
         
+        hardware_time = time.time() - hardware_start
         hardware_bar()
     
     # Phase 3: Load configuration
     progress_data['current_stage'] = "Configuration Loading"
     
-    with alive_bar(1, title='Loading Configuration\t\t') as config_bar:
+    with progress.bar("Configuration Loading", total=1, unit="configs") as config_bar:
         
-        config_bar.text = "Loading configuration..."
+        config_bar.text = "Loading configuration"
+        config_start = time.time()
         
         try:
             current_config = get_current_config()
@@ -31700,7 +31503,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             if not silent:
                 logger.debug("Loaded configuration for validation testing")
             config_bar.text = "Configuration loaded"
-                
+        
         except Exception as e:
             if not silent:
                 logger.warning(f"Could not load configuration for validation, using defaults: {e}")
@@ -31712,144 +31515,181 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             system_config = {}
             config_bar.text = "Configuration (using defaults)"
         
+        config_time = time.time() - config_start
         config_bar()
     
     # Phase 4: Extract configuration parameters using helper functions
     progress_data['current_stage'] = "Parameter Extraction"
     
-    with alive_bar(1, title='Extracting Parameters\t\t') as param_bar:
+    with progress.bar("Parameter Extraction", total=20, unit="parameters") as param_bar:
         
-        param_bar.text = "Extracting parameters..."
-        
+        param_bar.text = "Extracting input feature dimension"
         test_input_dim = _extract_and_validate_config_param(
             data_config, 'features', 20, 'FEATURES',
             lambda x: isinstance(x, int) and x > 0,
             "input feature dimension", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting latent encoding dimension"
         base_encoding_dim = _extract_and_validate_config_param(
             model_config, 'encoding_dim', 16, 'DEFAULT_ENCODING_DIM',
             lambda x: isinstance(x, int) and x > 0,
             "latent encoding dimension", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting hidden layer dimensions"
         base_hidden_dims = _extract_and_validate_config_param(
             model_config, 'hidden_dims', [128, 64], 'HIDDEN_LAYER_SIZES',
             lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(d, int) and d > 0 for d in x),
             "hidden layer dimensions", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting dropout rates"
         base_dropout_rates = _extract_and_validate_config_param(
             model_config, 'dropout_rates', [0.2, 0.15], 'DROPOUT_RATES',
             lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(r, (int, float)) and 0 <= r < 1 for r in x),
             "dropout rates", silent
         )
+        param_bar()
         
-        # Additional parameters for validation
+        param_bar.text = "Extracting activation function"
         activation = _extract_and_validate_config_param(
             model_config, 'activation', 'leaky_relu', 'ACTIVATION',
             lambda x: x in ['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'swish', 'elu', 'selu', 'prelu'],
             "activation function", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting activation parameter"
         activation_param = _extract_and_validate_config_param(
             model_config, 'activation_param', 0.2, 'ACTIVATION_PARAM',
             lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
             "activation parameter", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting normalization type"
         normalization = _extract_and_validate_config_param(
             model_config, 'normalization', 'batch', 'NORMALIZATION',
             lambda x: x in ['batch', 'layer', 'instance', 'group', 'none', None],
             "normalization type", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting batch normalization flag"
         use_batch_norm = _extract_and_validate_config_param(
             model_config, 'use_batch_norm', True, 'USE_BATCH_NORM',
             lambda x: isinstance(x, bool),
             "batch normalization flag", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting layer normalization flag"
         use_layer_norm = _extract_and_validate_config_param(
             model_config, 'use_layer_norm', False, 'USE_LAYER_NORM',
             lambda x: isinstance(x, bool),
             "layer normalization flag", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting skip connections flag"
         skip_connection = _extract_and_validate_config_param(
             model_config, 'skip_connection', True, 'SKIP_CONNECTION',
             lambda x: isinstance(x, bool),
             "skip connections flag", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting residual blocks flag"
         residual_blocks = _extract_and_validate_config_param(
             model_config, 'residual_blocks', False, 'RESIDUAL_BLOCKS',
             lambda x: isinstance(x, bool),
             "residual blocks flag", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting attention mechanism flag"
         use_attention = _extract_and_validate_config_param(
             model_config, 'use_attention', False, 'USE_ATTENTION',
             lambda x: isinstance(x, bool),
             "attention mechanism flag", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting ensemble size"
         num_models = _extract_and_validate_config_param(
             model_config, 'num_models', 3, 'NUM_MODELS',
             lambda x: isinstance(x, int) and 1 <= x <= 10,
             "ensemble size", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting ensemble diversity factor"
         diversity_factor = _extract_and_validate_config_param(
             model_config, 'diversity_factor', 0.2, 'DIVERSITY_FACTOR',
             lambda x: isinstance(x, (int, float)) and 0 <= x <= 1,
             "ensemble diversity factor", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting mixed precision training flag"
         mixed_precision = _extract_and_validate_config_param(
             training_config, 'mixed_precision', False, 'MIXED_PRECISION',
             lambda x: isinstance(x, bool),
             "mixed precision training", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting learning rate"
         learning_rate = _extract_and_validate_config_param(
             training_config, 'learning_rate', 0.001, 'LEARNING_RATE',
             lambda x: isinstance(x, (int, float)) and x > 0,
             "learning rate", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting compute device"
         device_setting = _extract_and_validate_config_param(
             hardware_config, 'device', 'auto', 'DEVICE',
             lambda x: isinstance(x, str) and x in ['auto', 'cpu', 'cuda'] or x.startswith('cuda:'),
             "compute device", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting random seed"
         random_seed = _extract_and_validate_config_param(
             system_config, 'random_seed', 42, 'RANDOM_SEED',
             lambda x: isinstance(x, int),
             "random seed", silent
         )
+        param_bar()
         
+        param_bar.text = "Extracting legacy compatibility mode"
         legacy_mode = _extract_and_validate_config_param(
             model_config, 'legacy_mode', False, 'LEGACY_MODE',
             lambda x: isinstance(x, bool),
             "legacy compatibility mode", silent
         )
+        param_bar()
         
-        # Phase 5: Validate and adjust parameters
+        # Validate and adjust parameters using helper function
+        param_bar.text = "Validating and adjusting parameters"
         base_hidden_dims, base_dropout_rates = _validate_and_adjust_parameters(
             base_hidden_dims, base_dropout_rates, silent
         )
-        
-        param_bar.text = "Parameters validated"
+        param_bar.text = "Parameters validated and adjusted"
         param_bar()
     
-    # Phase 6: Create model test definitions with ALL required parameters
+    # Phase 5: Create model test definitions with ALL required parameters
     progress_data['current_stage'] = "Creating Test Definitions"
     
-    with alive_bar(1, title='Creating Test Definitions\t') as def_bar:
+    with progress.bar("Creating Test Definitions", total=1, unit="definitions") as def_bar:
         
-        def_bar.text = "Creating model definitions..."
+        def_bar.text = "Creating model definitions"
+        definitions_start = time.time()
         
         # Create model test definitions with ALL required parameters
         model_definitions = _create_model_test_definition(
@@ -31863,7 +31703,6 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             num_models=num_models,
             diversity_factor=diversity_factor,
             mixed_precision=mixed_precision,
-            # ADDED: Pass all the missing parameters that are now required
             input_dim=test_input_dim,
             activation=activation,
             activation_param=activation_param,
@@ -31879,6 +31718,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                     definition[config_type]['data']['features'] = test_input_dim
                     definition[config_type]['model']['input_dim'] = test_input_dim
         
+        definitions_time = time.time() - definitions_start
         def_bar.text = f"Created {len(model_definitions)} test definitions"
         def_bar()
     
@@ -31911,7 +31751,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         }
     ]
     
-    # Phase 7: Initialize validation statistics
+    # Phase 6: Initialize validation statistics
     validation_stats = {
         'models_attempted': 0,
         'models_successful': 0,
@@ -31934,19 +31774,11 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         'failed_variants': []
     }
     
-    # Status symbols for visual feedback
-    status_symbols = {
-        'success': '[OK]',
-        'failure': '[FAIL]',
-        'warning': '[WARN]',
-        'skip': '[SKIP]'
-    }
-    
-    # Phase 8: Validate each model variant
+    # Phase 7: Validate each model variant
     progress_data['current_stage'] = "Model Validation"
     total_models = len(MODEL_VARIANTS)
     
-    with alive_bar(total_models, title='Validating Models\t') as model_bar:
+    with progress.bar("Model Validation", total=total_models, unit="models") as model_bar:
         
         for variant_name, variant_class in MODEL_VARIANTS.items():
             model_validation_start = time.time()
@@ -31956,7 +31788,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             # Update progress bar with current model info
             passed_count = validation_stats['models_successful']
             failed_count = validation_stats['models_failed']
-            model_bar.text = f"Testing {variant_name}... ({passed_count} passed, {failed_count} failed)"
+            model_bar.text = f"Testing {variant_name} ({passed_count} passed, {failed_count} failed)"
             
             # Initialize detailed tracking for this variant
             overall_status = 'available'
@@ -31983,7 +31815,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                     variant_details['errors'].append('Model class is None')
                     validation_stats['failed_variants'].append(variant_name)
                     validation_stats['models_failed'] += 1
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} class not found"
+                    model_bar.text = f"{variant_name} class not found"
                     model_bar()
                     continue
                 
@@ -31992,7 +31824,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                     variant_details['errors'].append('Model class is not callable')
                     validation_stats['failed_variants'].append(variant_name)
                     validation_stats['models_failed'] += 1
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} not callable"
+                    model_bar.text = f"{variant_name} not callable"
                     model_bar()
                     continue
                 
@@ -32172,8 +32004,8 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                         validation_stats['robustness_tests_passed'] += 1
                     
                     if not silent:
-                        logger.debug(f"{status_symbols['success']} {variant_name}: Comprehensive validation completed with {instantiation_method} configuration")
-                        
+                        logger.debug(f"{variant_name}: Comprehensive validation completed with {instantiation_method} configuration")
+                
                 else:
                     # Instantiation failed
                     variant_details['tests_performed'].append('instantiation')
@@ -32183,8 +32015,8 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                     validation_stats['models_failed'] += 1
                     
                     if not silent:
-                        logger.error(f"{status_symbols['failure']} {variant_name}: Instantiation failed")
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} instantiation failed"
+                        logger.error(f"{variant_name}: Instantiation failed")
+                    model_bar.text = f"{variant_name} instantiation failed"
                     model_bar()
                     continue
                 
@@ -32208,9 +32040,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                                 
                                 # Adjust for batch norm requirements
                                 test_config = definition['primary_config']
-                                if ((test_config['model'].get('use_batch_norm', False) or 
-                                     test_config['model'].get('normalization') == 'batch') and 
-                                     batch_size == 1):
+                                if ((test_config['model'].get('use_batch_norm', False) or test_config['model'].get('normalization') == 'batch') and batch_size == 1):
                                     batch_size = 2
                                 
                                 test_input = torch.randn(batch_size, test_input_dim)
@@ -32244,7 +32074,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                             variant_details['tests_failed'].append('advanced_scenarios')
                             validation_stats['total_tests_failed'] += 1
                         validation_stats['total_tests_performed'] += 1
-                        
+                    
                     except Exception as scenario_test_error:
                         variant_details['warnings'].append(f"Advanced scenario testing failed: {str(scenario_test_error)}")
                     
@@ -32276,11 +32106,11 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                             validation_stats['total_tests_performed'] += 1
                             validation_stats['total_tests_passed'] += 1
                             validation_stats['memory_tests_passed'] += 1
-                            
+                        
                         except ImportError:
                             variant_details['memory_usage']['psutil_available'] = False
                             variant_details['warnings'].append('psutil not available for detailed memory analysis')
-                        
+                    
                     except Exception as memory_error:
                         variant_details['warnings'].append(f'Memory analysis failed: {str(memory_error)}')
                     
@@ -32301,7 +32131,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                             variant_details['tests_passed'].append('enhanced_features')
                             validation_stats['total_tests_performed'] += 1
                             validation_stats['total_tests_passed'] += 1
-                            
+                        
                         except Exception as enhanced_error:
                             variant_details['warnings'].append(f'Enhanced features validation failed: {str(enhanced_error)}')
                     
@@ -32323,7 +32153,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                                 variant_details['tests_passed'].append('ensemble_features')
                                 validation_stats['total_tests_performed'] += 1
                                 validation_stats['total_tests_passed'] += 1
-                            
+                        
                         except Exception as ensemble_error:
                             variant_details['warnings'].append(f'Ensemble features validation failed: {str(ensemble_error)}')
                 
@@ -32341,17 +32171,17 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                     overall_status = 'error'
                     validation_stats['models_failed'] += 1
                     validation_stats['failed_variants'].append(variant_name)
-                    model_bar.text = f"{status_symbols['failure']} {variant_name} ({error_count} errors)"
+                    model_bar.text = f"{variant_name} ({error_count} errors)"
                 elif warning_count > 0 or validation_score < 0.8:
                     overall_status = 'warning'
                     validation_stats['models_warning'] += 1
                     validation_stats['warning_variants'].append(variant_name)
-                    model_bar.text = f"{status_symbols['warning']} {variant_name} ({warning_count} warnings)"
+                    model_bar.text = f"{variant_name} ({warning_count} warnings)"
                 else:
                     overall_status = 'available'
                     validation_stats['models_successful'] += 1
                     validation_stats['available_variants'].append(variant_name)
-                    model_bar.text = f"{status_symbols['success']} {variant_name} ({tests_passed}/{tests_total} tests)"
+                    model_bar.text = f"{variant_name} ({tests_passed}/{tests_total} tests)"
                 
                 # Create detailed status message
                 status_msg = overall_status
@@ -32380,7 +32210,7 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                 # Cleanup test model and apply memory optimization
                 if test_instance is not None:
                     del test_instance
-                    
+                
                 # Memory optimization after each model test
                 if _optimize_memory_if_needed(
                     condition=True,
@@ -32393,17 +32223,14 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
                 torch.cuda.empty_cache() if torch.cuda.is_available() else None
                 
                 if not silent:
-                    logger.info(f"Model {variant_name} validation completed: {status_msg} "
-                               f"({tests_passed}/{tests_total} tests passed, "
-                               f"{instantiation_method} config, "
-                               f"{model_validation_time:.2f}s)")
-                
+                    logger.info(f"Model {variant_name} validation completed: {status_msg} ({tests_passed}/{tests_total} tests passed, {instantiation_method} config, {model_validation_time:.2f}s)")
+            
             except Exception as e:
                 error_msg = f'validation_error: {str(e)}'
                 variant_status[variant_name] = error_msg
                 validation_stats['failed_variants'].append(variant_name)
                 validation_stats['models_failed'] += 1
-                model_bar.text = f"{status_symbols['failure']} {variant_name} unexpected error"
+                model_bar.text = f"{variant_name} unexpected error"
                 
                 if not silent:
                     logger.error(f"Model variant {variant_name} validation failed with unexpected error: {e}")
@@ -32431,12 +32258,13 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
         failed_count = validation_stats['models_failed']
         model_bar.text = f"Validation complete: {passed_count} passed, {failed_count} failed"
     
-    # Phase 9: Finalization
+    # Phase 8: Finalization
     progress_data['current_stage'] = "Finalizing"
     
-    with alive_bar(1, title='Finalizing\t\t') as final_bar:
+    with progress.bar("Finalizing", total=1, unit="steps") as final_bar:
         
-        final_bar.text = "Generating summary..."
+        final_bar.text = "Generating summary"
+        final_start = time.time()
         
         total_validation_time = time.time() - validation_start_time
         
@@ -32448,66 +32276,67 @@ def validate_model_variants(logger: logging.Logger, silent: bool = False) -> Dic
             silent=silent
         )
         
-        # Phase 10: Log validation summary
-        if not silent:
-            logger.info("="*70)
-            logger.info("MODEL VARIANTS VALIDATION SUMMARY")
-            logger.info("="*70)
-            logger.info(f"Total Validation Time: {total_validation_time:.2f} seconds")
-            logger.info(f"Models Attempted: {validation_stats['models_attempted']}")
-            logger.info(f"Models Available: {validation_stats['models_successful']}")
-            logger.info(f"Models with Warnings: {validation_stats['models_warning']}")
-            logger.info(f"Models Failed: {validation_stats['models_failed']}")
-            logger.info("-"*70)
-            logger.info(f"Total Tests Performed: {validation_stats['total_tests_performed']}")
-            logger.info(f"Total Tests Passed: {validation_stats['total_tests_passed']}")
-            logger.info(f"Total Tests Failed: {validation_stats['total_tests_failed']}")
-            success_rate = validation_stats['total_tests_passed']/max(1, validation_stats['total_tests_performed'])*100
-            logger.info(f"Test Success Rate: {success_rate:.1f}%")
-            logger.info("-"*70)
-            logger.info(f"Configuration Tests Passed: {validation_stats['configuration_tests_passed']}")
-            logger.info(f"Architecture Tests Passed: {validation_stats['architecture_tests_passed']}")
-            logger.info(f"Functionality Tests Passed: {validation_stats['functionality_tests_passed']}")
-            logger.info(f"Performance Tests Passed: {validation_stats['performance_tests_passed']}")
-            logger.info(f"Robustness Tests Passed: {validation_stats['robustness_tests_passed']}")
-            logger.info(f"Memory Tests Passed: {validation_stats['memory_tests_passed']}")
-            logger.info(f"Device Compatibility Tests: {validation_stats['device_compatibility_tests']}")
-            logger.info(f"Memory Optimizations Performed: {validation_stats['memory_optimizations_performed']}")
-            
-            # Log detailed metrics
-            if validation_stats['detailed_metrics']:
-                logger.info("-"*70)
-                logger.info("DETAILED METRICS:")
-                for model_name, metrics in validation_stats['detailed_metrics'].items():
-                    score = metrics['validation_score']
-                    tests_passed = metrics['tests_passed']
-                    tests_total = metrics['tests_total']
-                    method = metrics['instantiation_method']
-                    logger.info(f"  {model_name}: {score:.1%} score, {tests_passed}/{tests_total} tests, {method} config")
-            
-            # Log individual model results
-            logger.info("="*70)
-            for model_name, status in variant_status.items():
-                status_icon = "OK" if status == "available" else "WARN" if status.startswith("warning") else "FAIL"
-                logger.info(f"{status_icon} {model_name}: {status}")
-            
-            # Log recommendations
-            logger.info("="*70)
-            available_models = [name for name, status in variant_status.items() if status == 'available']
-            warning_models = [name for name, status in variant_status.items() if status.startswith('warning')]
-            failed_models = [name for name, status in variant_status.items() if status.startswith('error') or 'failed' in status]
-            
-            if available_models:
-                logger.info(f"RECOMMENDED MODELS: {', '.join(available_models)}")
-            if warning_models:
-                logger.info(f"MODELS WITH WARNINGS: {', '.join(warning_models)}")
-            if failed_models:
-                logger.info(f"FAILED MODELS: {', '.join(failed_models)}")
-            
-            logger.info("="*70)
-        
+        final_time = time.time() - final_start
         final_bar.text = "Validation complete!"
         final_bar()
+    
+    # Log validation summary
+    if not silent:
+        logger.info("="*70)
+        logger.info("MODEL VARIANTS VALIDATION SUMMARY")
+        logger.info("="*70)
+        logger.info(f"Total Validation Time: {total_validation_time:.2f} seconds")
+        logger.info(f"Models Attempted: {validation_stats['models_attempted']}")
+        logger.info(f"Models Available: {validation_stats['models_successful']}")
+        logger.info(f"Models with Warnings: {validation_stats['models_warning']}")
+        logger.info(f"Models Failed: {validation_stats['models_failed']}")
+        logger.info("-"*70)
+        logger.info(f"Total Tests Performed: {validation_stats['total_tests_performed']}")
+        logger.info(f"Total Tests Passed: {validation_stats['total_tests_passed']}")
+        logger.info(f"Total Tests Failed: {validation_stats['total_tests_failed']}")
+        success_rate = validation_stats['total_tests_passed']/max(1, validation_stats['total_tests_performed'])*100
+        logger.info(f"Test Success Rate: {success_rate:.1f}%")
+        logger.info("-"*70)
+        logger.info(f"Configuration Tests Passed: {validation_stats['configuration_tests_passed']}")
+        logger.info(f"Architecture Tests Passed: {validation_stats['architecture_tests_passed']}")
+        logger.info(f"Functionality Tests Passed: {validation_stats['functionality_tests_passed']}")
+        logger.info(f"Performance Tests Passed: {validation_stats['performance_tests_passed']}")
+        logger.info(f"Robustness Tests Passed: {validation_stats['robustness_tests_passed']}")
+        logger.info(f"Memory Tests Passed: {validation_stats['memory_tests_passed']}")
+        logger.info(f"Device Compatibility Tests: {validation_stats['device_compatibility_tests']}")
+        logger.info(f"Memory Optimizations Performed: {validation_stats['memory_optimizations_performed']}")
+        
+        # Log detailed metrics
+        if validation_stats['detailed_metrics']:
+            logger.info("-"*70)
+            logger.info("DETAILED METRICS:")
+            for model_name, metrics in validation_stats['detailed_metrics'].items():
+                score = metrics['validation_score']
+                tests_passed = metrics['tests_passed']
+                tests_total = metrics['tests_total']
+                method = metrics['instantiation_method']
+                logger.info(f"  {model_name}: {score:.1%} score, {tests_passed}/{tests_total} tests, {method} config")
+        
+        # Log individual model results
+        logger.info("="*70)
+        for model_name, status in variant_status.items():
+            status_icon = "OK" if status == "available" else "WARN" if status.startswith("warning") else "FAIL"
+            logger.info(f"{status_icon} {model_name}: {status}")
+        
+        # Log recommendations
+        logger.info("="*70)
+        available_models = [name for name, status in variant_status.items() if status == 'available']
+        warning_models = [name for name, status in variant_status.items() if status.startswith('warning')]
+        failed_models = [name for name, status in variant_status.items() if status.startswith('error') or 'failed' in status]
+        
+        if available_models:
+            logger.info(f"RECOMMENDED MODELS: {', '.join(available_models)}")
+        if warning_models:
+            logger.info(f"MODELS WITH WARNINGS: {', '.join(warning_models)}")
+        if failed_models:
+            logger.info(f"FAILED MODELS: {', '.join(failed_models)}")
+        
+        logger.info("="*70)
     
     return variant_status
 
@@ -33173,7 +33002,7 @@ def create_model_instance(
     
     This eliminates the redundancy between SimpleAutoencoder's parameter processing and
     the functions initialize_model_variants() and validate_model_variants() by leveraging
-    the existing comprehensive validation and instantiation infrastructure.
+    the existing validation and instantiation infrastructure.
     
     Args:
         model_type: Type of model to create ('SimpleAutoencoder', 'EnhancedAutoencoder', etc.)
@@ -33181,10 +33010,10 @@ def create_model_instance(
         config: Configuration dictionary (optional, will use current config if None)
         preset: Preset name to apply (optional)
         **kwargs: Additional parameters that will be merged into config
-        
+    
     Returns:
         Instantiated and validated model instance
-        
+    
     Raises:
         ValueError: If model_type is not available or configuration is invalid
         RuntimeError: If model instantiation fails
@@ -33254,7 +33083,6 @@ def create_model_instance(
             comprehensive_validation=True,
             hardware_data=None,
             silent=False,
-            #silent=True,
             logger=logger
         )
         
@@ -33269,7 +33097,7 @@ def create_model_instance(
         total_params = performance_metrics.get('total_parameters', 0)
         
         return model_instance
-        
+    
     except Exception as e:
         logger.error(f"Factory pattern model creation failed for {model_type}: {e}")
         raise RuntimeError(f"Model factory failed to create {model_type}: {str(e)}") from e
@@ -33628,7 +33456,7 @@ def _initialize_autoencoder_config(
         config: Configuration dictionary (optional, will use current config if None)
         preset: Preset name to apply (optional)
         **all other parameters: All the parameters that were previously handled in each class
-        
+    
     Returns:
         Dictionary containing:
         - 'config': Final processed configuration
@@ -33659,7 +33487,7 @@ def _initialize_autoencoder_config(
             input_dim = 20
             logger.warning("input_dim not provided in config, using default: 20")
     
-    # Enhanced tensor/array handling with better error messages
+    # Tensor/array handling with better error messages
     original_input_dim = input_dim  # Keep track for logging
     
     # Handle different input_dim types using existing helper pattern
@@ -33756,9 +33584,7 @@ def _initialize_autoencoder_config(
         config['data'] = {}
     config['data']['features'] = input_dim
     
-    #preset_name = preset if preset in PRESET_CONFIGS else None
     actual_preset_used = preset if preset in PRESET_CONFIGS else None
-    
     
     # Collect all non-None parameters for processing
     local_params = locals().copy()
@@ -33944,7 +33770,7 @@ def _initialize_autoencoder_config(
         # EnhancedAutoencoder-specific validations
         if input_dim < processed_params['min_features']:
             raise ValueError(f"Input dimension ({input_dim}) must be at least {processed_params['min_features']}")
-            
+        
         # Legacy mode adjustments
         if processed_params['legacy_mode']:
             processed_params['use_attention'] = False
@@ -34049,9 +33875,7 @@ def _initialize_autoencoder_config(
         'mixed_precision': mixed_precision,
         'mixed_precision_requested': mixed_precision_requested,
         'initialization_timestamp': initialization_timestamp,
-        #'preset_name': preset,
         'preset_name': actual_preset_used,
-        #'preset_name': preset_name,
         'training_config': training_config,
         'hardware_data': hardware_data,
         'system_context': system_context
@@ -37615,26 +37439,6 @@ def create_autoencoder_from_config(
         logger.error(f"Failed to create {model_type}: {e}")
         raise RuntimeError(f"Model creation failed: {str(e)}")
 
-def print_color(message: str, color: str = 'white', style: str = 'bright'):
-    """Helper function for colored output."""
-    color_map = {
-        'white': Fore.WHITE,
-        'red': Fore.RED,
-        'green': Fore.GREEN,
-        'yellow': Fore.YELLOW,
-        'blue': Fore.BLUE,
-        'magenta': Fore.MAGENTA,
-        'cyan': Fore.CYAN
-    }
-    style_map = {
-        'normal': Style.NORMAL,
-        'bright': Style.BRIGHT,
-        'dim': Style.DIM
-    }
-    color_code = color_map.get(color, Fore.WHITE)
-    style_code = style_map.get(style, Style.NORMAL)
-    print(f"{style_code}{color_code}{message}{Style.RESET_ALL}")
-
 def get_preprocessing_outputs(
     config_path: Optional[str] = None,
     base_results_dir: Optional[Path] = None,
@@ -38338,13 +38142,13 @@ def load_and_validate_data(
     # Advanced parameters
     data_quality_checks = advanced_config.setdefault('data_quality_checks', True)
     statistical_validation = advanced_config.setdefault('statistical_validation', False)
-
+    
     # Extract run tracking parameters
     run_id = run_tracking_config.get('run_id', run_id)
     run_number = run_tracking_config.get('run_number', run_number)
     run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
-
+    
     if statistics_path is None and save_statistics:
         if use_run_tracking and run_id is not None:
             if 'metrics' in run_specific_dirs:
@@ -38368,7 +38172,7 @@ def load_and_validate_data(
     
     # Initialize progress tracking
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'current_substage': None,
         'rows_processed': 0,
         'features_processed': 0,
@@ -38405,10 +38209,12 @@ def load_and_validate_data(
                     return self
                 def __exit__(self, *args):
                     pass
-                def __call__(self):
-                    pass
+                def __call__(self, *args, **kwargs):
+                    return self
                 def __setattr__(self, name, value):
                     pass
+                def __getattr__(self, name):
+                    return self
             bar_context = DummyBar()
         
         with bar_context as main_bar:
@@ -38416,7 +38222,7 @@ def load_and_validate_data(
             # STAGE 1: Configuration and Setup
             progress_data['current_stage'] = "Configuration Setup"
             if not silent_mode:
-                main_bar.text = "Setting up configuration and parameters..."
+                main_bar.text = "Setting up configuration and parameters"
             
             # Determine paths with multiple fallback strategies
             if data_path is None:
@@ -38457,7 +38263,7 @@ def load_and_validate_data(
             # STAGE 2: Path Validation and File Discovery
             progress_data['current_stage'] = "Path Validation"
             if not silent_mode:
-                main_bar.text = "Validating paths and discovering files..."
+                main_bar.text = "Validating paths and discovering files"
             
             # Validate file existence with helpful error messages
             if use_real_data:
@@ -38502,7 +38308,7 @@ def load_and_validate_data(
             # STAGE 3: Data Loading
             progress_data['current_stage'] = "Data Loading"
             if not silent_mode:
-                main_bar.text = "Loading data from source..."
+                main_bar.text = "Loading data from source"
             
             # Load data based on format and parameters
             if not silent_mode:
@@ -38553,7 +38359,7 @@ def load_and_validate_data(
                             df = pd.concat(df_chunks, ignore_index=True)
                         else:
                             df = pd.read_csv(data_path, **load_params)
-                            
+                    
                     elif data_format.lower() == 'parquet':
                         df = pd.read_parquet(data_path)
                     elif data_format.lower() == 'json':
@@ -38570,7 +38376,7 @@ def load_and_validate_data(
                     
                     if not silent_mode:
                         logger.info(f"Loaded {len(df)} rows and {len(df.columns)} columns")
-                    
+                
                 except Exception as e:
                     if not silent_mode:
                         logger.error(f"Failed to load data from {data_path}: {e}")
@@ -38586,7 +38392,7 @@ def load_and_validate_data(
             if not use_real_data or (use_real_data and 'df' not in locals()):
                 progress_data['current_substage'] = "Synthetic Data Generation"
                 if not silent_mode:
-                    main_bar.text = "Generating synthetic data..."
+                    main_bar.text = "Generating synthetic data"
                 
                 if not silent_mode:
                     logger.info("Generating synthetic data")
@@ -38607,20 +38413,16 @@ def load_and_validate_data(
                     # Generate attack data with different distribution
                     X_attack = np.random.normal(2, 1.5, (attack_samples, n_features))
                     X_attack += np.random.normal(0, noise_level, X_attack.shape)
-                    
+                
                 elif generation_method == 'mixed':
                     # More complex synthetic data
-                    X_normal = np.random.multivariate_normal(
-                        np.zeros(n_features), 
-                        np.eye(n_features), 
-                        normal_samples
-                    )
+                    X_normal = np.random.multivariate_normal(np.zeros(n_features), np.eye(n_features), normal_samples)
                     
                     # Create correlated attack features
                     attack_mean = np.random.uniform(-2, 2, n_features)
                     attack_cov = np.eye(n_features) * np.random.uniform(0.5, 2, n_features)
                     X_attack = np.random.multivariate_normal(attack_mean, attack_cov, attack_samples)
-                    
+                
                 else:
                     raise ValueError(f"Unknown synthetic generation method: {generation_method}")
                 
@@ -38656,7 +38458,7 @@ def load_and_validate_data(
             # STAGE 4: Data Validation
             progress_data['current_stage'] = "Data Validation"
             if not silent_mode:
-                main_bar.text = "Validating data structure and quality..."
+                main_bar.text = "Validating data structure and quality"
             
             if not silent_mode:
                 logger.info("Performing data validation")
@@ -38741,13 +38543,13 @@ def load_and_validate_data(
             # STAGE 5: Data Processing
             progress_data['current_stage'] = "Data Processing"
             if not silent_mode:
-                main_bar.text = "Processing data (cleaning, scaling, etc.)..."
+                main_bar.text = "Processing data (cleaning, scaling, etc.)"
             
             # Validate data quality
             if data_quality_checks:
                 progress_data['current_substage'] = "Quality Checks"
                 if not silent_mode:
-                    main_bar.text = "Performing data quality checks..."
+                    main_bar.text = "Performing data quality checks"
                 
                 if not silent_mode:
                     logger.info("Performing data quality checks")
@@ -38783,7 +38585,7 @@ def load_and_validate_data(
             if handle_missing and np.isnan(X).any():
                 progress_data['current_substage'] = "Missing Value Handling"
                 if not silent_mode:
-                    main_bar.text = "Handling missing values..."
+                    main_bar.text = "Handling missing values"
                 
                 if not silent_mode:
                     logger.info(f"Handling missing values using strategy: {handle_missing}")
@@ -38797,7 +38599,7 @@ def load_and_validate_data(
                     if not silent_mode:
                         logger.info(f"Dropped {rows_dropped} rows with missing values")
                     loading_stats['rows_dropped_missing'] = rows_dropped
-                    
+                
                 elif handle_missing == 'fill':
                     strategy = data_processing_config.get('missing_value_strategy', 'mean')
                     if strategy in ['mean', 'median', 'most_frequent']:
@@ -38860,7 +38662,7 @@ def load_and_validate_data(
             if outlier_detection:
                 progress_data['current_substage'] = "Outlier Detection"
                 if not silent_mode:
-                    main_bar.text = "Detecting and handling outliers..."
+                    main_bar.text = "Detecting and handling outliers"
                 
                 if not silent_mode:
                     logger.info(f"Detecting outliers using {outlier_method} method")
@@ -38873,16 +38675,16 @@ def load_and_validate_data(
                     upper_bound = Q3 + outlier_threshold * IQR
                     
                     outlier_mask = ((X < lower_bound) | (X > upper_bound)).any(axis=1)
-                    
+                
                 elif outlier_method == 'zscore':
                     z_scores = np.abs(stats.zscore(X, axis=0, nan_policy='omit'))
                     outlier_mask = (z_scores > outlier_threshold).any(axis=1)
-                    
+                
                 elif outlier_method == 'isolation':
                     iso_forest = IsolationForest(contamination=0.1, random_state=random_state)
                     outlier_labels = iso_forest.fit_predict(X)
                     outlier_mask = outlier_labels == -1
-                    
+                
                 else:
                     if not silent_mode:
                         logger.warning(f"Unknown outlier method: {outlier_method}")
@@ -38910,7 +38712,7 @@ def load_and_validate_data(
                 try:
                     progress_data['current_substage'] = "Loading Artifacts"
                     if not silent_mode:
-                        main_bar.text = "Loading preprocessing artifacts..."
+                        main_bar.text = "Loading preprocessing artifacts"
                     
                     if not silent_mode:
                         logger.info("Loading preprocessing artifacts")
@@ -38931,7 +38733,7 @@ def load_and_validate_data(
                     
                     loading_stats['artifacts_loaded'] = True
                     loading_stats['scaler_type'] = type(scaler).__name__ if scaler else None
-                    
+                
                 except Exception as e:
                     warning_msg = f"Failed to load artifacts: {e}"
                     if not silent_mode:
@@ -38943,7 +38745,7 @@ def load_and_validate_data(
             if normalization and normalization != 'none':
                 progress_data['current_substage'] = "Feature Scaling"
                 if not silent_mode:
-                    main_bar.text = "Applying feature scaling..."
+                    main_bar.text = "Applying feature scaling"
                 
                 if scaler is not None:
                     if not silent_mode:
@@ -38986,7 +38788,7 @@ def load_and_validate_data(
             if feature_engineering_config.get('feature_selection', False):
                 progress_data['current_substage'] = "Feature Selection"
                 if not silent_mode:
-                    main_bar.text = "Performing feature selection..."
+                    main_bar.text = "Performing feature selection"
                 
                 n_features_select = feature_engineering_config.get('n_features_select', min(50, len(feature_columns)))
                 selection_method = feature_engineering_config.get('feature_selection_method', 'k_best')
@@ -39023,7 +38825,7 @@ def load_and_validate_data(
             # STAGE 6: Data Splitting
             progress_data['current_stage'] = "Data Splitting"
             if not silent_mode:
-                main_bar.text = "Splitting data into train/validation/test sets..."
+                main_bar.text = "Splitting data into train/validation/test sets"
             
             # Split data into normal and attack samples
             normal_mask = (y == 0)
@@ -39089,7 +38891,7 @@ def load_and_validate_data(
             # STAGE 7: Statistical Validation and Quality Assessment
             progress_data['current_stage'] = "Quality Assessment"
             if not silent_mode:
-                main_bar.text = "Performing final quality assessment..."
+                main_bar.text = "Performing final quality assessment"
             
             # Statistical validation
             if statistical_validation:
@@ -39157,7 +38959,7 @@ def load_and_validate_data(
             # STAGE 8: Finalization and Statistics
             progress_data['current_stage'] = "Finalization"
             if not silent_mode:
-                main_bar.text = "Finalizing data preparation..."
+                main_bar.text = "Finalizing data preparation"
             
             # Prepare final data dictionary
             data_dict = {
@@ -39305,7 +39107,7 @@ def load_and_validate_data(
             logger.setLevel(original_level)
         
         return data_dict
-        
+    
     except Exception as e:
         # Update loading stats with error information
         loading_stats['completion_status'] = 'failed'
@@ -39338,7 +39140,7 @@ def validate_data_integrity(
     Args:
         data_dict: Data dictionary from load_and_validate_data
         config: Configuration dictionary
-        
+    
     Returns:
         Dictionary with validation results and recommendations
     """
@@ -39760,7 +39562,7 @@ def generate_synthetic_data(
     system_config = final_config.setdefault('system', {})
     run_tracking_config = final_config.setdefault('run_tracking', {})
     
-    # Handle silent mode - override verbose and progress_bar if silent is True
+    # Handle silent mode
     silent_mode = monitoring_config.get('silent', False)
     if silent_mode:
         # Force silent mode behavior
@@ -39796,7 +39598,7 @@ def generate_synthetic_data(
     attack_mean = attack_config.setdefault('attack_mean', 0.7)
     attack_std = attack_config.setdefault('attack_std', 0.2)
     attack_distribution = attack_config.setdefault('attack_distribution', 'mixed')
-    attack_types = attack_config.setdefault('attack_types', ['high_variance', 'shifted_mean', 'sparse_extreme', 'clustered_outliers'])
+    attack_types = attack_config.setdefault('attack_types', ['high_variance', 'shifted_mean', 'sparse_extreme', 'clustered_outliers', 'mixed_distribution', 'temporal_anomalies', 'contextual_anomalies'])
     
     # Anomaly configuration defaults
     anomaly_sparsity = anomaly_config.setdefault('anomaly_sparsity', 0.3)
@@ -39827,13 +39629,13 @@ def generate_synthetic_data(
     progress_bar = monitoring_config.setdefault('progress_bar', not silent_mode)
     log_generation_stats = monitoring_config.setdefault('log_generation_stats', True)
     generation_report = monitoring_config.setdefault('generation_report', True)
-
+    
     # Extract run tracking parameters
     run_id = run_tracking_config.get('run_id', run_id)
     run_number = run_tracking_config.get('run_number', run_number)
     run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
-
+    
     # Determine output directories with run-specific support
     if use_run_tracking and run_id and run_specific_dirs:
         # Use run-specific directories for outputs
@@ -39848,23 +39650,19 @@ def generate_synthetic_data(
         data_dir = system_config.setdefault('data_dir', Path(DATA_DIR / active_preset))
         datasets_dir = system_config.setdefault('dataset_dir', Path(DATASETS_DIR / active_preset))
         results_dir = system_config.setdefault('results_dir', Path(RESULTS_DIR / active_preset))
-
+    
     # Export defaults
-    #save_data = export_config.get('save_data', True)
     file_format = export_config.setdefault('file_format', None)
     compression = export_config.setdefault('compression', None)
     metadata_file = export_config.setdefault('metadata_file', True)
-
+    
     # Check if save_data was explicitly provided
     save_data_provided = ('save_data' in export_config or save_data is not None or 'export' in config and 'save_data' in config.get('export', {}))
-
+    
     # Set up logging level
     if verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
-    
-    if verbose:
-        logger.info("Starting synthetic data generation")
     
     if not save_data_provided:
         # Check if we're in a non-interactive context
@@ -39891,17 +39689,12 @@ def generate_synthetic_data(
             
             if verbose:
                 logger.info("Using default export configuration (automated context)")
-                print(Fore.CYAN + Style.BRIGHT + f"\nUsing default export configuration (automated context):")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
-                print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
         else:
             # Set to None to trigger interactive prompt
             save_data = None
     else:
         save_data = export_config.get('save_data', True)
-
+    
     # Interactive Export Configuration
     if save_data is None:
         # Check interactive environment that supports user input
@@ -39923,7 +39716,7 @@ def generate_synthetic_data(
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.GREEN + Style.BRIGHT + f"{compression}")
             print(Fore.CYAN + Style.BRIGHT + f"  ├─ Save metadata file: " + Fore.GREEN + Style.BRIGHT + f"{metadata_file}")
             print(Fore.CYAN + Style.BRIGHT + f"  └─ Output directory: " + Fore.GREEN + Style.BRIGHT + f"{datasets_dir}")
-
+            
             # Supported file formats
             supported_file_formats = {
                 'csv': 'Comma-separated values (universal compatibility)',
@@ -39935,7 +39728,7 @@ def generate_synthetic_data(
                 'hdf5': 'HDF5 format (large datasets, efficient)',
                 'feather': 'Feather format (fast I/O)'
             }
-
+            
             # Supported compression types
             supported_compressions = {
                 None: 'No compression',
@@ -39945,7 +39738,7 @@ def generate_synthetic_data(
                 'xz': 'XZ compression (high ratio)',
                 'zstd': 'Zstandard compression (fast)'
             }
-
+            
             config_updated = False
             
             try:
@@ -39953,7 +39746,7 @@ def generate_synthetic_data(
                 print(Fore.YELLOW + Style.BRIGHT + "\nSave data generation (default): " + Fore.GREEN + Style.BRIGHT + "True")
                 print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
                 save_data_confirm = input(Fore.YELLOW + Style.BRIGHT + f"\nDo you want to save generation data? (Y/n/c): " + Style.RESET_ALL).strip().upper()
-
+                
                 if save_data_confirm in ('C', 'CANCEL'):
                     print(Fore.RED + Style.BRIGHT + "\nExport configuration cancelled." + Style.RESET_ALL)
                     # Set to default and persist immediately
@@ -39969,7 +39762,7 @@ def generate_synthetic_data(
                     final_config['export'] = export_config
                     
                     config_updated = False
-                    
+                
                 elif save_data_confirm in ('N', 'NO'):
                     save_data = False
                     
@@ -39982,7 +39775,7 @@ def generate_synthetic_data(
                     print(Fore.GREEN + Style.BRIGHT + f"\nSave data generation disabled")
                     print(Fore.GREEN + Style.BRIGHT + "  └─ Output from synthetic data generation will not be saved")
                     config_updated = True
-                    
+                
                 elif save_data_confirm in ('', 'Y', 'YES'):
                     save_data = True
                     
@@ -39997,15 +39790,15 @@ def generate_synthetic_data(
                     # File format selection
                     print(Fore.YELLOW + Style.BRIGHT + f"\nFile format (default): " + Fore.GREEN + Style.BRIGHT + "csv")
                     print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
-
+                    
                     for i, (format_key, format_desc) in enumerate(supported_file_formats.items(), 1):
                         current = Fore.GREEN + Style.BRIGHT + " (current)" if format_key == file_format else ""
                         print(Fore.WHITE + Style.BRIGHT + f"  {i}. {format_key:8} - " + Fore.CYAN + Style.BRIGHT + f"{format_desc}{current}")
-
+                    
                     while True:
                         try:
                             file_format_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect file format type (1-{len(supported_file_formats)}, or 0 to cancel): " + Style.RESET_ALL).strip()
-
+                            
                             if file_format_choice == '0':
                                 print(Fore.RED + Style.BRIGHT + "\nFile format selection cancelled." + Style.RESET_ALL)
                                 print(Fore.GREEN + Style.BRIGHT + "\nUsing default: " + Fore.YELLOW + Style.BRIGHT + "csv" + Style.RESET_ALL)
@@ -40051,22 +39844,22 @@ def generate_synthetic_data(
                             export_config['file_format'] = file_format
                             final_config['export']['file_format'] = file_format
                             break
-
+                    
                     # Compression selection
                     compressible_formats = ['csv', 'parquet', 'json', 'pickle']
                     if file_format in compressible_formats:
                         print(Fore.YELLOW + Style.BRIGHT + f"\nCompression type (default): " + Fore.GREEN + Style.BRIGHT + "zip")
                         print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
-
+                        
                         for i, (comp_key, comp_desc) in enumerate(supported_compressions.items(), 1):
                             current = Fore.GREEN + Style.BRIGHT + " (current)" if comp_key == compression else ""
                             comp_display = comp_key if comp_key else 'None'
                             print(Fore.WHITE + Style.BRIGHT + f"  {i}. {comp_display:6} - " + Fore.CYAN + Style.BRIGHT + f"{comp_desc}{current}")
-
+                        
                         while True:
                             try:
                                 compression_type_choice = input(Fore.YELLOW + Style.BRIGHT + f"\nSelect compression type (1-{len(supported_compressions)}, or 0 to cancel): " + Style.RESET_ALL).strip()
-
+                                
                                 if compression_type_choice == '0':
                                     print(Fore.RED + Style.BRIGHT + "\nCompression selection cancelled." + Style.RESET_ALL)
                                     print(Fore.GREEN + Style.BRIGHT + "\nUsing default: " + Fore.YELLOW + Style.BRIGHT + "zip" + Style.RESET_ALL)
@@ -40129,13 +39922,13 @@ def generate_synthetic_data(
                         # Update immediately
                         export_config['compression'] = None
                         final_config['export']['compression'] = None
-
+                    
                     # Metadata file option
                     print(Fore.YELLOW + Style.BRIGHT + f"\nSave metadata file (default): " + Fore.GREEN + Style.BRIGHT + "True")
                     print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use default")
                     
                     metadata_choice = input(Fore.YELLOW + Style.BRIGHT + "\nDo you want to save metadata file? (Y/n): " + Style.RESET_ALL).strip().upper()
-
+                    
                     if metadata_choice in ('N', 'NO'):
                         metadata_file = False
                     else:
@@ -40149,13 +39942,13 @@ def generate_synthetic_data(
                         print(Fore.GREEN + Style.BRIGHT + "\nMetadata file will be saved." + Style.RESET_ALL)
                     else:
                         print(Fore.GREEN + Style.BRIGHT + "\nMetadata file will not be saved." + Style.RESET_ALL)
-
+                    
                     # Output directory option
                     print(Fore.YELLOW + Style.BRIGHT + f"\nOutput directory (current): " + Fore.GREEN + Style.BRIGHT + f"{datasets_dir}")
                     print(Fore.CYAN + Style.BRIGHT + "  └─ Leave empty to use current directory")
                     
                     dir_choice = input(Fore.YELLOW + Style.BRIGHT + "\nChange output directory? (y/N): " + Style.RESET_ALL).strip().lower()
-
+                    
                     if dir_choice in ['y', 'yes']:
                         new_dir = input(Fore.YELLOW + Style.BRIGHT + "\nEnter new output directory: " + Style.RESET_ALL).strip()
                         if new_dir:
@@ -40170,7 +39963,7 @@ def generate_synthetic_data(
                             except Exception as e:
                                 print(Fore.RED + Style.BRIGHT + f"\nInvalid directory: " + Fore.YELLOW + Style.BRIGHT + f"{e}" + Style.RESET_ALL)
                                 print(Fore.GREEN + Style.BRIGHT + f"Using default: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_dir}" + Style.RESET_ALL)
-
+                
                 if config_updated and verbose:
                     print(Fore.CYAN + Style.BRIGHT + "\nFinal Export Configuration:")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save data: " + Fore.YELLOW + Style.BRIGHT + f"{save_data}")
@@ -40190,7 +39983,7 @@ def generate_synthetic_data(
                 # Update final_config
                 final_config['export'] = export_config
                 final_config['system']['dataset_dir'] = datasets_dir
-
+            
             except (EOFError, KeyboardInterrupt):
                 print(Fore.GREEN + Style.BRIGHT + "\nUsing default configuration." + Style.RESET_ALL)
                 # Apply defaults
@@ -40209,7 +40002,7 @@ def generate_synthetic_data(
             # After collecting all interactive choices, mark this as configured
             export_config['_interactive_config_completed'] = True
             export_config['_config_timestamp'] = datetime.now().isoformat()
-
+        
         else:
             # Non-interactive mode
             if verbose:
@@ -40221,14 +40014,14 @@ def generate_synthetic_data(
             file_format = file_format or 'csv'
             compression = None
             metadata_file = True
-
+            
             # Update configuration
             export_config['save_data'] = save_data
             export_config['file_format'] = file_format
             export_config['compression'] = None
             export_config['metadata_file'] = metadata_file
             final_config['export'] = export_config
-
+            
             if verbose:
                 logger.info("Using default export configuration (non-interactive)")
                 print(Fore.CYAN + Style.BRIGHT + f"\nExport configuration applied:")
@@ -40236,7 +40029,7 @@ def generate_synthetic_data(
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ File format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format}")
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ Compression type: " + Fore.YELLOW + Style.BRIGHT + f"{compression}")
                 print(Fore.GREEN + Style.BRIGHT + f"  └─ Save metadata file: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_file}")
-
+    
     else:
         # save_data was explicitly provided
         save_data = export_config.get('save_data', True)
@@ -40248,7 +40041,7 @@ def generate_synthetic_data(
             compression = export_config.get('compression', None)
         if metadata_file is None:
             metadata_file = export_config.get('metadata_file', True)
-
+        
         # Update configuration
         export_config['save_data'] = save_data
         export_config['file_format'] = file_format
@@ -40266,7 +40059,7 @@ def generate_synthetic_data(
     
     # Initialize progress tracking
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'current_substage': None,
         'samples_generated': 0,
         'features_created': 0,
@@ -40291,6 +40084,20 @@ def generate_synthetic_data(
         'log_generation_stats': {}
     }
     
+    # Define all stage titles for ProgressHelper
+    titles = [
+        "Configuration",
+        "Initialization",
+        "Normal Data Generation",
+        "Attack Data Generation",
+        "Feature Engineering",
+        "Noise Addition",
+        "Feature Scaling",
+        "Data Splitting",
+        "Data Validation",
+        "Finalization"
+    ]
+    
     try:
         # Validate parameters
         if normal_samples <= 0 or attack_samples <= 0 or features <= 0:
@@ -40305,13 +40112,16 @@ def generate_synthetic_data(
         # Initialize random number generator
         np.random.seed(random_state)
         
-        # Calculate total stages for progress tracking
-        total_stages = 10  # Configuration, Setup, Normal Data, Attack Data, Correlation, Noise, Scaling, Splitting, Validation, Finalization
-        
         # Use progress bar only if not in silent mode and progress_bar is True
         if not silent_mode and progress_bar:
-            print(Fore.GREEN + Style.BRIGHT + "\nStarting synthetic data generation..." + Style.RESET_ALL)
-            bar_context = alive_bar(total_stages, title='Synthetic Data Generation\t', unit='stages')
+            print_color("\nStarting synthetic data generation...", 'green')
+            
+            if verbose:
+                logger.info("\nStarting synthetic data generation")
+            
+            # Create ProgressHelper instance with all stage titles
+            progress = ProgressHelper(titles)
+        
         else:
             # Create a dummy context manager that does nothing
             class DummyBar:
@@ -40319,18 +40129,23 @@ def generate_synthetic_data(
                     return self
                 def __exit__(self, *args):
                     pass
-                def __call__(self):
-                    pass
+                def __call__(self, *args, **kwargs):
+                    # Accept any arguments and return self to allow chaining
+                    return self
                 def __setattr__(self, name, value):
+                    # Silently ignore all attribute assignments
                     pass
-            bar_context = DummyBar()
+                def __getattr__(self, name):
+                    # Return self for any attribute/method access to allow chaining
+                    return self
+            progress = DummyBar()
         
-        with bar_context as main_bar:
+        # STAGE 1: Configuration and Validation
+        progress_data['current_stage'] = "Configuration"
+        
+        with progress.bar("Configuration", total=1, unit="steps") as bar:
             
-            # STAGE 1: Configuration and Validation
-            progress_data['current_stage'] = "Configuration"
-            if not silent_mode:
-                main_bar.text = "Validating parameters and setting up configuration..."
+            bar.text = "Validating parameters and setting up configuration"
             
             if verbose:
                 logger.info(f"Generating synthetic data: {normal_samples} normal, {attack_samples} attack samples")
@@ -40345,37 +40160,36 @@ def generate_synthetic_data(
                 feature_names = [f"{feature_prefix}_{i}" for i in range(features)]
             
             progress_data['features_created'] = len(feature_names)
-            if not silent_mode:
-                main_bar.text = "Configuration complete"
+            bar.text = "Configuration complete"
             generation_stats['stages_completed'].append('configuration')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 2: Data Generation Setup
+        progress_data['current_stage'] = "Initialization"
+        
+        with progress.bar("Initialization", total=1, unit="steps") as bar:
             
-            # STAGE 2: Data Generation Setup
-            progress_data['current_stage'] = "Initialization"
-            if not silent_mode:
-                main_bar.text = "Initializing data generation framework..."
+            bar.text = "Initializing data generation framework"
             
             # Initialize data containers
             X_normal = None
             X_attack_parts = []
             attack_type_counts = {}
             
-            if not silent_mode:
-                main_bar.text = "Initialization complete"
+            bar.text = "Initialization complete"
             generation_stats['stages_completed'].append('initialization')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 3: Normal Data Generation
+        progress_data['current_stage'] = "Normal Data Generation"
+        
+        with progress.bar("Normal Data Generation", total=1, unit="datasets") as bar:
             
-            # STAGE 3: Normal Data Generation
-            progress_data['current_stage'] = "Normal Data Generation"
-            if not silent_mode:
-                main_bar.text = f"Generating {normal_samples} normal samples..."
+            bar.text = f"Generating {normal_samples} normal samples"
             
             # Generate normal data based on method
             if generation_method == 'sklearn':
-                if not silent_mode:
-                    main_bar.text = f"Using sklearn: {normal_samples} samples, {features} features..."
+                bar.text = f"Using sklearn: {normal_samples} samples, {features} features"
                 
                 if verbose:
                     logger.info(f"Using sklearn: {normal_samples} samples, {features} features, {informative_features} informative features, {normal_clusters} clusters")
@@ -40390,18 +40204,16 @@ def generate_synthetic_data(
                     random_state=random_state
                 )
                 # Convert to probability-like values
-                if not silent_mode:
-                    main_bar.text = "Scaling sklearn data to [0,1] range..."
+                bar.text = "Scaling sklearn data to [0,1] range"
                 scaler = MinMaxScaler()
                 X_normal = scaler.fit_transform(X_normal)
-                
+            
             elif generation_method == 'clustering':
-                if not silent_mode:
-                    main_bar.text = f"Using clustering: {normal_samples} samples, {normal_clusters} clusters..."
+                bar.text = f"Using clustering: {normal_samples} samples, {normal_clusters} clusters"
                 
                 if verbose:
                     logger.info(f"Using clustering: {normal_samples} samples, {features} features, {normal_clusters} clusters")
-
+                
                 X_normal, _ = make_blobs(
                     n_samples=normal_samples,
                     centers=normal_clusters,
@@ -40410,13 +40222,11 @@ def generate_synthetic_data(
                     random_state=random_state
                 )
                 # Normalize to [0, 1] range
-                if not silent_mode:
-                    main_bar.text = "Normalizing cluster data to [0,1] range..."
+                bar.text = "Normalizing cluster data to [0,1] range"
                 X_normal = (X_normal - X_normal.min()) / (X_normal.max() - X_normal.min())
-                
+            
             elif generation_method == 'mixed':
-                if not silent_mode:
-                    main_bar.text = f"Using {normal_distribution} distribution for normal data..."
+                bar.text = f"Using {normal_distribution} distribution for normal data"
                 
                 if verbose:
                     logger.info(f"Using mixed distribution generation: {normal_distribution} for normal data, {normal_samples} samples, {features} features")
@@ -40438,24 +40248,24 @@ def generate_synthetic_data(
                     X_normal = np.random.normal(normal_mean, normal_std, (normal_samples, features))
                 
                 # Ensure values are in reasonable range
-                if not silent_mode:
-                    main_bar.text = "Clipping normal data to [0,1] range..."
+                bar.text = "Clipping normal data to [0,1] range"
                 X_normal = np.clip(X_normal, 0.0, 1.0)
-                
+            
             else:
                 raise ValueError(f"Unknown generation method: {generation_method}")
             
             progress_data['samples_generated'] += normal_samples
-            if not silent_mode:
-                main_bar.text = f"Generated {normal_samples} normal samples"
+            bar.text = f"Generated {normal_samples} normal samples"
             generation_stats['stages_completed'].append('normal_data_generation')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 4: Attack Data Generation
+        progress_data['current_stage'] = "Attack Data Generation"
+        total_attack_types = len(attack_types) + 1
+        
+        with progress.bar("Attack Data Generation", total=total_attack_types, unit="attack_types") as bar:
             
-            # STAGE 4: Attack Data Generation
-            progress_data['current_stage'] = "Attack Data Generation"
-            if not silent_mode:
-                main_bar.text = f"Generating {attack_samples} attack samples across {len(attack_types)} types..."
+            bar.text = f"Generating {attack_samples} attack samples across {total_attack_types} types"
             
             if verbose:
                 logger.info(f"Generating attack data with types: {attack_types}")
@@ -40467,8 +40277,7 @@ def generate_synthetic_data(
             # Generate each attack type with progress tracking using the main bar
             for i, attack_type in enumerate(attack_types):
                 progress_data['current_substage'] = f"Attack Type: {attack_type}"
-                if not silent_mode:
-                    main_bar.text = f"Generating {attack_type}: {i+1}/{len(attack_types)} attack types..."
+                bar.text = f"Generating {attack_type}: {i+1}/{total_attack_types} attack types"
                 
                 n_samples = samples_per_type + (1 if i < remainder else 0)
                 attack_type_counts[attack_type] = n_samples
@@ -40476,20 +40285,20 @@ def generate_synthetic_data(
                 if attack_type == 'high_variance':
                     # High variance anomalies
                     X_attack_type = np.random.normal(
-                        normal_mean, 
+                        normal_mean,
                         normal_std * anomaly_factor * 2,
                         (n_samples, features)
                     )
-                    
+                
                 elif attack_type == 'shifted_mean':
                     # Shifted mean anomalies
                     shift = anomaly_factor * 0.3
                     X_attack_type = np.random.normal(
-                        normal_mean + shift, 
-                        normal_std, 
+                        normal_mean + shift,
+                        normal_std,
                         (n_samples, features)
                     )
-                    
+                
                 elif attack_type == 'sparse_extreme':
                     # Sparse extreme anomalies
                     X_attack_type = np.random.normal(normal_mean, normal_std, (n_samples, features))
@@ -40497,23 +40306,23 @@ def generate_synthetic_data(
                     extreme_mask = np.random.random((n_samples, features)) < anomaly_sparsity
                     extreme_values = np.random.choice([0.05, 0.95], size=np.sum(extreme_mask))
                     X_attack_type[extreme_mask] = extreme_values * anomaly_intensity
-                    
+                
                 elif attack_type == 'clustered_outliers':
                     # Clustered outliers
                     outlier_center = normal_mean + (0.4 * anomaly_factor)
                     X_attack_type = np.random.normal(
-                        outlier_center, 
-                        cluster_variance, 
+                        outlier_center,
+                        cluster_variance,
                         (n_samples, features)
                     )
-                    
+                
                 elif attack_type == 'mixed_distribution':
                     # Mixed distribution anomalies
                     n_mixed = n_samples // 2
                     X_part1 = np.random.uniform(0.8, 1.0, (n_mixed, features)) * anomaly_factor
                     X_part2 = np.random.exponential(0.1 * anomaly_factor, (n_samples - n_mixed, features))
                     X_attack_type = np.vstack([X_part1, X_part2])
-                    
+                
                 elif attack_type == 'temporal_anomalies':
                     # Temporal pattern anomalies
                     X_attack_type = np.random.normal(normal_mean, normal_std, (n_samples, features))
@@ -40521,7 +40330,7 @@ def generate_synthetic_data(
                     for j in range(features):
                         temporal_pattern = np.sin(np.linspace(0, 2*np.pi, n_samples)) * anomaly_factor * 0.2
                         X_attack_type[:, j] += temporal_pattern
-                        
+                
                 elif attack_type == 'contextual_anomalies':
                     # Context-dependent anomalies
                     X_attack_type = np.random.normal(normal_mean, normal_std, (n_samples, features))
@@ -40530,7 +40339,7 @@ def generate_synthetic_data(
                     for cf in context_features:
                         mask = X_attack_type[:, cf] > normal_mean
                         X_attack_type[mask, cf] *= (1 + anomaly_factor)
-                        
+                
                 else:
                     if verbose:
                         logger.warning(f"Unknown attack type '{attack_type}', using high_variance")
@@ -40542,25 +40351,24 @@ def generate_synthetic_data(
                 
                 progress_data['samples_generated'] += n_samples
                 progress_data['attack_types_processed'] += 1
-                if not silent_mode:
-                    main_bar.text = f"Generated {n_samples} {attack_type} samples ({i+1}/{len(attack_types)})"
+                bar.text = f"Generated {n_samples} {attack_type} samples ({i+1}/{total_attack_types})"
+                bar()
             
             # Combine all attack data
-            if not silent_mode:
-                main_bar.text = "Combining all attack data..."
+            bar.text = "Combining all attack data"
             X_attack = np.vstack(X_attack_parts)
             generation_stats['attack_type_counts'] = attack_type_counts
             
-            if not silent_mode:
-                main_bar.text = f"Generated {attack_samples} attack samples across {len(attack_types)} types"
+            bar.text = f"Generated {attack_samples} attack samples across {total_attack_types} types"
             generation_stats['stages_completed'].append('attack_data_generation')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 5: Feature Correlation
+        progress_data['current_stage'] = "Feature Engineering"
+        
+        with progress.bar("Feature Engineering", total=1, unit="steps") as bar:
             
-            # STAGE 5: Feature Correlation
-            progress_data['current_stage'] = "Feature Engineering"
-            if not silent_mode:
-                main_bar.text = "Applying feature correlation structure..."
+            bar.text = "Applying feature correlation structure"
             
             # Add correlation structure if requested
             if correlated_features and features > 1:
@@ -40571,35 +40379,32 @@ def generate_synthetic_data(
                 
                 if correlation_matrix is not None and correlation_matrix.shape == (features, features):
                     # Use provided correlation matrix
-                    if not silent_mode:
-                        main_bar.text = "Applying provided correlation matrix..."
+                    bar.text = "Applying provided correlation matrix"
                     L = np.linalg.cholesky(correlation_matrix)
                     X_normal = X_normal @ L.T
                 else:
                     # Create simple correlation structure
-                    if not silent_mode:
-                        main_bar.text = "Creating correlation structure..."
+                    bar.text = "Creating correlation structure"
                     correlation_indices = np.random.choice(features, size=min(features//2, 5), replace=False)
                     for i in range(len(correlation_indices)-1):
                         idx1, idx2 = correlation_indices[i], correlation_indices[i+1]
                         X_normal[:, idx2] = (X_normal[:, idx2] * (1 - correlation_strength) + X_normal[:, idx1] * correlation_strength)
                 
                 # Renormalize
-                if not silent_mode:
-                    main_bar.text = "Renormalizing correlated data..."
+                bar.text = "Renormalizing correlated data"
                 X_normal = np.clip(X_normal, 0.0, 1.0)
                 generation_stats['correlation_applied'] = True
             
-            if not silent_mode:
-                main_bar.text = "Feature engineering complete"
+            bar.text = "Feature engineering complete"
             generation_stats['stages_completed'].append('feature_engineering')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 6: Noise Addition
+        progress_data['current_stage'] = "Noise Addition"
+        
+        with progress.bar("Noise Addition", total=1, unit="steps") as bar:
             
-            # STAGE 6: Noise Addition
-            progress_data['current_stage'] = "Noise Addition"
-            if not silent_mode:
-                main_bar.text = f"Adding {noise_type} noise..."
+            bar.text = f"Adding {noise_type} noise"
             
             # Add noise if requested
             if noise_level > 0:
@@ -40608,8 +40413,7 @@ def generate_synthetic_data(
                 
                 if noise_type == 'gaussian':
                     noise_std = noise_config.get('gaussian_noise_std', noise_level)
-                    if not silent_mode:
-                        main_bar.text = f"Adding Gaussian noise (std={noise_std:.3f})..."
+                    bar.text = f"Adding Gaussian noise (std={noise_std:.3f})"
                     normal_noise = np.random.normal(0, noise_std, X_normal.shape)
                     attack_noise = np.random.normal(0, noise_std, X_attack.shape)
                     
@@ -40618,8 +40422,7 @@ def generate_synthetic_data(
                     
                 elif noise_type == 'uniform':
                     noise_range = noise_config.get('uniform_noise_range', noise_level)
-                    if not silent_mode:
-                        main_bar.text = f"Adding uniform noise (range=±{noise_range:.3f})..."
+                    bar.text = f"Adding uniform noise (range=±{noise_range:.3f})"
                     normal_noise = np.random.uniform(-noise_range, noise_range, X_normal.shape)
                     attack_noise = np.random.uniform(-noise_range, noise_range, X_attack.shape)
                     
@@ -40628,8 +40431,7 @@ def generate_synthetic_data(
                     
                 elif noise_type == 'salt_pepper':
                     sp_ratio = noise_config.get('salt_pepper_ratio', 0.5)
-                    if not silent_mode:
-                        main_bar.text = f"Adding salt & pepper noise (ratio={sp_ratio:.2f})..."
+                    bar.text = f"Adding salt & pepper noise (ratio={sp_ratio:.2f})"
                     
                     # Apply salt and pepper noise
                     for X_data in [X_normal, X_attack]:
@@ -40641,30 +40443,28 @@ def generate_synthetic_data(
                         X_data[pepper_mask] = 0.0
                 
                 # Ensure values remain in valid range
-                if not silent_mode:
-                    main_bar.text = "Clipping noisy data to [0,1] range..."
+                bar.text = "Clipping noisy data to [0,1] range"
                 X_normal = np.clip(X_normal, 0.0, 1.0)
                 X_attack = np.clip(X_attack, 0.0, 1.0)
                 generation_stats['noise_applied'] = True
                 generation_stats['noise_type'] = noise_type
                 generation_stats['noise_level'] = noise_level
             
-            if not silent_mode:
-                main_bar.text = "Noise addition complete"
+            bar.text = "Noise addition complete"
             generation_stats['stages_completed'].append('noise_addition')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 7: Feature Scaling
+        progress_data['current_stage'] = "Feature Scaling"
+        
+        with progress.bar("Feature Scaling", total=1, unit="steps") as bar:
             
-            # STAGE 7: Feature Scaling
-            progress_data['current_stage'] = "Feature Scaling"
-            if not silent_mode:
-                main_bar.text = "Applying feature scaling..."
+            bar.text = "Applying feature scaling"
             
             # Apply feature scaling if requested
             scaler = None
             if feature_scaling:
-                if not silent_mode:
-                    main_bar.text = f"Applying {feature_scaling} scaling..."
+                bar.text = f"Applying {feature_scaling} scaling"
                 
                 if verbose:
                     logger.info(f"Applying {feature_scaling} scaling to data")
@@ -40684,16 +40484,16 @@ def generate_synthetic_data(
                 generation_stats['scaling_applied'] = True
                 generation_stats['scaling_method'] = feature_scaling
             
-            if not silent_mode:
-                main_bar.text = "Feature scaling complete"
+            bar.text = "Feature scaling complete"
             generation_stats['stages_completed'].append('feature_scaling')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 8: Data Splitting
+        progress_data['current_stage'] = "Data Splitting"
+        
+        with progress.bar("Data Splitting", total=1, unit="steps") as bar:
             
-            # STAGE 8: Data Splitting
-            progress_data['current_stage'] = "Data Splitting"
-            if not silent_mode:
-                main_bar.text = "Splitting data into train/validation/test sets..."
+            bar.text = "Splitting data into train/validation/test sets"
             
             # Create labels
             y_normal = np.zeros(normal_samples, dtype=np.int32)
@@ -40705,8 +40505,7 @@ def generate_synthetic_data(
             
             # Split normal data for training and validation
             if validation_split > 0:
-                if not silent_mode:
-                    main_bar.text = f"Splitting normal data (validation={validation_split:.1%})..."
+                bar.text = f"Splitting normal data (validation={validation_split:.1%})"
                 X_train_normal, X_val_normal, y_train_normal, y_val_normal = train_test_split(
                     X_normal, y_normal,
                     test_size=validation_split,
@@ -40722,15 +40521,13 @@ def generate_synthetic_data(
             # Handle test data
             if test_split > 0 and test_split <= 1.0:
                 if test_split < 1.0:
-                    if not silent_mode:
-                        main_bar.text = f"Splitting attack data (test={test_split:.1%})..."
+                    bar.text = f"Splitting attack data (test={test_split:.1%})"
                     test_size = int(len(X_attack) * test_split)
                     indices = np.random.choice(len(X_attack), size=test_size, replace=False)
                     X_test = X_attack[indices]
                     y_test = y_attack[indices]
                 else:
-                    if not silent_mode:
-                        main_bar.text = "Using all attack data for testing..."
+                    bar.text = "Using all attack data for testing"
                     X_test = X_attack
                     y_test = y_attack
             else:
@@ -40743,16 +40540,16 @@ def generate_synthetic_data(
                 'test_samples': len(X_test)
             })
             
-            if not silent_mode:
-                main_bar.text = "Data splitting complete"
+            bar.text = "Data splitting complete"
             generation_stats['stages_completed'].append('data_splitting')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 9: Data Validation
+        progress_data['current_stage'] = "Data Validation"
+        
+        with progress.bar("Data Validation", total=1, unit="validations") as bar:
             
-            # STAGE 9: Data Validation
-            progress_data['current_stage'] = "Data Validation"
-            if not silent_mode:
-                main_bar.text = "Validating generated data quality..."
+            bar.text = "Validating generated data quality"
             
             # Data quality validation if requested
             validation_results = {}
@@ -40780,8 +40577,7 @@ def generate_synthetic_data(
                 
                 # Statistical tests if requested
                 if final_config.get('validation', {}).get('statistical_tests', False):
-                    if not silent_mode:
-                        main_bar.text = "Running statistical tests..."
+                    bar.text = "Running statistical tests"
                     
                     if verbose:
                         logger.info(f"Performing statistical tests on generated data")
@@ -40821,8 +40617,7 @@ def generate_synthetic_data(
                                 logger.warning(f"Separation test failed: {e}")
                 
                 # Calculate data quality score
-                if not silent_mode:
-                    main_bar.text = "Calculating data quality metrics..."
+                bar.text = "Calculating data quality metrics"
                 quality_metrics = []
                 
                 # Sample adequacy
@@ -40851,27 +40646,25 @@ def generate_synthetic_data(
                 validation_results['quality_score'] = quality_score
                 validation_results['quality_metrics'] = dict(quality_metrics)
             
-            if not silent_mode:
-                main_bar.text = f"Data validation complete (Quality: {quality_score:.3f})"
+            bar.text = f"Data validation complete (Quality score: {quality_score:.3f})"
             generation_stats['stages_completed'].append('data_validation')
-            if not silent_mode:
-                main_bar()
+            bar()
+        
+        # STAGE 10: Finalization
+        progress_data['current_stage'] = "Finalization"
+        
+        with progress.bar("Finalization", total=1, unit="steps") as bar:
             
-            # STAGE 10: Finalization
-            progress_data['current_stage'] = "Finalization"
-            if not silent_mode:
-                main_bar.text = "Finalizing data preparation and metadata..."
+            bar.text = "Finalizing data preparation and metadata"
             
             # Convert to specified data type
             if data_type == 'float32':
-                if not silent_mode:
-                    main_bar.text = "Converting to float32..."
+                bar.text = "Converting to float32"
                 X_train_normal = X_train_normal.astype(np.float32)
                 X_val_normal = X_val_normal.astype(np.float32)
                 X_test = X_test.astype(np.float32)
             elif data_type == 'float64':
-                if not silent_mode:
-                    main_bar.text = "Converting to float64..."
+                bar.text = "Converting to float64"
                 X_train_normal = X_train_normal.astype(np.float64)
                 X_val_normal = X_val_normal.astype(np.float64)
                 X_test = X_test.astype(np.float64)
@@ -40996,8 +40789,8 @@ def generate_synthetic_data(
                     # Performance metrics
                     'generation_duration_seconds': generation_duration,
                     'stages_completed': len(generation_stats['stages_completed']),
-                    'total_stages': total_stages,
-                    'completion_percentage': (len(generation_stats['stages_completed']) / total_stages) * 100,
+                    'total_stages': 10,
+                    'completion_percentage': (len(generation_stats['stages_completed']) / 10) * 100,
                     'memory_estimate_mb': (total_samples * features * 4) / (1024 * 1024),  # float32 estimate
                     
                     # Configuration and reproducibility
@@ -41113,7 +40906,7 @@ def generate_synthetic_data(
                 
                 # Store in generation stats
                 generation_stats['log_generation_stats'] = stats
-
+                
                 # Save JSON report
                 if log_generation_stats and stats and use_run_tracking and run_id:
                     # Save generation stats to run-specific metrics directory
@@ -41133,7 +40926,6 @@ def generate_synthetic_data(
                                     serial_stats[key] = str(value)
                                 else:
                                     serial_stats[key] = str(value)
-
                             with open(stats_path, 'w') as f:
                                 json.dump(serial_stats, f, indent=2)
                             logger.info(f"Generation statistics saved: {stats_path}")
@@ -41204,7 +40996,7 @@ def generate_synthetic_data(
                     'attack_types_processed': progress_data['attack_types_processed'],
                     'final_quality_score': progress_data['data_quality_score']
                 },
-
+                
                 # Run tracking information
                 "run_tracking": {
                     "run_id": run_id,
@@ -41223,7 +41015,7 @@ def generate_synthetic_data(
                 try:
                     # Generate timestamp for unique filename
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
+                    
                     # Include run_id in report filenames
                     if use_run_tracking and run_id:
                         json_filename = f"synthetic_data_generation_report_{run_id}_{timestamp}.json"
@@ -41234,7 +41026,7 @@ def generate_synthetic_data(
                     
                     # FIRST: Create serializable JSON report
                     json_report_path = reports_dir / json_filename
-
+                    
                     # Ensure Path object
                     if json_report_path:
                         json_report_file = Path(json_report_path)
@@ -41296,7 +41088,7 @@ def generate_synthetic_data(
                             "generation_time_seconds": metadata['generation_time_seconds'],
                             "samples_per_second": metadata['total_samples'] / metadata['generation_time_seconds'] if metadata['generation_time_seconds'] > 0 else 0,
                             "stages_completed": len(metadata['generation_stats']['stages_completed']),
-                            "total_stages": total_stages,
+                            "total_stages": 10,
                             "memory_estimate_mb": metadata['total_samples'] * metadata['features'] * 4 / (1024**2)
                         },
                         "directory_structure": {
@@ -41406,12 +41198,11 @@ def generate_synthetic_data(
                         f.write("="*80 + "\n")
                         f.write("SYNTHETIC DATA GENERATION REPORT\n")
                         f.write("="*80 + "\n\n")
-
                         f.write(f"Generation Date: {report_data['report_metadata']['generation_date']}\n")
                         f.write(f"Report Version: {report_data['report_metadata']['report_version']}\n")
                         f.write(f"Report Location: {report_data['report_metadata']['report_location']}\n")
                         f.write(f"JSON Report: {json_report_file.name}\n\n")
-
+                        
                         # Export Configuration
                         f.write("-"*80 + "\n")
                         f.write("EXPORT CONFIGURATION\n")
@@ -41424,7 +41215,7 @@ def generate_synthetic_data(
                             f.write(f"Metadata File: {export_cfg['metadata_file']}\n")
                             f.write(f"Output Directory: {export_cfg['output_directory']}\n")
                         f.write("\n")
-
+                        
                         # Configuration Summary
                         f.write("-"*80 + "\n")
                         f.write("CONFIGURATION SUMMARY\n")
@@ -41438,7 +41229,7 @@ def generate_synthetic_data(
                         f.write(f"Features: {cfg_summary['features']}\n")
                         f.write(f"Anomaly Factor: {cfg_summary['anomaly_factor']}\n")
                         f.write(f"Random State: {cfg_summary['random_state']}\n\n")
-
+                        
                         # Data Characteristics
                         f.write("-"*80 + "\n")
                         f.write("DATA CHARACTERISTICS\n")
@@ -41465,7 +41256,7 @@ def generate_synthetic_data(
                         f.write(f"Test Samples: {splits['test_samples']:,}\n")
                         f.write(f"Validation Split: {splits['validation_split']:.1%}\n")
                         f.write(f"Test Split: {splits['test_split']:.1%}\n\n")
-
+                        
                         # Quality Metrics
                         f.write("-"*80 + "\n")
                         f.write("QUALITY METRICS\n")
@@ -41488,7 +41279,7 @@ def generate_synthetic_data(
                         f.write(f"Samples per Second: {perf['samples_per_second']:.1f}\n")
                         f.write(f"Stages Completed: {perf['stages_completed']}/{perf['total_stages']}\n")
                         f.write(f"Memory Estimate: {perf['memory_estimate_mb']:.2f} MB\n\n")
-
+                        
                         # Detailed Statistics
                         if 'detailed_statistics' in report_data:
                             stats = report_data['detailed_statistics']
@@ -41553,21 +41344,16 @@ def generate_synthetic_data(
                     if verbose:
                         logger.info(f"Text report saved to: {report_file}")
                         logger.info(f"JSON report saved to: {json_report_file}")
-                        print(Fore.GREEN + Style.BRIGHT + "\nGenerated data generation reports:")
-                        print(Fore.GREEN + Style.BRIGHT + f"  ├─ JSON Report: " + Fore.YELLOW + Style.BRIGHT + f"{json_report_file}")
-                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Text Report: " + Fore.YELLOW + Style.BRIGHT + f"{report_file}")
-                    
+                
                 except Exception as report_error:
                     warning_msg = f"Failed to generate report: {report_error}"
                     generation_stats['warnings_encountered'].append(warning_msg)
                     if verbose:
                         logger.warning(warning_msg)
             
-            if not silent_mode:
-                main_bar.text = "Finalization complete"
+            bar.text = "Finalization complete"
             generation_stats['stages_completed'].append('finalization')
-            if not silent_mode:
-                main_bar()
+            bar()
         
         # Prepare output data structure
         if output_format == 'dict':
@@ -41581,11 +41367,10 @@ def generate_synthetic_data(
                 "feature_names": feature_names,
                 "metadata": metadata
             }
-            
+        
         elif output_format == 'dataframe':
             # Create DataFrames
-            if not silent_mode and 'main_bar' in locals():
-                main_bar.text = "Creating DataFrames..."
+            bar.text = "Creating DataFrames"
             train_df = pd.DataFrame(X_train_normal, columns=feature_names)
             train_df[label_column] = y_train_normal
             
@@ -41601,11 +41386,10 @@ def generate_synthetic_data(
                 "test_df": test_df,
                 "metadata": metadata
             }
-            
+        
         elif output_format == 'sklearn':
             # sklearn-compatible format
-            if not silent_mode and 'main_bar' in locals():
-                main_bar.text = "Creating sklearn-compatible format..."
+            bar.text = "Creating sklearn-compatible format"
             X_combined = np.vstack([X_train_normal, X_val_normal, X_test]) if len(X_val_normal) > 0 and len(X_test) > 0 else X_train_normal
             y_combined = np.hstack([y_train_normal, y_val_normal, y_test]) if len(y_val_normal) > 0 and len(y_test) > 0 else y_train_normal
             
@@ -41625,10 +41409,10 @@ def generate_synthetic_data(
                 },
                 "metadata": metadata
             }
-            
+        
         else:
             raise ValueError(f"Unknown output format: {output_format}")
-
+        
         # Save data if requested
         if save_data:
             # Validate file format
@@ -41657,7 +41441,7 @@ def generate_synthetic_data(
             }
             
             file_extension = format_extensions.get(file_format, file_format)
-
+            
             # Include run_id in filename if run tracking is enabled
             if use_run_tracking and run_id:
                 base_filename = f"synthetic_data_{run_id}_{timestamp}"
@@ -41667,7 +41451,7 @@ def generate_synthetic_data(
             # Create the uncompressed file path first
             uncompressed_path = datasets_dir / f"{base_filename}.{file_extension}"
             uncompressed_path.parent.mkdir(parents=True, exist_ok=True)
-
+            
             # If compression is specified, the final file will have a compression extension
             if compression is not None:
                 # Map compression types to file extensions
@@ -41682,7 +41466,7 @@ def generate_synthetic_data(
                 datasets_path = datasets_dir / f"{base_filename}.{compression_extension}"
             else:
                 datasets_path = uncompressed_path
-
+            
             if verbose:
                 if compression:
                     logger.info(f"Saving synthetic data to {uncompressed_path} and compressing to {datasets_path}")
@@ -41704,15 +41488,13 @@ def generate_synthetic_data(
                 
                 # First save the uncompressed file
                 if file_format == 'csv':
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as CSV..."
+                    bar.text = "Saving as CSV"
                     
                     df_combined.to_csv(uncompressed_path, index=False, encoding=encoding)
                     will_be_binary = False
                     
                 elif file_format == 'parquet':
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as Parquet..."
+                    bar.text = "Saving as Parquet"
                     
                     try:
                         df_combined.to_parquet(uncompressed_path, index=False, engine='pyarrow')
@@ -41730,15 +41512,13 @@ def generate_synthetic_data(
                         will_be_binary = False
                 
                 elif file_format == 'json':
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as JSON..."
+                    bar.text = "Saving as JSON"
                     
                     df_combined.to_json(uncompressed_path, orient='records', indent=2, force_ascii=False)
                     will_be_binary = False
                 
                 elif file_format == 'pickle':
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as pickle..."
+                    bar.text = "Saving as pickle"
                     
                     # Pickle doesn't support built-in compression, save the result dict
                     with open(uncompressed_path, 'wb') as f:
@@ -41747,8 +41527,7 @@ def generate_synthetic_data(
                     will_be_binary = True
                 
                 elif file_format in ['npy', 'npz']:
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as NumPy arrays..."
+                    bar.text = "Saving as NumPy arrays"
                     
                     save_args = {
                         'X_train': X_train_normal,
@@ -41771,8 +41550,7 @@ def generate_synthetic_data(
                     will_be_binary = True
                 
                 elif file_format in ['hdf5', 'h5']:
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as HDF5..."
+                    bar.text = "Saving as HDF5"
                     
                     try:
                         import h5py
@@ -41801,7 +41579,7 @@ def generate_synthetic_data(
                                         pass
                         
                         will_be_binary = True
-                        
+                    
                     except ImportError:
                         warning_msg = "h5py not available, falling back to numpy format"
                         generation_stats['warnings_encountered'].append(warning_msg)
@@ -41818,13 +41596,12 @@ def generate_synthetic_data(
                         will_be_binary = True
                 
                 elif file_format == 'feather':
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving as Feather..."
+                    bar.text = "Saving as Feather"
                     
                     try:
                         df_combined.to_feather(uncompressed_path)
                         will_be_binary = True
-                        
+                    
                     except (ImportError, AttributeError):
                         warning_msg = "pyarrow not available for Feather format, falling back to CSV"
                         generation_stats['warnings_encountered'].append(warning_msg)
@@ -41837,8 +41614,7 @@ def generate_synthetic_data(
                 
                 # Now handle compression if requested
                 if compression and uncompressed_path.exists():
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = f"Compressing to {compression}..."
+                    bar.text = f"Compressing to {compression}"
                     
                     try:
                         if compression == 'zip':
@@ -41846,7 +41622,7 @@ def generate_synthetic_data(
                             with zipfile.ZipFile(datasets_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                                 zipf.write(uncompressed_path, uncompressed_path.name)
                             compression_type = 'zip'
-                            
+                        
                         elif compression == 'gzip':
                             import gzip
                             import shutil
@@ -41854,21 +41630,21 @@ def generate_synthetic_data(
                                 with gzip.open(datasets_path, 'wb') as f_out:
                                     shutil.copyfileobj(f_in, f_out)
                             compression_type = 'gzip'
-                            
+                        
                         elif compression == 'bz2':
                             import bz2
                             with open(uncompressed_path, 'rb') as f_in:
                                 with bz2.open(datasets_path, 'wb') as f_out:
                                     shutil.copyfileobj(f_in, f_out)
                             compression_type = 'bz2'
-                            
+                        
                         elif compression == 'xz':
                             import lzma
                             with open(uncompressed_path, 'rb') as f_in:
                                 with lzma.open(datasets_path, 'wb') as f_out:
                                     shutil.copyfileobj(f_in, f_out)
                             compression_type = 'xz'
-                            
+                        
                         else:
                             warning_msg = f"Unsupported compression type '{compression}', using zip instead"
                             generation_stats['warnings_encountered'].append(warning_msg)
@@ -41883,7 +41659,7 @@ def generate_synthetic_data(
                         
                         # Remove the uncompressed file if compression was successful
                         uncompressed_path.unlink()
-                        
+                    
                     except Exception as compression_error:
                         warning_msg = f"Compression failed: {compression_error}. Keeping uncompressed file."
                         generation_stats['warnings_encountered'].append(warning_msg)
@@ -41929,11 +41705,11 @@ def generate_synthetic_data(
                     file_type = "binary" if metadata['is_binary'] else "text"
                     logger.info(f"Successfully saved data to: {datasets_path}")
                     
-                    print(Fore.GREEN + Style.BRIGHT + "\nSuccessfully generated dataset:")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Dataset Location: " + Fore.YELLOW + Style.BRIGHT + f"{datasets_path}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ File Size: " + Fore.YELLOW + Style.BRIGHT + f"{metadata['dataset_file_size']}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  ├─ Format: " + Fore.YELLOW + Style.BRIGHT + f"{file_format.upper()}")
-                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Compression: " + Fore.YELLOW + Style.BRIGHT + f"{compression_type or 'none'}")
+                    print("\nSuccessfully generated dataset:")
+                    print(f"  ├─ Dataset Location: {datasets_path}")
+                    print(f"  ├─ File Size: {metadata['dataset_file_size']}")
+                    print(f"  ├─ Format: {file_format.upper()}")
+                    print(f"  └─ Compression: {compression_type or 'none'}")
                 
                 # Save metadata if requested
                 if metadata_file:
@@ -41942,12 +41718,11 @@ def generate_synthetic_data(
                         metadata_filename = f"synthetic_data_{run_id}_{timestamp}_metadata.json"
                     else:
                         metadata_filename = f"{base_filename}_metadata.json"
-
+                    
                     metadata_path = datasets_dir / metadata_filename
                     metadata_path.parent.mkdir(parents=True, exist_ok=True)
                     
-                    if not silent_mode and 'main_bar' in locals():
-                        main_bar.text = "Saving metadata..."
+                    bar.text = "Saving metadata"
                     
                     with open(metadata_path, 'w', encoding='utf-8') as f:
                         # Make metadata JSON serializable
@@ -41967,7 +41742,7 @@ def generate_synthetic_data(
                         json.dump(serializable_metadata, f, indent=2, ensure_ascii=False)
                     
                     metadata['metadata_file_path'] = str(metadata_path)
-
+                    
                     # Calculate metadata file size
                     if metadata_path.exists():
                         meta_file_size_bytes = metadata_path.stat().st_size
@@ -41986,9 +41761,9 @@ def generate_synthetic_data(
                     
                     if verbose:
                         logger.info(f"Saved metadata to {metadata_path}")
-                        print(Fore.GREEN + Style.BRIGHT + "\nSuccessfully saved metadata:")
-                        print(Fore.GREEN + Style.BRIGHT + f"  └─ Metadata Location: " + Fore.YELLOW + Style.BRIGHT + f"{metadata_path} ({metadata['metadata_file_size']})")
-                
+                        print_color(f"\nSuccessfully saved metadata: {Fore.YELLOW + Style.BRIGHT}{file_format}", 'green')
+                        print_color(f"  └─ {Fore.MAGENTA + Style.BRIGHT}{metadata_path} {Fore.YELLOW + Style.BRIGHT}({metadata['metadata_file_size']})", 'green')
+            
             except Exception as e:
                 error_msg = f"Failed to save data as {file_format}: {e}"
                 generation_stats['warnings_encountered'].append(error_msg)
@@ -42016,7 +41791,7 @@ def generate_synthetic_data(
             logger.info(f"Data quality score: {quality_score:.3f}")
             logger.info(f"Output format: {output_format}")
             logger.info(f"Generation time: {total_time:.2f} seconds")
-            logger.info(f"Stages completed: {len(generation_stats['stages_completed'])}/{total_stages}")
+            logger.info(f"Stages completed: {len(generation_stats['stages_completed'])}/10")
             
             # If log generation stats were collected
             if log_generation_stats and 'log_generation_stats' in generation_stats:
@@ -42070,13 +41845,13 @@ def generate_synthetic_data(
                     logger.info(f"Warnings encountered: {stats['warnings_encountered']}")
             
             logger.info("-" * 40)
-
+        
         # Restore original logging level if it was changed
         if verbose and 'original_level' in locals():
             logger.setLevel(original_level)
         
         return result
-        
+    
     # Handle exceptions
     except Exception as e:
         # Update generation stats with error information
@@ -42314,7 +42089,7 @@ def generate_synthetic_data(
                     json.dump(serializable_partial, f, indent=2)
                 
                 logger.info(f"Partial results metadata saved: {partial_results_path}")
-                
+            
             except Exception as partial_save_error:
                 logger.warning(f"Failed to save partial results: {partial_save_error}")
         
@@ -42330,7 +42105,7 @@ def validate_synthetic_data(
     Args:
         data_dict: Data dictionary from generate_synthetic_data
         config: Configuration dictionary
-        
+    
     Returns:
         Dictionary with validation results and quality metrics
     """
@@ -42969,6 +42744,7 @@ def create_dataloaders(
     
     **kwargs
 ) -> Union[Tuple[DataLoader, DataLoader, DataLoader], Dict[str, DataLoader], DataLoader]:
+    
     # Start timing
     start_time = datetime.now()
     
@@ -43178,12 +42954,9 @@ def create_dataloaders(
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
-    if verbose:
-        logger.info("Starting DataLoader creation")
-    
     # Initialize progress tracking
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'current_substage': None,
         'dataloaders_created': 0,
         'datasets_processed': 0,
@@ -43205,51 +42978,83 @@ def create_dataloaders(
         },
         'stages_completed': [],
         'warnings_encountered': [],
-        'performance_metrics': {}
+        'performance_metrics': {},
+        # Run tracking information
+        'run_tracking': {
+            'run_id': run_id,
+            'run_number': run_number,
+            'use_run_tracking': use_run_tracking,
+            'run_specific_dirs_available': list(run_specific_dirs.keys()) if run_specific_dirs else []
+        } if use_run_tracking else None
     }
     
+    # Define stage titles for ProgressHelper
+    titles = [
+        "Configuration",
+        "Data Validation",
+        "System Optimization",
+        "Transform Setup",
+        "Dataset Creation",
+        "Sampler Configuration",
+        "Collate Function",
+        "Training DataLoader",
+        "Validation DataLoader",
+        "Test DataLoader",
+        "Cross-validation",
+        "Finalization"
+    ]
+    
+    # Use ProgressHelper for consistent progress bars
+    if progress_bar and not silent_mode:
+        print_color("\nStarting DataLoader Creation...", 'green')
+        
+        if verbose:
+            logger.info("\nStarting DataLoader creation")
+        
+        progress = ProgressHelper(titles)
+    
+    else:
+        # Create a dummy context manager that does nothing
+        class DummyBar:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+            def __call__(self, *args, **kwargs):
+                # Accept any arguments and return self to allow chaining
+                return self
+            def __setattr__(self, name, value):
+                # Silently ignore all attribute assignments
+                pass
+            def __getattr__(self, name):
+                # Return self for any attribute/method access to allow chaining
+                return self
+        progress = DummyBar()
+    
     try:
-        # Calculate total stages for progress tracking
-        total_stages = 12  # Configuration, Data Validation, System Optimization, Transforms, Datasets, Samplers, Collate, Training DL, Validation DL, Test DL, CV DL, Finalization
+        # Ensure run-specific directories exist when saving
+        if use_run_tracking and run_specific_dirs:
+            for dir_type, dir_path in run_specific_dirs.items():
+                try:
+                    dir_path.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
         
-        # Use progress bar only if not in silent mode and progress_bar is True
-        if not silent_mode and progress_bar:
-            print(Fore.GREEN + Style.BRIGHT + "\nStarting dataloader creation..." + Style.RESET_ALL)
-            bar_context = alive_bar(total_stages, title='DataLoader Creation\t\t', unit='stages')
-        else:
-            # Create a dummy context manager that does nothing
-            class DummyBar:
-                def __enter__(self):
-                    return self
-                def __exit__(self, *args):
-                    pass
-                def __call__(self):
-                    pass
-                def __setattr__(self, name, value):
-                    pass
-            bar_context = DummyBar()
-        
-        with bar_context as main_bar:
-            
-            # STAGE 1: Configuration and Setup
-            progress_data['current_stage'] = "Configuration"
-            if not silent_mode:
-                main_bar.text = "Setting up configuration and parameters..."
+        # STAGE 1: Configuration and Setup
+        with progress.bar("Configuration", total=1, unit="steps") as bar:
+            bar.text = "Setting up configuration and parameters"
             
             # Determine device configuration
             if device == 'auto':
                 device = 'cuda' if torch.cuda.is_available() else 'cpu'
             
-            if not silent_mode:
-                main_bar.text = "Configuration complete"
+            bar.text = "Configuration complete"
             creation_stats['stages_completed'].append('configuration')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 2: Data Validation
-            progress_data['current_stage'] = "Data Validation"
-            if not silent_mode:
-                main_bar.text = "Validating and preparing input data..."
+            bar()
+        
+        # STAGE 2: Data Validation
+        with progress.bar("Data Validation", total=1, unit="steps") as bar:
+            bar.text = "Validating and preparing input data"
             
             # Extract data from various input formats
             datasets = {}
@@ -43344,16 +43149,13 @@ def create_dataloaders(
             }
             
             progress_data['datasets_processed'] = 1 + (1 if X_val is not None else 0) + (1 if X_test is not None else 0)
-            if not silent_mode:
-                main_bar.text = f"Data validation complete ({progress_data['datasets_processed']} datasets)"
+            bar.text = f"Data validation complete ({progress_data['datasets_processed']} datasets)"
             creation_stats['stages_completed'].append('data_validation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 3: System Optimization
-            progress_data['current_stage'] = "System Optimization"
-            if not silent_mode:
-                main_bar.text = "Optimizing system parameters..."
+            bar()
+        
+        # STAGE 3: System Optimization
+        with progress.bar("System Optimization", total=1, unit="steps") as bar:
+            bar.text = "Optimizing system parameters"
             
             # Optimize system parameters based on available resources
             if system_optimization:
@@ -43427,16 +43229,13 @@ def create_dataloaders(
             val_shuffle = sampling_config.get('val_shuffle', False)
             test_shuffle = sampling_config.get('test_shuffle', False)
             
-            if not silent_mode:
-                main_bar.text = "System optimization complete"
+            bar.text = "System optimization complete"
             creation_stats['stages_completed'].append('system_optimization')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 4: Transform Pipeline Setup
-            progress_data['current_stage'] = "Transform Setup"
-            if not silent_mode:
-                main_bar.text = "Setting up data transforms..."
+            bar()
+        
+        # STAGE 4: Transform Pipeline Setup
+        with progress.bar("Transform Setup", total=1, unit="steps") as bar:
+            bar.text = "Setting up data transforms"
             
             # Setup multiprocessing context
             mp_context = core_config.get('multiprocessing_context')
@@ -43491,16 +43290,13 @@ def create_dataloaders(
                 generic_transform = None
             
             progress_data['transforms_applied'] = sum(1 for t in [train_transform, val_transform, test_transform, generic_transform] if t is not None)
-            if not silent_mode:
-                main_bar.text = f"Transform setup complete ({progress_data['transforms_applied']} transforms)"
+            bar.text = f"Transform setup complete ({progress_data['transforms_applied']} transforms)"
             creation_stats['stages_completed'].append('transform_setup')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 5: Dataset Creation
-            progress_data['current_stage'] = "Dataset Creation"
-            if not silent_mode:
-                main_bar.text = "Creating tensor datasets..."
+            bar()
+        
+        # STAGE 5: Dataset Creation
+        with progress.bar("Dataset Creation", total=1, unit="steps") as bar:
+            bar.text = "Creating tensor datasets"
             
             # Create tensor datasets
             def create_enhanced_dataset(X, y=None, transform=None):
@@ -43555,16 +43351,13 @@ def create_dataloaders(
             val_dataset = create_enhanced_dataset(X_val, y_val, val_transform) if X_val is not None else None
             test_dataset = create_enhanced_dataset(X_test, y_test, test_transform) if X_test is not None else None
             
-            if not silent_mode:
-                main_bar.text = "Dataset creation complete"
+            bar.text = "Dataset creation complete"
             creation_stats['stages_completed'].append('dataset_creation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 6: Sampler Configuration
-            progress_data['current_stage'] = "Sampler Configuration"
-            if not silent_mode:
-                main_bar.text = "Configuring data samplers..."
+            bar()
+        
+        # STAGE 6: Sampler Configuration
+        with progress.bar("Sampler Configuration", total=1, unit="steps") as bar:
+            bar.text = "Configuring data samplers"
             
             # Setup samplers
             train_sampler = None
@@ -43681,16 +43474,13 @@ def create_dataloaders(
                 generator.manual_seed(sampling_config['shuffle_seed'])
             
             progress_data['samplers_configured'] = sum(1 for s in [train_sampler, val_sampler, test_sampler] if s is not None)
-            if not silent_mode:
-                main_bar.text = f"Sampler configuration complete ({progress_data['samplers_configured']} samplers)"
+            bar.text = f"Sampler configuration complete ({progress_data['samplers_configured']} samplers)"
             creation_stats['stages_completed'].append('sampler_configuration')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 7: Collate Function Setup
-            progress_data['current_stage'] = "Collate Function"
-            if not silent_mode:
-                main_bar.text = "Setting up collate functions..."
+            bar()
+        
+        # STAGE 7: Collate Function Setup
+        with progress.bar("Collate Function", total=1, unit="steps") as bar:
+            bar.text = "Setting up collate functions"
             
             # Custom collate function
             enhanced_collate_fn = None
@@ -43772,16 +43562,13 @@ def create_dataloaders(
             else:
                 worker_init_fn = None
             
-            if not silent_mode:
-                main_bar.text = "Collate function setup complete"
+            bar.text = "Collate function setup complete"
             creation_stats['stages_completed'].append('collate_setup')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 8: Training DataLoader Creation
-            progress_data['current_stage'] = "Training DataLoader"
-            if not silent_mode:
-                main_bar.text = "Creating training DataLoader..."
+            bar()
+        
+        # STAGE 8: Training DataLoader Creation
+        with progress.bar("Training DataLoader", total=1, unit="steps") as bar:
+            bar.text = "Creating training DataLoader"
             
             # Common DataLoader parameters
             common_params = {
@@ -43837,7 +43624,7 @@ def create_dataloaders(
                     if verbose:
                         logger.debug(f"Training DataLoader created successfully on attempt {attempt + 1}")
                     break
-                    
+                
                 except Exception as e:
                     fallback_attempts += 1
                     error_str = str(e).lower()
@@ -43925,16 +43712,13 @@ def create_dataloaders(
             
             progress_data['dataloaders_created'] += 1
             progress_data['fallback_attempts'] = fallback_attempts
-            if not silent_mode:
-                main_bar.text = f"Training DataLoader created (attempts: {fallback_attempts + 1})"
+            bar.text = f"Training DataLoader created (attempts: {fallback_attempts + 1})"
             creation_stats['stages_completed'].append('training_dataloader')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 9: Validation DataLoader Creation
-            progress_data['current_stage'] = "Validation DataLoader"
-            if not silent_mode:
-                main_bar.text = "Creating validation DataLoader..."
+            bar()
+        
+        # STAGE 9: Validation DataLoader Creation
+        with progress.bar("Validation DataLoader", total=1, unit="steps") as bar:
+            bar.text = "Creating validation DataLoader"
             
             # Create validation DataLoader
             val_loader = None
@@ -43967,16 +43751,13 @@ def create_dataloaders(
                 
                 progress_data['dataloaders_created'] += 1
             
-            if not silent_mode:
-                main_bar.text = f"Validation DataLoader {'created' if val_loader else 'skipped'}"
+            bar.text = f"Validation DataLoader {'created' if val_loader else 'skipped'}"
             creation_stats['stages_completed'].append('validation_dataloader')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 10: Test DataLoader Creation
-            progress_data['current_stage'] = "Test DataLoader"
-            if not silent_mode:
-                main_bar.text = "Creating test DataLoader..."
+            bar()
+        
+        # STAGE 10: Test DataLoader Creation
+        with progress.bar("Test DataLoader", total=1, unit="steps") as bar:
+            bar.text = "Creating test DataLoader"
             
             # Create test DataLoader
             test_loader = None
@@ -44009,16 +43790,13 @@ def create_dataloaders(
                 
                 progress_data['dataloaders_created'] += 1
             
-            if not silent_mode:
-                main_bar.text = f"Test DataLoader {'created' if test_loader else 'skipped'}"
+            bar.text = f"Test DataLoader {'created' if test_loader else 'skipped'}"
             creation_stats['stages_completed'].append('test_dataloader')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 11: Cross-validation DataLoaders
-            progress_data['current_stage'] = "Cross-validation"
-            if not silent_mode:
-                main_bar.text = "Creating cross-validation DataLoaders..."
+            bar()
+        
+        # STAGE 11: Cross-validation DataLoaders
+        with progress.bar("Cross-validation", total=1, unit="steps") as bar:
+            bar.text = "Creating cross-validation DataLoaders"
             
             # Cross-validation DataLoaders
             cv_loaders = None
@@ -44040,16 +43818,17 @@ def create_dataloaders(
                     
                     cv_loaders = []
                     
-                    # Create progress bar for CV folds only if not in silent mode and progress_bar is True
-                    if not silent_mode and progress_bar:
-                        cv_bar_context = alive_bar(cv_folds, title='CV Folds\t\t\t', unit='folds')
+                    # Use nested progress bars for CV folds if progress_bar is enabled
+                    if progress_bar and not silent_mode:
+                        # Create a separate progress helper for CV folds
+                        cv_titles = [f"Fold {i+1}" for i in range(cv_folds)]
+                        cv_progress = ProgressHelper(cv_titles)
                     else:
-                        cv_bar_context = DummyBar()
+                        cv_progress = DummyBar()
                     
-                    with cv_bar_context as cv_bar:
-                        for fold_idx, (train_idx, val_idx) in enumerate(splits):
-                            if not silent_mode:
-                                cv_bar.text = f"Creating fold {fold_idx + 1}/{cv_folds}"
+                    for fold_idx, (train_idx, val_idx) in enumerate(splits):
+                        with cv_progress.bar(f"Fold {fold_idx+1}", total=1, unit="steps") as cv_bar:
+                            cv_bar.text = f"Processing fold {fold_idx + 1}/{cv_folds}"
                             
                             fold_train_X = X_train[train_idx]
                             fold_val_X = X_train[val_idx]
@@ -44084,27 +43863,24 @@ def create_dataloaders(
                                 'val': fold_val_loader
                             })
                             
-                            if not silent_mode:
-                                cv_bar()
+                            cv_bar.text = f"Fold {fold_idx + 1} complete"
+                            cv_bar()
                     
                     if verbose:
                         logger.info(f"Created {cv_folds} cross-validation fold DataLoaders")
-                    
+                
                 except Exception as e:
                     if verbose:
                         logger.error(f"Failed to create cross-validation DataLoaders: {e}")
                     cv_loaders = None
             
-            if not silent_mode:
-                main_bar.text = f"Cross-validation {'completed' if cv_loaders else 'skipped'}"
+            bar.text = f"Cross-validation {'completed' if cv_loaders else 'skipped'}"
             creation_stats['stages_completed'].append('cross_validation')
-            if not silent_mode:
-                main_bar()
-            
-            # STAGE 12: Finalization and Performance Analysis
-            progress_data['current_stage'] = "Finalization"
-            if not silent_mode:
-                main_bar.text = "Finalizing DataLoader creation..."
+            bar()
+        
+        # STAGE 12: Finalization and Performance Analysis
+        with progress.bar("Finalization", total=1, unit="steps") as bar:
+            bar.text = "Finalizing DataLoader creation"
             
             # Performance profiling and benchmarking
             if profile_dataloaders or benchmark_dataloaders:
@@ -44228,7 +44004,7 @@ def create_dataloaders(
             performance_score = sum(score for _, score in performance_metrics) / len(performance_metrics)
             progress_data['performance_score'] = performance_score
             creation_stats['performance_score'] = performance_score
-
+            
             # Save statistics if requested
             if save_statistics and statistics_path:
                 if verbose:
@@ -44258,16 +44034,17 @@ def create_dataloaders(
                     if verbose:
                         logger.warning(f"Failed to save statistics: {e}")
             
-            if not silent_mode:
-                main_bar.text = f"Finalization complete (Performance: {performance_score:.3f})"
+            # Calculate total processing time
+            total_time = (datetime.now() - start_time).total_seconds()
+            
+            bar.text = f"Finalization complete (Performance: {performance_score:.3f}, Time: {total_time:.1f}s)"
             creation_stats['stages_completed'].append('finalization')
-            if not silent_mode:
-                main_bar()
+            creation_stats['total_processing_time'] = total_time
+            creation_stats['completion_status'] = 'success'
+            bar()
         
         # Prepare return value based on configuration
         total_time = (datetime.now() - start_time).total_seconds()
-        creation_stats['total_processing_time'] = total_time
-        creation_stats['completion_status'] = 'success'
         
         # Create metadata
         metadata = {
@@ -44337,7 +44114,7 @@ def create_dataloaders(
                 train_loader.cv_folds = cv_loaders
             
             return result
-        
+    
     except Exception as e:
         # Update creation stats with error information
         creation_stats['completion_status'] = 'failed'
@@ -44382,7 +44159,7 @@ def create_dataloaders(
                     logger.setLevel(original_level)
                 
                 return (train_loader, val_loader, test_loader)
-                
+            
             except Exception as fallback_error:
                 if verbose:
                     logger.error(f"Fallback DataLoader creation also failed: {fallback_error}")
@@ -45048,13 +44825,13 @@ def train_epoch(
         continue_on_error = error_config.setdefault('continue_on_error', False)
         max_retries = error_config.setdefault('max_retries', 3)
         graceful_degradation = error_config.setdefault('graceful_degradation', True)
-
+        
         # Extract run tracking parameters
         run_id = run_tracking_config.get('run_id', run_id)
         run_number = run_tracking_config.get('run_number', run_number)
         run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
         use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
-
+        
         # Checkpoint defaults
         save_checkpoint = checkpoint_config.setdefault('save_checkpoint', False)
         checkpoint_frequency = checkpoint_config.setdefault('checkpoint_frequency', 10)
@@ -45064,7 +44841,7 @@ def train_epoch(
         model_state_dict = checkpoint_config.setdefault('model_state_dict', True)
         save_optimizer_state = checkpoint_config.setdefault('save_optimizer_state', True)
         save_scheduler_state = checkpoint_config.setdefault('save_scheduler_state', True)
-
+        
         # Loss function defaults
         loss_function = loss_config.setdefault('loss_function', 'mse')
         loss_weights = loss_config.setdefault('loss_weights', None)
@@ -45079,7 +44856,7 @@ def train_epoch(
         focal_loss_gamma = loss_stability_config.setdefault('focal_loss_gamma', None)
         loss_smoothing = loss_stability_config.setdefault('loss_smoothing', None)
         stable_loss_computation = loss_stability_config.setdefault('stable_loss_computation', None)
-
+        
         # Initialize batch processing mode
         batch_processing_mode = batch_config.get('batch_processing_mode', 'standard')
         variable_batch_size = batch_config.get('variable_batch_size', False)
@@ -45091,7 +44868,7 @@ def train_epoch(
         if verbose:
             original_level = logger.level
             logger.setLevel(getattr(logging, log_level.upper()))
-
+        
         # Apply dropout rate dynamically if model supports it
         if dropout_rate is not None and hasattr(model, 'set_dropout'):
             try:
@@ -45156,7 +44933,7 @@ def train_epoch(
                 else:
                     logger.warning(f"No BatchNorm layers found to configure momentum")
                     batch_norm_momentum_applied = False
-                    
+            
             except Exception as e:
                 logger.warning(f"Failed to configure BatchNorm momentum: {e}")
                 batch_norm_momentum_applied = False
@@ -45177,12 +44954,10 @@ def train_epoch(
                 else:
                     logger.warning(f"No LayerNorm layers found to configure epsilon")
                     layer_norm_eps_applied = False
-                    
+            
             except Exception as e:
                 logger.warning(f"Failed to configure LayerNorm epsilon: {e}")
                 layer_norm_eps_applied = False
-        
-        logger.info(f"Starting training epoch {epoch if epoch is not None else 'N/A'}")
         
         # Parameter validation
         if model is None:
@@ -45237,7 +45012,7 @@ def train_epoch(
                 torch.manual_seed(reproducibility_config['random_seed'])
                 if torch.cuda.is_available():
                     torch.cuda.manual_seed_all(reproducibility_config['random_seed'])
-            
+        
         elif benchmark_mode or cudnn_benchmark:
             torch.backends.cudnn.benchmark = True
             torch.backends.cudnn.deterministic = False
@@ -45319,7 +45094,7 @@ def train_epoch(
         warmup_steps = scheduler_config.get('warmup_steps', 0)
         warmup_scheduler = scheduler_config.get('warmup_scheduler')
         current_warmup_step = 0
-
+        
         if warmup_steps > 0 and warmup_scheduler:
             logger.info(f"Warmup scheduler enabled for {warmup_steps} steps")
             training_stats['warmup_enabled'] = True
@@ -45340,7 +45115,7 @@ def train_epoch(
         
         # Set model to training mode
         model.train()
-
+        
         # Apply performance mode optimizations
         if performance_mode == 'maximum':
             # Maximum performance - sacrifice some stability
@@ -45350,7 +45125,7 @@ def train_epoch(
             if hasattr(torch, 'set_num_threads'):
                 torch.set_num_threads(max(1, torch.get_num_threads() // 2))
             logger.info("Performance mode: Maximum - optimized for speed")
-            
+        
         elif performance_mode == 'balanced':
             # Balanced - good speed with stability
             torch.backends.cudnn.benchmark = True
@@ -45358,7 +45133,7 @@ def train_epoch(
             if hasattr(torch, 'set_float32_matmul_precision'):
                 torch.set_float32_matmul_precision('high')
             logger.info("Performance mode: Balanced - optimized for speed/stability balance")
-            
+        
         elif performance_mode == 'stable':
             # Stable - prioritize reproducibility
             torch.backends.cudnn.benchmark = False
@@ -45366,13 +45141,13 @@ def train_epoch(
             if hasattr(torch, 'set_float32_matmul_precision'):
                 torch.set_float32_matmul_precision('highest')
             logger.info("Performance mode: Stable - optimized for reproducibility")
-            
-        else:  # 'standard'
+        
+        else:
             # Standard - PyTorch defaults
             logger.info("Performance mode: Standard - using PyTorch defaults")
-
+        
         training_stats['performance_mode_applied'] = performance_mode
-
+        
         # Apply channels_last memory format if requested
         if channels_last and device.type == 'cuda':
             try:
@@ -45409,21 +45184,21 @@ def train_epoch(
                     pass
             
             logger.info(f"Memory optimization: Aggressive - cache_freq={empty_cache_frequency}, gc_freq={gc_collection_frequency}")
-            
+        
         elif memory_optimization == 'balanced':
             # Balanced approach - moderate memory usage
             logger.info(f"Memory optimization: Balanced - cache_freq={empty_cache_frequency}, gc_freq={gc_collection_frequency}")
-            
+        
         elif memory_optimization == 'minimal':
             # Minimal optimization - prioritize speed
             empty_cache_frequency = empty_cache_frequency * 2  # Less frequent cache clearing
             gc_collection_frequency = gc_collection_frequency * 2  # Less frequent GC
             logger.info(f"Memory optimization: Minimal - cache_freq={empty_cache_frequency}, gc_freq={gc_collection_frequency}")
-
+        
         training_stats['memory_optimization_strategy'] = memory_optimization
         training_stats['effective_cache_frequency'] = empty_cache_frequency
         training_stats['effective_gc_frequency'] = gc_collection_frequency
-
+        
         # Initialize metrics tracking
         metrics_tracker = {
             'losses': [],
@@ -45433,7 +45208,7 @@ def train_epoch(
             'memory_usage': [],
             'detailed_metrics': defaultdict(list) if calculate_detailed_metrics else None
         }
-
+        
         # Initialize early stopping state
         early_stopping_state = {
             'best_metric': float('inf') if early_stopping_mode == 'min' else float('-inf'),
@@ -45442,7 +45217,7 @@ def train_epoch(
             'best_weights': None,
             'stopped': False
         }
-
+        
         if early_stopping:
             logger.info(f"Early stopping enabled: patience={early_stopping_patience}, metric={early_stopping_metric}, delta={early_stopping_delta}")
             
@@ -45469,19 +45244,16 @@ def train_epoch(
                 loss_window_size = loss_stability_config.get('loss_window_size', 10)
                 metrics_tracker['loss_window'] = deque(maxlen=loss_window_size)
         
+        titles = f"Training {progress_bar_desc}"
+        
         # Set up alive-progress bar
         if progress_bar:
             try:
-                pbar_context = alive_bar(
+                progress = ProgressHelper(titles)
+                pbar_context = progress.bar(
+                    title=f"Training {progress_bar_desc}",
                     total=len(loader),
-                    title=f'Training {progress_bar_desc}\t',
-                    unit='batches',
-                    bar='smooth',
-                    spinner='dots',
-                    stats=False,
-                    monitor=True,
-                    elapsed=True,
-                    stats_end=False
+                    unit="batches"
                 )
                 pbar = pbar_context.__enter__()
             except ImportError:
@@ -45495,6 +45267,9 @@ def train_epoch(
         else:
             pbar = None
             pbar_context = None
+        
+        if verbose:
+            logger.info(f"\nStarting training epochs from {epoch+1} to {epochs}")
         
         # Initialize profiling if requested
         if profile_training:
@@ -45534,7 +45309,7 @@ def train_epoch(
                     'compute': debug_config.get('profile_compute', False),
                     'activities': [str(a) for a in profiler_activities]
                 }
-                
+            
             except Exception as e:
                 logger.warning(f"Failed to initialize profiler: {e}")
                 profiler = None
@@ -45551,7 +45326,7 @@ def train_epoch(
         num_samples = 0
         accumulated_steps = 0
         best_loss = float('inf')
-
+        
         # Initialize best metric tracking for checkpointing
         if save_best_model:
             if best_metric == 'loss':
@@ -45573,7 +45348,7 @@ def train_epoch(
         custom_training_step = callback_config.get('custom_training_step')
         pre_batch_callback = callback_config.get('pre_batch_callback')
         post_batch_callback = callback_config.get('post_batch_callback')
-
+        
         # Set up distributed training if enabled
         if distributed:
             try:
@@ -45628,7 +45403,7 @@ def train_epoch(
                     'broadcast_buffers': broadcast_buffers,
                     'gradient_as_bucket_view': gradient_as_bucket_view
                 }
-                
+            
             except ImportError:
                 logger.error("Distributed training requested but torch.distributed not available")
                 distributed = False
@@ -45645,7 +45420,7 @@ def train_epoch(
         if batch_processing_mode not in ['standard', 'dynamic', 'adaptive', 'memory_optimized', 'gradient_accumulation']:
             logger.warning(f"Invalid batch_processing_mode '{batch_processing_mode}', using 'standard'")
             batch_processing_mode = 'standard'
-
+        
         # Initialize batch processing state
         batch_processing_state = {
             'current_batch_size': batch_size,
@@ -45658,13 +45433,10 @@ def train_epoch(
             'success_count': 0,
             'mode': batch_processing_mode
         }
-
+        
         logger.info(f"Batch processing mode: {batch_processing_mode}")
         if variable_batch_size or dynamic_batching:
-            logger.info(
-                f"Dynamic batching enabled - Range: [{batch_processing_state['min_batch_size']}, "
-                f"{batch_processing_state['max_batch_size']}]"
-            )
+            logger.info(f"Dynamic batching enabled - Range: [{batch_processing_state['min_batch_size']}, {batch_processing_state['max_batch_size']}]")
         
         logger.info(f"Starting epoch with {len(loader)} batches")
         
@@ -45681,10 +45453,7 @@ def train_epoch(
                 )
                 
                 if dynamic_accumulation_steps != gradient_accumulation_steps:
-                    logger.info(
-                        f"Adjusting gradient accumulation: {gradient_accumulation_steps} → {dynamic_accumulation_steps} "
-                        f"(target effective batch: {target_effective_batch_size})"
-                    )
+                    logger.info(f"Adjusting gradient accumulation: {gradient_accumulation_steps} → {dynamic_accumulation_steps} (target effective batch: {target_effective_batch_size})")
                     gradient_accumulation_steps = dynamic_accumulation_steps
         
         # Main training loop
@@ -45718,10 +45487,7 @@ def train_epoch(
                             actual_batch_size = batch.size(0)
                         
                         if actual_batch_size != effective_batch_size:
-                            logger.debug(
-                                f"Batch size mismatch: expected {effective_batch_size}, "
-                                f"got {actual_batch_size}"
-                            )
+                            logger.debug(f"Batch size mismatch: expected {effective_batch_size}, got {actual_batch_size}")
                     else:
                         effective_batch_size = batch_size
                     
@@ -45741,7 +45507,7 @@ def train_epoch(
                             # Case 1: Single tensor batch (autoencoder-style)
                             inputs = batch.to(device, non_blocking=non_blocking_transfer)
                             targets = inputs
-                            
+                        
                         elif isinstance(batch, (list, tuple)):
                             # Case 2: List or tuple batch (most common)
                             if len(batch) == 0:
@@ -45763,7 +45529,7 @@ def train_epoch(
                                     targets = torch.tensor(batch[1], dtype=torch.float32).to(device, non_blocking=non_blocking_transfer)
                             else:
                                 targets = inputs  # Autoencoder case
-                                
+                        
                         else:
                             # Case 3: Unknown format - attempt conversion
                             try:
@@ -45954,7 +45720,7 @@ def train_epoch(
                     
                     current_batch_size = inputs.size(0)
                     num_samples += current_batch_size
-
+                    
                     # Advanced training techniques
                     if advanced_config.get('curriculum_learning', False):
                         # Curriculum learning: adjust difficulty based on epoch/batch
@@ -45975,7 +45741,7 @@ def train_epoch(
                             # Example: Use simpler data or reduced features early in training
                             # This is model/task specific
                             logger.debug(f"Curriculum progress: {curriculum_progress:.2%} (batch {batch_idx})")
-
+                    
                     # Progressive training: gradually increase model complexity
                     if advanced_config.get('progressive_training', False):
                         # Example: gradually enable model features
@@ -45984,7 +45750,7 @@ def train_epoch(
                         if batch_idx < progressive_epoch_threshold:
                             # Example: Use simpler forward pass or disable certain features
                             logger.debug(f"Progressive training: warmup phase (batch {batch_idx}/{progressive_epoch_threshold})")
-
+                    
                     # Adaptive training: adjust learning dynamically
                     if advanced_config.get('adaptive_training', False):
                         # Example: adjust learning rate based on loss trends
@@ -45997,7 +45763,7 @@ def train_epoch(
                                 for param_group in optimizer.param_groups:
                                     param_group['lr'] *= 0.95
                                 logger.debug(f"Adaptive training: reduced LR due to increasing loss trend")
-
+                    
                     # Self-supervised pretext tasks
                     if advanced_config.get('self_supervised_pretext', False):
                         # Example: Add auxiliary self-supervised task
@@ -46028,7 +45794,7 @@ def train_epoch(
                         
                         except Exception as e:
                             logger.debug(f"Self-supervised pretext task failed: {e}")
-
+                    
                     # Teacher forcing (for sequence models)
                     if advanced_config.get('teacher_forcing_ratio', None) is not None:
                         teacher_forcing_ratio = advanced_config['teacher_forcing_ratio']
@@ -46104,7 +45870,7 @@ def train_epoch(
                                         outputs_stable = torch.clamp(outputs, -stability_clip_value, stability_clip_value)
                                     else:
                                         outputs_stable = outputs
-
+                                    
                                     # Step 2: Apply label smoothing to targets
                                     if label_smoothing is not None and label_smoothing > 0:
                                         target_mean = targets.mean()
@@ -46112,7 +45878,7 @@ def train_epoch(
                                         logger.debug(f"Label smoothing applied: {label_smoothing:.4f}")
                                     else:
                                         targets_smooth = targets
-
+                                    
                                     # Step 3: Compute base loss (with focal loss if enabled)
                                     if focal_loss_alpha is not None and focal_loss_gamma is not None:
                                         # Focal loss computation for regression
@@ -46136,11 +45902,7 @@ def train_epoch(
                                         }
                                         
                                         if verbose and batch_idx % (log_frequency * 10) == 0:
-                                            logger.debug(
-                                                f"Focal loss - alpha: {focal_loss_alpha:.3f}, "
-                                                f"gamma: {focal_loss_gamma:.3f}, "
-                                                f"avg_weight: {focal_weight.mean():.3f}"
-                                            )
+                                            logger.debug(f"Focal loss - alpha: {focal_loss_alpha:.3f}, gamma: {focal_loss_gamma:.3f}, avg_weight: {focal_weight.mean():.3f}")
                                     
                                     else:
                                         # Standard loss computation
@@ -46167,10 +45929,8 @@ def train_epoch(
                                         else:
                                             reconstruction_loss = criterion(outputs_stable, targets_smooth)
                                         
-                                        loss_components = {
-                                            'reconstruction': reconstruction_loss.item()
-                                        }
-
+                                        loss_components = {'reconstruction': reconstruction_loss.item()}
+                                    
                                     # Step 4: Apply loss smoothing
                                     if loss_smoothing in ['ema', 'exponential']:
                                         current_loss = reconstruction_loss.item()
@@ -46191,12 +45951,8 @@ def train_epoch(
                                         loss_components['loss_scale'] = loss_scale
                                         
                                         if verbose and batch_idx % (log_frequency * 10) == 0:
-                                            logger.debug(
-                                                f"Loss smoothing - current: {current_loss:.6f}, "
-                                                f"smoothed: {smoothed_loss_value:.6f}, "
-                                                f"scale: {loss_scale:.3f}"
-                                            )
-
+                                            logger.debug(f"Loss smoothing - current: {current_loss:.6f}, smoothed: {smoothed_loss_value:.6f}, scale: {loss_scale:.3f}")
+                                    
                                     elif loss_smoothing == 'temporal':
                                         current_loss = reconstruction_loss.item()
                                         metrics_tracker['loss_window'].append(current_loss)
@@ -46209,15 +45965,11 @@ def train_epoch(
                                             loss_components['temporal_smoothed_loss'] = window_avg
                                             
                                             if verbose and batch_idx % (log_frequency * 10) == 0:
-                                                logger.debug(
-                                                    f"Temporal smoothing - current: {current_loss:.6f}, "
-                                                    f"window_avg: {window_avg:.6f}, "
-                                                    f"window_size: {len(metrics_tracker['loss_window'])}"
-                                                )
-
+                                                logger.debug(f"Temporal smoothing - current: {current_loss:.6f}, window_avg: {window_avg:.6f}, window_size: {len(metrics_tracker['loss_window'])}")
+                                    
                                     # Initialize total loss with weighted reconstruction
                                     loss = reconstruction_loss_weight * reconstruction_loss
-
+                                    
                                     # Multi-task learning: Add auxiliary losses if enabled
                                     if multi_task_learning and auxiliary_loss_weight > 0:
                                         # Auxiliary loss: Encourage diverse representations
@@ -46249,7 +46001,7 @@ def train_epoch(
                                         
                                         if verbose and batch_idx % (log_frequency * 10) == 0:
                                             logger.debug(f"L2 regularization loss: {l2_loss.item():.6f}")
-
+                                    
                                     # Legacy regularization_loss_weight support
                                     elif regularization_loss_weight > 0:
                                         reg_loss = torch.tensor(0.0, device=device)
@@ -46300,7 +46052,7 @@ def train_epoch(
                                                 
                                                 loss = weighted_loss
                                                 loss_components['weighted'] = True
-                                                
+                                        
                                         except Exception as weight_e:
                                             logger.debug(f"Loss weighting failed: {weight_e}")
                                     
@@ -46333,7 +46085,7 @@ def train_epoch(
                                         
                                         if 'targets_fixed' not in locals():
                                             loss = criterion(outputs, targets)
-                                        
+                                    
                                     except Exception as final_e:
                                         logger.error(f"Final loss computation attempt failed: {final_e}")
                                         if handle_nan_loss == 'skip':
@@ -46397,11 +46149,7 @@ def train_epoch(
                             effective_batch_size = batch_processing_state['current_batch_size'] * gradient_accumulation_steps
                             
                             if verbose and batch_idx % (log_frequency * 10) == 0:
-                                logger.debug(
-                                    f"Batch processing - Physical: {batch_processing_state['current_batch_size']}, "
-                                    f"Effective: {effective_batch_size}, "
-                                    f"Accumulation: {gradient_accumulation_steps}"
-                                )
+                                logger.debug(f"Batch processing - Physical: {batch_processing_state['current_batch_size']}, Effective: {effective_batch_size}, Accumulation: {gradient_accumulation_steps}")
                         
                         # Gradient clipping
                         if gradient_clip > 0 or max_grad_norm > 0:
@@ -46415,10 +46163,7 @@ def train_epoch(
                                     max_grad_norm or gradient_clip
                                 )
                             elif gradient_clipping_mode == 'value':
-                                grad_norm = torch.nn.utils.clip_grad_value_(
-                                    model.parameters(), 
-                                    gradient_clip
-                                )
+                                grad_norm = torch.nn.utils.clip_grad_value_(model.parameters(), gradient_clip)
                                 # Calculate norm for tracking
                                 grad_norm = torch.sqrt(sum(param.grad.data.norm()**2 for param in model.parameters() if param.grad is not None))
                             else:
@@ -46530,11 +46275,7 @@ def train_epoch(
                                 
                                 # Log bottleneck if significant
                                 if bottleneck_time > 40:  # If any component takes >40% of time
-                                    logger.warning(
-                                        f"Bottleneck detected: {bottleneck} ({bottleneck_time:.1f}% of batch time)\n"
-                                        f"  Forward: {forward_pct:.1f}%, Backward: {backward_pct:.1f}%, "
-                                        f"Optimizer: {optimizer_pct:.1f}%, Data Loading: {data_loading_pct:.1f}%"
-                                    )
+                                    logger.warning(f"Bottleneck detected: {bottleneck} ({bottleneck_time:.1f}% of batch time)  Forward: {forward_pct:.1f}%, Backward: {backward_pct:.1f}%, Optimizer: {optimizer_pct:.1f}%, Data Loading: {data_loading_pct:.1f}%")
                                     
                                     # Track bottleneck in metrics
                                     if not hasattr(metrics_tracker, 'bottlenecks'):
@@ -46553,7 +46294,7 @@ def train_epoch(
                         
                         except Exception as e:
                             logger.debug(f"Bottleneck detection failed: {e}")
-
+                    
                     # Add bottleneck info to final metrics
                     if bottleneck_detection and hasattr(metrics_tracker, 'bottlenecks'):
                         metrics_tracker['bottleneck_analysis'] = {
@@ -46618,7 +46359,7 @@ def train_epoch(
                                 
                                 # Break out of training loop
                                 break
-
+                    
                     # Add early stopping info to final metrics
                     metrics_tracker['early_stopping'] = {
                         'enabled': early_stopping,
@@ -46709,20 +46450,9 @@ def train_epoch(
                         current_lr = optimizer.param_groups[0]['lr']
                         
                         if timing_analysis:
-                            logger.info(
-                                f"Batch {batch_idx}/{len(loader)} | "
-                                f"Loss: {avg_loss:.6f} | "
-                                f"LR: {current_lr:.2e} | "
-                                f"Forward: {forward_time/batch_idx:.3f}s | "
-                                f"Backward: {backward_time/batch_idx:.3f}s | "
-                                f"Optimizer: {optimizer_time/(accumulated_steps//gradient_accumulation_steps):.3f}s"
-                            )
+                            logger.info(f"Batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f} | LR: {current_lr:.2e} | Forward: {forward_time/batch_idx:.3f}s | Backward: {backward_time/batch_idx:.3f}s | Optimizer: {optimizer_time/(accumulated_steps//gradient_accumulation_steps):.3f}s")
                         else:
-                            logger.info(
-                                f"Batch {batch_idx}/{len(loader)} | "
-                                f"Loss: {avg_loss:.6f} | "
-                                f"LR: {current_lr:.2e}"
-                            )
+                            logger.info(f"Batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f} | LR: {current_lr:.2e}")
                     
                     # Update alive-progress bar
                     if pbar:
@@ -46730,15 +46460,8 @@ def train_epoch(
                         avg_loss_display = total_loss / num_batches
                         current_lr_display = optimizer.param_groups[0]['lr']
                         
-                        # Format the text for the progress bar
-                        #progress_text = (f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}")
-                        #progress_text = f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}"
-                        
                         # Update the progress bar text
-                        #pbar.text(progress_text)
-                        pbar.text(f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}")
-                        
-                        # Update the progress
+                        pbar.text = f"Loss: {current_loss_display:.4f}, Avg: {avg_loss_display:.4f}, LR: {current_lr_display:.2e}, Batch: {batch_idx+1}/{len(loader)}"
                         pbar()
                     
                     # Post-batch callback
@@ -46760,17 +46483,10 @@ def train_epoch(
                                     # Adjust batch size based on memory usage
                                     if memory_allocated > 0.85:  # High memory usage
                                         # Reduce batch size
-                                        new_batch_size = max(
-                                            batch_processing_state['min_batch_size'],
-                                            int(batch_processing_state['current_batch_size'] * 0.8)
-                                        )
+                                        new_batch_size = max(batch_processing_state['min_batch_size'], int(batch_processing_state['current_batch_size'] * 0.8))
                                         
                                         if new_batch_size != batch_processing_state['current_batch_size']:
-                                            logger.info(
-                                                f"Reducing batch size due to high memory usage: "
-                                                f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
-                                                f"(memory: {memory_allocated:.1%})"
-                                            )
+                                            logger.info(f"Reducing batch size due to high memory usage: {batch_processing_state['current_batch_size']} → {new_batch_size} (memory: {memory_allocated:.1%})")
                                             batch_processing_state['current_batch_size'] = new_batch_size
                                             batch_processing_state['adaptation_history'].append({
                                                 'batch': batch_idx,
@@ -46782,17 +46498,10 @@ def train_epoch(
                                     
                                     elif memory_allocated < 0.6 and batch_processing_state['success_count'] > 10:
                                         # Increase batch size if memory allows
-                                        new_batch_size = min(
-                                            batch_processing_state['max_batch_size'],
-                                            int(batch_processing_state['current_batch_size'] * 1.2)
-                                        )
+                                        new_batch_size = min(batch_processing_state['max_batch_size'], int(batch_processing_state['current_batch_size'] * 1.2))
                                         
                                         if new_batch_size != batch_processing_state['current_batch_size']:
-                                            logger.info(
-                                                f"Increasing batch size due to low memory usage: "
-                                                f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
-                                                f"(memory: {memory_allocated:.1%})"
-                                            )
+                                            logger.info(f"Increasing batch size due to low memory usage: {batch_processing_state['current_batch_size']} → {new_batch_size} (memory: {memory_allocated:.1%})")
                                             batch_processing_state['current_batch_size'] = new_batch_size
                                             batch_processing_state['success_count'] = 0  # Reset counter
                                             batch_processing_state['adaptation_history'].append({
@@ -46814,17 +46523,10 @@ def train_epoch(
                                 
                                 if avg_batch_time > target_time * 1.5:
                                     # Reduce batch size to speed up
-                                    new_batch_size = max(
-                                        batch_processing_state['min_batch_size'],
-                                        int(batch_processing_state['current_batch_size'] * 0.9)
-                                    )
+                                    new_batch_size = max(batch_processing_state['min_batch_size'], int(batch_processing_state['current_batch_size'] * 0.9))
                                     
                                     if new_batch_size != batch_processing_state['current_batch_size']:
-                                        logger.info(
-                                            f"Reducing batch size for faster iteration: "
-                                            f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
-                                            f"(avg time: {avg_batch_time:.3f}s)"
-                                        )
+                                        logger.info(f"Reducing batch size for faster iteration: {batch_processing_state['current_batch_size']} → {new_batch_size} (avg time: {avg_batch_time:.3f}s)")
                                         batch_processing_state['current_batch_size'] = new_batch_size
                                         batch_processing_state['adaptation_history'].append({
                                             'batch': batch_idx,
@@ -46837,17 +46539,10 @@ def train_epoch(
                                 
                                 elif avg_batch_time < target_time * 0.5 and batch_processing_state['success_count'] > 10:
                                     # Increase batch size for better throughput
-                                    new_batch_size = min(
-                                        batch_processing_state['max_batch_size'],
-                                        int(batch_processing_state['current_batch_size'] * 1.1)
-                                    )
+                                    new_batch_size = min(batch_processing_state['max_batch_size'], int(batch_processing_state['current_batch_size'] * 1.1))
                                     
                                     if new_batch_size != batch_processing_state['current_batch_size']:
-                                        logger.info(
-                                            f"Increasing batch size for better throughput: "
-                                            f"{batch_processing_state['current_batch_size']} → {new_batch_size} "
-                                            f"(avg time: {avg_batch_time:.3f}s)"
-                                        )
+                                        logger.info(f"Increasing batch size for better throughput: {batch_processing_state['current_batch_size']} → {new_batch_size} (avg time: {avg_batch_time:.3f}s)")
                                         batch_processing_state['current_batch_size'] = new_batch_size
                                         batch_processing_state['success_count'] = 0
                                         batch_processing_state['adaptation_history'].append({
@@ -46940,10 +46635,10 @@ def train_epoch(
                                 
                                 if verbose and batch_idx % (log_frequency * 10) == 0:
                                     logger.info(f"Checkpoint saved: {checkpoint_save_path}")
-                                    
+                            
                             except Exception as e:
                                 logger.warning(f"Failed to save checkpoint at batch {batch_idx}: {e}")
-                    
+                
                 except Exception as batch_error:
                     # Add OOM handling BEFORE the generic error logging
                     if isinstance(batch_error, RuntimeError):
@@ -46956,15 +46651,10 @@ def train_epoch(
                             # Automatic batch size reduction
                             if dynamic_batching or batch_processing_mode == 'memory_optimized':
                                 old_batch_size = batch_processing_state['current_batch_size']
-                                new_batch_size = max(
-                                    batch_processing_state['min_batch_size'],
-                                    int(old_batch_size * 0.5)  # Halve the batch size
-                                )
+                                new_batch_size = max(batch_processing_state['min_batch_size'], int(old_batch_size * 0.5))
                                 
                                 if new_batch_size < old_batch_size:
-                                    logger.warning(
-                                        f"Reducing batch size due to OOM: {old_batch_size} → {new_batch_size}"
-                                    )
+                                    logger.warning(f"Reducing batch size due to OOM: {old_batch_size} → {new_batch_size}")
                                     batch_processing_state['current_batch_size'] = new_batch_size
                                     batch_processing_state['adaptation_history'].append({
                                         'batch': batch_idx,
@@ -47074,7 +46764,7 @@ def train_epoch(
                     metrics_tracker['losses'] = losses_tensor.cpu().tolist()
                 
                 logger.debug(f"Reduced metrics across {world_size} processes (rank {rank})")
-                
+            
             except Exception as e:
                 logger.warning(f"Failed to reduce distributed metrics: {e}")
         
@@ -47150,7 +46840,7 @@ def train_epoch(
                 
                 if verbose:
                     logger.info(f"New best model saved: {best_model_path} (loss: {avg_loss:.6f})")
-                    
+            
             except Exception as e:
                 logger.warning(f"Failed to save best model checkpoint: {e}")
         
@@ -47318,7 +47008,7 @@ def train_epoch(
         
         logger.info(f"Training epoch completed: loss={avg_loss:.6f}, batches={num_batches}")
         return avg_loss, metrics
-        
+    
     except Exception as e:
         logger.error(f"Training epoch failed: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -48163,6 +47853,32 @@ def _default_validation_callbacks():
     
     return callbacks
 
+class ProgressHelper:
+    """Reusable factory for creating consistent alive_progress bars."""
+    def __init__(self, titles: list[str] = None):
+        """
+        Initialize helper with optional list of titles.
+        
+        Args:
+            titles: Optional list of title strings (not needed for simple approach)
+        """
+        # Titles parameter is kept for backward compatibility but not used
+        self.titles = titles if titles else []
+    
+    def bar(self, title: str, total: int, unit: str):
+        """
+        Return a configured alive_progress bar with consistent formatting.
+        
+        Args:
+            title: The title to display
+            total: Total number of items to process
+            unit: Unit name for the progress bar
+        
+        Returns:
+            Configured alive_bar context manager
+        """
+        return alive_bar(total, title=title, unit=unit, length=25, elapsed=True, title_length=25)
+
 def validate(
     # Core Validation Parameters
     model: Optional[nn.Module] = None,
@@ -48640,8 +48356,6 @@ def validate(
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
-    logger.info(f"Starting validation for epoch {epoch if epoch is not None else 'N/A'}")
-    
     # Initialize variables for cleanup
     pbar = None
     
@@ -48681,7 +48395,8 @@ def validate(
         # Set model to appropriate mode
         if eval_mode:
             model.eval()
-            logger.debug("Set model to eval mode")
+            if verbose:
+                logger.debug("Set model to eval mode")
         
         # Initialize metrics tracking
         metrics_tracker = {
@@ -48707,32 +48422,35 @@ def validate(
         forward_time = 0
         metrics_time = 0
         
+        # Define stage titles for ProgressHelper
+        titles = [f"{progress_bar_desc}"]
+        
         # Set up alive-progress bar
         if progress_bar:
             try:
-                pbar_context = alive_bar(
-                    total=len(loader),
-                    title=f'{progress_bar_desc}\t',
-                    unit='batches',
-                    bar='smooth',
-                    spinner='dots',
-                    stats=False,
-                    monitor=True,
-                    elapsed=True,
-                    stats_end=False
+                progress = ProgressHelper(titles)
+                pbar_context = progress.bar(
+                    title=progress_bar_desc,
+                    total=len(loader) + 1,
+                    unit='batches'
                 )
                 pbar = pbar_context.__enter__()
             except ImportError:
-                logger.warning("alive-progress not available, progress bar disabled")
+                if verbose:
+                    logger.warning("alive-progress not available, progress bar disabled")
                 pbar = None
                 pbar_context = None
             except Exception as e:
-                logger.warning(f"Failed to initialize alive-progress bar: {e}")
+                if verbose:
+                    logger.warning(f"Failed to initialize alive-progress bar: {e}")
                 pbar = None
                 pbar_context = None
         else:
             pbar = None
             pbar_context = None
+        
+        if verbose:
+            logger.info(f"\nStarting validation with {len(loader)} batches")
         
         # Ensure run-specific directories exist when saving
         if use_run_tracking and run_specific_dirs:
@@ -48740,12 +48458,11 @@ def validate(
                 try:
                     dir_path.mkdir(parents=True, exist_ok=True)
                 except Exception as e:
-                    logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
+                    if verbose:
+                        logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
         
         # Validation callbacks setup
         validation_callbacks = custom_config.get('validation_callbacks', [])
-        
-        logger.info(f"Starting validation with {len(loader)} batches")
         
         # Determine validation context
         if inference_mode and hasattr(torch, 'inference_mode'):
@@ -48780,7 +48497,8 @@ def validate(
                                 if error_handling == 'strict':
                                     raise ValueError(f"Non-finite input values detected in batch {batch_idx}")
                                 else:
-                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite inputs")
+                                    if verbose:
+                                        logger.warning(f"Skipping batch {batch_idx} due to non-finite inputs")
                                     continue
                     
                     # Apply input transforms if specified
@@ -48793,7 +48511,7 @@ def validate(
                     
                     # Update progress bar with data loading status
                     if pbar:
-                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Data loaded | Processing..."
+                        pbar.text = f"Data loaded | Batch {batch_idx+1}/{len(loader)}"
                     
                     # Forward pass with mixed precision and timing
                     forward_start_time = time.time()
@@ -48807,12 +48525,14 @@ def validate(
                             if hasattr(model, '__class__') and 'autoencoder' in model.__class__.__name__.lower():
                                 # For autoencoder, target should be input
                                 targets = inputs
-                                logger.debug("Set targets = inputs for autoencoder validation")
+                                if verbose:
+                                    logger.debug("Set targets = inputs for autoencoder validation")
                             else:
                                 # Try to reshape targets to match outputs
                                 if outputs.numel() == targets.numel():
                                     targets = targets.view_as(outputs)
-                                    logger.debug(f"Reshaped targets from {targets.shape} to {outputs.shape}")
+                                    if verbose:
+                                        logger.debug(f"Reshaped targets from {targets.shape} to {outputs.shape}")
                                 else:
                                     # Try to match batch size and feature dimensions
                                     batch_size = outputs.size(0)
@@ -48828,20 +48548,23 @@ def validate(
                                         else:
                                             # As last resort, use inputs as targets
                                             targets = inputs
-                                            logger.warning(f"Using inputs as targets due to irreconcilable shape mismatch")
+                                            if verbose:
+                                                logger.warning(f"Using inputs as targets due to irreconcilable shape mismatch")
                                     else:
                                         # For other shapes, try to use inputs
                                         targets = inputs
-                                        logger.warning(f"Complex shape mismatch, using inputs as targets")
-                            
-                            logger.debug(f"Fixed shape mismatch: outputs {outputs.shape}, targets {targets.shape}")
+                                        if verbose:
+                                            logger.warning(f"Complex shape mismatch, using inputs as targets")
+                            if verbose:
+                                logger.debug(f"Fixed shape mismatch: outputs {outputs.shape}, targets {targets.shape}")
                         
                         # Calculate loss with proper error handling
                         try:
                             loss = criterion(outputs, targets)
                         except RuntimeError as loss_error:
-                            logger.error(f"Loss calculation failed even after shape fixing: {loss_error}")
-                            logger.error(f"Final shapes - outputs: {outputs.shape}, targets: {targets.shape}")
+                            if verbose:
+                                logger.error(f"Loss calculation failed even after shape fixing: {loss_error}")
+                                logger.error(f"Final shapes - outputs: {outputs.shape}, targets: {targets.shape}")
                             
                             # Final attempt: force targets to match outputs exactly
                             if 'autoencoder' in str(type(model)).lower():
@@ -48851,16 +48574,20 @@ def validate(
                             
                             try:
                                 loss = criterion(outputs, targets)
-                                logger.warning("Used fallback target matching for loss calculation")
+                                if verbose:
+                                    logger.warning("Used fallback target matching for loss calculation")
                             except Exception as final_error:
-                                logger.error(f"Final loss calculation attempt failed: {final_error}")
+                                if verbose:
+                                    logger.error(f"Final loss calculation attempt failed: {final_error}")
                                 if handle_nan_outputs == 'skip':
-                                    logger.warning(f"Skipping batch {batch_idx} due to unresolvable loss calculation")
+                                    if verbose:
+                                        logger.warning(f"Skipping batch {batch_idx} due to unresolvable loss calculation")
                                     continue
                                 elif graceful_degradation:
                                     # Create a dummy loss to continue
                                     loss = torch.tensor(0.0, device=device, requires_grad=True)
-                                    logger.warning(f"Using dummy loss for batch {batch_idx}")
+                                    if verbose:
+                                        logger.warning(f"Using dummy loss for batch {batch_idx}")
                                 else:
                                     raise
                     
@@ -48874,14 +48601,15 @@ def validate(
                                 if handle_nan_outputs == 'error':
                                     raise ValueError(f"Non-finite output values detected in batch {batch_idx}")
                                 elif handle_nan_outputs == 'skip':
-                                    logger.warning(f"Skipping batch {batch_idx} due to non-finite outputs")
+                                    if verbose:
+                                        logger.warning(f"Skipping batch {batch_idx} due to non-finite outputs")
                                     continue
                                 elif handle_nan_outputs == 'replace':
                                     outputs = torch.nan_to_num(outputs, nan=0.0, posinf=1.0, neginf=0.0)
                     
                     # Update progress bar with forward pass completion
                     if pbar:
-                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Forward pass completed | Calculating metrics..."
+                        pbar.text = f"Forward pass completed | Batch {batch_idx+1}/{len(loader)}"
                     
                     # Calculate metrics with timing
                     metrics_start_time = time.time()
@@ -48916,10 +48644,12 @@ def validate(
                             
                             # Log custom metrics periodically
                             if batch_idx % (log_frequency * 10) == 0 and verbose:
-                                logger.debug(f"Custom metrics @ batch {batch_idx}: {list(custom_metrics.keys())[:5]}")
+                                if verbose:
+                                    logger.debug(f"Custom metrics @ batch {batch_idx}: {list(custom_metrics.keys())[:5]}")
                         
                         except Exception as e:
-                            logger.warning(f"Custom metric calculation failed at batch {batch_idx}: {e}")
+                            if verbose:
+                                logger.warning(f"Custom metric calculation failed at batch {batch_idx}: {e}")
                             if error_handling == 'strict':
                                 raise RuntimeError(f"Custom metric function failed: {e}") from e
                     
@@ -48975,10 +48705,10 @@ def validate(
                         avg_loss_display = total_loss / num_batches
                         
                         # Format the text for the progress bar with detailed status
-                        progress_text = (f"Batch {batch_idx+1}/{len(loader)} | Loss: {current_loss_display:.4f} | Avg: {avg_loss_display:.4f} | Samples: {num_samples:,} | Memory: {torch.cuda.memory_allocated(device)/1024**2:.0f}MB")
+                        #progress_text = (f"Batch {batch_idx+1}/{len(loader)} | Loss: {current_loss_display:.4f} | Avg: {avg_loss_display:.4f} | Samples: {num_samples:,} | Memory: {torch.cuda.memory_allocated(device)/1024**2:.0f}MB")
                         
                         # Update the progress bar text
-                        pbar.text = progress_text
+                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Loss: {current_loss_display:.4f} | Avg: {avg_loss_display:.4f} | Samples: {num_samples:,} | Memory: {torch.cuda.memory_allocated(device)/1024**2:.0f}MB"
                         
                         # Update the progress
                         pbar()
@@ -48988,9 +48718,11 @@ def validate(
                         avg_loss = total_loss / num_batches
                         
                         if timing_analysis:
-                            logger.info(f"Validation batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f} | Forward: {forward_time/batch_idx:.3f}s | Metrics: {metrics_time/batch_idx:.3f}s")
+                            if verbose:
+                                logger.info(f"Validation batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f} | Forward: {forward_time/batch_idx:.3f}s | Metrics: {metrics_time/batch_idx:.3f}s")
                         else:
-                            logger.info(f"Validation batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f}")
+                            if verbose:
+                                logger.info(f"Validation batch {batch_idx}/{len(loader)} | Loss: {avg_loss:.6f}")
                     
                     # Execute validation callbacks
                     for callback in validation_callbacks:
@@ -49004,26 +48736,31 @@ def validate(
                                 metrics=metrics_tracker
                             )
                         except Exception as e:
-                            logger.warning(f"Validation callback execution failed: {e}")
-                    
+                            if verbose:
+                                logger.warning(f"Validation callback execution failed: {e}")
+                
                 except Exception as e:
                     if continue_on_error:
-                        logger.error(f"Error in validation batch {batch_idx}: {e}")
+                        if verbose:
+                            logger.error(f"Error in validation batch {batch_idx}: {e}")
                         if error_handling == 'skip':
                             continue
                         elif error_handling == 'retry':
                             retry_count = 0
                             while retry_count < max_retries:
                                 try:
-                                    logger.info(f"Retrying validation batch {batch_idx}, attempt {retry_count + 1}")
+                                    if verbose:
+                                        logger.info(f"Retrying validation batch {batch_idx}, attempt {retry_count + 1}")
                                     # Re-process the batch (simplified retry logic)
                                     break
                                 except Exception as retry_e:
                                     retry_count += 1
-                                    logger.warning(f"Retry {retry_count} failed: {retry_e}")
+                                    if verbose:
+                                        logger.warning(f"Retry {retry_count} failed: {retry_e}")
                             
                             if retry_count >= max_retries:
-                                logger.error(f"Max retries exceeded for batch {batch_idx}")
+                                if verbose:
+                                    logger.error(f"Max retries exceeded for batch {batch_idx}")
                                 if graceful_degradation:
                                     continue
                                 else:
@@ -49033,7 +48770,7 @@ def validate(
         
         # Update progress bar for post-processing phase
         if pbar:
-            pbar.text = "Validation completed | Calculating final metrics..."
+            pbar.text = "Calculating final metrics"
         
         # Calculate final metrics
         validation_end_time = time.time()
@@ -49045,12 +48782,13 @@ def validate(
         
         # Update progress bar for anomaly detection
         if pbar and (anomaly_detection or threshold_analysis):
-            pbar.text = "Validation completed | Performing anomaly detection..."
+            pbar.text = "Performing anomaly detection"
         
         # Anomaly detection and threshold analysis
         anomaly_results = {}
         if anomaly_detection or threshold_analysis:
-            logger.info("Performing anomaly detection and threshold analysis")
+            if verbose:
+                logger.info("Performing anomaly detection and threshold analysis")
             
             if len(reconstruction_errors_array) > 0:
                 # Calculate threshold based on method or custom function
@@ -49060,24 +48798,29 @@ def validate(
                         threshold = custom_threshold_fn(reconstruction_errors_array)
                         threshold_method_used = f'custom_{custom_threshold_fn.__name__}'
                         threshold_method = threshold_method_used
-                        logger.info(f"Custom threshold calculated: {threshold:.6f}")
+                        if verbose:
+                            logger.info(f"Custom threshold calculated: {threshold:.6f}")
                     except Exception as e:
-                        logger.warning(f"Custom threshold function failed: {e}, falling back to configured method")
+                        if verbose:
+                            logger.warning(f"Custom threshold function failed: {e}, falling back to configured method")
                         # Fallback to standard threshold calculation
                         if threshold_method == 'percentile':
                             threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
                             threshold_method_used = 'percentile'
-                            logger.info(f"Falling back to configured method: {threshold_method_used}")
+                            if verbose:
+                                logger.info(f"Falling back to configured method: {threshold_method_used}")
                         elif threshold_method == 'mean_std':
                             mean_error = np.mean(reconstruction_errors_array)
                             std_error = np.std(reconstruction_errors_array)
                             threshold = mean_error + 2 * std_error
                             threshold_method_used = 'mean_std'
-                            logger.info(f"Falling back to configured method: {threshold_method_used}")
+                            if verbose:
+                                logger.info(f"Falling back to configured method: {threshold_method_used}")
                         else:
                             threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
                             threshold_method_used = 'percentile'
-                            logger.info(f"Falling back to configured method: {threshold_method_used}")
+                            if verbose:
+                                logger.info(f"Falling back to configured method: {threshold_method_used}")
                 else:
                     # Standard threshold calculation
                     if threshold_method == 'percentile':
@@ -49096,7 +48839,6 @@ def validate(
                         threshold_method_used = 'iqr'
                     else:
                         threshold = np.percentile(reconstruction_errors_array, percentile_threshold)
-                        #threshold_method_used = 'percentile_default'
                         threshold_method_used = 'fixed_percentile'
                 
                 # Anomaly detection results
@@ -49113,16 +48855,18 @@ def validate(
                     'anomaly_indices': np.where(anomalies)[0].tolist() if save_predictions else []
                 }
             else:
-                logger.warning("No reconstruction errors available for anomaly detection")
+                if verbose:
+                    logger.warning("No reconstruction errors available for anomaly detection")
         
         # Update progress bar for statistical analysis
         if pbar and statistical_metrics:
-            pbar.text = "Validation completed | Performing statistical analysis..."
+            pbar.text = "Performing statistical analysis"
         
         # Statistical analysis
         statistical_results = {}
         if statistical_metrics and len(reconstruction_errors_array) > 0:
-            logger.info("Performing statistical analysis")
+            if verbose:
+                logger.info("Performing statistical analysis")
             
             # Basic statistics
             statistical_results.update({
@@ -49151,9 +48895,10 @@ def validate(
                         'skewness': float(stats.skew(reconstruction_errors_array)),
                         'kurtosis': float(stats.kurtosis(reconstruction_errors_array))
                     })
-                    
+                
                 except Exception as e:
-                    logger.warning(f"Statistical tests failed: {e}")
+                    if verbose:
+                        logger.warning(f"Statistical tests failed: {e}")
             
             # Confidence interval
             if confidence_interval < 1.0:
@@ -49168,7 +48913,8 @@ def validate(
         # Outlier analysis
         outlier_results = {}
         if outlier_analysis and len(reconstruction_errors_array) > 0:
-            logger.info("Performing outlier analysis")
+            if verbose:
+                logger.info("Performing outlier analysis")
             
             # IQR-based outliers
             Q1 = np.percentile(reconstruction_errors_array, 25)
@@ -49199,21 +48945,23 @@ def validate(
                 samples_tensor = torch.tensor(num_samples, device=device)
                 dist.all_reduce(samples_tensor, op=dist.ReduceOp.SUM)
                 num_samples = samples_tensor.item()
-                
-                logger.info("Reduced metrics across distributed processes")
-                
+                if verbose:
+                    logger.info("Reduced metrics across distributed processes")
+            
             except Exception as e:
-                logger.warning(f"Failed to reduce distributed metrics: {e}")
+                if verbose:
+                    logger.warning(f"Failed to reduce distributed metrics: {e}")
         
         # Update progress bar for custom analysis
         if pbar and custom_analysis_fn:
-            pbar.text = "Validation completed | Performing custom analysis..."
+            pbar.text = "Performing custom analysis"
         
         # Custom analysis
         custom_analysis_results = {}
         if custom_analysis_fn:
             try:
-                logger.info(f"Performing custom analysis using: {custom_analysis_fn.__name__}")
+                if verbose:
+                    logger.info(f"Performing custom analysis using: {custom_analysis_fn.__name__}")
                 
                 # Prepare data for analysis
                 predictions_array = np.concatenate(all_predictions) if all_predictions else None
@@ -49229,25 +48977,28 @@ def validate(
                 )
                 
                 # Log analysis summary
-                logger.info(f"Custom analysis completed: {len(custom_analysis_results)} result categories")
+                if verbose:
+                    logger.info(f"Custom analysis completed: {len(custom_analysis_results)} result categories")
                 
                 # Log key findings if available
                 if 'model_health_score' in custom_analysis_results:
-                    logger.info(f"Model Health Score: {custom_analysis_results['model_health_score']:.2%}")
+                    if verbose:
+                        logger.info(f"Model Health Score: {custom_analysis_results['model_health_score']:.2%}")
                 
                 if 'security_assessment' in custom_analysis_results:
                     security = custom_analysis_results['security_assessment']
-                    logger.info(f"Security Readiness: {security.get('readiness', 'unknown')}")
+                    if verbose:
+                        logger.info(f"Security Readiness: {security.get('readiness', 'unknown')}")
                     if security.get('risks'):
-                        logger.warning(f"Security Risks Detected: {len(security['risks'])}")
+                        if verbose:
+                            logger.warning(f"Security Risks Detected: {len(security['risks'])}")
                 
-                # Store in comprehensive metrics
-                #comprehensive_metrics['custom_analysis_detailed'] = custom_analysis_results
                 custom_analysis_detailed = custom_analysis_results
-                
+            
             except Exception as e:
-                logger.error(f"Custom analysis failed: {e}")
-                logger.debug(traceback.format_exc())
+                if verbose:
+                    logger.error(f"Custom analysis failed: {e}")
+                    logger.debug(traceback.format_exc())
                 custom_analysis_results = {
                     'error': str(e),
                     'error_type': type(e).__name__,
@@ -49259,7 +49010,7 @@ def validate(
         
         # Update progress bar for finalization
         if pbar:
-            pbar.text = "Validation completed | Finalizing results..."
+            pbar.text = "Finalizing results"
         
         # Comprehensive metrics dictionary
         comprehensive_metrics = {
@@ -49271,26 +49022,21 @@ def validate(
             'num_samples': num_samples,
             'total_validation_time': total_validation_time,
             'avg_batch_time': total_validation_time / num_batches if num_batches > 0 else 0,
-            
             # Basic reconstruction metrics
             'mean_mse': float(np.mean(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
             'std_mse': float(np.std(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
             'min_mse': float(np.min(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
             'max_mse': float(np.max(reconstruction_errors_array)) if len(reconstruction_errors_array) > 0 else 0.0,
             'samples_validated': len(reconstruction_errors_array),
-            
             # Mixed precision information
             'mixed_precision_enabled': mixed_precision,
             'autocast_enabled': autocast_enabled,
-            
             # Memory information
             'memory_allocated_mb': torch.cuda.memory_allocated(device) / 1024**2 if torch.cuda.is_available() else 0,
             'memory_reserved_mb': torch.cuda.memory_reserved(device) / 1024**2 if torch.cuda.is_available() else 0,
-            
             # Performance metrics
             'samples_per_second': num_samples / total_validation_time if total_validation_time > 0 else 0,
             'batches_per_second': num_batches / total_validation_time if total_validation_time > 0 else 0,
-            
             # Timing breakdown
             'timing': {
                 'forward_time': forward_time,
@@ -49299,18 +49045,14 @@ def validate(
                 'avg_forward_time': forward_time / num_batches if num_batches > 0 else 0,
                 'avg_metrics_time': metrics_time / num_batches if num_batches > 0 else 0
             },
-            
             # Configuration info
             'config_applied': final_config,
             'device': str(device),
             'distributed_validation': distributed,
-            
             # Quality metrics
             'validation_stable': not any(loss > 1000 for loss in metrics_tracker['losses'][-10:]) if metrics_tracker['losses'] else True,
-
             # Custom analysis results
             'custom_analysis_detailed': custom_analysis_detailed if custom_analysis_results else None,
-
             # Run tracking information
             'run_tracking': {
                 'run_id': run_id,
@@ -49381,6 +49123,10 @@ def validate(
             if 'security_assessment' in custom_analysis_results:
                 comprehensive_metrics['security_readiness'] = custom_analysis_results['security_assessment'].get('readiness', 'unknown')
         
+        # Update progress bar for custom analysis
+        if pbar and save_results:
+            pbar.text = "Finalizing results | Saving results"
+        
         # Save results if requested
         if save_results:
             # Determine results path with run tracking support
@@ -49388,7 +49134,6 @@ def validate(
                 # Use run-specific results directory if available
                 if 'results' in run_specific_dirs:
                     results_dir = run_specific_dirs['results']
-                    # Ensure directory exists
                     results_dir.mkdir(parents=True, exist_ok=True)
                     results_path = results_dir / f"validation_results_epoch_{epoch}_{run_id}.json"
                 else:
@@ -49399,7 +49144,6 @@ def validate(
             else:
                 # Default behavior for standalone usage
                 results_dir = Path(results_path)
-                # Ensure directory exists
                 results_dir.mkdir(parents=True, exist_ok=True)
                 results_path = results_dir / f"validation_results_epoch_{epoch}.json"
             
@@ -49416,9 +49160,15 @@ def validate(
                 
                 with open(results_path, 'w') as f:
                     json.dump(serializable_metrics, f, indent=2)
-                logger.info(f"Saved validation results to {results_path}")
+                if verbose:
+                    logger.info(f"Saved validation results to {results_path}")
             except Exception as e:
-                logger.warning(f"Failed to save validation results: {e}")
+                if verbose:
+                    logger.warning(f"Failed to save validation results: {e}")
+        
+        # Update progress bar for custom analysis
+        if pbar and save_predictions and all_predictions:
+            pbar.text = "Finalizing results | Saving predictions"
         
         # Save predictions if requested
         if save_predictions and all_predictions:
@@ -49426,7 +49176,6 @@ def validate(
             if use_run_tracking and run_id is not None:
                 if 'results' in run_specific_dirs:
                     predictions_dir = run_specific_dirs['results']
-                    # Ensure directory exists
                     predictions_dir.mkdir(parents=True, exist_ok=True)
                     predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}_{run_id}.npy"
                 else:
@@ -49437,15 +49186,20 @@ def validate(
             else:
                 # Default behavior for standalone usage
                 predictions_dir = Path(results_path).parent
-                # Ensure directory exists
                 predictions_dir.mkdir(parents=True, exist_ok=True)
                 predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}.npy"
             
             try:
                 np.save(predictions_path, np.concatenate(all_predictions))
-                logger.info(f"Saved predictions to {predictions_path}")
+                if verbose:
+                    logger.info(f"Saved predictions to {predictions_path}")
             except Exception as e:
-                logger.warning(f"Failed to save predictions: {e}")
+                if verbose:
+                    logger.warning(f"Failed to save predictions: {e}")
+        
+        # Final progress bar update
+        if pbar:
+            pbar.text = f"Validation completed | Loss: {avg_loss:.4f} | Time: {total_validation_time:.1f}s"
         
         # Log summary
         logger.info("=" * 80)
@@ -49482,13 +49236,14 @@ def validate(
         # Final progress bar update
         if pbar:
             pbar.text = f"Validation completed | Loss: {avg_loss:.4f} | Time: {total_validation_time:.1f}s"
+            pbar()
         
         # Restore original logging level
         if verbose and 'original_level' in locals():
             logger.setLevel(original_level)
         
         return avg_loss, reconstruction_errors_array, comprehensive_metrics
-        
+    
     except Exception as e:
         # Restore original logging level on error
         if verbose and 'original_level' in locals():
@@ -50026,13 +49781,14 @@ def calculate_threshold(
     run_number = run_tracking_config.get('run_number', run_number)
     run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
-
+    
     # Set up logging level
     if verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
     
-    logger.info(f"Starting threshold calculation using method: {threshold_method}")
+    if verbose:
+        logger.info(f"\nStarting threshold calculation using method: {threshold_method}")
     
     # Initialize variables for cleanup
     pbar = None
@@ -50065,17 +49821,16 @@ def calculate_threshold(
             else:
                 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
+        titles = ["Threshold Calculation"]
+        
         # Set up main progress bar for the entire threshold calculation process
         if progress_bar:
             try:
-                pbar_context = alive_bar(
-                    title='Threshold Calculation\t',
-                    bar='smooth',
-                    spinner='dots',
-                    stats=False,
-                    monitor=True,
-                    elapsed=True,
-                    stats_end=False
+                progress = ProgressHelper(titles)
+                pbar_context = progress.bar(
+                    title="Threshold Calculation",
+                    total=None,
+                    unit=None
                 )
                 pbar = pbar_context.__enter__()  # Get the actual progress bar iterator
             except ImportError:
@@ -50097,7 +49852,7 @@ def calculate_threshold(
         
         # Data preparation and validation
         if pbar:
-            pbar.text = "Preparing and validating input data..."
+            pbar.text = "Preparing and validating input data"
         logger.info("Preparing and validating input data")
         
         mse_values = None
@@ -50108,11 +49863,11 @@ def calculate_threshold(
             mse_values = np.array(reconstruction_errors)
             data_source = "provided_reconstruction_errors"
             logger.debug(f"Using provided reconstruction errors: {len(mse_values)} samples")
-            
+        
         elif data is not None and model is not None:
             # Calculate reconstruction errors from data and model
             if pbar:
-                pbar.text = "Calculating reconstruction errors from model and data..."
+                pbar.text = "Calculating reconstruction errors from model and data"
             logger.info("Calculating reconstruction errors from model and data")
             data_source = "calculated_from_model"
             
@@ -50141,8 +49896,7 @@ def calculate_threshold(
                         
                         # Update progress bar with batch processing status
                         if pbar:
-                            progress_text = (f"Processing batch {current_batch}/{total_batches} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}")
-                            pbar.text = progress_text
+                            pbar.text = f"Processing batch {current_batch}/{total_batches} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
                         
                         batch_data = data_tensor[i:i+batch_size].to(device)
                         
@@ -50174,7 +49928,7 @@ def calculate_threshold(
                             torch.cuda.empty_cache()
                 
                 mse_values = np.array(mse_list)
-                
+            
             else:
                 # Process all data at once
                 data_tensor = data_tensor.to(device)
@@ -50210,11 +49964,11 @@ def calculate_threshold(
                         mse_values = np.array(mse_list)
                     else:
                         mse_values = batch_mse
-            
+        
         elif loader is not None and model is not None:
             # Calculate reconstruction errors from DataLoader
             if pbar:
-                pbar.text = "Calculating reconstruction errors from DataLoader..."
+                pbar.text = "Calculating reconstruction errors from DataLoader"
             logger.info("Calculating reconstruction errors from DataLoader")
             data_source = "calculated_from_dataloader"
             
@@ -50228,8 +49982,7 @@ def calculate_threshold(
                 for batch_idx, batch in enumerate(loader):
                     # Update progress bar with DataLoader processing status
                     if pbar:
-                        progress_text = (f"Processing batch {batch_idx+1}/{len(loader)} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}")
-                        pbar.text = progress_text
+                        pbar.text = f"Processing batch {batch_idx+1}/{len(loader)} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
                     
                     if isinstance(batch, (list, tuple)):
                         inputs = batch[0].to(device)
@@ -50248,7 +50001,7 @@ def calculate_threshold(
                         torch.cuda.empty_cache()
             
             mse_values = np.array(mse_list)
-            
+        
         else:
             raise ValueError("Must provide either reconstruction_errors, or (model and data), or (model and loader)")
         
@@ -50270,7 +50023,7 @@ def calculate_threshold(
         # Data preprocessing if requested
         if data_preprocessing:
             if pbar:
-                pbar.text = "Applying data preprocessing..."
+                pbar.text = "Applying data preprocessing"
             logger.info("Applying data preprocessing")
             
             # Remove outliers if requested
@@ -50304,7 +50057,7 @@ def calculate_threshold(
         
         # Calculate basic statistics
         if pbar:
-            pbar.text = "Calculating basic statistics..."
+            pbar.text = "Calculating basic statistics"
         
         basic_stats = {
             'mean': float(np.mean(mse_values)),
@@ -50325,7 +50078,7 @@ def calculate_threshold(
         
         if threshold_method == 'percentile':
             if pbar:
-                pbar.text = f"Calculating percentile-based threshold: P{percentile}..."
+                pbar.text = f"Calculating percentile-based threshold: P{percentile}"
             logger.info(f"Calculating percentile-based threshold: P{percentile}")
             
             threshold = np.percentile(mse_values, percentile, interpolation=percentile_interpolation)
@@ -50343,10 +50096,10 @@ def calculate_threshold(
                 'percentile_used': percentile,
                 'interpolation': percentile_interpolation
             })
-            
+        
         elif threshold_method == 'statistical':
             if pbar:
-                pbar.text = f"Calculating statistical threshold using: {statistical_method}..."
+                pbar.text = f"Calculating statistical threshold using: {statistical_method}"
             logger.info(f"Calculating statistical threshold using: {statistical_method}")
             
             if statistical_method == 'mean_std':
@@ -50375,10 +50128,10 @@ def calculate_threshold(
                 'statistical_method': statistical_method,
                 'multiplier_used': std_multiplier if statistical_method == 'mean_std' else iqr_multiplier
             })
-            
+        
         elif threshold_method == 'distribution':
             if pbar:
-                pbar.text = f"Calculating distribution-based threshold using: {distribution_type}..."
+                pbar.text = f"Calculating distribution-based threshold using: {distribution_type}"
             logger.info(f"Calculating distribution-based threshold using: {distribution_type}")
             
             if distribution_type == 'normal':
@@ -50390,7 +50143,7 @@ def calculate_threshold(
                     'sigma': float(sigma),
                     'distribution_params': {'mu': mu, 'sigma': sigma}
                 })
-                
+            
             elif distribution_type == 'gamma':
                 # Fit gamma distribution
                 shape, loc, scale = stats.gamma.fit(mse_values)
@@ -50401,7 +50154,7 @@ def calculate_threshold(
                     'scale': float(scale),
                     'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
                 })
-                
+            
             elif distribution_type == 'lognorm':
                 # Fit lognormal distribution
                 shape, loc, scale = stats.lognorm.fit(mse_values)
@@ -50412,7 +50165,7 @@ def calculate_threshold(
                     'scale': float(scale),
                     'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
                 })
-                
+            
             elif distribution_type == 'exponential':
                 # Fit exponential distribution
                 loc, scale = stats.expon.fit(mse_values)
@@ -50422,7 +50175,7 @@ def calculate_threshold(
                     'scale': float(scale),
                     'distribution_params': {'loc': loc, 'scale': scale}
                 })
-                
+            
             else:
                 # Default to normal distribution
                 mu, sigma = stats.norm.fit(mse_values)
@@ -50435,10 +50188,10 @@ def calculate_threshold(
                 'distribution_type': distribution_type,
                 'confidence_level': confidence_level
             })
-            
+        
         elif threshold_method == 'ml':
             if pbar:
-                pbar.text = f"Calculating ML-based threshold using: {ml_threshold_method}..."
+                pbar.text = f"Calculating ML-based threshold using: {ml_threshold_method}"
             logger.info(f"Calculating ML-based threshold using: {ml_threshold_method}")
             
             # Reshape data for sklearn
@@ -50459,7 +50212,7 @@ def calculate_threshold(
                     'contamination': isolation_forest_contamination,
                     'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
                 })
-                
+            
             elif ml_threshold_method == 'local_outlier_factor':
                 clf = LocalOutlierFactor(n_neighbors=local_outlier_factor_neighbors, contamination=contamination_rate)
                 outlier_labels = clf.fit_predict(X)
@@ -50476,7 +50229,7 @@ def calculate_threshold(
                     'contamination': contamination_rate,
                     'lof_scores_range': [float(np.min(lof_scores)), float(np.max(lof_scores))]
                 })
-                
+            
             elif ml_threshold_method == 'one_class_svm':
                 clf = OneClassSVM(nu=one_class_svm_nu, kernel=one_class_svm_kernel)
                 clf.fit(X)
@@ -50493,7 +50246,7 @@ def calculate_threshold(
                     'kernel': one_class_svm_kernel,
                     'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
                 })
-                
+            
             elif ml_threshold_method == 'elliptic_envelope':
                 clf = EllipticEnvelope(contamination=elliptic_envelope_contamination, random_state=random_state)
                 clf.fit(X)
@@ -50509,7 +50262,7 @@ def calculate_threshold(
                     'contamination': elliptic_envelope_contamination,
                     'mahalanobis_distances_range': [float(np.min(scores)), float(np.max(scores))]
                 })
-                
+            
             else:
                 # Fallback to isolation forest
                 clf = IsolationForest(contamination=contamination_rate, random_state=random_state)
@@ -50523,10 +50276,10 @@ def calculate_threshold(
                     'ml_method': 'isolation_forest_fallback',
                     'contamination': contamination_rate
                 })
-                
+        
         elif threshold_method == 'mixture':
             if pbar:
-                pbar.text = "Calculating mixture model threshold..."
+                pbar.text = "Calculating mixture model threshold"
             logger.info("Calculating mixture model threshold")
             
             if mixture_type == 'gaussian':
@@ -50561,10 +50314,10 @@ def calculate_threshold(
                     'method': 'mixture_fallback_percentile',
                     'percentile_used': percentile
                 })
-                
+        
         elif threshold_method == 'adaptive':
             if pbar:
-                pbar.text = "Calculating adaptive threshold..."
+                pbar.text = "Calculating adaptive threshold"
             logger.info("Calculating adaptive threshold")
             
             # Calculate multiple thresholds and select based on data characteristics
@@ -50597,7 +50350,7 @@ def calculate_threshold(
                     'kurtosis': basic_stats['kurtosis']
                 }
             })
-            
+        
         else:
             # Default to percentile method
             logger.warning(f"Unknown threshold method '{threshold_method}', using percentile")
@@ -50612,7 +50365,7 @@ def calculate_threshold(
         cv_results = {}
         if cross_validation_threshold:
             if pbar:
-                pbar.text = "Performing cross-validation threshold analysis..."
+                pbar.text = "Performing cross-validation threshold analysis"
             logger.info("Performing cross-validation threshold analysis")
             
             fold_thresholds = []
@@ -50630,8 +50383,7 @@ def calculate_threshold(
                 
                 # Update progress bar with CV status
                 if pbar:
-                    progress_text = (f"Cross-validation: Fold {fold+1}/{cv_folds} | Threshold: {fold_threshold:.4f} | Samples: {len(fold_data):,}")
-                    pbar.text = progress_text
+                    pbar.text = f"Cross-validation: Fold {fold+1}/{cv_folds} | Threshold: {fold_threshold:.4f} | Samples: {len(fold_data):,}"
             
             cv_results = {
                 'cv_folds': cv_folds,
@@ -50646,7 +50398,7 @@ def calculate_threshold(
         bootstrap_results = {}
         if bootstrap_threshold:
             if pbar:
-                pbar.text = "Performing bootstrap confidence interval analysis..."
+                pbar.text = "Performing bootstrap confidence interval analysis"
             logger.info("Performing bootstrap confidence interval analysis")
             
             bootstrap_thresholds = []
@@ -50659,8 +50411,7 @@ def calculate_threshold(
                 
                 # Update progress bar every 100 samples to avoid performance hit
                 if pbar and i % 100 == 0:
-                    progress_text = (f"Bootstrap: {i+1}/{bootstrap_samples} | Current CI: [{np.percentile(bootstrap_thresholds, 2.5):.4f}, {np.percentile(bootstrap_thresholds, 97.5):.4f}]")
-                    pbar.text = progress_text
+                    pbar.text = f"Bootstrap: {i+1}/{bootstrap_samples} | Current CI: [{np.percentile(bootstrap_thresholds, 2.5):.4f}, {np.percentile(bootstrap_thresholds, 97.5):.4f}]"
             
             bootstrap_results = {
                 'bootstrap_samples': bootstrap_samples,
@@ -50674,7 +50425,7 @@ def calculate_threshold(
         validation_results = {}
         if validate_threshold:
             if pbar:
-                pbar.text = "Performing threshold validation..."
+                pbar.text = "Performing threshold validation"
             logger.info("Performing threshold validation")
             
             # Calculate some validation metrics
@@ -50754,7 +50505,7 @@ def calculate_threshold(
         # Save results if requested
         if save_results:
             if pbar:
-                pbar.text = "Saving results..."
+                pbar.text = "Saving results"
             
             # Determine results path with run tracking support
             if use_run_tracking and run_id is not None:
@@ -50763,13 +50514,11 @@ def calculate_threshold(
                     results_path = run_specific_dirs['results'] / f"threshold_results_{run_id}.json"
                 else:
                     # Fallback to default location with run_id suffix
-                    # Ensure the directory exists before saving
                     results_dir = Path(__file__).resolve().parent / "results"
                     results_dir.mkdir(parents=True, exist_ok=True)
                     results_path = results_dir / f"threshold_results_{run_id}.json"
             else:
                 # Default behavior for standalone usage
-                # Ensure the default results directory exists
                 results_dir = Path(results_path)
                 results_dir.mkdir(parents=True, exist_ok=True)
                 results_path = results_dir / "threshold_results.json"
@@ -50796,7 +50545,7 @@ def calculate_threshold(
             try:
                 if plot_distribution:
                     if pbar:
-                        pbar.text = "Generating visualization..."
+                        pbar.text = "Generating visualization"
                     plt.figure(figsize=(10, 6))
                     plt.hist(mse_values, bins=50, alpha=0.7, density=True, label='Reconstruction Errors')
                     plt.axvline(final_threshold, color='red', linestyle='--', label=f'Threshold ({threshold_method}): {final_threshold:.4f}')
@@ -50824,7 +50573,7 @@ def calculate_threshold(
                     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
                     plt.close()
                     logger.info(f"Saved distribution plot to {plot_path}")
-                    
+            
             except ImportError:
                 logger.warning("Matplotlib not available, skipping visualization")
             except Exception as e:
@@ -50834,7 +50583,7 @@ def calculate_threshold(
         if pbar:
             pbar.text = f"Threshold calculation completed: {final_threshold:.4f}"
         
-        # Log comprehensive summary
+        # Log summary
         logger.info("=" * 80)
         logger.info("THRESHOLD CALCULATION SUMMARY")
         logger.info("=" * 80)
@@ -50871,7 +50620,7 @@ def calculate_threshold(
     
     except (EOFError, KeyboardInterrupt):
         logger.warning("Threshold calculation interrupted by user")
-
+    
     except Exception as e:
         # Restore original logging level on error
         if verbose and 'original_level' in locals():
@@ -51637,7 +51386,7 @@ def train_model(
     error_handling = error_config.setdefault('error_handling', 'strict')
     graceful_degradation = error_config.setdefault('graceful_degradation', True)
     
-    logger.info("Starting model training pipeline...")
+    logger.info("\nStarting model training pipeline...")
     
     # Initialize alive_bar context managers
     main_pbar = None
@@ -51960,9 +51709,13 @@ def train_model(
         
         if data_path is None:
             data_path = preprocessed_dataset
+        else:
+            data_path = Path(data_path)
         
         if artifacts_path is None:
             artifacts_path = preprocessing_artifacts
+        else:
+            artifacts_path = Path(artifacts_path)
         
         if data_path.exists() and artifacts_path.exists():
             if data_path.is_file() and artifacts_path.is_file():
@@ -51986,7 +51739,7 @@ def train_model(
         
         if use_real_data:
             try:
-                logger.info("Loading real data...")
+                logger.info("Loading real data")
                 data = load_and_validate_data(
                     data_path=data_path,
                     artifacts_path=artifacts_path,
@@ -52016,7 +51769,7 @@ def train_model(
                 
                 data_metadata = data.get("metadata", {})
                 logger.info(f"Loaded real data: {len(data['X_train'])} train, {len(data['X_val'])} val, {len(data['X_test'])} test samples")
-                
+            
             except Exception as e:
                 logger.error(f"Failed to load real data: {e}")
                 if graceful_degradation:
@@ -52027,7 +51780,7 @@ def train_model(
         
         if not use_real_data:
             try:
-                logger.info("Generating synthetic data...")
+                logger.info("Generating synthetic data")
                 
                 # Set input dimension if not specified
                 if input_dim is None:
@@ -52079,7 +51832,7 @@ def train_model(
                 )
                 data_metadata = data.get("metadata", {})
                 logger.info(f"Generated synthetic data: {len(data['X_train'])} train, {len(data['X_val'])} val, {len(data['X_test'])} test samples")
-                
+            
             except Exception as e:
                 logger.error(f"Synthetic data generation failed: {e}")
                 raise RuntimeError(f"Data preparation failed: {e}") from e
@@ -52135,7 +51888,7 @@ def train_model(
             )
             
             logger.info(f"Created dataloaders: train={len(train_loader)} batches, val={len(val_loader)} batches, test={len(test_loader)} batches")
-            
+        
         except Exception as e:
             logger.error(f"DataLoader creation failed: {e}")
             if graceful_degradation:
@@ -52228,12 +51981,12 @@ def train_model(
         logger.info(f"Model: {type(model).__name__}")
         logger.info(f"Total parameters: {total_params:,}")
         logger.info(f"Trainable parameters: {trainable_params:,}")
-
+        
         if model_size_mb > 1:  # 1024 KB = 1 MB
             logger.info(f"Model size: {model_size_mb:.3f} MB")
         else:
             logger.info(f"Model size: {model_size_kb:.3f} KB")
-
+        
         logger.info(f"Factory Pattern: Enabled")
         logger.info(f"Centralized Config: Enabled")
         
@@ -52327,18 +52080,16 @@ def train_model(
             'detailed_metrics': {}
         }
         
+        titles = ["Training Epochs"]
+        
         # Set up epoch progress bar with alive_bar
         if progress_bar:
             try:
-                epoch_pbar_context = alive_bar(
+                progress = ProgressHelper(titles)
+                epoch_pbar_context = progress.bar(
+                    title="Training Epochs",
                     total=epochs,
-                    title='Training Epochs\t\t',
-                    bar='smooth',
-                    spinner='dots_waves2',
-                    stats=True,
-                    monitor=True,
-                    elapsed=True,
-                    stats_end=True
+                    unit="epochs"
                 )
                 epoch_pbar = epoch_pbar_context.__enter__()
             except ImportError:
@@ -52356,8 +52107,9 @@ def train_model(
             try:
                 # Update epoch progress bar
                 if epoch_pbar:
-                    train_loss_history = f"{training_history['train_loss'][-1]:.6f}" if training_history['train_loss'] else "Initializing..."
-                    epoch_pbar.text = (f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss_history}")
+                    train_loss_history = f"{training_history['train_loss'][-1]:.6f}" if training_history['train_loss'] else "Initializing"
+                    val_loss_history = f"{training_history['val_loss'][-1]:.6f}" if training_history['val_loss'] else "Initializing"
+                    epoch_pbar.text = (f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss_history} | Val: {val_loss_history}")
                 
                 # Training phase
                 train_loss, train_metrics = train_epoch(
@@ -52373,7 +52125,8 @@ def train_model(
                     mixed_precision=mixed_precision,
                     scaler=scaler,
                     scheduler=scheduler,
-                    progress_bar=progress_bar and not epoch_pbar,
+                    #progress_bar=progress_bar and not epoch_pbar,
+                    progress_bar=False if epoch_pbar else progress_bar,
                     progress_bar_desc=f"Epoch {epoch+1}/{epochs}",
                     verbose=debug_mode,
                     # Pass run tracking information
@@ -52399,17 +52152,16 @@ def train_model(
                     mixed_precision=mixed_precision,
                     calculate_metrics=True,
                     detailed_metrics=validation_config.get('detailed_metrics', True),
-                    
                     # Enable IDS-specific features
                     anomaly_detection=security_config.get('enable_security_metrics', True),
                     threshold_analysis=security_config.get('adaptive_threshold', True),
-                    
                     # Custom functions for IDS validation
                     custom_metric_fn=_default_security_metrics if security_config.get('enable_security_metrics', True) else None,
                     custom_threshold_fn=_default_adaptive_threshold if security_config.get('adaptive_threshold', True) else None,
                     custom_analysis_fn=_default_validation_analysis if validation_config.get('detailed_metrics', True) else None,
                     validation_callbacks=_default_validation_callbacks() if monitoring_config.get('real_time_monitoring', True) else [],
-                    progress_bar=progress_bar and not epoch_pbar,
+                    #progress_bar=progress_bar and not epoch_pbar,
+                    progress_bar=False if epoch_pbar else progress_bar,
                     progress_bar_desc=f"Validating Epoch {epoch+1}/{epochs}",
                     verbose=debug_mode,
                     config=config,
@@ -52594,7 +52346,7 @@ def train_model(
         
         # Load best model for evaluation
         if save_model and (run_model_dir / "best_model.pth").exists():
-            logger.info("Loading best model for final evaluation...")
+            logger.info("Loading best model for final evaluation")
             try:
                 checkpoint = torch.load(run_model_dir / "best_model.pth", map_location=device, weights_only=False)
                 model.load_state_dict(checkpoint['model_state_dict'])
@@ -52615,6 +52367,7 @@ def train_model(
                 threshold_method=threshold_method,
                 adaptive_threshold=security_config.get('adaptive_threshold', True),
                 config=config,
+                progress_bar=True,
                 # Pass run tracking information
                 run_id=run_id,
                 run_number=run_number,
@@ -52663,19 +52416,16 @@ def train_model(
                 calculate_metrics=True,
                 detailed_metrics=True,
                 statistical_metrics=True,
-
                 # Enable IDS analysis for final evaluation
                 anomaly_detection=True,
                 anomaly_threshold=threshold,
                 threshold_analysis=True,
-                
                 # Custom IDS functions for final evaluation
                 custom_metric_fn=_default_security_metrics,
                 custom_threshold_fn=_default_adaptive_threshold,
                 custom_analysis_fn=_default_validation_analysis,
                 validation_callbacks=_default_validation_callbacks(),
-                
-                progress_bar=progress_bar,
+                progress_bar=True,
                 progress_bar_desc="Final Validation",
                 config=config,
                 # Run tracking parameters
@@ -53654,8 +53404,7 @@ def train_model_interactive(
             print(Fore.CYAN + Style.BRIGHT + f"  └─ Adaptive Threshold: " + Fore.GREEN + f"{'Enabled' if adaptive_threshold else 'Disabled'}")
             
             # Confirmation prompt
-            print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
-            confirm = input(Fore.YELLOW + Style.BRIGHT + "\nStart training with these settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
+            confirm = input(Fore.YELLOW + Style.BRIGHT + "\n\nStart training with these settings? (Y/n/c to cancel): " + Style.RESET_ALL).strip().lower()
             
             if confirm in ('', 'y', 'yes'):
                 print(Fore.GREEN + Style.BRIGHT + "\nLaunching training with configured defaults...")
@@ -61322,6 +61071,8 @@ def run_stability_test(
                     output_format='dict',
                     verbose=False,
                     silent=False,
+                    progress_bar=True,
+                    save_data=True,
                     config=final_config
                 )
                 
@@ -62572,9 +62323,13 @@ def hyperparameter_search(
     
     if data_path is None:
         data_path = preprocessed_dataset
+    else:
+        data_path = Path(data_path)
     
     if artifacts_path is None:
         artifacts_path = preprocessing_artifacts
+    else:
+        artifacts_path = Path(artifacts_path)
     
     if data_path.exists() and artifacts_path.exists():
         if data_path.is_file() and artifacts_path.is_file():
@@ -62697,8 +62452,8 @@ def hyperparameter_search(
                             with alive_bar(1, title='Generating Synthetic Data', bar='smooth', spinner='dots', length=20) as data_bar:
                                 data_bar.text("Generating synthetic data...")
                                 data = generate_synthetic_data(
-                                    normal_samples=10000,
-                                    attack_samples=2000,
+                                    normal_samples=100000,
+                                    attack_samples=20000,
                                     features=78,
                                     validation_split=0.2,
                                     random_state=random_seed,
@@ -62710,8 +62465,8 @@ def hyperparameter_search(
                         with alive_bar(1, title='Generating Synthetic Data', bar='smooth', spinner='dots', length=20) as data_bar:
                             data_bar.text("Generating synthetic data...")
                             data = generate_synthetic_data(
-                                normal_samples=10000,
-                                attack_samples=2000,
+                                normal_samples=100000,
+                                attack_samples=20000,
                                 features=78,
                                 validation_split=0.2,
                                 random_state=random_seed,
@@ -63796,649 +63551,164 @@ def setup_hyperparameter_optimization(
     
     # Set up HPO configuration with intelligent defaults
     hpo_section = final_config.setdefault('hyperparameter_optimization', {})
-
-    # Detect active preset for comprehensive extraction
+    
+    # Detect active preset for logging
     active_preset = final_config.get('metadata', {}).get('preset_used', final_config.get('presets', {}).get('current_preset', final_config.get('runtime', {}).get('preset_name', 'unknown')))
-
-    # Parameter extraction
-    def _extract_with_preset_fallback(param_name: str, default_value: Any, preset_path: Optional[List[str]] = None, validator: Optional[Callable] = None) -> Any:
-        """
-        Extract parameter with preset-aware fallback chain.
-        
-        Args:
-            param_name: Name of parameter to extract
-            default_value: Default value if not found
-            preset_path: Path to parameter in preset config (e.g., ['hyperparameter_optimization', 'n_trials'])
-            validator: Optional validation function
-            
-        Returns:
-            Extracted and validated parameter value
-        """
-        # Priority 1: Check direct function parameters
-        if param_name in cleaned_params:
-            value = cleaned_params[param_name]
-            if validator is None or validator(value):
-                logger.debug(f"Parameter '{param_name}' extracted from direct params: {value}")
-                return value
-        
-        # Priority 2: Check HPO section in current config
-        if param_name in hpo_section:
-            value = hpo_section[param_name]
-            if validator is None or validator(value):
-                logger.debug(f"Parameter '{param_name}' extracted from hpo_section: {value}")
-                return value
-        
-        # Priority 3: Check preset configuration
-        if preset_path and active_preset and active_preset != 'unknown' and active_preset in PRESET_CONFIGS:
-            preset_config = PRESET_CONFIGS[active_preset]
-            
-            # Navigate preset path
-            current = preset_config
-            for key in preset_path:
-                if isinstance(current, dict) and key in current:
-                    current = current[key]
-                else:
-                    current = None
-                    break
-            
-            if current is not None and (validator is None or validator(current)):
-                logger.debug(f"Parameter '{param_name}' extracted from preset '{active_preset}': {current}")
-                return current
-        
-        # Priority 4: Return default value
-        logger.debug(f"Parameter '{param_name}' using default value: {default_value}")
-        return default_value
-
+    
     # Extract express setup configuration if available
     express_config = hpo_section.get('express_setup', {})
     if express_context:
         express_config.update(express_context)
-
+    
+    # Apply optimization focus from express setup
+    optimization_focus = (hpo_section.get('optimization_focus') or cleaned_params.get('optimization_focus') or express_config.get('focus', 'balanced'))
+    hpo_section['optimization_focus'] = optimization_focus
+    
+    express_optimization_space = hpo_section.get('optimization_space') or express_config.get('optimization_space')
+    optimization_space_batch_size = express_optimization_space.get('batch_size') if express_optimization_space else None
+    
+    # Apply system class from express setup
+    system_class = (hpo_section.get('system_class') or cleaned_params.get('system_class') or express_config.get('system_class', 'standard'))
+    hpo_section['system_class'] = system_class
+    
+    # Apply express intensity if available
+    express_intensity = express_config.get('intensity', 'Standard')
+    hpo_section['express_intensity'] = express_intensity
+    
     # Core HPO parameters
-    # HPO Enabled Status
-    hpo_enabled = _extract_with_preset_fallback(
-        'enabled', True, ['hyperparameter_optimization', 'enabled'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['enabled'] = hpo_enabled
-
-    # Objective Metric
-    objective_metric = _extract_with_preset_fallback(
-        'objective_metric', 'validation_loss', ['hyperparameter_optimization', 'objective_metric'],
-        lambda x: isinstance(x, str)
-    )
-    hpo_section['objective_metric'] = objective_metric
-
-    # Number of Trials
-    n_trials = _extract_with_preset_fallback(
-        'n_trials', 100, ['hyperparameter_optimization', 'n_trials'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['n_trials'] = n_trials
-
-    # Timeout (seconds)
-    timeout_seconds = _extract_with_preset_fallback(
-        'timeout_seconds', 0, ['hyperparameter_optimization', 'timeout_seconds'],
-        lambda x: isinstance(x, (int, float)) and x >= 0
-    )
-    hpo_section['timeout_seconds'] = timeout_seconds
-
-    # Study Name
-    study_name = _extract_with_preset_fallback(
-        'study_name', f"autoencoder_hpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}", ['hyperparameter_optimization', 'study_name'],
-        lambda x: isinstance(x, str) and len(x) > 0
-    )
-    hpo_section['study_name'] = study_name
-
-    # Optimization Direction
-    direction = _extract_with_preset_fallback(
-        'direction', 'minimize', ['hyperparameter_optimization', 'direction'],
-        lambda x: x in ['minimize', 'maximize']
-    )
-    hpo_section['direction'] = direction
-
-    # Sampler Type
-    sampler_raw = _extract_with_preset_fallback(
-        'sampler_type', 'TPE', ['hyperparameter_optimization', 'sampler'],
-        None
-    )
-
-    # Handle dictionary-based sampler configuration
-    if isinstance(sampler_raw, dict):
-        sampler_type = sampler_raw.get('type', 'TPE')
-        sampler_config = sampler_raw
-    else:
-        sampler_type = sampler_raw
-        sampler_config = {}
-
-    hpo_section['sampler_type'] = sampler_type
-
-    # Pruner Type
-    pruner_raw = _extract_with_preset_fallback(
-        'pruner_type', 'MedianPruner', ['hyperparameter_optimization', 'pruner'],
-        None
-    )
-
-    # Handle dictionary-based pruner configuration
-    if isinstance(pruner_raw, dict):
-        pruner_type = pruner_raw.get('type', 'MedianPruner')
-        pruner_config = pruner_raw
-    else:
-        pruner_type = pruner_raw
-        pruner_config = {}
-
-    hpo_section['pruner_type'] = pruner_type
-
+    hpo_enabled = hpo_section.setdefault('enabled', cleaned_params.get('enabled', True))
+    objective_metric = hpo_section.setdefault('objective_metric', cleaned_params.get('objective_metric', 'validation_loss'))
+    n_trials = hpo_section.setdefault('n_trials', cleaned_params.get('n_trials', 100))
+    timeout_seconds = hpo_section.setdefault('timeout_seconds', cleaned_params.get('timeout_seconds', 0))
+    study_name = hpo_section.setdefault('study_name', cleaned_params.get('study_name', f"autoencoder_hpo_{datetime.now().strftime('%Y%m%d_%H%M%S')}"))
+    direction = hpo_section.setdefault('direction', cleaned_params.get('direction', 'minimize'))
+    sampler_type = hpo_section.setdefault('sampler_type', cleaned_params.get('sampler_type', 'TPE'))
+    pruner_type = hpo_section.setdefault('pruner_type', cleaned_params.get('pruner_type', 'MedianPruner'))
+    
     # Search Space Configuration
-    search_space_config = hpo_section.get('search_space', {})
-
-    # Extract search space parameters with preset support
-    encoding_dim_min = _extract_with_preset_fallback(
-        'encoding_dim_min', 4, ['hyperparameter_optimization', 'search_space', 'encoding_dim_min'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    search_space_config['encoding_dim_min'] = encoding_dim_min
-
-    encoding_dim_max = _extract_with_preset_fallback(
-        'encoding_dim_max', 32, ['hyperparameter_optimization', 'search_space', 'encoding_dim_max'],
-        lambda x: isinstance(x, int) and x > encoding_dim_min
-    )
-    search_space_config['encoding_dim_max'] = encoding_dim_max
-
-    hidden_layers_min = _extract_with_preset_fallback(
-        'hidden_layers_min', 1, ['hyperparameter_optimization', 'search_space', 'hidden_layers_min'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    search_space_config['hidden_layers_min'] = hidden_layers_min
-
-    hidden_layers_max = _extract_with_preset_fallback(
-        'hidden_layers_max', 3, ['hyperparameter_optimization', 'search_space', 'hidden_layers_max'],
-        lambda x: isinstance(x, int) and x >= hidden_layers_min
-    )
-    search_space_config['hidden_layers_max'] = hidden_layers_max
-
-    lr_min = _extract_with_preset_fallback(
-        'lr_min', 1e-5, ['hyperparameter_optimization', 'search_space', 'lr_min'],
-        lambda x: isinstance(x, (int, float)) and x > 0
-    )
-    search_space_config['lr_min'] = lr_min
-
-    lr_max = _extract_with_preset_fallback(
-        'lr_max', 1e-2, ['hyperparameter_optimization', 'search_space', 'lr_max'],
-        lambda x: isinstance(x, (int, float)) and x > lr_min
-    )
-    search_space_config['lr_max'] = lr_max
-
-    batch_sizes = _extract_with_preset_fallback(
-        'batch_sizes', [32, 64, 128], ['hyperparameter_optimization', 'search_space', 'batch_sizes'],
-        lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(i, int) and i > 0 for i in x)
-    )
-    search_space_config['batch_sizes'] = batch_sizes
-
-    weight_decay_min = _extract_with_preset_fallback(
-        'weight_decay_min', 1e-6, ['hyperparameter_optimization', 'search_space', 'weight_decay_min'],
-        lambda x: isinstance(x, (int, float)) and x >= 0
-    )
-    search_space_config['weight_decay_min'] = weight_decay_min
-
-    weight_decay_max = _extract_with_preset_fallback(
-        'weight_decay_max', 1e-2, ['hyperparameter_optimization', 'search_space', 'weight_decay_max'],
-        lambda x: isinstance(x, (int, float)) and x >= weight_decay_min
-    )
-    search_space_config['weight_decay_max'] = weight_decay_max
-
-    dropout_min = _extract_with_preset_fallback(
-        'dropout_min', 0.0, ['hyperparameter_optimization', 'search_space', 'dropout_min'],
-        lambda x: isinstance(x, (int, float)) and 0 <= x <= 1
-    )
-    search_space_config['dropout_min'] = dropout_min
-
-    dropout_max = _extract_with_preset_fallback(
-        'dropout_max', 0.5, ['hyperparameter_optimization', 'search_space', 'dropout_max'],
-        lambda x: isinstance(x, (int, float)) and dropout_min <= x <= 1
-    )
-    search_space_config['dropout_max'] = dropout_max
-
-    activations = _extract_with_preset_fallback(
-        'activations', ['relu', 'leaky_relu', 'gelu'], ['hyperparameter_optimization', 'search_space', 'activations'],
-        lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(i, str) for i in x)
-    )
-    search_space_config['activations'] = activations
-
-    normalizations = _extract_with_preset_fallback(
-        'normalizations', [None, 'batch', 'layer'], ['hyperparameter_optimization', 'search_space', 'normalizations'],
-        lambda x: isinstance(x, list) and len(x) > 0
-    )
-    search_space_config['normalizations'] = normalizations
-
-    percentile_min = _extract_with_preset_fallback(
-        'percentile_min', 90, ['hyperparameter_optimization', 'search_space', 'percentile_min'],
-        lambda x: isinstance(x, (int, float)) and 0 < x < 100
-    )
-    search_space_config['percentile_min'] = percentile_min
-
-    percentile_max = _extract_with_preset_fallback(
-        'percentile_max', 99, ['hyperparameter_optimization', 'search_space', 'percentile_max'],
-        lambda x: isinstance(x, (int, float)) and percentile_min < x <= 100
-    )
-    search_space_config['percentile_max'] = percentile_max
-
-    # Update hpo_section with search space
-    hpo_section['search_space'] = search_space_config
-
+    search_space_config = hpo_section.setdefault('search_space', {})
+    encoding_dim_min = search_space_config.setdefault('encoding_dim_min', cleaned_params.get('encoding_dim_min', 4))
+    encoding_dim_max = search_space_config.setdefault('encoding_dim_max', cleaned_params.get('encoding_dim_max', 32))
+    hidden_layers_min = search_space_config.setdefault('hidden_layers_min', cleaned_params.get('hidden_layers_min', 1))
+    hidden_layers_max = search_space_config.setdefault('hidden_layers_max', cleaned_params.get('hidden_layers_max', 3))
+    lr_min = search_space_config.setdefault('lr_min', cleaned_params.get('lr_min', 1e-5))
+    lr_max = search_space_config.setdefault('lr_max', cleaned_params.get('lr_max', 1e-2))
+    batch_sizes = search_space_config.setdefault('batch_sizes', cleaned_params.get('batch_sizes', [32, 64, 128]))
+    weight_decay_min = search_space_config.setdefault('weight_decay_min', cleaned_params.get('weight_decay_min', 1e-6))
+    weight_decay_max = search_space_config.setdefault('weight_decay_max', cleaned_params.get('weight_decay_max', 1e-2))
+    dropout_min = search_space_config.setdefault('dropout_min', cleaned_params.get('dropout_min', 0.0))
+    dropout_max = search_space_config.setdefault('dropout_max', cleaned_params.get('dropout_max', 0.5))
+    activations = search_space_config.setdefault('activations', cleaned_params.get('activations', ['relu', 'leaky_relu', 'gelu']))
+    normalizations = search_space_config.setdefault('normalizations', cleaned_params.get('normalizations', [None, 'batch', 'layer']))
+    percentile_min = search_space_config.setdefault('percentile_min', cleaned_params.get('percentile_min', 90))
+    percentile_max = search_space_config.setdefault('percentile_max', cleaned_params.get('percentile_max', 99))
+    
     # Data parameters
     data_config = final_config.setdefault('data', {})
-    use_real_data = _extract_with_preset_fallback(
-        'use_real_data', data_config.get('use_real_data', False), ['data', 'use_real_data'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['use_real_data'] = use_real_data
-
-    preprocessed_dataset = _extract_with_preset_fallback(
-        'data_path', Path(data_config.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv")), ['data', 'data_path'],
-        None
-    )
-    hpo_section['data_path'] = preprocessed_dataset
-
-    preprocessing_artifacts = _extract_with_preset_fallback(
-        'artifacts_path', Path(data_config.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl")), ['data', 'artifacts_path'],
-        None
-    )
-    hpo_section['artifacts_path'] = preprocessing_artifacts
-
-    normal_samples = _extract_with_preset_fallback(
-        'normal_samples', data_config.get('normal_samples', 10000), ['data', 'normal_samples'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['normal_samples'] = normal_samples
-
-    attack_samples = _extract_with_preset_fallback(
-        'attack_samples', data_config.get('attack_samples', 2000), ['data', 'attack_samples'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['attack_samples'] = attack_samples
-
-    features = _extract_with_preset_fallback(
-        'features', data_config.get('features', 78), ['data', 'features'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['features'] = features
-
+    use_real_data = hpo_section.setdefault('use_real_data', data_config.get('use_real_data', cleaned_params.get('use_real_data', False)))
+    data_path = hpo_section.setdefault('data_path', data_config.get('data_path', cleaned_params.get('data_path', None)))
+    artifacts_path = hpo_section.setdefault('artifacts_path', data_config.get('artifacts_path', cleaned_params.get('artifacts_path', None)))
+    normal_samples = hpo_section.setdefault('normal_samples', data_config.get('normal_samples', cleaned_params.get('normal_samples', 100000)))
+    attack_samples = hpo_section.setdefault('attack_samples', data_config.get('attack_samples', cleaned_params.get('attack_samples', 20000)))
+    features = hpo_section.setdefault('features', data_config.get('features', cleaned_params.get('features', 78)))
+    preprocessed_dataset = Path(hpo_section.setdefault('data_path', data_config.get('data_path', cleaned_params.get('data_path', DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"))))
+    preprocessing_artifacts = Path(hpo_section.setdefault('artifacts_path', data_config.get('artifacts_path', cleaned_params.get('artifacts_path', DEFAULT_MODEL_DIR / "preprocessing_artifacts.pkl"))))
+    
     # Model selection
     model_config = final_config.setdefault('model', {})
-
-    model_types = _extract_with_preset_fallback(
-        'model_types', ['SimpleAutoencoder', 'EnhancedAutoencoder'], ['hyperparameter_optimization', 'model_types'],
-        lambda x: isinstance(x, list) and len(x) > 0 and all(isinstance(i, str) for i in x)
-    )
-    hpo_section['model_types'] = model_types
-
-    search_all_models = _extract_with_preset_fallback(
-        'search_all_models', False, ['hyperparameter_optimization', 'search_all_models'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['search_all_models'] = search_all_models
-
+    model_types = hpo_section.setdefault('model_types', cleaned_params.get('model_types', ['SimpleAutoencoder', 'EnhancedAutoencoder']))
+    search_all_models = hpo_section.setdefault('search_all_models', cleaned_params.get('search_all_models', False))
+    
     if search_all_models:
         model_types = list(MODEL_VARIANTS.keys())
-        hpo_section['model_types'] = model_types
-
+    
     # Cross-validation parameters
-    cv_folds = _extract_with_preset_fallback(
-        'cv_folds', 3, ['hyperparameter_optimization', 'cv_folds'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['cv_folds'] = cv_folds
-
-    cv_shuffle = _extract_with_preset_fallback(
-        'cv_shuffle', True, ['hyperparameter_optimization', 'cv_shuffle'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['cv_shuffle'] = cv_shuffle
-
-    cv_random_state = _extract_with_preset_fallback(
-        'cv_random_state', data_config.get('random_state', 42), ['hyperparameter_optimization', 'cv_random_state'],
-        lambda x: isinstance(x, int) and x >= 0
-    )
-    hpo_section['cv_random_state'] = cv_random_state
-
+    cv_folds = hpo_section.setdefault('cv_folds', cleaned_params.get('cv_folds', 3))
+    cv_shuffle = hpo_section.setdefault('cv_shuffle', cleaned_params.get('cv_shuffle', True))
+    cv_random_state = hpo_section.setdefault('cv_random_state', data_config.get('random_state', cleaned_params.get('cv_random_state', 42)))
+    
     # Trial configuration
-    trial_epochs = _extract_with_preset_fallback(
-        'trial_epochs', 20, ['hyperparameter_optimization', 'trial_epochs'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['trial_epochs'] = trial_epochs
-
-    trial_patience = _extract_with_preset_fallback(
-        'trial_patience', 5, ['hyperparameter_optimization', 'trial_patience'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['trial_patience'] = trial_patience
-
-    trial_batch_size = _extract_with_preset_fallback(
-        'trial_batch_size', 64, ['hyperparameter_optimization', 'trial_batch_size'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['trial_batch_size'] = trial_batch_size
-
+    trial_epochs = hpo_section.setdefault('trial_epochs', cleaned_params.get('trial_epochs', 20))
+    trial_patience = hpo_section.setdefault('trial_patience', cleaned_params.get('trial_patience', 5))
+    trial_batch_size = hpo_section.setdefault('trial_batch_size', cleaned_params.get('trial_batch_size', 64))
+    
     # System parameters
     system_config = final_config.get('system', {})
-
-    device = _extract_with_preset_fallback(
-        'device', system_config.get('device', 'auto'), ['system', 'device'],
-        lambda x: isinstance(x, str)
-    )
-    hpo_section['device'] = device
-
-    random_seed = _extract_with_preset_fallback(
-        'random_seed', system_config.get('random_seed', data_config.get('random_state', 42)), ['system', 'random_seed'],
-        lambda x: isinstance(x, int) and x >= 0
-    )
-    hpo_section['random_seed'] = random_seed
-
-    num_workers = _extract_with_preset_fallback(
-        'num_workers', system_config.get('num_workers', 0), ['system', 'num_workers'],
-        lambda x: isinstance(x, int) and x >= 0
-    )
-    hpo_section['num_workers'] = num_workers
-
-    parallel_jobs = _extract_with_preset_fallback(
-        'parallel_jobs', 1, ['hyperparameter_optimization', 'parallel_jobs'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['parallel_jobs'] = parallel_jobs
-
-    # Storage parameters
-    storage_config = hpo_section.get('storage', {})
-
-    storage_enabled = _extract_with_preset_fallback(
-        'storage_enabled', False, ['hyperparameter_optimization', 'storage', 'enabled'],
-        lambda x: isinstance(x, bool)
-    )
-    storage_config['enabled'] = storage_enabled
-
-    storage_url = _extract_with_preset_fallback(
-        'storage_url', None, ['hyperparameter_optimization', 'storage', 'url'],
-        None
-    )
-    storage_config['url'] = storage_url
-
-    load_if_exists = _extract_with_preset_fallback(
-        'load_if_exists', False, ['hyperparameter_optimization', 'storage', 'load_if_exists'],
-        lambda x: isinstance(x, bool)
-    )
-    storage_config['load_if_exists'] = load_if_exists
-
-    hpo_section['storage'] = storage_config
-
-    # Output parameters
-    save_study = _extract_with_preset_fallback(
-        'save_study', True, ['hyperparameter_optimization', 'save_study'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['save_study'] = save_study
-
-    study_dir = _extract_with_preset_fallback(
-        'study_dir', DEFAULT_MODEL_DIR / "hpo_studies" / active_preset, ['hyperparameter_optimization', 'study_dir'],
-        None
-    )
-    hpo_section['study_dir'] = study_dir
-
-    generate_plots = _extract_with_preset_fallback(
-        'generate_plots', True, ['hyperparameter_optimization', 'generate_plots'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['generate_plots'] = generate_plots
-
-    cleanup_trials = _extract_with_preset_fallback(
-        'cleanup_trials', True, ['hyperparameter_optimization', 'cleanup_trials'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['cleanup_trials'] = cleanup_trials
-
-    # Early stopping
-    early_stopping_config = hpo_section.get('early_stopping', {})
-
-    early_stopping_enabled = _extract_with_preset_fallback(
-        'early_stopping_enabled', True, ['hyperparameter_optimization', 'early_stopping', 'enabled'],
-        lambda x: isinstance(x, bool)
-    )
-    early_stopping_config['enabled'] = early_stopping_enabled
-
-    early_stopping_patience = _extract_with_preset_fallback(
-        'early_stopping_patience', 10, ['hyperparameter_optimization', 'early_stopping', 'patience'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    early_stopping_config['patience'] = early_stopping_patience
-
-    early_stopping_min_trials = _extract_with_preset_fallback(
-        'early_stopping_min_trials', 20, ['hyperparameter_optimization', 'early_stopping_min_trials'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_section['early_stopping_min_trials'] = early_stopping_min_trials
-
-    early_stopping_min_improvement = _extract_with_preset_fallback(
-        'early_stopping_min_improvement', 1e-4, ['hyperparameter_optimization', 'early_stopping', 'min_improvement'],
-        lambda x: isinstance(x, (int, float)) and x > 0
-    )
-    early_stopping_config['min_improvement'] = early_stopping_min_improvement
-
-    hpo_section['early_stopping'] = early_stopping_config
-
-    # Monitoring
-    verbose = _extract_with_preset_fallback(
-        'verbose', system_config.get('verbose', True), ['system', 'verbose'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['verbose'] = verbose
-
-    interactive = _extract_with_preset_fallback(
-        'interactive', True, ['hyperparameter_optimization', 'interactive'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['interactive'] = interactive
-
-    show_progress = _extract_with_preset_fallback(
-        'show_progress', True, ['hyperparameter_optimization', 'show_progress'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_section['show_progress'] = show_progress
-
-    log_level = _extract_with_preset_fallback(
-        'log_level', system_config.get('log_level', 'INFO'), ['system', 'log_level'],
-        lambda x: x in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-    )
-    hpo_section['log_level'] = log_level
-
-    # Hardware configuration
-    memory_limit = _extract_with_preset_fallback(
-        'memory_limit', None, ['hyperparameter_optimization', 'memory_limit'],
-        None
-    )
-    hpo_section['memory_limit'] = memory_limit
-
-    # Sampler parameters
-    hpo_sampler_config = hpo_section.get('hpo_sampler', {})
-
-    sampler_seed = _extract_with_preset_fallback(
-        'sampler_seed', random_seed, ['hyperparameter_optimization', 'hpo_sampler', 'seed'],
-        lambda x: isinstance(x, int) and x >= 0
-    )
-    hpo_sampler_config['seed'] = sampler_seed
-
-    sampler_n_startup_trials = _extract_with_preset_fallback(
-        'sampler_n_startup_trials', 10, ['hyperparameter_optimization', 'hpo_sampler', 'n_startup_trials'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_sampler_config['n_startup_trials'] = sampler_n_startup_trials
-
-    sampler_n_ei_candidates = _extract_with_preset_fallback(
-        'sampler_n_ei_candidates', 24, ['hyperparameter_optimization', 'hpo_sampler', 'n_ei_candidates'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_sampler_config['n_ei_candidates'] = sampler_n_ei_candidates
-
-    sampler_multivariate = _extract_with_preset_fallback(
-        'sampler_multivariate', False, ['hyperparameter_optimization', 'hpo_sampler', 'multivariate'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_sampler_config['multivariate'] = sampler_multivariate
-
-    sampler_consider_prior = _extract_with_preset_fallback(
-        'sampler_consider_prior', True, ['hyperparameter_optimization', 'hpo_sampler', 'consider_prior'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_sampler_config['consider_prior'] = sampler_consider_prior
-
-    sampler_consider_magic_clip = _extract_with_preset_fallback(
-        'sampler_consider_magic_clip', True, ['hyperparameter_optimization', 'hpo_sampler', 'consider_magic_clip'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_sampler_config['consider_magic_clip'] = sampler_consider_magic_clip
-
-    sampler_consider_endpoints = _extract_with_preset_fallback(
-        'sampler_consider_endpoints', False, ['hyperparameter_optimization', 'hpo_sampler', 'consider_endpoints'],
-        lambda x: isinstance(x, bool)
-    )
-    hpo_sampler_config['consider_endpoints'] = sampler_consider_endpoints
-
-    sampler_prior_weight = _extract_with_preset_fallback(
-        'sampler_prior_weight', 1.0, ['hyperparameter_optimization', 'hpo_sampler', 'prior_weight'],
-        lambda x: isinstance(x, (int, float)) and x > 0
-    )
-    hpo_sampler_config['prior_weight'] = sampler_prior_weight
-
-    hpo_section['hpo_sampler'] = hpo_sampler_config
-
-    # Pruner parameters
-    hpo_pruner_config = hpo_section.get('hpo_pruner', {})
-
-    pruner_n_startup_trials = _extract_with_preset_fallback(
-        'pruner_n_startup_trials', 5, ['hyperparameter_optimization', 'hpo_pruner', 'n_startup_trials'],
-        lambda x: isinstance(x, int) and x >= 0
-    )
-    hpo_pruner_config['n_startup_trials'] = pruner_n_startup_trials
-
-    pruner_n_warmup_steps = _extract_with_preset_fallback(
-        'pruner_n_warmup_steps', 10, ['hyperparameter_optimization', 'hpo_pruner', 'n_warmup_steps'],
-        lambda x: isinstance(x, int) and x >= 0
-    )
-    hpo_pruner_config['n_warmup_steps'] = pruner_n_warmup_steps
-
-    pruner_interval_steps = _extract_with_preset_fallback(
-        'pruner_interval_steps', 1, ['hyperparameter_optimization', 'hpo_pruner', 'interval_steps'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_pruner_config['interval_steps'] = pruner_interval_steps
-
-    pruner_min_resource = _extract_with_preset_fallback(
-        'pruner_min_resource', 1, ['hyperparameter_optimization', 'hpo_pruner', 'min_resource'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    hpo_pruner_config['min_resource'] = pruner_min_resource
-
-    pruner_max_resource = _extract_with_preset_fallback(
-        'pruner_max_resource', 'auto', ['hyperparameter_optimization', 'hpo_pruner', 'max_resource'],
-        None
-    )
-    hpo_pruner_config['max_resource'] = pruner_max_resource
-
-    pruner_reduction_factor = _extract_with_preset_fallback(
-        'pruner_reduction_factor', 3, ['hyperparameter_optimization', 'hpo_pruner', 'reduction_factor'],
-        lambda x: isinstance(x, int) and x > 1
-    )
-    hpo_pruner_config['reduction_factor'] = pruner_reduction_factor
-
-    hpo_section['hpo_pruner'] = hpo_pruner_config
-
-    # Scoring configuration
-    scoring_config = hpo_section.get('scoring', {})
-
-    use_composite_score = _extract_with_preset_fallback(
-        'use_composite_score', False, ['hyperparameter_optimization', 'scoring', 'use_composite_score'],
-        lambda x: isinstance(x, bool)
-    )
-    scoring_config['use_composite_score'] = use_composite_score
-
-    validation_weight = _extract_with_preset_fallback(
-        'validation_weight', 0.7, ['hyperparameter_optimization', 'scoring', 'validation_weight'],
-        lambda x: isinstance(x, (int, float)) and 0 <= x <= 1
-    )
-    scoring_config['validation_weight'] = validation_weight
-
-    test_weight = _extract_with_preset_fallback(
-        'test_weight', 0.2, ['hyperparameter_optimization', 'scoring', 'test_weight'],
-        lambda x: isinstance(x, (int, float)) and 0 <= x <= 1
-    )
-    scoring_config['test_weight'] = test_weight
-
-    complexity_weight = _extract_with_preset_fallback(
-        'complexity_weight', 0.1, ['hyperparameter_optimization', 'scoring', 'complexity_weight'],
-        lambda x: isinstance(x, (int, float)) and 0 <= x <= 1
-    )
-    scoring_config['complexity_weight'] = complexity_weight
-
-    performance_weight = _extract_with_preset_fallback(
-        'performance_weight', 0.0, ['hyperparameter_optimization', 'scoring', 'performance_weight'],
-        lambda x: isinstance(x, (int, float)) and 0 <= x <= 1
-    )
-    scoring_config['performance_weight'] = performance_weight
-
-    max_params_penalty = _extract_with_preset_fallback(
-        'max_params_penalty', 100000, ['hyperparameter_optimization', 'scoring', 'max_params_penalty'],
-        lambda x: isinstance(x, int) and x > 0
-    )
-    scoring_config['max_params_penalty'] = max_params_penalty
-
-    hpo_section['scoring'] = scoring_config
-
-    # Express setup configuration
-    # Apply optimization focus from express setup or preset
-    optimization_focus = (hpo_section.get('optimization_focus') or cleaned_params.get('optimization_focus') or express_config.get('focus') or _extract_with_preset_fallback(
-        'optimization_focus', 'balanced', ['hyperparameter_optimization', 'optimization_focus'],
-        lambda x: x in ['balanced', 'speed', 'accuracy', 'efficiency']))
-    hpo_section['optimization_focus'] = optimization_focus
-
-    # Apply system class from express setup or preset
-    system_class = (hpo_section.get('system_class') or cleaned_params.get('system_class') or express_config.get('system_class') or _extract_with_preset_fallback(
-        'system_class', 'standard', ['hyperparameter_optimization', 'system_class'],
-        lambda x: x in ['limited', 'standard', 'high_performance', 'enterprise']))
-    hpo_section['system_class'] = system_class
-
-    # Apply express intensity if available
-    express_intensity = (express_config.get('intensity') or _extract_with_preset_fallback(
-        'express_intensity', 'Standard', ['hyperparameter_optimization', 'express_intensity'],
-        lambda x: x in ['Quick', 'Standard', 'Thorough', 'Comprehensive']))
-    hpo_section['express_intensity'] = express_intensity
-
+    device = hpo_section.setdefault('device', system_config.get('device', cleaned_params.get('device', 'auto')))
+    random_seed = hpo_section.setdefault('random_seed', system_config.get('random_seed', data_config.get('random_state', cleaned_params.get('random_seed', 42))))
+    num_workers = hpo_section.setdefault('num_workers', system_config.get('num_workers', cleaned_params.get('num_workers', 0)))
+    parallel_jobs = hpo_section.setdefault('parallel_jobs', cleaned_params.get('parallel_jobs', 1))
+    
     # Apply express parallel trials if available
     express_parallel_trials = hpo_section.get('parallel_trials')
     if express_parallel_trials and express_parallel_trials > parallel_jobs:
         parallel_jobs = express_parallel_trials
         hpo_section['parallel_jobs'] = parallel_jobs
-
-    # Extract express optimization space if available
-    express_optimization_space = (hpo_section.get('optimization_space') or express_config.get('optimization_space') or _extract_with_preset_fallback(
-        'optimization_space', None, ['hyperparameter_optimization', 'optimization_space'],
-        None))
-
-    if express_optimization_space:
-        hpo_section['optimization_space'] = express_optimization_space
-
-    # Log parameter extraction summary
-    if verbose:
-        params_from_preset = sum(1 for param in ['n_trials', 'timeout_seconds', 'sampler_type', 'pruner_type', 'optimization_focus', 'system_class'] if active_preset in PRESET_CONFIGS and param in PRESET_CONFIGS[active_preset].get('hyperparameter_optimization', {}))
-        
-        if params_from_preset > 0:
-            logger.info(f"Extracted {params_from_preset} parameters from preset '{active_preset}'")
-
+    
+    # Storage parameters
+    storage_config = hpo_section.setdefault('storage', {})
+    storage_enabled = storage_config.setdefault('enabled', cleaned_params.get('storage_enabled', False))
+    storage_url = storage_config.setdefault('url', cleaned_params.get('storage_url', None))
+    load_if_exists = storage_config.setdefault('load_if_exists', cleaned_params.get('load_if_exists', False))
+    
+    # Output parameters
+    save_study = hpo_section.setdefault('save_study', cleaned_params.get('save_study', True))
+    study_dir = hpo_section.setdefault('study_dir', cleaned_params.get('study_dir', DEFAULT_MODEL_DIR / "hpo_studies" / active_preset))
+    generate_plots = hpo_section.setdefault('generate_plots', cleaned_params.get('generate_plots', True))
+    cleanup_trials = hpo_section.setdefault('cleanup_trials', cleaned_params.get('cleanup_trials', True))
+    
+    # Early stopping
+    early_stopping_config = hpo_section.setdefault('early_stopping', {})
+    early_stopping_enabled = early_stopping_config.setdefault('enabled', cleaned_params.get('early_stopping_enabled', True))
+    early_stopping_patience = early_stopping_config.setdefault('patience', cleaned_params.get('early_stopping_patience', 10))
+    early_stopping_min_trials = hpo_section.setdefault('early_stopping_min_trials', cleaned_params.get('early_stopping_min_trials', 20))
+    early_stopping_min_improvement = early_stopping_config.setdefault('min_improvement', cleaned_params.get('early_stopping_min_improvement', 1e-4))
+    
+    # Monitoring
+    verbose = hpo_section.setdefault('verbose', system_config.get('verbose', cleaned_params.get('verbose', True)))
+    interactive = hpo_section.setdefault('interactive', cleaned_params.get('interactive', True))
+    show_progress = hpo_section.setdefault('show_progress', cleaned_params.get('show_progress', True))
+    log_level = hpo_section.setdefault('log_level', system_config.get('log_level', cleaned_params.get('log_level', 'INFO')))
+    
+    # Hardware configuration
+    memory_limit = hpo_section.setdefault('memory_limit', cleaned_params.get('memory_limit', None))
+    
+    # Sampler parameters
+    hpo_sampler_config = hpo_section.setdefault('hpo_sampler', {})
+    sampler_seed = hpo_sampler_config.setdefault('seed', random_seed)
+    sampler_n_startup_trials = hpo_sampler_config.setdefault('n_startup_trials', 10)
+    sampler_n_ei_candidates = hpo_sampler_config.setdefault('n_ei_candidates', 24)
+    sampler_multivariate = hpo_sampler_config.setdefault('multivariate', False)
+    sampler_consider_prior = hpo_sampler_config.setdefault('consider_prior', True)
+    sampler_consider_magic_clip = hpo_sampler_config.setdefault('consider_magic_clip', True)
+    sampler_consider_endpoints = hpo_sampler_config.setdefault('consider_endpoints', False)
+    sampler_prior_weight = hpo_sampler_config.setdefault('prior_weight', 1.0)
+    
+    # Pruner parameters
+    hpo_pruner_config = hpo_section.setdefault('hpo_pruner', {})
+    pruner_n_startup_trials = hpo_pruner_config.setdefault('n_startup_trials', 5)
+    pruner_n_warmup_steps = hpo_pruner_config.setdefault('n_warmup_steps', 10)
+    pruner_interval_steps = hpo_pruner_config.setdefault('interval_steps', 1)
+    pruner_min_resource = hpo_pruner_config.setdefault('min_resource', 1)
+    pruner_max_resource = hpo_pruner_config.setdefault('max_resource', 'auto')
+    pruner_reduction_factor = hpo_pruner_config.setdefault('reduction_factor', 3)
+    
+    # Scoring configuration
+    scoring_config = hpo_section.setdefault('scoring', {})
+    use_composite_score = scoring_config.setdefault('use_composite_score', False)
+    validation_weight = scoring_config.setdefault('validation_weight', 0.7)
+    test_weight = scoring_config.setdefault('test_weight', 0.2)
+    complexity_weight = scoring_config.setdefault('complexity_weight', 0.1)
+    performance_weight = scoring_config.setdefault('performance_weight', 0.0)
+    max_params_penalty = scoring_config.setdefault('max_params_penalty', 100000)
+    
     # Set up logging
     if verbose:
         original_level = logger.level
         logger.setLevel(getattr(logging, log_level))
     
     total_setup_stages = 16
-
+    
     # Initialize results tracking
     setup_results = {
         'start_time': start_time.isoformat(),
@@ -64465,7 +63735,7 @@ def setup_hyperparameter_optimization(
     
     # Progress tracking data
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'current_operation': None,
         'setup_steps_completed': 0,
         'total_setup_steps': total_setup_stages,
@@ -64475,9 +63745,13 @@ def setup_hyperparameter_optimization(
     
     if data_path is None:
         data_path = preprocessed_dataset
+    else:
+        data_path = Path(data_path)
     
     if artifacts_path is None:
         artifacts_path = preprocessing_artifacts
+    else:
+        artifacts_path = Path(artifacts_path)
     
     if data_path.exists() and artifacts_path.exists():
         if data_path.is_file() and artifacts_path.is_file():
@@ -64565,11 +63839,11 @@ def setup_hyperparameter_optimization(
         # Update results tracking
         setup_results['setup_stages_completed'] = 1
         progress_data['setup_steps_completed'] = 1
-
+        
         # STAGE 1.5: Preset Validation and Compatibility
         progress_data['current_stage'] = "Preset Validation"
         setup_results['current_stage'] = "Preset Validation"
-
+        
         # Validate preset configuration completeness
         if active_preset != 'unknown' and active_preset in PRESET_CONFIGS:
             preset_hpo_config = PRESET_CONFIGS[active_preset].get('hyperparameter_optimization', {})
@@ -64611,22 +63885,22 @@ def setup_hyperparameter_optimization(
                     'valid': True,
                     'message': 'Preset configuration complete'
                 }
-
+        
         setup_results['setup_stages_completed'] = 1.5
         progress_data['setup_steps_completed'] = 1.5
         
         # STAGE 2: Express Configuration Integration
         progress_data['current_stage'] = "Express Configuration"
         setup_results['current_stage'] = "Express Configuration"
-
+        
         # Extract and validate express setup parameters
         express_config = hpo_section.get('express_setup', {})
         if express_context:
             express_config.update(express_context)
-
+        
         # Apply express-specific optimizations based on focus
         optimization_focus = (hpo_section.get('optimization_focus') or cleaned_params.get('optimization_focus') or express_config.get('focus', 'balanced'))
-
+        
         # Validate optimization focus
         valid_focuses = ['speed', 'accuracy', 'balanced', 'efficiency']
         if optimization_focus not in valid_focuses:
@@ -64635,9 +63909,9 @@ def setup_hyperparameter_optimization(
             if verbose:
                 logger.warning(warning_msg)
             optimization_focus = 'balanced'
-
+        
         hpo_section['optimization_focus'] = optimization_focus
-
+        
         # Apply focus-specific parameter adjustments
         if optimization_focus == 'speed':
             # Speed-optimized defaults
@@ -64647,7 +63921,7 @@ def setup_hyperparameter_optimization(
                 hpo_section['n_trials'] = min(25, hpo_section.get('n_trials', 100))
             if 'cv_folds' not in hpo_section:
                 hpo_section['cv_folds'] = 2
-                
+        
         elif optimization_focus == 'accuracy':
             # Accuracy-optimized defaults
             if 'trial_epochs' not in hpo_section:
@@ -64656,10 +63930,10 @@ def setup_hyperparameter_optimization(
                 hpo_section['n_trials'] = max(100, hpo_section.get('n_trials', 100))
             if 'cv_folds' not in hpo_section:
                 hpo_section['cv_folds'] = 5
-
+        
         # Extract and validate system class
         system_class = (hpo_section.get('system_class') or cleaned_params.get('system_class') or express_config.get('system_class', 'standard'))
-
+        
         valid_system_classes = ['limited', 'standard', 'high_performance', 'enterprise']
         if system_class not in valid_system_classes:
             warning_msg = f"Invalid system class '{system_class}', using 'standard'"
@@ -64667,9 +63941,9 @@ def setup_hyperparameter_optimization(
             if verbose:
                 logger.warning(warning_msg)
             system_class = 'standard'
-
+        
         hpo_section['system_class'] = system_class
-
+        
         # Apply system class optimizations
         if system_class == 'limited':
             # Conservative settings for limited systems
@@ -64681,7 +63955,7 @@ def setup_hyperparameter_optimization(
             parallel_jobs = max(4, hpo_section.get('parallel_jobs', 1))
             num_workers = min(8, hardware_data.get('cpu_cores', {}).get('logical_cores', 4))
             memory_efficient = False
-
+        
         # Extract express optimization space
         express_optimization_space = hpo_section.get('optimization_space') or express_config.get('optimization_space')
         if express_optimization_space:
@@ -64700,7 +63974,7 @@ def setup_hyperparameter_optimization(
                     setup_results['warnings'].append(warning_msg)
                     if verbose:
                         logger.warning(warning_msg)
-
+        
         # Store express configuration validation results
         setup_results['express_validation'] = {
             'optimization_focus': optimization_focus,
@@ -64817,7 +64091,7 @@ def setup_hyperparameter_optimization(
             sampler_config['n_startup_trials'] = min(5, n_trials // 20)
         elif optimization_focus == 'accuracy':
             sampler_config['n_startup_trials'] = min(15, n_trials // 5)
-
+        
         # Map common sampler variants to standard names
         sampler_mapping = {
             'Random': 'Random',
@@ -64826,7 +64100,7 @@ def setup_hyperparameter_optimization(
             'NSGAIISampler': 'NSGAII'
         }
         sampler_type = sampler_mapping.get(sampler_type, 'TPE')
-
+        
         if sampler_type == 'TPE':
             sampler = TPESampler(
                 seed=sampler_config['seed'],
@@ -64870,7 +64144,7 @@ def setup_hyperparameter_optimization(
         setup_results['current_stage'] = "Pruner Setup"
         
         pruner_config = hpo_pruner_config.copy()
-
+        
         # Apply optimization focus to pruner configuration
         if optimization_focus == 'speed':
             pruner_config['n_startup_trials'] = 3
@@ -64887,7 +64161,7 @@ def setup_hyperparameter_optimization(
             'SuccessiveHalving': 'SuccessiveHalvingPruner'
         }
         pruner_type = pruner_mapping.get(pruner_type, 'MedianPruner')
-
+        
         if pruner_type == 'MedianPruner':
             pruner = MedianPruner(
                 n_startup_trials=pruner_config['n_startup_trials'],
@@ -65006,7 +64280,7 @@ def setup_hyperparameter_optimization(
                     # Skip model_type if already handled
                     if param_name == 'model_type':
                         continue
-                        
+                    
                     param_type = param_config.get('type', 'float')
                     
                     try:
@@ -65015,17 +64289,17 @@ def setup_hyperparameter_optimization(
                             high = param_config.get('high', param_config.get('max', 1.0))
                             log = param_config.get('log', False)
                             params[param_name] = trial.suggest_float(param_name, low, high, log=log)
-                            
+                        
                         elif param_type == 'int':
                             low = param_config.get('low', param_config.get('min', 0))
                             high = param_config.get('high', param_config.get('max', 100))
                             step = param_config.get('step', 1)
                             params[param_name] = trial.suggest_int(param_name, low, high, step=step)
-                            
+                        
                         elif param_type == 'categorical':
                             choices = param_config.get('choices', [])
                             params[param_name] = trial.suggest_categorical(param_name, choices)
-                            
+                    
                     except Exception as e:
                         logger.warning(f"Failed to suggest parameter {param_name}: {e}")
                         # Fall back to default parameter suggestion
@@ -65164,9 +64438,9 @@ def setup_hyperparameter_optimization(
                     ]
                 else:  # ultra_deep
                     hidden_dims = [
-                        max(256, encoding_dim * 16), 
-                        max(128, encoding_dim * 8), 
-                        max(64, encoding_dim * 4), 
+                        max(256, encoding_dim * 16),
+                        max(128, encoding_dim * 8),
+                        max(64, encoding_dim * 4),
                         max(32, encoding_dim * 2)
                     ]
                     dropout_rates = [
@@ -65329,10 +64603,10 @@ def setup_hyperparameter_optimization(
                 
                 use_real_data_local = use_real_data
                 input_dim = features
-
+                
                 # Initialize fold_config at the beginning to avoid UnboundLocalError
                 # fold_config = None
-
+                
                 # Ensure all required parameters are available in trial_params
                 required_params = {
                     # Core model parameters
@@ -65533,9 +64807,9 @@ def setup_hyperparameter_optimization(
                     # Use k-fold cross-validation for cv_folds >= 2
                     kf = KFold(n_splits=cv_folds, shuffle=cv_shuffle, random_state=cv_random_state)
                     fold_indices = list(kf.split(X_data))
-
+                
                 fold_scores = []
-
+                
                 for fold_idx, (train_idx, val_idx) in enumerate(fold_indices):
                     try:
                         trial.set_user_attr('current_fold', f"{fold_idx + 1}/{len(fold_indices)}")
@@ -65807,7 +65081,7 @@ def setup_hyperparameter_optimization(
                     mean_score = float('inf')
                     std_score = 0.0
                     logger.warning(f"Trial {trial.number}: No valid scores obtained from any fold")
-
+                
                 # Store trial results with serialization
                 def make_json_serializable(obj):
                     """Recursively convert Path objects and other non-serializable types to strings."""
@@ -65822,11 +65096,11 @@ def setup_hyperparameter_optimization(
                     else:
                         # Convert any other non-serializable type to string
                         return str(obj)
-
+                
                 # Create serializable versions
                 serializable_trial_params = make_json_serializable(trial_params)
                 serializable_fold_config = make_json_serializable(fold_config)
-
+                
                 trial.set_user_attr('mean_cv_score', mean_score)
                 trial.set_user_attr('std_cv_score', std_score)
                 trial.set_user_attr('individual_fold_scores', fold_scores)
@@ -65890,7 +65164,7 @@ def setup_hyperparameter_optimization(
         # STAGE 12: Final Configuration & Analysis Setup
         progress_data['current_stage'] = "Final Configuration"
         setup_results['current_stage'] = "Final Configuration"
-
+        
         # Create study configuration
         study_config = {
             "study_name": study_name,
@@ -65927,11 +65201,11 @@ def setup_hyperparameter_optimization(
             },
             "timestamp": datetime.now().isoformat()
         }
-
+        
         # STAGE 12: Configuration Serialization with Progress Bar
         progress_data['current_stage'] = "Saving Study"
         setup_results['current_stage'] = "Saving Study"
-
+        
         # Configuration validation and serialization
         def validate_serializable(obj, path="root", max_depth=10, current_depth=0):
             """
@@ -65942,7 +65216,7 @@ def setup_hyperparameter_optimization(
                 path: Current path in object hierarchy
                 max_depth: Maximum recursion depth
                 current_depth: Current recursion depth
-                
+            
             Returns:
                 Tuple of (is_valid, list_of_errors)
             """
@@ -65997,7 +65271,7 @@ def setup_hyperparameter_optimization(
             # Unknown type
             else:
                 return False, [f"Non-serializable object at {path}: {type(obj).__name__}"]
-
+        
         def create_serializable_config(config_dict, max_depth=10, current_depth=0, progress_bar=None, total_items=None, current_item=[0]):
             """
             Create a fully serializable version of configuration dictionary.
@@ -66009,7 +65283,7 @@ def setup_hyperparameter_optimization(
                 progress_bar: Optional alive_progress bar for tracking
                 total_items: Total number of items to process (for progress calculation)
                 current_item: List containing current item count (mutable for recursion)
-                
+            
             Returns:
                 Serializable dictionary
             """
@@ -66073,7 +65347,7 @@ def setup_hyperparameter_optimization(
                 return str(config_dict)
             except Exception:
                 return f"<UNCONVERTIBLE_{type(config_dict).__name__}>"
-
+        
         def count_items(obj, max_depth=10, current_depth=0):
             """Count total items in nested structure for progress tracking."""
             if current_depth > max_depth:
@@ -66085,11 +65359,11 @@ def setup_hyperparameter_optimization(
                 return sum(count_items(item, max_depth, current_depth + 1) for item in obj)
             else:
                 return 1
-
+        
         # Initialize alive_progress bar for configuration saving
         save_bar = None
         save_bar_context = None
-
+        
         try:
             if show_progress and verbose:
                 # Calculate total steps for the saving process
@@ -66109,9 +65383,9 @@ def setup_hyperparameter_optimization(
             
             # Step 1: Validate study_config before saving
             if save_bar:
-                save_bar.text = "Validating configuration structure..."
+                save_bar.text = "Validating configuration structure"
             
-            logger.debug("Validating study configuration for serialization...")
+            logger.debug("Validating study configuration for serialization")
             is_valid, validation_errors = validate_serializable(study_config)
             
             if save_bar:
@@ -66131,9 +65405,9 @@ def setup_hyperparameter_optimization(
             
             # Step 2: Create serializable version of study_config
             if save_bar:
-                save_bar.text = "Creating serializable configuration..."
+                save_bar.text = "Creating serializable configuration"
             
-            logger.debug("Creating serializable configuration...")
+            logger.debug("Creating serializable configuration")
             
             # Count total items for accurate progress tracking
             total_items = count_items(study_config)
@@ -66177,7 +65451,7 @@ def setup_hyperparameter_optimization(
             
             # Step 3: Verify the serialized config is valid JSON
             if save_bar:
-                save_bar.text = "Validating JSON serialization..."
+                save_bar.text = "Validating JSON serialization"
             
             try:
                 json.dumps(serializable_study_config)
@@ -66214,7 +65488,7 @@ def setup_hyperparameter_optimization(
             
             # Step 4: Save the validated and serializable configuration
             if save_bar:
-                save_bar.text = "Writing configuration to disk..."
+                save_bar.text = "Writing configuration to disk"
             
             config_path = study_dir / f"{study_name}_study_config.json"
             try:
@@ -66231,7 +65505,7 @@ def setup_hyperparameter_optimization(
                     save_bar.text = f"Configuration saved ({file_size_kb:.1f} KB)"
                 
                 logger.info(f"Study configuration saved successfully: {config_path} ({file_size_kb:.1f} KB)")
-                
+            
             except Exception as e:
                 error_msg = f"Failed to save study configuration: {e}"
                 logger.error(error_msg)
@@ -66259,7 +65533,7 @@ def setup_hyperparameter_optimization(
             
             # Step 5: Verification
             if save_bar:
-                save_bar.text = "Verifying saved configuration..."
+                save_bar.text = "Verifying saved configuration"
             
             # Verify the saved file can be read back
             if config_path.exists():
@@ -66292,7 +65566,7 @@ def setup_hyperparameter_optimization(
                 
                 if setup_results.get('config_verified'):
                     print(Fore.GREEN + Style.BRIGHT + f"File verification: passed")
-
+        
         except Exception as save_exception:
             error_msg = f"Critical error during configuration save: {save_exception}"
             logger.error(error_msg)
@@ -66300,8 +65574,8 @@ def setup_hyperparameter_optimization(
             setup_results['errors'].append(error_msg)
             
             if save_bar:
-                save_bar.text = f"Save failed: {str(save_exception)[:50]}..."
-
+                save_bar.text = f"Save failed: {str(save_exception)[:50]}"
+        
         finally:
             # Ensure progress bar is closed
             if save_bar and save_bar_context:
@@ -66309,7 +65583,7 @@ def setup_hyperparameter_optimization(
                     save_bar_context.__exit__(None, None, None)
                 except Exception:
                     pass
-
+        
         # Update results tracking
         setup_results['setup_stages_completed'] = 12
         progress_data['setup_steps_completed'] = 12
@@ -66324,7 +65598,7 @@ def setup_hyperparameter_optimization(
         # STAGE 13: Optimization Function Setup
         progress_data['current_stage'] = "Optimization Function"
         setup_results['current_stage'] = "Optimization Function"
-
+        
         # Define optimization function
         def run_optimization():
             """Run the optimization process."""
@@ -67840,11 +67114,13 @@ def run_hyperparameter_optimization(
         express_config.update(express_context)
     
     # Apply optimization focus from express setup
-    optimization_focus = (hpo_section.get('optimization_focus') or cleaned_params.get('optimization_focus') or express_config.get('focus', 'speed'))
+    #optimization_focus = (hpo_section.get('optimization_focus') or cleaned_params.get('optimization_focus') or express_config.get('focus', 'speed'))
+    optimization_focus = hpo_section.get('optimization_focus', cleaned_params.get('optimization_focus', express_config.get('focus', 'speed')))
     hpo_section['optimization_focus'] = optimization_focus
     
     # Apply system class from express setup
-    system_class = (hpo_section.get('system_class') or cleaned_params.get('system_class') or express_config.get('system_class', 'standard'))
+    #system_class = (hpo_section.get('system_class') or cleaned_params.get('system_class') or express_config.get('system_class', 'standard'))
+    system_class = hpo_section.get('system_class', cleaned_params.get('system_class', express_config.get('system_class', 'standard')))
     hpo_section['system_class'] = system_class
     
     # Apply express intensity if available
@@ -67858,19 +67134,21 @@ def run_hyperparameter_optimization(
     n_trials = hpo_section.setdefault('n_trials', cleaned_params.get('n_trials', 50))
     
     # Proper handling of timeout_minutes with None checking
-    timeout_minutes_param = cleaned_params.get('timeout_minutes')
+    #timeout_minutes_param = cleaned_params.get('timeout_minutes')
+    timeout_seconds = hpo_section.setdefault('timeout_seconds', cleaned_params.get('timeout_seconds', 600))
+    timeout_minutes_param = hpo_section.setdefault('timeout_minutes', cleaned_params.get('timeout_minutes', 10.0))
     if timeout_minutes_param is not None:
         try:
             timeout_minutes = float(timeout_minutes_param)
         except (TypeError, ValueError):
             logger.warning(f"Invalid timeout_minutes value: {timeout_minutes_param}, using default")
-            timeout_minutes = 0.0
+            timeout_minutes = 10.0
     else:
-        timeout_minutes = hpo_section.get('timeout_minutes', 0.0)
+        timeout_minutes = hpo_section.get('timeout_minutes', 10.0)
     
     # Ensure timeout_minutes is always a valid float
     if timeout_minutes is None:
-        timeout_minutes = 0.0
+        timeout_minutes = 10.0
     
     hpo_section['timeout_minutes'] = timeout_minutes
     
@@ -67992,7 +67270,7 @@ def run_hyperparameter_optimization(
     # Training parameters
     train_best_model = hpo_section.setdefault('train_best_model', cleaned_params.get('train_best_model', True))
     save_best_config = hpo_section.setdefault('save_best_config', cleaned_params.get('save_best_config', True))
-
+    
     total_stages = 5  # Setup, Optimization, Analysis, Final Training, Finalization
     
     # Initialize results tracking
@@ -68008,7 +67286,7 @@ def run_hyperparameter_optimization(
         },
         'total_stages': total_stages,
         'stages_completed': 0,
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'trials_completed': 0,
         'trials_failed': 0,
         'trials_pruned': 0,
@@ -68035,7 +67313,7 @@ def run_hyperparameter_optimization(
     
     # Progress tracking data
     progress_data = {
-        'current_stage': 'Starting...',
+        'current_stage': 'Starting',
         'current_operation': None,
         'trials_completed': 0,
         'trials_failed': 0,
@@ -68051,9 +67329,13 @@ def run_hyperparameter_optimization(
     
     if data_path is None:
         data_path = preprocessed_dataset
+    else:
+        data_path = Path(data_path)
     
     if artifacts_path is None:
         artifacts_path = preprocessing_artifacts
+    else:
+        artifacts_path = Path(artifacts_path)
     
     if data_path.exists() and artifacts_path.exists():
         if data_path.is_file() and artifacts_path.is_file():
@@ -68092,57 +67374,6 @@ def run_hyperparameter_optimization(
             }
         })
         
-        # Display HPO header
-        if interactive:
-            print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
-            print(Fore.MAGENTA + Style.BRIGHT + "HYPERPARAMETER OPTIMIZATION LAUNCH")
-            print(Fore.CYAN + Style.BRIGHT + "-"*40)
-            
-            # Show express context if available
-            if express_config:
-                print(Fore.YELLOW + Style.BRIGHT + "Express Setup Context:")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimization Focus: " + Fore.YELLOW + Style.BRIGHT + f"{optimization_focus.title()}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}")
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Intensity: " + Fore.YELLOW + Style.BRIGHT + f"{express_intensity}")
-                if express_config.get('preset_alignment'):
-                    print(Fore.GREEN + Style.BRIGHT + f"  └─ Preset Alignment: " + Fore.YELLOW + Style.BRIGHT + f"{express_config['preset_alignment']}")
-            
-            print(Fore.YELLOW + Style.BRIGHT + "Optimization Configuration:")
-            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Study Name: " + Fore.YELLOW + Style.BRIGHT + f"{study_name}")
-            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Total Trials: " + Fore.YELLOW + Style.BRIGHT + f"{n_trials}")
-            
-            if timeout_minutes > 0:
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"{timeout_minutes} minutes")
-            else:
-                print(Fore.GREEN + Style.BRIGHT + f"  ├─ Timeout: " + Fore.YELLOW + Style.BRIGHT + f"No Timeout")
-            
-            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Types: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(model_types)}")
-            print(Fore.GREEN + Style.BRIGHT + f"  ├─ CV Folds: " + Fore.YELLOW + Style.BRIGHT + f"{cv_folds}")
-            print(Fore.GREEN + Style.BRIGHT + f"  ├─ Sampler: " + Fore.YELLOW + Style.BRIGHT + f"{sampler_type}")
-            print(Fore.GREEN + Style.BRIGHT + f"  └─ Pruner: " + Fore.YELLOW + Style.BRIGHT + f"{pruner_type}")
-            
-            print(Fore.CYAN + Style.BRIGHT + "\n  Data Configuration:")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Data Type: " + Fore.YELLOW + Style.BRIGHT + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Normal Samples: " + Fore.YELLOW + Style.BRIGHT + f"{normal_samples}")
-            print(Fore.GREEN + Style.BRIGHT + f"    └─ Attack Samples: " + Fore.YELLOW + Style.BRIGHT + f"{attack_samples}")
-            
-            print(Fore.CYAN + Style.BRIGHT + "\n  System Configuration:")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Device: " + Fore.YELLOW + Style.BRIGHT + f"{device}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Random Seed: " + Fore.YELLOW + Style.BRIGHT + f"{random_seed}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Num Workers: " + Fore.YELLOW + Style.BRIGHT + f"{num_workers}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}")
-            print(Fore.GREEN + Style.BRIGHT + f"    └─ Trial Epochs: " + Fore.YELLOW + Style.BRIGHT + f"{trial_epochs}")
-            
-            print(Fore.CYAN + Style.BRIGHT + "\n  Output Configuration:")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Save Study: " + Fore.YELLOW + Style.BRIGHT + f"{save_study}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Generate Plots: " + Fore.YELLOW + Style.BRIGHT + f"{generate_plots}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Train Best Model: " + Fore.YELLOW + Style.BRIGHT + f"{train_best_model}")
-            print(Fore.GREEN + Style.BRIGHT + f"    ├─ Save Best Config: " + Fore.YELLOW + Style.BRIGHT + f"{save_best_config}")
-            print(Fore.GREEN + Style.BRIGHT + f"    └─ Study Directory: " + Fore.YELLOW + Style.BRIGHT + f"{study_dir}")
-            
-            print(Fore.GREEN + Style.BRIGHT + "\nStarting hyperparameter optimization pipeline...")
-        
         # Memory optimization at start
         _optimize_memory_if_needed(
             condition=True,
@@ -68158,7 +67389,7 @@ def run_hyperparameter_optimization(
         setup_stage_start = time.time()
         hpo_results['current_stage'] = "Setup"
         progress_data['current_stage'] = "Setup"
-
+        
         hpo_setup = setup_hyperparameter_optimization(
             n_trials=n_trials,
             timeout_seconds=timeout_seconds,
@@ -68217,7 +67448,7 @@ def run_hyperparameter_optimization(
             }
         })
         progress_data['setup_completed'] = True
-
+        
         # STAGE 2: Optimization
         optimization_stage_start = time.time()
         hpo_results['current_stage'] = "Optimization"
@@ -68404,7 +67635,7 @@ def run_hyperparameter_optimization(
         progress_data['current_stage'] = "Finalization"
         
         with alive_bar(1, title='Finalizing\t\t', bar='smooth', spinner='dots') as finalization_bar:
-            finalization_bar.text = "Finalizing HPO results and generating recommendations..."
+            finalization_bar.text = "Finalizing HPO results and generating recommendations"
         
             # Generate express-aware recommendations
             recommendations = []
@@ -68664,7 +67895,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
     Args:
         config: Complete configuration dictionary containing all sections
         **kwargs: Additional runtime parameters and overrides
-        
+    
     Returns:
         Dictionary containing optimization results or None if failed
     """
@@ -71772,7 +71003,7 @@ def _run_quick_hpo_test(
             return result
         else:
             return None
-            
+    
     except KeyboardInterrupt:
         print(Fore.RED + Style.BRIGHT + "\nQuick HPO test interrupted by user!")
         # Return to previous menu
@@ -79269,11 +78500,9 @@ def _estimate_hpo_time(
         base_trial_time = trial_epochs * base_epoch_time
         
         # Apply all factors
-        hardware_adjusted_time = (base_trial_time * cpu_factor * memory_factor * 
-                                min(gpu_factor, 1.0) * storage_factor * system_class_factor)
+        hardware_adjusted_time = (base_trial_time * cpu_factor * memory_factor * min(gpu_factor, 1.0) * storage_factor * system_class_factor)
         
-        total_seconds = (n_trials * hardware_adjusted_time * model_complexity_factor * 
-                        cv_factor * hpo_overhead_factor * progressive_factor)
+        total_seconds = (n_trials * hardware_adjusted_time * model_complexity_factor * cv_factor * hpo_overhead_factor * progressive_factor)
         
         # Add setup and teardown time
         setup_time = 60  # 1 minute setup
@@ -79348,7 +78577,7 @@ def _estimate_hpo_time(
         logger.debug(f"  Confidence range: {range_estimate}")
         
         return final_estimate
-        
+    
     except Exception as e:
         logger.debug(f"Time estimation failed: {e}")
         
@@ -79367,7 +78596,7 @@ def _estimate_hpo_time(
             else:
                 days = int(simple_minutes // 1440)
                 return f"~{days} day{'s' if days != 1 else ''}"
-                
+        
         except Exception:
             # Ultimate fallback
             return "Several hours (estimation failed)"
