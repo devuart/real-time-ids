@@ -27,6 +27,7 @@ backend/checkpoints/
 backend/artifacts/
 backend/config/
 backend/models/
+backend/deep_learning_runs/
 
 # Database files
 *.db
@@ -115,3 +116,4 @@ Thumbs.db
 *.run_tracker
 *events.out.tfevents.*
 *.preprocessor_run_tracker
+*.deep_learning_run_tracker
