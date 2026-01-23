@@ -7440,7 +7440,7 @@ class ProgressHelper:
         Returns:
             Configured alive_bar context manager
         """
-        return alive_bar(total, title=title, unit=unit, length=25, elapsed=True, title_length=25)
+        return alive_bar(total, title=title, title_length=25, unit=unit, length=25, elapsed=True, stats=False, dual_line=True)
 
 def invalidate_config_cache():
     """Invalidate the configuration cache to force reload with enhanced logging."""
@@ -37985,7 +37985,7 @@ def load_and_validate_data(
     # Experimental Parameters
     experimental_features: Optional[bool] = None,
     advanced_preprocessing: Optional[bool] = None,
-
+    
     # Run Tracking Parameters
     run_id: Optional[str] = None,
     run_number: Optional[int] = None,
@@ -38063,6 +38063,9 @@ def load_and_validate_data(
         ],
         'run_tracking': [
             'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
+        ],
+        'data': [
+            'data_path', 'artifacts_path'
         ]
     }
     
@@ -38087,11 +38090,13 @@ def load_and_validate_data(
     compatibility_config = final_config.setdefault('compatibility', {})
     advanced_config = final_config.setdefault('advanced', {})
     run_tracking_config = final_config.setdefault('run_tracking', {})
+    data_config = final_config.setdefault('data', {})
     
-    # Handle silent mode - override verbose and progress_bar if silent is True
+    # Handle silent mode
     silent_mode = monitoring_config.get('silent', False)
+    
+    # Force silent mode behavior
     if silent_mode:
-        # Force silent mode behavior
         monitoring_config['verbose'] = False
         monitoring_config['progress_bar'] = False
     
@@ -38149,26 +38154,45 @@ def load_and_validate_data(
     run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
     
-    if statistics_path is None and save_statistics:
-        if use_run_tracking and run_id is not None:
-            if 'metrics' in run_specific_dirs:
-                statistics_path = run_specific_dirs['metrics'] / f"data_loading_statistics.json"
-            else:
-                statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
+    # Data and artifacts paths
+    deep_learning_runs = Path(__file__).resolve().parent / 'deep_learning_runs'
+    preprocessed_dataset = data_config.get('data_path', data_path)
+    preprocessing_artifacts = data_config.get('artifacts_path', artifacts_path)
+    
+    # Determine output directories with run-specific support
+    if use_run_tracking and run_id and run_specific_dirs:
+        run_tracking = True
+        run_dir = deep_learning_runs / f"{run_id}"
+        # Use run-specific directories for outputs
+        metrics_dir = run_specific_dirs.get('metrics', run_dir / 'metrics') / 'load_and_validate_data'
+        results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'load_and_validate_data'
+    
+    else:
+        run_tracking = False
+        # Directory defaults
+        metrics_dir = deep_learning_runs / 'metrics' / 'load_and_validate_data'
+        results_dir = deep_learning_runs / 'results' / 'load_and_validate_data'
+    
+    if save_statistics and statistics_path is None:
+        if run_tracking:
+            statistics_path = metrics_dir / 'loading_and_validation_statistics.json'
         else:
-            statistics_path = monitoring_config.get('statistics_path', data_path.parent / "data_loading_statistics.json")
+            statistics_path = metrics_dir / f"loading_and_validation_statistics_{start_time.strftime('%Y%m%d_%H%M%S')}.json"
     
     # Convert to Path object if necessary
     if statistics_path is not None:
         statistics_path = Path(statistics_path)
     
+    # Determine if progress bar should be shown
+    if not silent_mode and progress_bar:
+        show_progress_bar = True
+    else:
+        show_progress_bar = False
+    
     # Set up logging level based on silent mode
     if not silent_mode and verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
-    
-    if not silent_mode:
-        logger.info("Starting data loading and validation")
     
     # Initialize progress tracking
     progress_data = {
@@ -38188,6 +38212,7 @@ def load_and_validate_data(
         'artifacts_path': None,
         'use_real_data': use_real_data,
         'config_applied': final_config,
+        'progress_stats': [],
         'stages_completed': [],
         'errors_encountered': [],
         'warnings_encountered': [],
@@ -38199,9 +38224,10 @@ def load_and_validate_data(
         total_stages = 8  # Configuration, Paths, Loading, Validation, Processing, Splitting, Statistics, Finalization
         
         # Use progress bar only if not in silent mode and progress_bar is True
-        if not silent_mode and progress_bar:
-            print(Fore.GREEN + Style.BRIGHT + "\nStarting data loading and validation..." + Style.RESET_ALL)
+        if show_progress_bar:
+            print_color("\nStarting data loading and validation...", 'green')
             bar_context = alive_bar(total_stages, title='Data Loading & Validation\t', unit='stages')
+        
         else:
             # Create a dummy context manager that does nothing
             class DummyBar:
@@ -38215,105 +38241,103 @@ def load_and_validate_data(
                     pass
                 def __getattr__(self, name):
                     return self
+            
             bar_context = DummyBar()
+        
+        loading_stats['progress_stats'].append("Data loading and validation started")
         
         with bar_context as main_bar:
             
             # STAGE 1: Configuration and Setup
             progress_data['current_stage'] = "Configuration Setup"
-            if not silent_mode:
-                main_bar.text = "Setting up configuration and parameters"
+            
+            if show_progress_bar:
+                main_bar.text = "Configuring preprocessing outputs paths"
             
             # Determine paths with multiple fallback strategies
             if data_path is None:
-                # Try to get from config
-                data_path = final_config.get('data', {}).get('data_path') or final_config.get('system', {}).get('data_dir')
-                
-                if data_path is None:
-                    # Use default path
-                    data_path = DEFAULT_MODEL_DIR / "preprocessed_dataset.csv"
-                else:
-                    data_path = Path(data_path)
+                data_path = preprocessed_dataset
             else:
                 data_path = Path(data_path)
             
             if artifacts_path is None:
-                # Try to get from config or derive from data path
-                artifacts_path = final_config.get('data', {}).get('artifacts_path')
-                if artifacts_path is None:
-                    artifacts_path = data_path.parent / "preprocessing_artifacts.pkl"
-                else:
-                    artifacts_path = Path(artifacts_path)
+                artifacts_path = preprocessing_artifacts
             else:
                 artifacts_path = Path(artifacts_path)
             
             loading_stats['data_path'] = str(data_path)
             loading_stats['artifacts_path'] = str(artifacts_path)
-            
-            if not silent_mode:
-                logger.info(f"Data path: {data_path}")
-                logger.info(f"Artifacts path: {artifacts_path}")
-            
-            if not silent_mode:
-                main_bar.text = "Configuration complete"
+            loading_stats['progress_stats'].append(f"{data_path} and {artifacts_path} set as data sources")
             loading_stats['stages_completed'].append('configuration')
-            if not silent_mode:
+            
+            if show_progress_bar:
+                main_bar.text = "Configuration complete"
                 main_bar()
             
             # STAGE 2: Path Validation and File Discovery
             progress_data['current_stage'] = "Path Validation"
-            if not silent_mode:
-                main_bar.text = "Validating paths and discovering files"
+            
+            if show_progress_bar:
+                main_bar.text = "Path validation and file discovery"
             
             # Validate file existence with helpful error messages
             if use_real_data:
-                if not data_path.exists():
-                    # Try alternative locations
-                    alternative_paths = [
-                        data_path.parent / "dataset.csv",
-                        data_path.parent / "data.csv",
-                        Path.cwd() / "data" / data_path.name,
-                        Path.cwd() / data_path.name
-                    ]
-                    
-                    found_alternative = None
-                    for alt_path in alternative_paths:
-                        if alt_path.exists():
-                            found_alternative = alt_path
-                            break
-                    
-                    if found_alternative:
-                        if not silent_mode:
-                            logger.warning(f"Data file not found at {data_path}, using {found_alternative}")
-                        data_path = found_alternative
-                        loading_stats['data_path'] = str(data_path)
-                        loading_stats['warnings_encountered'].append(f"Used alternative path: {found_alternative}")
+                if data_path.exists():
+                    if data_path.is_file():
+                        preprocessing_dataset = True
                     else:
-                        error_msg = f"Data file not found: {data_path}\nTried alternatives: {alternative_paths}"
-                        loading_stats['errors_encountered'].append(error_msg)
-                        raise FileNotFoundError(error_msg)
+                        preprocessing_dataset = False
+                        loading_stats['warnings_encountered'].append(f"Preprocessed dataset path is not a file: {data_path}")
                 
-                if not artifacts_path.exists() and normalization != 'none':
-                    if not silent_mode:
-                        logger.warning(f"Artifacts file not found: {artifacts_path}")
-                        logger.info("Will attempt to load data without preprocessing artifacts")
-                    loading_stats['warnings_encountered'].append("Artifacts file not found")
+                else:
+                    preprocessing_dataset = False
+                    loading_stats['errors_encountered'].append(f"Preprocessed dataset path does not exists: {data_path}")
+                
+                if artifacts_path.exists():
+                    if artifacts_path.is_file():
+                        preprocessing_artifacts = True
+                    else:
+                        preprocessing_artifacts = False
+                        loading_stats['warnings_encountered'].append(f"Preprocessed dataset artifacts path is not a file: {artifacts_path}")
+                
+                else:
+                    preprocessing_artifacts = False
+                    loading_stats['errors_encountered'].append(f"Preprocessed dataset artifacts path does not exists: {artifacts_path}")
+                
+                if preprocessing_dataset and preprocessing_artifacts:
+                    preprocessing_outputs = True
+                else:
+                    preprocessing_outputs = False
+                
+                if not preprocessing_outputs:
+                    loading_stats['warnings_encountered'].append("Preprocessing outputs missing, attempting to locate automatically")
+                    # Get preprocessing outputs using the helper function
+                    csv_path, pkl_path, test_config, preprocessing_summary = get_preprocessing_outputs(interactive=True)
+                    
+                    data_path = csv_path
+                    artifacts_path = pkl_path
+                
+                else:
+                    data_path = data_path
+                    artifacts_path = artifacts_path
+                
+                data_config['data_path'] = data_path
+                data_config['artifacts_path'] = artifacts_path
+                
+                loading_stats['data_path'] = str(data_path)
+                loading_stats['artifacts_path'] = str(artifacts_path)
+                loading_stats['stages_completed'].append('path_validation')
             
-            if not silent_mode:
+            if show_progress_bar:
                 main_bar.text = "Path validation complete"
-            loading_stats['stages_completed'].append('path_validation')
-            if not silent_mode:
                 main_bar()
             
             # STAGE 3: Data Loading
             progress_data['current_stage'] = "Data Loading"
-            if not silent_mode:
-                main_bar.text = "Loading data from source"
+            if show_progress_bar:
+                main_bar.text = f"Loading data from source: {data_format}"
             
             # Load data based on format and parameters
-            if not silent_mode:
-                logger.info(f"Loading data in {data_format} format")
-            
             if use_real_data:
                 try:
                     # Load data based on format
@@ -38334,21 +38358,24 @@ def load_and_validate_data(
                         
                         if chunk_size is not None:
                             # Handle large files with chunking
-                            if not silent_mode:
-                                logger.info(f"Loading data in chunks of size {chunk_size}")
+                            loading_stats['warnings_encountered'].append(f"Loading data in chunks of: {chunk_size}")
                             chunk_iter = pd.read_csv(data_path, chunksize=chunk_size, **load_params)
                             df_chunks = []
                             
                             # Show chunk loading progress only if not in silent mode and progress_bar is True
-                            if not silent_mode and progress_bar:
+                            if show_progress_bar:
+                                # close previous progress bar to avoid overlap
+                                main_bar.text = "Loading data in chunks"
+                                main_bar()
+                                
                                 total_chunks = (os.path.getsize(data_path) // (chunk_size * 1000)) + 1
-                                with alive_bar(total_chunks, title='Loading Chunks\t\t', unit='chunks') as chunk_bar:
-                                    for i, chunk in enumerate(chunk_iter):
-                                        df_chunks.append(chunk)
-                                        chunk_bar.text = f"Chunk {i+1}: {len(chunk)} rows"
-                                        chunk_bar()
-                                        if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
-                                            break
+                                for i, chunk in enumerate(chunk_iter):
+                                    df_chunks.append(chunk)
+                                    main_bar.text = f"Loading chunk: {i+1}/{total_chunks}"
+                                    main_bar()
+                                    if len(df_chunks) * chunk_size >= (max_samples or float('inf')):
+                                        break
+                            
                             else:
                                 # Silent mode or no progress bar - just load chunks
                                 for i, chunk in enumerate(chunk_iter):
@@ -38373,30 +38400,23 @@ def load_and_validate_data(
                     loading_stats['columns_loaded'] = len(df.columns)
                     progress_data['rows_processed'] = len(df)
                     progress_data['features_processed'] = len(df.columns)
-                    
-                    if not silent_mode:
-                        logger.info(f"Loaded {len(df)} rows and {len(df.columns)} columns")
                 
                 except Exception as e:
-                    if not silent_mode:
-                        logger.error(f"Failed to load data from {data_path}: {e}")
                     loading_stats['errors_encountered'].append(f"Data loading failed: {str(e)}")
                     
                     if not use_real_data:
-                        if not silent_mode:
-                            logger.info("Falling back to synthetic data generation")
+                        loading_stats['warnings_encountered'].append("Falling back to synthetic data generation")
                     else:
                         raise RuntimeError(f"Data loading failed: {str(e)}")
             
             # Generate synthetic data if needed
             if not use_real_data or (use_real_data and 'df' not in locals()):
                 progress_data['current_substage'] = "Synthetic Data Generation"
-                if not silent_mode:
+                
+                if show_progress_bar:
                     main_bar.text = "Generating synthetic data"
                 
-                if not silent_mode:
-                    logger.info("Generating synthetic data")
-                
+                # Extract synthetic data configuration parameters
                 normal_samples = synthetic_data_config.get('synthetic_normal_samples', 8000)
                 attack_samples = synthetic_data_config.get('synthetic_attack_samples', 2000)
                 n_features = min_features
@@ -38404,64 +38424,159 @@ def load_and_validate_data(
                 noise_level = synthetic_data_config.get('synthetic_noise_level', 0.1)
                 synthetic_seed = synthetic_data_config.get('synthetic_seed', random_state)
                 
-                np.random.seed(synthetic_seed)
-                
-                if generation_method == 'gaussian':
-                    # Generate normal data
-                    X_normal = np.random.normal(0, 1, (normal_samples, n_features))
+                try:
+                    # Call generate_synthetic_data() function with appropriate parameters
+                    synthetic_result = generate_synthetic_data(
+                        # Core generation parameters
+                        normal_samples=normal_samples,
+                        attack_samples=attack_samples,
+                        features=n_features,
+                        random_state=synthetic_seed,
+                        
+                        # Generation method parameters
+                        generation_method=generation_method,
+                        noise_level=noise_level,
+                        
+                        # Data structure parameters
+                        label_column=label_column,
+                        feature_prefix='feature',
+                        output_format='dict',  # Get dict format for easy processing
+                        data_type='float32',
+                        
+                        # Splitting parameters - align with load_and_validate_data expectations
+                        validation_split=0.0,  # We'll handle splitting later in load_and_validate_data
+                        test_split=1.0,  # Use all attack data
+                        
+                        # Export parameters - don't save during generation
+                        save_data=False,
+                        
+                        # Monitoring parameters
+                        verbose=verbose if not silent_mode else False,
+                        progress_bar=False,  # Suppress nested progress bars
+                        silent=silent_mode,
+                        
+                        # Pass through any additional synthetic config parameters
+                        **{k: v for k, v in synthetic_data_config.items() if k not in ['synthetic_normal_samples', 'synthetic_attack_samples', 'synthetic_generation_method', 'synthetic_noise_level', 'synthetic_seed']},
+                        
+                        # Run tracking parameters if available
+                        run_id=run_id,
+                        run_number=run_number,
+                        run_specific_dirs=run_specific_dirs,
+                        use_run_tracking=use_run_tracking,
+                        
+                        # Pass through the full config for context
+                        config=final_config
+                    )
                     
-                    # Generate attack data with different distribution
-                    X_attack = np.random.normal(2, 1.5, (attack_samples, n_features))
-                    X_attack += np.random.normal(0, noise_level, X_attack.shape)
-                
-                elif generation_method == 'mixed':
-                    # More complex synthetic data
-                    X_normal = np.random.multivariate_normal(np.zeros(n_features), np.eye(n_features), normal_samples)
+                    # Extract the generated data from the result
+                    X_train_normal = synthetic_result.get('X_train', np.array([]))
+                    X_test = synthetic_result.get('X_test', np.array([]))
+                    feature_names = synthetic_result.get('feature_names', [f'feature_{i}' for i in range(n_features)])
+                    generation_metadata = synthetic_result.get('metadata', {})
                     
-                    # Create correlated attack features
-                    attack_mean = np.random.uniform(-2, 2, n_features)
-                    attack_cov = np.eye(n_features) * np.random.uniform(0.5, 2, n_features)
-                    X_attack = np.random.multivariate_normal(attack_mean, attack_cov, attack_samples)
+                    # Combine normal and attack data
+                    if len(X_train_normal) > 0 and len(X_test) > 0:
+                        X_normal = X_train_normal
+                        X_attack = X_test
+                        
+                        # Combine data
+                        X = np.vstack([X_normal, X_attack])
+                        y = np.hstack([np.zeros(len(X_normal)), np.ones(len(X_attack))])
+                        
+                        # Create DataFrame
+                        df = pd.DataFrame(X, columns=feature_names)
+                        df[label_column] = y
+                        
+                        # Update loading stats with generation information
+                        loading_stats.update({
+                            'synthetic_data_generated': True,
+                            'normal_samples': len(X_normal),
+                            'attack_samples': len(X_attack),
+                            'generation_method': generation_metadata.get('generation_method', generation_method),
+                            'noise_level': generation_metadata.get('noise_level', noise_level),
+                            'data_quality_score': generation_metadata.get('data_quality_score', 0.0),
+                            'generation_time_seconds': generation_metadata.get('generation_time_seconds', 0.0),
+                            'synthetic_generation_metadata': generation_metadata
+                        })
+                        
+                        progress_data['rows_processed'] = len(df)
+                        progress_data['features_processed'] = len(df.columns)
+                        loading_stats['progress_stats'].append(f"Generated synthetic data: {len(X_normal)} normal, {len(X_attack)} attack samples | Data quality score: {generation_metadata.get('data_quality_score', 0.0):.3f}")
+                    
+                    else:
+                        error_msg = "Synthetic data generation produced empty datasets"
+                        loading_stats['errors_encountered'].append(error_msg)
+                        raise ValueError(error_msg)
                 
-                else:
-                    raise ValueError(f"Unknown synthetic generation method: {generation_method}")
-                
-                # Combine data
-                X = np.vstack([X_normal, X_attack])
-                y = np.hstack([np.zeros(normal_samples), np.ones(attack_samples)])
-                
-                # Create DataFrame
-                feature_names = [f'feature_{i}' for i in range(n_features)]
-                df = pd.DataFrame(X, columns=feature_names)
-                df[label_column] = y
-                
-                loading_stats.update({
-                    'synthetic_data_generated': True,
-                    'normal_samples': normal_samples,
-                    'attack_samples': attack_samples,
-                    'generation_method': generation_method,
-                    'noise_level': noise_level
-                })
-                
-                progress_data['rows_processed'] = len(df)
-                progress_data['features_processed'] = len(df.columns)
-                
-                if not silent_mode:
-                    logger.info(f"Generated synthetic data: {normal_samples} normal, {attack_samples} attack samples")
+                except Exception as synthetic_error:
+                    # Handle synthetic data generation errors
+                    error_msg = f"Default synthetic data generation method failed: {str(synthetic_error)}"
+                    
+                    loading_stats['errors_encountered'].append(error_msg)
+                    loading_stats['warnings_encountered'].append("Using fallback synthetic data generation method")
+                    
+                    # Fallback to simple synthetic data generation
+                    try:
+                        np.random.seed(synthetic_seed)
+                        
+                        if generation_method == 'gaussian':
+                            # Generate normal data
+                            X_normal = np.random.normal(0, 1, (normal_samples, n_features))
+                            
+                            # Generate attack data with different distribution
+                            X_attack = np.random.normal(2, 1.5, (attack_samples, n_features))
+                            X_attack += np.random.normal(0, noise_level, X_attack.shape)
+                        
+                        elif generation_method == 'mixed':
+                            # More complex synthetic data
+                            X_normal = np.random.multivariate_normal(np.zeros(n_features), np.eye(n_features), normal_samples)
+                            
+                            # Create correlated attack features
+                            attack_mean = np.random.uniform(-2, 2, n_features)
+                            attack_cov = np.eye(n_features) * np.random.uniform(0.5, 2, n_features)
+                            X_attack = np.random.multivariate_normal(attack_mean, attack_cov, attack_samples)
+                        
+                        else:
+                            raise ValueError(f"Unknown synthetic generation method: {generation_method}")
+                        
+                        # Combine data
+                        X = np.vstack([X_normal, X_attack])
+                        y = np.hstack([np.zeros(normal_samples), np.ones(attack_samples)])
+                        
+                        # Create DataFrame
+                        feature_names = [f'feature_{i}' for i in range(n_features)]
+                        df = pd.DataFrame(X, columns=feature_names)
+                        df[label_column] = y
+                        
+                        loading_stats.update({
+                            'synthetic_data_generated': True,
+                            'fallback_generation_used': True,
+                            'fallback_reason': str(synthetic_error),
+                            'normal_samples': normal_samples,
+                            'attack_samples': attack_samples,
+                            'generation_method': generation_method,
+                            'noise_level': noise_level
+                        })
+                        
+                        progress_data['rows_processed'] = len(df)
+                        progress_data['features_processed'] = len(df.columns)
+                        loading_stats['progress_stats'].append(f"Fallback synthetic data generation completed: {normal_samples} normal, {attack_samples} attack samples")
+                    
+                    except Exception as fallback_error:
+                        # If even fallback fails, raise error
+                        error_msg = f"Both default synthetic generation and fallback failed: {str(fallback_error)}"
+                        loading_stats['errors_encountered'].append(error_msg)
+                        raise RuntimeError(error_msg)
             
-            if not silent_mode:
-                main_bar.text = "Data loading complete"
             loading_stats['stages_completed'].append('data_loading')
-            if not silent_mode:
+            if show_progress_bar:
+                main_bar.text = "Data loading complete"
                 main_bar()
             
             # STAGE 4: Data Validation
             progress_data['current_stage'] = "Data Validation"
-            if not silent_mode:
+            if show_progress_bar:
                 main_bar.text = "Validating data structure and quality"
-            
-            if not silent_mode:
-                logger.info("Performing data validation")
             
             if df is None or df.empty:
                 error_msg = "No data loaded or generated"
@@ -38487,9 +38602,8 @@ def load_and_validate_data(
                 numeric_columns.remove(label_column)
             
             if len(numeric_columns) < min_features:
-                if not silent_mode:
-                    logger.warning(f"Only {len(numeric_columns)} numeric features found, minimum is {min_features}")
-                loading_stats['warnings_encountered'].append(f"Low numeric features: {len(numeric_columns)}")
+                message = f"Low numeric features found: {len(numeric_columns)}, minimum is {min_features}"
+                loading_stats['warnings_encountered'].append(message)
                 
                 # Try to convert non-numeric columns
                 conversion_attempts = 0
@@ -38503,8 +38617,8 @@ def load_and_validate_data(
                         except Exception:
                             continue
                 
-                if conversion_attempts > 0 and not silent_mode:
-                    logger.info(f"Converted {conversion_attempts} columns to numeric")
+                if conversion_attempts > 0:
+                    loading_stats['progress_stats'].append(f"Columns converted to numeric types: {conversion_attempts}")
             
             # Update feature columns
             if feature_columns is None:
@@ -38521,8 +38635,7 @@ def load_and_validate_data(
                 raise ValueError(error_msg)
             
             if max_features and len(feature_columns) > max_features:
-                if not silent_mode:
-                    logger.info(f"Reducing features from {len(feature_columns)} to {max_features}")
+                loading_stats['progress_stats'].append(f"Reducing features from {len(feature_columns)} to {max_features}")
                 feature_columns = feature_columns[:max_features]
             
             loading_stats['feature_columns'] = feature_columns
@@ -38533,42 +38646,37 @@ def load_and_validate_data(
             X = df[feature_columns].values.astype(np.float32)
             y = df[label_column].values
             
-            progress_data['validation_passed'] += 1
-            if not silent_mode:
-                main_bar.text = "Data validation complete"
             loading_stats['stages_completed'].append('data_validation')
-            if not silent_mode:
+            progress_data['validation_passed'] += 1
+            
+            if show_progress_bar:
+                main_bar.text = "Data validation complete"
                 main_bar()
             
             # STAGE 5: Data Processing
             progress_data['current_stage'] = "Data Processing"
-            if not silent_mode:
+            if show_progress_bar:
                 main_bar.text = "Processing data (cleaning, scaling, etc.)"
             
             # Validate data quality
             if data_quality_checks:
                 progress_data['current_substage'] = "Quality Checks"
-                if not silent_mode:
+                if show_progress_bar:
                     main_bar.text = "Performing data quality checks"
-                
-                if not silent_mode:
-                    logger.info("Performing data quality checks")
                 
                 # Check for infinite values
                 inf_mask = np.isinf(X)
                 if inf_mask.any():
-                    if not silent_mode:
-                        logger.warning(f"Found {inf_mask.sum()} infinite values, replacing with NaN")
+                    message = f"Found {inf_mask.sum()} infinite values, replacing with NaN"
+                    loading_stats['warnings_encountered'].append(message)
+                    
                     X[inf_mask] = np.nan
-                    loading_stats['warnings_encountered'].append(f"Fixed {inf_mask.sum()} infinite values")
                 
                 # Check for excessive missing values
                 missing_per_feature = np.isnan(X).sum(axis=0) / len(X)
                 problematic_features = np.where(missing_per_feature > 0.5)[0]
                 if len(problematic_features) > 0:
                     warning_msg = f"Features with >50% missing values: {problematic_features}"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
                 
                 # Check for zero variance features
@@ -38577,18 +38685,15 @@ def load_and_validate_data(
                     zero_var_features = np.where(variances < feature_engineering_config['variance_threshold'])[0]
                     if len(zero_var_features) > 0:
                         warning_msg = f"Low variance features detected: {zero_var_features}"
-                        if not silent_mode:
-                            logger.warning(warning_msg)
                         loading_stats['warnings_encountered'].append(warning_msg)
             
             # Handle missing values
             if handle_missing and np.isnan(X).any():
                 progress_data['current_substage'] = "Missing Value Handling"
-                if not silent_mode:
-                    main_bar.text = "Handling missing values"
+                loading_stats['progress_stats'].append(f"Handling missing values using strategy: {handle_missing}")
                 
-                if not silent_mode:
-                    logger.info(f"Handling missing values using strategy: {handle_missing}")
+                if show_progress_bar:
+                    main_bar.text = "Handling missing values"
                 
                 if handle_missing == 'drop':
                     # Drop rows with any missing values
@@ -38596,9 +38701,9 @@ def load_and_validate_data(
                     rows_dropped = (~valid_mask).sum()
                     X = X[valid_mask]
                     y = y[valid_mask]
-                    if not silent_mode:
-                        logger.info(f"Dropped {rows_dropped} rows with missing values")
+                    
                     loading_stats['rows_dropped_missing'] = rows_dropped
+                    loading_stats['progress_stats'].append(f"Dropped {rows_dropped} rows with missing values")
                 
                 elif handle_missing == 'fill':
                     strategy = data_processing_config.get('missing_value_strategy', 'mean')
@@ -38610,10 +38715,10 @@ def load_and_validate_data(
                         imputer = SimpleImputer(strategy='mean')
                     
                     X = imputer.fit_transform(X)
-                    if not silent_mode:
-                        logger.info(f"Filled missing values using {strategy} strategy")
+                    
                     loading_stats['missing_values_filled'] = True
                     loading_stats['imputation_strategy'] = strategy
+                    loading_stats['progress_stats'].append(f"Filled missing values using {strategy} strategy")
             
             # Validate sample sizes
             if len(X) < min_samples:
@@ -38622,19 +38727,18 @@ def load_and_validate_data(
                 raise ValueError(error_msg)
             
             if max_samples and len(X) > max_samples:
-                if not silent_mode:
-                    logger.info(f"Limiting dataset to {max_samples} samples")
+                loading_stats['progress_stats'].append(f"Limiting dataset to {max_samples} samples")
                 indices = np.random.choice(len(X), max_samples, replace=False)
                 X = X[indices]
                 y = y[indices]
+                
                 loading_stats['samples_limited'] = max_samples
             
             # Validate label distribution
             unique_labels = np.unique(y)
             label_counts = {label: np.sum(y == label) for label in unique_labels}
             
-            if not silent_mode:
-                logger.info(f"Label distribution: {label_counts}")
+            loading_stats['progress_stats'].append(f"Validating label distribution: {label_counts}")
             loading_stats['label_distribution'] = label_counts
             
             # Check for class balance issues
@@ -38642,9 +38746,7 @@ def load_and_validate_data(
                 min_class_size = min(label_counts.values())
                 min_class_samples_threshold = class_balance_config.setdefault('min_class_samples', 10)
                 if min_class_size < class_balance_config['min_class_samples']:
-                    warning_msg = f"Smallest class has only {min_class_size} samples"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
+                    warning_msg = f"Smallest class has only: {min_class_size} samples"
                     loading_stats['warnings_encountered'].append(warning_msg)
             
             if class_balance_config.setdefault('max_class_ratio', 10):
@@ -38654,18 +38756,15 @@ def load_and_validate_data(
                 class_ratio = max_class_size / min_class_size if min_class_size > 0 else float('inf')
                 if class_ratio > class_balance_config['max_class_ratio']:
                     warning_msg = f"Class imbalance ratio: {class_ratio:.2f}"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
                     loading_stats['warnings_encountered'].append(warning_msg)
             
             # Outlier detection and handling
             if outlier_detection:
                 progress_data['current_substage'] = "Outlier Detection"
-                if not silent_mode:
-                    main_bar.text = "Detecting and handling outliers"
+                loading_stats['progress_stats'].append(f"Detecting outliers using {outlier_method} method")
                 
-                if not silent_mode:
-                    logger.info(f"Detecting outliers using {outlier_method} method")
+                if show_progress_bar:
+                    main_bar.text = f"Detecting and handling outliers: {outlier_method} method"
                 
                 if outlier_method == 'iqr':
                     Q1 = np.percentile(X, 25, axis=0)
@@ -38686,22 +38785,20 @@ def load_and_validate_data(
                     outlier_mask = outlier_labels == -1
                 
                 else:
-                    if not silent_mode:
-                        logger.warning(f"Unknown outlier method: {outlier_method}")
+                    message = f"Unknown outlier method: {outlier_method}, skipping outlier detection"
+                    loading_stats['warnings_encountered'].append(message)
                     outlier_mask = np.zeros(len(X), dtype=bool)
-                    loading_stats['warnings_encountered'].append(f"Unknown outlier method: {outlier_method}")
                 
                 n_outliers = outlier_mask.sum()
                 if n_outliers > 0:
-                    if not silent_mode:
-                        logger.info(f"Detected {n_outliers} outliers ({n_outliers/len(X)*100:.1f}%)")
+                    loading_stats['progress_stats'].append(f"Detected {n_outliers} outliers ({n_outliers/len(X)*100:.1f}%)")
                     # Remove outliers
                     X = X[~outlier_mask]
                     y = y[~outlier_mask]
-                    if not silent_mode:
-                        logger.info(f"Removed outliers, dataset size: {len(X)}")
+                    
                     loading_stats['outliers_removed'] = n_outliers
                     loading_stats['outlier_percentage'] = n_outliers/len(X)*100
+                    loading_stats['progress_stats'].append(f"Removed outliers, dataset size: {len(X)}")
             
             # Load preprocessing artifacts if available
             scaler = None
@@ -38710,22 +38807,18 @@ def load_and_validate_data(
             
             if artifacts_path.exists():
                 try:
-                    progress_data['current_substage'] = "Loading Artifacts"
-                    if not silent_mode:
-                        main_bar.text = "Loading preprocessing artifacts"
+                    progress_data['current_substage'] = "Loading Preprocessing Artifacts"
+                    loading_stats['progress_stats'].append(f"Loading preprocessing artifacts: {artifacts_path.name}")
                     
-                    if not silent_mode:
-                        logger.info("Loading preprocessing artifacts")
+                    if show_progress_bar:
+                        main_bar.text = f"Loading artifacts: {artifacts_path.name}"
+                    
                     artifacts = joblib.load(artifacts_path)
                     
                     # Validate artifacts
                     artifacts_features = artifacts.get("feature_names", [])
                     if artifacts_features and set(artifacts_features) != set(feature_columns):
-                        warning_msg = "Feature names in artifacts don't match current features"
-                        if not silent_mode:
-                            logger.warning(warning_msg)
-                            logger.warning(f"Artifacts features: {len(artifacts_features)}")
-                            logger.warning(f"Current features: {len(feature_columns)}")
+                        warning_msg = f"Artifact features don't match current dataset features: artifact features: {len(artifacts_features)}, current dataset features: {len(feature_columns)}"
                         loading_stats['warnings_encountered'].append(warning_msg)
                     
                     scaler = artifacts.get("scaler")
@@ -38735,34 +38828,29 @@ def load_and_validate_data(
                     loading_stats['scaler_type'] = type(scaler).__name__ if scaler else None
                 
                 except Exception as e:
-                    warning_msg = f"Failed to load artifacts: {e}"
-                    if not silent_mode:
-                        logger.warning(warning_msg)
+                    warning_msg = f"Failed to load preprocessing artifacts: {e}"
                     loading_stats['warnings_encountered'].append(warning_msg)
                     artifacts = {}
             
             # Apply or create scaling
             if normalization and normalization != 'none':
                 progress_data['current_substage'] = "Feature Scaling"
-                if not silent_mode:
+                if show_progress_bar:
                     main_bar.text = "Applying feature scaling"
                 
                 if scaler is not None:
-                    if not silent_mode:
-                        logger.info(f"Applying existing {type(scaler).__name__} scaler")
+                    loading_stats['progress_stats'].append(f"Applying existing scaler: {type(scaler).__name__}")
+                    
                     try:
                         X_scaled = scaler.transform(X)
                         loading_stats['scaling_applied'] = 'existing'
                     except Exception as e:
                         warning_msg = f"Failed to apply existing scaler: {e}"
-                        if not silent_mode:
-                            logger.warning(warning_msg)
                         loading_stats['warnings_encountered'].append(warning_msg)
                         scaler = None
                 
                 if scaler is None:
-                    if not silent_mode:
-                        logger.info(f"Creating new {normalization} scaler")
+                    loading_stats['progress_stats'].append(f"Creating new {normalization} scaler")
                     
                     if normalization == 'standard':
                         scaler = StandardScaler()
@@ -38773,28 +38861,27 @@ def load_and_validate_data(
                     elif normalization == 'quantile':
                         scaler = QuantileTransformer()
                     else:
-                        if not silent_mode:
-                            logger.warning(f"Unknown normalization method: {normalization}, using standard")
+                        warning_msg = f"Unknown normalization method: {normalization}, using standard"
+                        loading_stats['warnings_encountered'].append(warning_msg)
                         scaler = StandardScaler()
                     
                     X_scaled = scaler.fit_transform(X)
                     loading_stats['scaling_applied'] = 'new'
                 
                 X = X_scaled.astype(np.float32)
+            
             else:
                 loading_stats['scaling_applied'] = 'none'
             
             # Feature selection
             if feature_engineering_config.get('feature_selection', False):
                 progress_data['current_substage'] = "Feature Selection"
-                if not silent_mode:
-                    main_bar.text = "Performing feature selection"
-                
                 n_features_select = feature_engineering_config.get('n_features_select', min(50, len(feature_columns)))
                 selection_method = feature_engineering_config.get('feature_selection_method', 'k_best')
+                loading_stats['progress_stats'].append(f"Performing feature selection: {selection_method}")
                 
-                if not silent_mode:
-                    logger.info(f"Performing feature selection: {selection_method}")
+                if show_progress_bar:
+                    main_bar.text = f"Performing feature selection: {selection_method}"
                 
                 if selection_method == 'k_best':
                     if feature_selector is None:
@@ -38811,20 +38898,19 @@ def load_and_validate_data(
                     X = X_selected
                     feature_columns = selected_feature_names
                     
-                    if not silent_mode:
-                        logger.info(f"Selected {len(feature_columns)} features from {len(selected_features)}")
                     loading_stats['features_selected'] = len(feature_columns)
+                    loading_stats['progress_stats'].append(f"Selected {len(feature_columns)} features from {len(selected_features)}")
             
             progress_data['validation_passed'] += 1
-            if not silent_mode:
-                main_bar.text = "Data processing complete"
             loading_stats['stages_completed'].append('data_processing')
-            if not silent_mode:
+            
+            if show_progress_bar:
+                main_bar.text = "Data processing complete"
                 main_bar()
             
             # STAGE 6: Data Splitting
             progress_data['current_stage'] = "Data Splitting"
-            if not silent_mode:
+            if show_progress_bar:
                 main_bar.text = "Splitting data into train/validation/test sets"
             
             # Split data into normal and attack samples
@@ -38834,8 +38920,7 @@ def load_and_validate_data(
             X_normal = X[normal_mask]
             X_attack = X[attack_mask]
             
-            if not silent_mode:
-                logger.info(f"Data split: {len(X_normal)} normal, {len(X_attack)} attack samples")
+            loading_stats['progress_stats'].append(f"Spliting data into: {len(X_normal)} normal, {len(X_attack)} attack samples")
             
             # Perform train/validation/test splits
             if len(X_normal) == 0:
@@ -38851,6 +38936,7 @@ def load_and_validate_data(
                     random_state=random_state,
                     shuffle=shuffle_data
                 )
+            
             else:
                 X_train_normal = X_normal
                 X_val_normal = np.array([]).reshape(0, X_normal.shape[1])
@@ -38862,6 +38948,7 @@ def load_and_validate_data(
                     X_test = X_attack[:test_size] if test_size > 0 else X_attack
                 else:
                     X_test = X_attack
+            
             else:
                 # If no attack data, use a portion of normal data for testing
                 if test_split > 0:
@@ -38882,21 +38969,20 @@ def load_and_validate_data(
             })
             
             progress_data['validation_passed'] += 1
-            if not silent_mode:
-                main_bar.text = "Data splitting complete"
             loading_stats['stages_completed'].append('data_splitting')
-            if not silent_mode:
+            
+            if show_progress_bar:
+                main_bar.text = "Data splitting complete"
                 main_bar()
             
             # STAGE 7: Statistical Validation and Quality Assessment
             progress_data['current_stage'] = "Quality Assessment"
-            if not silent_mode:
-                main_bar.text = "Performing final quality assessment"
+            if show_progress_bar:
+                main_bar.text = "Performing quality assessment"
             
             # Statistical validation
             if statistical_validation:
-                if not silent_mode:
-                    logger.info("Performing statistical validation")
+                loading_stats['progress_stats'].append("Performing statistical validation")
                 
                 # Check data distributions
                 if advanced_config.get('distribution_checks', False):
@@ -38913,8 +38999,9 @@ def load_and_validate_data(
                                 'p_value': p_value,
                                 'normal': p_value >= 0.05
                             })
-                            if p_value < 0.05 and not silent_mode:
-                                logger.debug(f"Feature {feature_name} may not be normally distributed (p={p_value:.4f})")
+                            if p_value < 0.05:
+                                warning_msg = f"Feature may not be normally distributed: '{feature_name}' (p={p_value:.4f})"
+                                loading_stats['warnings_encountered'].append(warning_msg)
                     
                     loading_stats['normality_tests'] = normality_results
             
@@ -38950,16 +39037,17 @@ def load_and_validate_data(
             loading_stats['data_quality_score'] = quality_score
             loading_stats['quality_metrics'] = dict(quality_metrics)
             
-            if not silent_mode:
-                main_bar.text = "Quality assessment complete"
+            progress_data['validation_passed'] += 1
             loading_stats['stages_completed'].append('quality_assessment')
-            if not silent_mode:
+            
+            if show_progress_bar:
+                main_bar.text = "Quality assessment complete"
                 main_bar()
             
             # STAGE 8: Finalization and Statistics
             progress_data['current_stage'] = "Finalization"
-            if not silent_mode:
-                main_bar.text = "Finalizing data preparation"
+            if show_progress_bar:
+                main_bar.text = "Finalizing data and statistics"
             
             # Prepare final data dictionary
             data_dict = {
@@ -39025,10 +39113,6 @@ def load_and_validate_data(
                 } if advanced_config.get('include_raw_data', False) else None
             }
             
-            # Validate final data shapes and consistency
-            if not silent_mode:
-                logger.info("Performing final data validation")
-            
             # Shape consistency checks
             expected_features = len(feature_columns)
             for key in ["X_train", "X_val", "X_test"]:
@@ -39042,14 +39126,18 @@ def load_and_validate_data(
             # Data type consistency
             for key in ["X_train", "X_val", "X_test"]:
                 if data_dict[key].dtype != np.float32:
-                    if not silent_mode:
-                        logger.warning(f"{key} has dtype {data_dict[key].dtype}, converting to float32")
+                    warning_msg = f"{key} has dtype {data_dict[key].dtype}, converting to float32"
+                    loading_stats['warnings_encountered'].append(warning_msg)
+                    
                     data_dict[key] = data_dict[key].astype(np.float32)
             
             # Save statistics if requested
             if save_statistics and statistics_path:
-                if not silent_mode:
-                    logger.info(f"Saving loading statistics to {statistics_path}")
+                loading_stats['progress_stats'].append(f"Saving statistics: {statistics_path}")
+                
+                if show_progress_bar:
+                    main_bar.text = f"Saving statistics: {statistics_path.name}"
+                
                 try:
                     with open(statistics_path, 'w') as f:
                         # Make loading_stats JSON serializable
@@ -39061,16 +39149,18 @@ def load_and_validate_data(
                                 serializable_stats[key] = str(value)
                         
                         json.dump(serializable_stats, f, indent=2)
-                    if not silent_mode:
-                        logger.info(f"Saved loading statistics to {statistics_path}")
+                    
+                    loading_stats['progress_stats'].append(f"Saving statistics completed: {statistics_path}")
+                
                 except Exception as e:
-                    if not silent_mode:
-                        logger.warning(f"Failed to save statistics: {e}")
+                    warning_msg = f"Failed to save statistics: {e}"
+                    loading_stats['warnings_encountered'].append(warning_msg)
             
-            if not silent_mode:
-                main_bar.text = "Finalization complete"
+            progress_data['validation_passed'] += 1
             loading_stats['stages_completed'].append('finalization')
-            if not silent_mode:
+            
+            if show_progress_bar:
+                main_bar.text = "Finalization complete"
                 main_bar()
         
         # Log summary
@@ -39111,156 +39201,243 @@ def load_and_validate_data(
             logger.setLevel(original_level)
         
         error_msg = f"Data loading and validation failed: {str(e)}"
-        if not silent_mode:
+        if verbose:
             logger.error(error_msg)
             logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        # Save error information
+        error_info = {
+            "success": False,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "timestamp": start_time.isoformat() if 'start_time' in locals() else datetime.now().isoformat(),
+            "loading_interrupted": True,
+            "loading_id": f"error_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            "data_source": "real" if use_real_data else "synthetic",
+            "configuration": locals().get('final_config', config or {}),
+            "loading_stats": loading_stats,
+            "system_info": {
+                "python_version": platform.python_version(),
+                "numpy_version": np.__version__,
+                "pandas_version": pd.__version__,
+                "platform": platform.platform()
+            },
+            "traceback": traceback.format_exc(),
+            "partial_results": {}
+        }
+        
+        # Add partial loading results if available
+        if 'df' in locals() and locals()['df'] is not None and not locals()['df'].empty:
+            try:
+                error_info["partial_results"] = {
+                    "stages_completed": loading_stats.get('stages_completed', []),
+                    "rows_processed": locals().get('progress_data', {}).get('rows_processed', 0),
+                    "features_processed": locals().get('progress_data', {}).get('features_processed', 0),
+                    "data_quality_score": locals().get('progress_data', {}).get('data_quality_score', 0.0),
+                    "dataframe_available": True,
+                    "dataframe_shape": locals()['df'].shape,
+                    "columns": locals()['df'].columns.tolist(),
+                    "data_types": locals()['df'].dtypes.to_dict()
+                }
+                
+                if 'X' in locals() and locals()['X'] is not None:
+                    error_info["partial_results"]["feature_matrix_available"] = True
+                    error_info["partial_results"]["feature_matrix_shape"] = locals()['X'].shape
+                
+                if 'y' in locals() and locals()['y'] is not None:
+                    error_info["partial_results"]["labels_available"] = True
+                    error_info["partial_results"]["labels_shape"] = locals()['y'].shape
+                    error_info["partial_results"]["unique_labels"] = np.unique(locals()['y']).tolist()
+                
+                if 'X_train_normal' in locals() and locals()['X_train_normal'] is not None:
+                    error_info["partial_results"]["train_data_available"] = True
+                    error_info["partial_results"]["train_samples"] = len(locals()['X_train_normal'])
+                
+                if 'X_val_normal' in locals() and locals()['X_val_normal'] is not None:
+                    error_info["partial_results"]["val_data_available"] = True
+                    error_info["partial_results"]["val_samples"] = len(locals()['X_val_normal'])
+                
+                if 'X_test' in locals() and locals()['X_test'] is not None:
+                    error_info["partial_results"]["test_data_available"] = True
+                    error_info["partial_results"]["test_samples"] = len(locals()['X_test'])
+                
+                logger.info(f"Partial loading completed: {len(loading_stats.get('stages_completed', []))} stages")
+            except Exception as partial_error:
+                error_info["partial_results"]["extraction_error"] = str(partial_error)
+        
+        # Add loading parameters information
+        error_info["loading_parameters"] = {
+            "use_real_data": locals().get('use_real_data', False),
+            "data_path": str(locals().get('data_path', 'unknown')),
+            "artifacts_path": str(locals().get('artifacts_path', 'unknown')),
+            "min_samples": locals().get('min_samples', 0),
+            "min_features": locals().get('min_features', 0),
+            "normalization": locals().get('normalization', 'unknown'),
+            "validation_split": locals().get('validation_split', 0.0),
+            "test_split": locals().get('test_split', 0.0)
+        }
+        
+        # Add data information if partially available
+        if 'feature_columns' in locals() and locals()['feature_columns']:
+            try:
+                error_info["data_info"] = {
+                    "feature_columns_count": len(locals()['feature_columns']),
+                    "label_column": locals().get('label_column', 'unknown'),
+                    "data_format": locals().get('data_format', 'unknown')
+                }
+            except Exception:
+                error_info["data_info"] = {"error": "Could not extract data info"}
+        
+        # Save error information to file
+        try:
+            # Use appropriate directory based on what's available
+            if run_tracking:
+                error_path = metrics_dir / f"loading_and_validation_errors.json"
+            else:
+                error_path = metrics_dir / f"loading_and_validation_errors_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             
-            # Provide helpful error context
-            logger.error(f"Error occurred while processing: {data_path}")
-            logger.error(f"Configuration used: {final_config}")
-            logger.error(f"Stages completed: {loading_stats['stages_completed']}")
+            # Create serializable error info
+            serializable_error_info = {}
+            for key, value in error_info.items():
+                if key == 'configuration':
+                    serializable_error_info[key] = 'configuration_available_in_separate_file'
+                elif key == 'loading_stats':
+                    serializable_stats = {}
+                    for stats_key, stats_value in value.items():
+                        if stats_key == 'config_applied':
+                            serializable_stats[stats_key] = 'config_not_included_in_error_file'
+                        elif isinstance(stats_value, (str, int, float, bool, type(None))):
+                            serializable_stats[stats_key] = stats_value
+                        elif isinstance(stats_value, (list, tuple)):
+                            serializable_stats[stats_key] = [
+                                item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                                for item in stats_value
+                            ]
+                        elif isinstance(stats_value, dict):
+                            serializable_stats[stats_key] = {
+                                str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                                for k, v in stats_value.items()
+                            }
+                        else:
+                            serializable_stats[stats_key] = str(stats_value)
+                    serializable_error_info[key] = serializable_stats
+                elif isinstance(value, (str, int, float, bool, type(None))):
+                    serializable_error_info[key] = value
+                elif isinstance(value, (list, tuple)):
+                    serializable_error_info[key] = [
+                        item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                        for item in value
+                    ]
+                elif isinstance(value, dict):
+                    serializable_error_info[key] = {
+                        str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                        for k, v in value.items()
+                    }
+                elif isinstance(value, Path):
+                    serializable_error_info[key] = str(value)
+                else:
+                    serializable_error_info[key] = str(value)
+            
+            with open(error_path, "w") as f:
+                json.dump(serializable_error_info, f, indent=2)
+            
+            logger.error(f"Error information saved to: {error_path}")
+            error_info["error_log_path"] = str(error_path)
+        
+        except Exception as save_error:
+            logger.error(f"Failed to save error information: {save_error}")
+            error_info["save_error"] = str(save_error)
+        
+        # Save partial results if any data was loaded
+        if error_info.get("partial_results") and error_info["partial_results"].get("stages_completed"):
+            try:
+                partial_results_data = {
+                    "success": False,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "partial_loading": True,
+                    "timestamp": error_info["timestamp"],
+                    "loading_id": error_info["loading_id"],
+                    "stages_completed": error_info["partial_results"]["stages_completed"],
+                    "rows_processed": error_info["partial_results"].get("rows_processed", 0),
+                    "system_info": error_info["system_info"],
+                    "error_log_path": error_info.get("error_log_path"),
+                    "loading_parameters": error_info["loading_parameters"]
+                }
+                
+                # Add partial data arrays if available
+                partial_data = {}
+                if 'X_train_normal' in locals() and locals()['X_train_normal'] is not None:
+                    try:
+                        partial_data['X_train'] = locals()['X_train_normal']
+                    except Exception:
+                        pass
+                
+                if 'X_val_normal' in locals() and locals()['X_val_normal'] is not None:
+                    try:
+                        partial_data['X_val'] = locals()['X_val_normal']
+                    except Exception:
+                        pass
+                
+                if 'X_test' in locals() and locals()['X_test'] is not None:
+                    try:
+                        partial_data['X_test'] = locals()['X_test']
+                    except Exception:
+                        pass
+                
+                if 'feature_columns' in locals() and locals()['feature_columns']:
+                    try:
+                        partial_data['feature_names'] = locals()['feature_columns']
+                    except Exception:
+                        pass
+                
+                if 'scaler' in locals() and locals()['scaler'] is not None:
+                    try:
+                        partial_data['scaler'] = locals()['scaler']
+                    except Exception:
+                        pass
+                
+                # Save partial data if any exists
+                if partial_data:
+                    if run_tracking:
+                        partial_path = results_dir / f"partial_loading_and_validation_results.npz"
+                        partial_results_path = results_dir / f"partial_loading_and_validation_results_metadata.json"
+                    else:
+                        partial_path = results_dir / f"partial_loading_and_validation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.npz"
+                        partial_results_path = results_dir / f"partial_loading_and_validation_results_metadata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                    
+                    # Save as compressed numpy archive
+                    np.savez_compressed(partial_path, **partial_data)
+                    partial_results_data['partial_data_path'] = str(partial_path)
+                    logger.info(f"Partial data saved: {partial_path}")
+                
+                # Create serializable partial results
+                serializable_partial = {}
+                for key, value in partial_results_data.items():
+                    if isinstance(value, (str, int, float, bool, type(None))):
+                        serializable_partial[key] = value
+                    elif isinstance(value, (list, tuple)):
+                        serializable_partial[key] = [
+                            item if isinstance(item, (str, int, float, bool, type(None))) else str(item)
+                            for item in value
+                        ]
+                    elif isinstance(value, dict):
+                        serializable_partial[key] = {
+                            str(k): v if isinstance(v, (str, int, float, bool, type(None))) else str(v)
+                            for k, v in value.items()
+                        }
+                    else:
+                        serializable_partial[key] = str(value)
+                
+                with open(partial_results_path, "w") as f:
+                    json.dump(serializable_partial, f, indent=2)
+                
+                logger.info(f"Partial results metadata saved: {partial_results_path}")
+            
+            except Exception as partial_save_error:
+                logger.warning(f"Failed to save partial results: {partial_save_error}")
         
         raise RuntimeError(error_msg)
-
-def validate_data_integrity(
-    data_dict: Dict[str, Union[np.ndarray, Dict[str, Any]]],
-    config: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """
-    Perform data integrity validation.
-    
-    Args:
-        data_dict: Data dictionary from load_and_validate_data
-        config: Configuration dictionary
-    
-    Returns:
-        Dictionary with validation results and recommendations
-    """
-    validation_results = {
-        'passed': True,
-        'warnings': [],
-        'errors': [],
-        'recommendations': [],
-        'quality_score': 1.0,
-        'detailed_checks': {}
-    }
-    
-    try:
-        # Extract data components
-        X_train = data_dict.get('X_train', np.array([]))
-        X_val = data_dict.get('X_val', np.array([]))
-        X_test = data_dict.get('X_test', np.array([]))
-        metadata = data_dict.get('metadata', {})
-        
-        # Check data presence
-        if X_train.size == 0:
-            validation_results['errors'].append("No training data available")
-            validation_results['passed'] = False
-        
-        # Check data shapes consistency
-        if X_train.size > 0 and X_val.size > 0:
-            if X_train.shape[1] != X_val.shape[1]:
-                validation_results['errors'].append(f"Feature dimension mismatch: train={X_train.shape[1]}, val={X_val.shape[1]}")
-                validation_results['passed'] = False
-        
-        # Check for data quality issues
-        for name, data in [('train', X_train), ('val', X_val), ('test', X_test)]:
-            if data.size > 0:
-                # Check for NaN values
-                nan_count = np.isnan(data).sum()
-                if nan_count > 0:
-                    validation_results['warnings'].append(f"{name} data contains {nan_count} NaN values")
-                
-                # Check for infinite values
-                inf_count = np.isinf(data).sum()
-                if inf_count > 0:
-                    validation_results['warnings'].append(f"{name} data contains {inf_count} infinite values")
-                
-                # Check data ranges
-                if np.any(data > 1e6) or np.any(data < -1e6):
-                    validation_results['warnings'].append(f"{name} data contains extreme values")
-        
-        # Calculate quality score
-        n_warnings = len(validation_results['warnings'])
-        n_errors = len(validation_results['errors'])
-        validation_results['quality_score'] = max(0.0, 1.0 - (n_warnings * 0.1 + n_errors * 0.5))
-        
-        return validation_results
-    
-    except Exception as e:
-        validation_results['errors'].append(f"Validation process failed: {str(e)}")
-        validation_results['passed'] = False
-        validation_results['quality_score'] = 0.0
-        return validation_results
-
-def create_data_pipeline(
-    config: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Create a data processing pipeline based on configuration.
-    
-    Args:
-        config: Complete configuration dictionary
-        
-    Returns:
-        Data pipeline configuration
-    """
-    pipeline_config = {
-        'steps': [],
-        'parameters': {},
-        'validation_rules': {},
-        'monitoring': {}
-    }
-    
-    # Extract relevant configuration sections
-    data_config = config.get('data_loading', {})
-    processing_config = config.get('data_processing', {})
-    validation_config = config.get('data_validation', {})
-    
-    # Build pipeline steps
-    pipeline_steps = []
-    
-    # Step 1: Data Loading
-    pipeline_steps.append({
-        'name': 'data_loading',
-        'function': 'load_raw_data',
-        'parameters': data_config
-    })
-    
-    # Step 2: Data Validation
-    pipeline_steps.append({
-        'name': 'validation',
-        'function': 'validate_data_structure',
-        'parameters': validation_config
-    })
-    
-    # Step 3: Data Processing
-    if processing_config.get('normalization', 'none') != 'none':
-        pipeline_steps.append({
-            'name': 'normalization',
-            'function': 'apply_normalization',
-            'parameters': {'method': processing_config['normalization']}
-        })
-    
-    # Step 4: Feature Engineering
-    if config.get('feature_engineering', {}).get('feature_selection', False):
-        pipeline_steps.append({
-            'name': 'feature_selection',
-            'function': 'select_features',
-            'parameters': config['feature_engineering']
-        })
-    
-    # Step 5: Data Splitting
-    pipeline_steps.append({
-        'name': 'data_splitting',
-        'function': 'split_data',
-        'parameters': config.get('data_splitting', {})
-    })
-    
-    pipeline_config['steps'] = pipeline_steps
-    pipeline_config['parameters'] = config
-    
-    return pipeline_config
 
 def generate_synthetic_data(
     # Core Data Generation Parameters
@@ -39630,19 +39807,23 @@ def generate_synthetic_data(
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
     
     # Determine output directories with run-specific support
+    deep_learning_runs = Path(__file__).resolve().parent / 'deep_learning_runs'
     if use_run_tracking and run_id and run_specific_dirs:
+        run_tracking = True
+        run_dir = deep_learning_runs / f"{run_id}"
         # Use run-specific directories for outputs
-        datasets_dir = run_specific_dirs.get('datasets', datasets_dir)
-        reports_dir = run_specific_dirs.get('reports', reports_dir)
-        results_dir = run_specific_dirs.get('results', results_dir)
-        data_dir = run_specific_dirs.get('data', data_dir)
-        logger.debug(f"Using run-specific directories for synthetic data generation (run_id: {run_id})")
+        datasets_dir = run_specific_dirs.get('datasets', run_dir / 'datasets') / 'generate_synthetic_data'
+        reports_dir = run_specific_dirs.get('reports', run_dir / 'reports') / 'generate_synthetic_data'
+        results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'generate_synthetic_data'
+        data_dir = run_specific_dirs.get('data', run_dir / 'data') / 'generate_synthetic_data'
+    
     else:
         # Directory defaults
-        reports_dir = system_config.setdefault('reports_dir', Path(REPORTS_DIR / active_preset))
-        data_dir = system_config.setdefault('data_dir', Path(DATA_DIR / active_preset))
-        datasets_dir = system_config.setdefault('dataset_dir', Path(DATASETS_DIR / active_preset))
-        results_dir = system_config.setdefault('results_dir', Path(RESULTS_DIR / active_preset))
+        run_tracking = False
+        reports_dir = Path(deep_learning_runs / 'reports' / 'generate_synthetic_data')
+        data_dir = Path(deep_learning_runs / 'data' / 'generate_synthetic_data')
+        datasets_dir = Path(deep_learning_runs / 'datasets' / 'generate_synthetic_data')
+        results_dir = Path(deep_learning_runs / 'results' / 'generate_synthetic_data')
     
     # Export defaults
     file_format = export_config.setdefault('file_format', None)
@@ -40901,29 +41082,35 @@ def generate_synthetic_data(
                 generation_stats['log_generation_stats'] = stats
                 
                 # Save JSON report
-                if log_generation_stats and stats and use_run_tracking and run_id:
+                if log_generation_stats and stats:
                     # Save generation stats to run-specific metrics directory
-                    if 'metrics' in run_specific_dirs:
-                        json_stats = run_specific_dirs['metrics'] / f"generation_stats_{run_id}.json"
-                        # Ensure Path object
-                        if json_stats:
-                            stats_path = Path(json_stats)
-                            stats_path.parent.mkdir(parents=True, exist_ok=True)
-                        try:
-                            # Prepare statistics for JSON serialization
-                            serial_stats = {}
-                            for key, value in stats.items():
-                                if isinstance(value, (str, int, float, bool, list, dict, type(None))):
-                                    serial_stats[key] = value
-                                elif isinstance(value, Path):
-                                    serial_stats[key] = str(value)
-                                else:
-                                    serial_stats[key] = str(value)
-                            with open(stats_path, 'w') as f:
-                                json.dump(serial_stats, f, indent=2)
-                            logger.info(f"Generation statistics saved: {stats_path}")
-                        except Exception as e:
-                            logger.error(f"Failed to save generation statistics: {e}")
+                    if run_tracking:
+                        json_stats = metrics_dir / f"data_generation_statistics.json"
+                    else:
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        json_stats = metrics_dir / f"data_generation_statistics_{timestamp}.json"
+                    
+                    # Ensure Path object
+                    if json_stats:
+                        stats_path = Path(json_stats)
+                        stats_path.parent.mkdir(parents=True, exist_ok=True)
+                    
+                    # Save JSON
+                    try:
+                        # Prepare statistics for JSON serialization
+                        serial_stats = {}
+                        for key, value in stats.items():
+                            if isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                                serial_stats[key] = value
+                            elif isinstance(value, Path):
+                                serial_stats[key] = str(value)
+                            else:
+                                serial_stats[key] = str(value)
+                        with open(stats_path, 'w') as f:
+                            json.dump(serial_stats, f, indent=2)
+                        logger.info(f"Generation statistics saved: {stats_path}")
+                    except Exception as e:
+                        logger.error(f"Failed to save generation statistics: {e}")
             
             # Prepare metadata
             total_time = (datetime.now() - start_time).total_seconds()
@@ -41010,9 +41197,9 @@ def generate_synthetic_data(
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     
                     # Include run_id in report filenames
-                    if use_run_tracking and run_id:
-                        json_filename = f"synthetic_data_generation_report_{run_id}_{timestamp}.json"
-                        txt_filename = f"synthetic_data_generation_report_{run_id}_{timestamp}.txt"
+                    if run_tracking:
+                        json_filename = f"synthetic_data_generation_report.json"
+                        txt_filename = f"synthetic_data_generation_report.txt"
                     else:
                         json_filename = f"synthetic_data_generation_report_{timestamp}.json"
                         txt_filename = f"synthetic_data_generation_report_{timestamp}.txt"
@@ -41436,10 +41623,10 @@ def generate_synthetic_data(
             file_extension = format_extensions.get(file_format, file_format)
             
             # Include run_id in filename if run tracking is enabled
-            if use_run_tracking and run_id:
-                base_filename = f"synthetic_data_{run_id}_{timestamp}"
+            if run_tracking:
+                base_filename = f"synthetic_dataset"
             else:
-                base_filename = f"synthetic_data_{timestamp}"
+                base_filename = f"synthetic_dataset_{timestamp}"
             
             # Create the uncompressed file path first
             uncompressed_path = datasets_dir / f"{base_filename}.{file_extension}"
@@ -41485,7 +41672,7 @@ def generate_synthetic_data(
                     
                     df_combined.to_csv(uncompressed_path, index=False, encoding=encoding)
                     will_be_binary = False
-                    
+                
                 elif file_format == 'parquet':
                     bar.text = "Saving as Parquet"
                     
@@ -41855,11 +42042,6 @@ def generate_synthetic_data(
         if verbose:
             logger.error(error_msg)
             logger.error(f"Full traceback: {traceback.format_exc()}")
-            
-            # Provide helpful error context
-            logger.error(f"Generation parameters: normal={normal_samples}, attack={attack_samples}, features={features}")
-            logger.error(f"Configuration used: {final_config}")
-            logger.error(f"Stages completed: {generation_stats['stages_completed']}")
         
         # Save error information
         error_info = {
@@ -41929,15 +42111,10 @@ def generate_synthetic_data(
         # Save error information to file
         try:
             # Use appropriate directory based on what's available
-            if 'datasets_dir' in locals() and locals()['datasets_dir']:
-                error_dir = Path(locals()['datasets_dir'])
-            elif 'results_dir' in locals() and locals()['results_dir']:
-                error_dir = Path(locals()['results_dir'])
+            if run_tracking:
+                error_path = metrics_dir / f"synthetic_data_generation_errors.json"
             else:
-                error_dir = Path(DATASETS_DIR / locals().get('active_preset', 'default'))
-            
-            error_dir.mkdir(parents=True, exist_ok=True)
-            error_path = error_dir / f"generation_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                error_path = metrics_dir / f"synthetic_data_generation_errors_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             
             # Create serializable error info
             serializable_error_info = {}
@@ -42039,21 +42216,17 @@ def generate_synthetic_data(
                 
                 # Save partial data if any exists
                 if partial_data:
-                    if 'datasets_dir' in locals() and locals()['datasets_dir']:
-                        partial_dir = Path(locals()['datasets_dir'])
+                    if run_tracking:
+                        partial_path = results_dir / f"partial_data_generation_results.npz"
+                        partial_results_path = results_dir / f"partial_data_generation_results_metadata.json"
                     else:
-                        partial_dir = Path(DATASETS_DIR / locals().get('active_preset', 'default'))
-                    
-                    partial_dir.mkdir(parents=True, exist_ok=True)
-                    partial_path = partial_dir / f"partial_generation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.npz"
+                        partial_path = results_dir / f"partial_data_generation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.npz"
+                        partial_results_path = results_dir / f"partial_data_generation_results_metadata_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
                     
                     # Save as compressed numpy archive
                     np.savez_compressed(partial_path, **partial_data)
                     partial_results_data['partial_data_path'] = str(partial_path)
                     logger.info(f"Partial data saved: {partial_path}")
-                
-                # Save partial results metadata
-                partial_results_path = error_dir / f"partial_generation_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
                 
                 # Create serializable partial results
                 serializable_partial = {}
@@ -42082,6 +42255,146 @@ def generate_synthetic_data(
                 logger.warning(f"Failed to save partial results: {partial_save_error}")
         
         raise RuntimeError(error_msg)
+
+def validate_data_integrity(
+    data_dict: Dict[str, Union[np.ndarray, Dict[str, Any]]],
+    config: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Perform data integrity validation.
+    
+    Args:
+        data_dict: Data dictionary from load_and_validate_data
+        config: Configuration dictionary
+    
+    Returns:
+        Dictionary with validation results and recommendations
+    """
+    validation_results = {
+        'passed': True,
+        'warnings': [],
+        'errors': [],
+        'recommendations': [],
+        'quality_score': 1.0,
+        'detailed_checks': {}
+    }
+    
+    try:
+        # Extract data components
+        X_train = data_dict.get('X_train', np.array([]))
+        X_val = data_dict.get('X_val', np.array([]))
+        X_test = data_dict.get('X_test', np.array([]))
+        metadata = data_dict.get('metadata', {})
+        
+        # Check data presence
+        if X_train.size == 0:
+            validation_results['errors'].append("No training data available")
+            validation_results['passed'] = False
+        
+        # Check data shapes consistency
+        if X_train.size > 0 and X_val.size > 0:
+            if X_train.shape[1] != X_val.shape[1]:
+                validation_results['errors'].append(f"Feature dimension mismatch: train={X_train.shape[1]}, val={X_val.shape[1]}")
+                validation_results['passed'] = False
+        
+        # Check for data quality issues
+        for name, data in [('train', X_train), ('val', X_val), ('test', X_test)]:
+            if data.size > 0:
+                # Check for NaN values
+                nan_count = np.isnan(data).sum()
+                if nan_count > 0:
+                    validation_results['warnings'].append(f"{name} data contains {nan_count} NaN values")
+                
+                # Check for infinite values
+                inf_count = np.isinf(data).sum()
+                if inf_count > 0:
+                    validation_results['warnings'].append(f"{name} data contains {inf_count} infinite values")
+                
+                # Check data ranges
+                if np.any(data > 1e6) or np.any(data < -1e6):
+                    validation_results['warnings'].append(f"{name} data contains extreme values")
+        
+        # Calculate quality score
+        n_warnings = len(validation_results['warnings'])
+        n_errors = len(validation_results['errors'])
+        validation_results['quality_score'] = max(0.0, 1.0 - (n_warnings * 0.1 + n_errors * 0.5))
+        
+        return validation_results
+    
+    except Exception as e:
+        validation_results['errors'].append(f"Validation process failed: {str(e)}")
+        validation_results['passed'] = False
+        validation_results['quality_score'] = 0.0
+        return validation_results
+
+def create_data_pipeline(
+    config: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Create a data processing pipeline based on configuration.
+    
+    Args:
+        config: Complete configuration dictionary
+    
+    Returns:
+        Data pipeline configuration
+    """
+    pipeline_config = {
+        'steps': [],
+        'parameters': {},
+        'validation_rules': {},
+        'monitoring': {}
+    }
+    
+    # Extract relevant configuration sections
+    data_config = config.get('data_loading', {})
+    processing_config = config.get('data_processing', {})
+    validation_config = config.get('data_validation', {})
+    
+    # Build pipeline steps
+    pipeline_steps = []
+    
+    # Step 1: Data Loading
+    pipeline_steps.append({
+        'name': 'data_loading',
+        'function': 'load_raw_data',
+        'parameters': data_config
+    })
+    
+    # Step 2: Data Validation
+    pipeline_steps.append({
+        'name': 'validation',
+        'function': 'validate_data_structure',
+        'parameters': validation_config
+    })
+    
+    # Step 3: Data Processing
+    if processing_config.get('normalization', 'none') != 'none':
+        pipeline_steps.append({
+            'name': 'normalization',
+            'function': 'apply_normalization',
+            'parameters': {'method': processing_config['normalization']}
+        })
+    
+    # Step 4: Feature Engineering
+    if config.get('feature_engineering', {}).get('feature_selection', False):
+        pipeline_steps.append({
+            'name': 'feature_selection',
+            'function': 'select_features',
+            'parameters': config['feature_engineering']
+        })
+    
+    # Step 5: Data Splitting
+    pipeline_steps.append({
+        'name': 'data_splitting',
+        'function': 'split_data',
+        'parameters': config.get('data_splitting', {})
+    })
+    
+    pipeline_config['steps'] = pipeline_steps
+    pipeline_config['parameters'] = config
+    
+    return pipeline_config
 
 def validate_synthetic_data(
     data_dict: Dict[str, Union[np.ndarray, Dict[str, Any]]],
@@ -42920,23 +43233,36 @@ def create_dataloaders(
     max_retries = error_config.setdefault('max_retries', 3)
     
     # Extract run tracking parameters
+    deep_learning_runs = Path(__file__).resolve().parent / 'deep_learning_runs'
     run_id = run_tracking_config.get('run_id', run_id)
     run_number = run_tracking_config.get('run_number', run_number)
     run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
     
+    # Determine output directories with run-specific support
+    if use_run_tracking and run_id and run_specific_dirs:
+        run_tracking = True
+        run_dir = deep_learning_runs / f"{run_id}"
+        # Use run-specific directories for outputs
+        metrics_dir = run_specific_dirs.get('metrics', run_dir / 'metrics') / 'create_dataloaders'
+        results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'create_dataloaders'
+    
+    else:
+        run_tracking = False
+        # Directory defaults
+        metrics_dir = deep_learning_runs / 'metrics' / 'create_dataloaders'
+        results_dir = deep_learning_runs / 'results' / 'create_dataloaders'
+    
     # Determine statistics save path with run tracking support
     if save_statistics and statistics_path is None:
-        if use_run_tracking and run_id is not None:
-            # Use run-specific metrics directory if available
-            if 'metrics' in run_specific_dirs:
-                statistics_path = run_specific_dirs['metrics'] / f"dataloader_statistics_{run_id}.json"
-            else:
-                # Fallback to default location with run_id suffix
-                statistics_path = Path(__file__).resolve().parent / "metrics" / f"dataloader_statistics_{run_id}.json"
+        if run_tracking:
+            statistics_path = metrics_dir / f"dataloader_creation_statistics.json"
         else:
-            # Default behavior for standalone usage
-            statistics_path = Path(__file__).resolve().parent / "metrics" / "dataloader_statistics.json"
+            statistics_path = metrics_dir / f"dataloader_creation_statistics_{start_time.strftime('%Y%m%d_%H%M%S')}.json"
+    
+    # Convert to Path object if necessary
+    if statistics_path is not None:
+        statistics_path = Path(statistics_path)
     
     # Set up logging level
     if verbose:
@@ -44000,9 +44326,6 @@ def create_dataloaders(
                     logger.info(f"Saving dataloader statistics to {statistics_path}")
                 
                 try:
-                    # Ensure parent directory exists
-                    statistics_path.parent.mkdir(parents=True, exist_ok=True)
-                    
                     # Prepare statistics for JSON serialization
                     serializable_stats = {}
                     for key, value in creation_stats.items():
@@ -47842,32 +48165,6 @@ def _default_validation_callbacks():
     
     return callbacks
 
-class ProgressHelper:
-    """Reusable factory for creating consistent alive_progress bars."""
-    def __init__(self, titles: list[str] = None):
-        """
-        Initialize helper with optional list of titles.
-        
-        Args:
-            titles: Optional list of title strings (not needed for simple approach)
-        """
-        # Titles parameter is kept for backward compatibility but not used
-        self.titles = titles if titles else []
-    
-    def bar(self, title: str, total: int, unit: str):
-        """
-        Return a configured alive_progress bar with consistent formatting.
-        
-        Args:
-            title: The title to display
-            total: Total number of items to process
-            unit: Unit name for the progress bar
-        
-        Returns:
-            Configured alive_bar context manager
-        """
-        return alive_bar(total, title=title, unit=unit, length=25, elapsed=True, title_length=25)
-
 def validate(
     # Core Validation Parameters
     model: Optional[nn.Module] = None,
@@ -47956,7 +48253,7 @@ def validate(
     world_size: Optional[int] = None,
     rank: Optional[int] = None,
     reduce_metrics: Optional[bool] = None,
-
+    
     # Directory Parameters
     artifacts_dir: Optional[Union[str, Path]] = None,
     checkpoints_dir: Optional[Union[str, Path]] = None,
@@ -48259,7 +48556,7 @@ def validate(
     
     # Export and visualization parameters
     save_results = export_config.setdefault('save_results', True)
-    results_path = export_config.setdefault('results_path', result_dir)
+    results_path = export_config.setdefault('results_path', None)
     save_predictions = export_config.setdefault('save_predictions', True)
     save_reconstructions = export_config.setdefault('save_reconstructions', True)
     visualization = export_config.setdefault('visualization', True)
@@ -48295,7 +48592,7 @@ def validate(
     experimental_features = experimental_config.setdefault('experimental_features', False)
     experimental_metrics = experimental_config.setdefault('experimental_metrics', False)
     beta_features = experimental_config.setdefault('beta_features', False)
-
+    
     # Security parameters
     enable_security_metrics = security_config.setdefault('enable_security_metrics', True)
     real_time_monitoring = security_config.setdefault('real_time_monitoring', True)
@@ -48305,20 +48602,20 @@ def validate(
     custom_threshold_fn = custom_config.get('custom_threshold_fn')
     custom_analysis_fn = custom_config.get('custom_analysis_fn')
     validation_callbacks = custom_config.get('validation_callbacks', [])
-
+    
     # Apply IDS-specific defaults if not provided
     if custom_metric_fn is None and enable_security_metrics:
         custom_metric_fn = _default_security_metrics
         logger.debug("Using default security metrics function")
-
+    
     if custom_threshold_fn is None and adaptive_threshold:
         custom_threshold_fn = _default_adaptive_threshold
         logger.debug("Using default adaptive threshold function")
-
+    
     if custom_analysis_fn is None and detailed_metrics:
         custom_analysis_fn = _default_validation_analysis
         logger.debug("Using default validation analysis function")
-
+    
     if not validation_callbacks and real_time_monitoring:
         validation_callbacks = _default_validation_callbacks()
         logger.debug(f"Using {len(validation_callbacks)} default validation callbacks")
@@ -48339,7 +48636,24 @@ def validate(
     run_number = run_tracking_config.get('run_number', run_number)
     run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
-
+    
+    # Determine output directories with run-specific support
+    deep_learning_runs = Path(__file__).resolve().parent / 'deep_learning_runs'
+    if use_run_tracking and run_id and run_specific_dirs:
+        run_tracking = True
+        run_dir = deep_learning_runs / f"{run_id}"
+        # Use run-specific directories for outputs
+        metrics_dir = run_specific_dirs.get('metrics', run_dir / 'metrics') / 'validate'
+        results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'validate'
+        figures_dir = run_specific_dirs.get('figures', run_dir / 'figures') / 'validate'
+    
+    else:
+        run_tracking = False
+        # Directory defaults
+        metrics_dir = deep_learning_runs / 'metrics' / 'validate'
+        results_dir = deep_learning_runs / 'results' / 'validate'
+        figures_dir = deep_learning_runs / 'figures' / 'validate'
+    
     # Set up logging level
     if verbose:
         original_level = logger.level
@@ -48412,14 +48726,17 @@ def validate(
         metrics_time = 0
         
         # Define stage titles for ProgressHelper
-        titles = [f"{progress_bar_desc}"]
+        titles = f"Validating {progress_bar_desc}"
         
         # Set up alive-progress bar
         if progress_bar:
+            if verbose:
+                logger.info(f"\nStarting validation with {len(loader)} batches")
+            
             try:
                 progress = ProgressHelper(titles)
                 pbar_context = progress.bar(
-                    title=progress_bar_desc,
+                    title=f"Validating {progress_bar_desc}",
                     total=len(loader) + 1,
                     unit='batches'
                 )
@@ -48438,17 +48755,15 @@ def validate(
             pbar = None
             pbar_context = None
         
-        if verbose:
-            logger.info(f"\nStarting validation with {len(loader)} batches")
-        
         # Ensure run-specific directories exist when saving
         if use_run_tracking and run_specific_dirs:
             for dir_type, dir_path in run_specific_dirs.items():
-                try:
-                    dir_path.mkdir(parents=True, exist_ok=True)
-                except Exception as e:
-                    if verbose:
-                        logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
+                if not dir_path.exists():
+                    try:
+                        dir_path.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        if verbose:
+                            logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
         
         # Validation callbacks setup
         validation_callbacks = custom_config.get('validation_callbacks', [])
@@ -48469,7 +48784,7 @@ def validate(
                 try:
                     # Update progress bar with current batch processing status
                     if pbar:
-                        pbar.text = f"Processing {batch_idx+1}/{len(loader)}"
+                        pbar.text = f"Loading batch: {batch_idx+1}/{len(loader)}"
                     
                     # Move data to device
                     if isinstance(batch, (list, tuple)):
@@ -48500,7 +48815,7 @@ def validate(
                     
                     # Update progress bar with data loading status
                     if pbar:
-                        pbar.text = f"Data loaded | {batch_idx+1}/{len(loader)}"
+                        pbar.text = f"Running foward pass: {batch_idx+1}/{len(loader)}"
                     
                     # Forward pass with mixed precision and timing
                     forward_start_time = time.time()
@@ -48598,7 +48913,7 @@ def validate(
                     
                     # Update progress bar with forward pass completion
                     if pbar:
-                        pbar.text = f"Forward pass completed | {batch_idx+1}/{len(loader)}"
+                        pbar.text = f"Calculating metrics: {batch_idx+1}/{len(loader)}"
                     
                     # Calculate metrics with timing
                     metrics_start_time = time.time()
@@ -48694,9 +49009,7 @@ def validate(
                         avg_loss_display = total_loss / num_batches
                         
                         # Update the progress bar text
-                        pbar.text = f"Current Loss: {current_loss_display:.4f} | Avg Loss: {avg_loss_display:.4f} | Samples: {num_samples:,}"
-                        
-                        # Update the progress
+                        pbar.text = f"Batch {batch_idx+1}/{len(loader)} | Current Loss: {current_loss_display:.4f} | Avg Loss: {avg_loss_display:.4f} | Samples: {num_samples:,}"
                         pbar()
                     
                     # Logging
@@ -49111,27 +49424,20 @@ def validate(
         
         # Update progress bar for custom analysis
         if pbar and save_results:
-            pbar.text = "Finalizing results | Saving results"
+            pbar.text = "Saving validation results"
         
         # Save results if requested
         if save_results:
             # Determine results path with run tracking support
-            if use_run_tracking and run_id is not None:
-                # Use run-specific results directory if available
-                if 'results' in run_specific_dirs:
-                    results_dir = run_specific_dirs['results']
-                    results_dir.mkdir(parents=True, exist_ok=True)
-                    results_path = results_dir / f"validation_results_epoch_{epoch}.json"
-                else:
-                    # Fallback to default location with run_id suffix
-                    results_dir = Path(result_dir / f"{run_id}")
-                    results_dir.mkdir(parents=True, exist_ok=True)
-                    results_path = results_dir / f"validation_results_epoch_{epoch}.json"
-            else:
-                # Default behavior for standalone usage
-                results_dir = Path(result_dir)
-                results_dir.mkdir(parents=True, exist_ok=True)
+            if run_tracking:
                 results_path = results_dir / f"validation_results_epoch_{epoch}.json"
+            else:
+                results_path = results_dir / f"validation_results_epoch_{epoch}.json"
+            
+            # Ensure Path object
+            if results_path:
+                results_path = Path(results_path)
+                results_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Save JSON
             try:
@@ -49154,26 +49460,20 @@ def validate(
         
         # Update progress bar for custom analysis
         if pbar and save_predictions and all_predictions:
-            pbar.text = "Finalizing results | Saving predictions"
+            pbar.text = "Saving validation predictions"
         
         # Save predictions if requested
         if save_predictions and all_predictions:
             # Determine predictions path with run tracking support
-            if use_run_tracking and run_id is not None:
-                if 'results' in run_specific_dirs:
-                    predictions_dir = run_specific_dirs['results']
-                    predictions_dir.mkdir(parents=True, exist_ok=True)
-                    predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}.npy"
-                else:
-                    # Fallback to default location with run_id suffix
-                    predictions_dir = Path(result_dir / f"{run_id}")
-                    predictions_dir.mkdir(parents=True, exist_ok=True)
-                    predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}.npy"
+            if run_tracking:
+                predictions_path = results_dir / f"validation_predictions_epoch_{epoch}.npy"
             else:
-                # Default behavior for standalone usage
-                predictions_dir = Path(result_dir)
-                predictions_dir.mkdir(parents=True, exist_ok=True)
-                predictions_path = predictions_dir / f"validation_predictions_epoch_{epoch}.npy"
+                predictions_path = results_dir / f"validation_predictions_epoch_{epoch}.npy"
+            
+            # Ensure Path object
+            if predictions_path:
+                predictions_path = Path(predictions_path)
+                predictions_path.parent.mkdir(parents=True, exist_ok=True)
             
             try:
                 np.save(predictions_path, np.concatenate(all_predictions))
@@ -49728,10 +50028,10 @@ def calculate_threshold(
     
     # Export parameters
     export_config = final_config.setdefault('export', {})
-    save_results = export_config.setdefault('save_results', False)
-    results_path = export_config.setdefault('results_path', './threshold_results')
+    save_results = export_config.setdefault('save_results', True)
+    results_path = export_config.setdefault('results_path', None)
     save_threshold_analysis = export_config.setdefault('save_threshold_analysis', True)
-    visualization = export_config.setdefault('visualization', False)
+    visualization = export_config.setdefault('visualization', True)
     plot_distribution = export_config.setdefault('plot_distribution', True)
     plot_threshold = export_config.setdefault('plot_threshold', True)
     plot_roc_curve = export_config.setdefault('plot_roc_curve', False)
@@ -49764,13 +50064,27 @@ def calculate_threshold(
     run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
     use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
     
+    # Determine output directories with run-specific support
+    deep_learning_runs = Path(__file__).resolve().parent / 'deep_learning_runs'
+    if use_run_tracking and run_id and run_specific_dirs:
+        run_tracking = True
+        run_dir = deep_learning_runs / f"{run_id}"
+        # Use run-specific directories for outputs
+        metrics_dir = run_specific_dirs.get('metrics', run_dir / 'metrics') / 'calculate_threshold'
+        results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'calculate_threshold'
+        figures_dir = run_specific_dirs.get('figures', run_dir / 'figures') / 'calculate_threshold'
+    
+    else:
+        run_tracking = False
+        # Directory defaults
+        metrics_dir = deep_learning_runs / 'metrics' / 'calculate_threshold'
+        results_dir = deep_learning_runs / 'results' / 'calculate_threshold'
+        figures_dir = deep_learning_runs / 'figures' / 'calculate_threshold'
+    
     # Set up logging level
     if verbose:
         original_level = logger.level
         logger.setLevel(logging.INFO)
-    
-    if verbose:
-        logger.info(f"\nStarting threshold calculation using method: {threshold_method}")
     
     # Initialize variables for cleanup
     pbar = None
@@ -49807,6 +50121,9 @@ def calculate_threshold(
         
         # Set up main progress bar for the entire threshold calculation process
         if progress_bar:
+            if verbose:
+                logger.info(f"\nStarting threshold calculation using method: {threshold_method}")
+            
             try:
                 progress = ProgressHelper(titles)
                 pbar_context = progress.bar(
@@ -49827,10 +50144,11 @@ def calculate_threshold(
         # Ensure run-specific directories exist when saving
         if use_run_tracking and run_specific_dirs:
             for dir_type, dir_path in run_specific_dirs.items():
-                try:
-                    dir_path.mkdir(parents=True, exist_ok=True)
-                except Exception as e:
-                    logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
+                if not dir_path.exists():
+                    try:
+                        dir_path.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
         
         # Data preparation and validation
         if pbar:
@@ -50086,21 +50404,26 @@ def calculate_threshold(
             
             if statistical_method == 'mean_std':
                 threshold = basic_stats['mean'] + std_multiplier * basic_stats['std']
+            
             elif statistical_method == 'median_mad':
                 mad = np.median(np.abs(mse_values - basic_stats['median']))
                 threshold = basic_stats['median'] + mad_multiplier * mad
                 threshold_results['mad'] = float(mad)
+            
             elif statistical_method == 'iqr':
                 IQR = basic_stats['q75'] - basic_stats['q25']
                 threshold = basic_stats['q75'] + iqr_multiplier * IQR
                 threshold_results['iqr'] = float(IQR)
+            
             elif statistical_method == 'z_score':
                 threshold = basic_stats['mean'] + z_score_threshold * basic_stats['std']
+            
             elif statistical_method == 'modified_z_score':
                 mad = np.median(np.abs(mse_values - basic_stats['median']))
                 modified_z_scores = 0.6745 * (mse_values - basic_stats['median']) / mad
                 threshold = basic_stats['median'] + z_score_threshold * mad / 0.6745
                 threshold_results['modified_z_mad'] = float(mad)
+            
             else:
                 threshold = basic_stats['mean'] + 2 * basic_stats['std']
             
@@ -50276,7 +50599,6 @@ def calculate_threshold(
                 # Calculate threshold based on anomaly component
                 anomaly_mean = component_means[anomaly_component]
                 anomaly_std = np.sqrt(gmm.covariances_[anomaly_component].flatten()[0])
-                
                 threshold = anomaly_mean - 2 * anomaly_std  # Conservative threshold
                 
                 threshold_results.update({
@@ -50288,6 +50610,7 @@ def calculate_threshold(
                     'component_weights': gmm.weights_.tolist(),
                     'anomaly_component': int(anomaly_component)
                 })
+            
             else:
                 # Fallback to percentile method
                 threshold = np.percentile(mse_values, percentile)
@@ -50311,9 +50634,11 @@ def calculate_threshold(
             if basic_stats['skewness'] > 1:  # Right-skewed
                 threshold = percentile_thresh
                 method_used = 'percentile_skewed'
+            
             elif basic_stats['kurtosis'] > 3:  # Heavy-tailed
                 threshold = iqr_thresh
                 method_used = 'iqr_heavy_tailed'
+            
             else:  # Approximately normal
                 threshold = statistical_thresh
                 method_used = 'statistical_normal'
@@ -50490,20 +50815,15 @@ def calculate_threshold(
                 pbar.text = "Saving results"
             
             # Determine results path with run tracking support
-            if use_run_tracking and run_id is not None:
-                # Use run-specific results directory if available
-                if 'results' in run_specific_dirs:
-                    results_path = run_specific_dirs['results'] / "threshold_calculation_results.json"
-                else:
-                    # Fallback to default location with run_id suffix
-                    results_dir = Path(RESULTS_DIR / "deep_learning" / f"{run_id}")
-                    results_dir.mkdir(parents=True, exist_ok=True)
-                    results_path = results_dir / "threshold_calculation_results.json"
+            if run_tracking:
+                results_path = results_dir / 'threshold_calculation_results.json'
             else:
-                # Default behavior for standalone usage
-                results_dir = Path(RESULTS_DIR / "deep_learning")
-                results_dir.mkdir(parents=True, exist_ok=True)
-                results_path = results_dir / "threshold_calculation_results.json"
+                results_path = results_dir / f"threshold_calculation_results_{start_time.strftime('%Y%m%d_%H%M%S')}.json"
+            
+            # Ensure Path object
+            if results_path:
+                results_path = Path(results_path)
+                results_path.parent.mkdir(parents=True, exist_ok=True)
             
             # Save JSON
             try:
@@ -50524,10 +50844,22 @@ def calculate_threshold(
         
         # Visualization if requested
         if visualization:
+            if pbar:
+                pbar.text = "Generating visualization"
+            
+            # Determine plot path with run tracking support
+            if run_tracking:
+                plot_path = figures_dir / 'threshold_distribution_visualization.png'
+            else:
+                plot_path = figures_dir / f"threshold_distribution_visualization_{start_time.strftime('%Y%m%d_%H%M%S')}.png"
+            
+            # Ensure Path object
+            if plot_path:
+                plot_path = Path(plot_path)
+                plot_path.parent.mkdir(parents=True, exist_ok=True)
+            
             try:
                 if plot_distribution:
-                    if pbar:
-                        pbar.text = "Generating visualization"
                     plt.figure(figsize=(10, 6))
                     plt.hist(mse_values, bins=50, alpha=0.7, density=True, label='Reconstruction Errors')
                     plt.axvline(final_threshold, color='red', linestyle='--', label=f'Threshold ({threshold_method}): {final_threshold:.4f}')
@@ -50536,21 +50868,6 @@ def calculate_threshold(
                     plt.title('Reconstruction Error Distribution and Threshold')
                     plt.legend()
                     plt.grid(True, alpha=0.3)
-                    
-                    # Determine plot path with run tracking support
-                    if use_run_tracking and run_id is not None:
-                        if 'figures' in run_specific_dirs:
-                            plot_path = run_specific_dirs['figures'] / "threshold_distribution.png"
-                        else:
-                            # Ensure the figures directory exists
-                            figures_dir = Path(FIGURES_DIR / "deep_learning" / f"{run_id}")
-                            figures_dir.mkdir(parents=True, exist_ok=True)
-                            plot_path = figures_dir / "threshold_distribution.png"
-                    else:
-                        # Ensure the figures directory exists
-                        figures_dir = Path(FIGURES_DIR / "deep_learning")
-                        figures_dir.mkdir(parents=True, exist_ok=True)
-                        plot_path = figures_dir / "threshold_distribution.png"
                     
                     plt.savefig(plot_path, dpi=300, bbox_inches='tight')
                     plt.close()
@@ -51210,7 +51527,7 @@ def train_model(
     
     # Apply preset parameter extraction
     config = extract_from_active_preset(config)
-
+    
     # Handle legacy args parameter for backward compatibility
     if args is not None:
         # Extract parameters from args object
@@ -51331,15 +51648,16 @@ def train_model(
     artifacts_dir = Path(system_config.get('artifacts_dir', ARTIFACTS_DIR / "deep_learning"))
     figures_dir = Path(system_config.get('figures_dir', FIGURES_DIR / "deep_learning"))
     info_dir = Path(system_config.get('info_dir', INFO_DIR / "deep_learning"))
-    #base_dir = Path(__file__).resolve().parent
-    deep_learning_runs = Path(__file__).resolve().parent / "deep_learning_runs"
-    tensorboard_dir = Path(__file__).resolve().parent / "deep_learning_runs" / "tensorboard"
+    base_dir = Path(__file__).resolve().parent
+    deep_learning_runs = base_dir / 'deep_learning_runs'
+    runs_dir = deep_learning_runs / 'runs'
+    tensorboard_dir = deep_learning_runs / 'tensorboard'
     
     # System defaults
     device = system_config.setdefault('device', 'auto')
     random_seed = system_config.setdefault('random_seed', RANDOM_STATE)
     reproducible = system_config.setdefault('reproducible', True)
-
+    
     # Handle silent mode
     silent_mode = monitoring_config.get('silent', False)
     
@@ -51424,33 +51742,34 @@ def train_model(
         
         # Create directories
         directories_to_create = [
-            model_dir, log_dir, tensorboard_dir, config_dir, checkpoint_dir, results_dir, data_dir,
+            model_dir, log_dir, tensorboard_dir, config_dir, checkpoint_dir, results_dir, data_dir, runs_dir,
             reports_dir, metrics_dir, datasets_dir, artifacts_dir, figures_dir, info_dir, deep_learning_runs
         ]
         
         for directory in directories_to_create:
-            try:
-                directory.mkdir(parents=True, exist_ok=True)
-                logger.debug(f"Ensured directory exists: {directory}")
-            except PermissionError as e:
-                logger.error(f"Permission denied creating directory {directory}: {e}")
-                if not graceful_degradation:
-                    raise
-            except Exception as e:
-                logger.warning(f"Failed to create directory {directory}: {e}")
-                if not graceful_degradation:
-                    raise
+            if not directory.exists():
+                try:
+                    directory.mkdir(parents=True, exist_ok=True)
+                    logger.debug(f"Ensured directory exists: {directory}")
+                except PermissionError as e:
+                    logger.error(f"Permission denied creating directory {directory}: {e}")
+                    if not graceful_degradation:
+                        raise
+                except Exception as e:
+                    logger.warning(f"Failed to create directory {directory}: {e}")
+                    if not graceful_degradation:
+                        raise
         
         # Setup experiment tracking with sequential run numbers
         timestamp = start_time.strftime("%Y%m%d_%H%M%S")
         
-        # Get next sequential run number for this tensorboard directory
+        # Get next sequential run number
         def get_next_run_number(tracking_dir: Path) -> int:
             """Get the next sequential run number for the tracking directory.
             
             Args:
-                tracking_dir (Path): Directory where run tracking is stored (typically tensorboard_dir).
-                
+                tracking_dir (Path): Directory where run tracking is stored.
+            
             Returns:
                 int: Next run number.
             """
@@ -51504,7 +51823,7 @@ def train_model(
         preset_code = preset_code_map.get(active_preset, active_preset[:3].lower())
         
         # Generate sequential run ID with timestamp "run_001_20231115_143022"
-        run_number = get_next_run_number(tensorboard_dir)
+        run_number = get_next_run_number(runs_dir)
         run_id = f"run_{run_number:03d}"
         
         # Generate full tracking ID with all details for metadata only
@@ -51514,10 +51833,10 @@ def train_model(
         ).hexdigest()[:4]
         
         # Full ID stored only in metadata, not used for file/directory names
-        run_id_full = f"{model_code}_{preset_code}_{timestamp}_{unique_hash}"
+        run_id_full = f"run_{run_number:03d}_{model_code}_{preset_code}_{timestamp}_{unique_hash}"
         
         # Create numbered experiment directory
-        experiment_dir = deep_learning_runs / run_id
+        experiment_dir = runs_dir / f"{run_id}"
         experiment_dir.mkdir(parents=True, exist_ok=True)
         
         # Create run-specific subdirectories for all outputs
@@ -51534,29 +51853,30 @@ def train_model(
         run_artifacts_dir = experiment_dir / "artifacts"
         run_figures_dir = experiment_dir / "figures"
         run_info_dir = experiment_dir / "info"
+        run_history_dir = experiment_dir / "history"
         
         # Create all run-specific directories
         run_directories = [
             run_model_dir, run_log_dir, run_tensorboard_dir, run_config_dir, run_checkpoint_dir, run_results_dir, run_data_dir,
-            run_reports_dir, run_metrics_dir, run_datasets_dir, run_artifacts_dir, run_figures_dir, run_info_dir
+            run_reports_dir, run_metrics_dir, run_datasets_dir, run_artifacts_dir, run_figures_dir, run_info_dir, run_history_dir
         ]
         
         for directory in run_directories:
-            try:
-                directory.mkdir(parents=True, exist_ok=True)
-                logger.debug(f"Created run-specific directory: {directory}")
-            except Exception as e:
-                logger.warning(f"Failed to create run-specific directory {directory}: {e}")
-                if not graceful_degradation:
-                    raise
+            if not directory.exists():
+                try:
+                    directory.mkdir(parents=True, exist_ok=True)
+                    logger.debug(f"Created run-specific directory: {directory}")
+                except Exception as e:
+                    logger.warning(f"Failed to create run-specific directory {directory}: {e}")
+                    if not graceful_degradation:
+                        raise
         
         # Initialize TensorBoard writer
         writer = None
         if tensorboard_logging:
             try:
                 writer = SummaryWriter(log_dir=str(run_tensorboard_dir))
-                logger.info(f"TensorBoard logging enabled: {run_tensorboard_dir}")
-                logger.debug(f"Run ID: {run_id}")
+                logger.info(f"TensorBoard logging enabled: {run_tensorboard_dir}, Run ID: {run_id}")
             except ImportError:
                 logger.warning("TensorBoard not available, logging disabled")
                 tensorboard_logging = False
@@ -51606,7 +51926,8 @@ def train_model(
                     'datasets': str(run_datasets_dir),
                     'artifacts': str(run_artifacts_dir),
                     'figures': str(run_figures_dir),
-                    'info': str(run_info_dir)
+                    'info': str(run_info_dir),
+                    'history': str(run_history_dir)
                 },
                 'system': {
                     'hostname': platform.node(),
@@ -51734,6 +52055,7 @@ def train_model(
                     run_specific_dirs={
                         'data': run_data_dir,
                         'artifacts': run_artifacts_dir,
+                        'results': run_results_dir,
                         'metrics': run_metrics_dir
                     },
                     use_run_tracking=True,
@@ -52068,6 +52390,8 @@ def train_model(
         # Set up epoch progress bar with alive_bar
         if progress_bar:
             try:
+                print_color("\nTraining model...", 'green')
+                
                 progress = ProgressHelper(titles)
                 epoch_pbar_context = progress.bar(
                     title="Training Epochs",
@@ -52090,9 +52414,13 @@ def train_model(
             try:
                 # Update epoch progress bar
                 if epoch_pbar:
-                    train_loss_history = f"{training_history['train_loss'][-1]:.6f}" if training_history['train_loss'] else "Initializing"
-                    val_loss_history = f"{training_history['val_loss'][-1]:.6f}" if training_history['val_loss'] else "Initializing"
-                    epoch_pbar.text = (f"Train Loss: {train_loss_history} | Val Loss: {val_loss_history}")
+                    if epoch > 0:
+                        train_loss_history = training_history['train_loss'][-1] if training_history['train_loss'] else 0.0
+                        val_loss_history = training_history['val_loss'][-1] if training_history['val_loss'] else 0.0
+                        learning_rate_history = training_history['learning_rate'][-1] if training_history['learning_rate'] else 0.0
+                        epoch_pbar.text = f"Epoch {epoch+1}/{epochs} | Train Loss: {train_loss_history:.6f} | Val Loss: {val_loss_history:.6f} | Learning Rate: {learning_rate_history:.2e}"
+                    else:
+                        epoch_pbar.text = f"Initializing: {epochs} Epochs"
                 
                 # Training phase
                 train_loss, train_metrics = train_epoch(
@@ -52109,7 +52437,7 @@ def train_model(
                     scaler=scaler,
                     scheduler=scheduler,
                     progress_bar=False if epoch_pbar else progress_bar,
-                    progress_bar_desc=f"{epoch+1}/{epochs}",
+                    progress_bar_desc=f"epoch {epoch+1}/{epochs}",
                     verbose=debug_mode,
                     # Pass run tracking information
                     run_id=run_id,
@@ -52143,7 +52471,7 @@ def train_model(
                     custom_analysis_fn=_default_validation_analysis if validation_config.get('detailed_metrics', True) else None,
                     validation_callbacks=_default_validation_callbacks() if monitoring_config.get('real_time_monitoring', True) else [],
                     progress_bar=False if epoch_pbar else progress_bar,
-                    progress_bar_desc=f"{epoch+1}/{epochs}",
+                    progress_bar_desc=f"epoch {epoch+1}/{epochs}",
                     verbose=debug_mode,
                     config=config,
                     # Run tracking parameters
@@ -52247,7 +52575,7 @@ def train_model(
                 # Console logging
                 if epoch % log_frequency == 0 or epoch == epochs - 1:
                     memory_info = f"GPU: {memory_usage:.3f}GB" if device.type == 'cuda' and 'memory_usage' in locals() else f"RAM: {memory_usage:.3f}GB" if device.type == 'cpu' and 'memory_usage' in locals() else "Mem: N/A"
-                    logger.info(f"Epoch {epoch+1:3d}/{epochs}, Train: {train_loss:.6f}, Val: {val_loss:.6f}, LR: {current_lr:.2e}, Time: {epoch_time:.1f}s, {memory_info}")
+                    logger.info(f"Epoch {epoch+1:3d}/{epochs}, Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}, Learning Rate: {current_lr:.2e}, Time: {epoch_time:.1f}s, {memory_info}")
                 
                 # Model checkpointing and early stopping
                 is_best = val_loss < best_val_loss
@@ -52258,7 +52586,7 @@ def train_model(
                     # Save best model
                     if save_model:
                         # Use run-specific directory
-                        best_model_path = run_model_dir / "best_model.pth"
+                        best_model_path = run_model_dir / "deep_learning_best_model.pth"
                         torch.save({
                             'epoch': epoch,
                             'model_state_dict': model.state_dict(),
@@ -52271,7 +52599,7 @@ def train_model(
                         }, best_model_path)
                         
                         if epoch % (checkpoint_frequency * 5) == 0:
-                            logger.info(f"New best model saved (epoch {epoch+1}, loss: {best_val_loss:.6f})")
+                            logger.info(f"New best model saved (epoch {epoch+1}, best val loss: {best_val_loss:.6f})")
                 else:
                     patience_counter += 1
                 
@@ -52283,7 +52611,7 @@ def train_model(
                 # Periodic checkpointing
                 if save_checkpoints and epoch % checkpoint_frequency == 0 and epoch > 0:
                     # Use run-specific directory
-                    checkpoint_path = run_checkpoint_dir / f"checkpoint_epoch_{epoch+1}.pth"
+                    checkpoint_path = run_checkpoint_dir / f"deep_learning_checkpoint_epoch_{epoch+1}.pth"
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': model.state_dict(),
@@ -52298,7 +52626,7 @@ def train_model(
                 if epoch_pbar:
                     epoch_pbar()
                     # Update the text with current metrics
-                    epoch_pbar.text = (f"Train loss: {train_loss:.4f} | Val loss: {val_loss:.4f} | Best: {best_val_loss:.4f} | LR: {current_lr:.2e}")
+                    epoch_pbar.text = (f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Best Val Loss: {best_val_loss:.4f} | Current Learning Rate: {current_lr:.2e}")
             
             except Exception as e:
                 logger.error(f"Training error at epoch {epoch+1}: {e}")
@@ -52326,10 +52654,10 @@ def train_model(
         logger.info(f"Training completed in {total_training_time/60:.1f} minutes ({final_epoch} epochs)")
         
         # Load best model for evaluation
-        if save_model and (run_model_dir / "best_model.pth").exists():
+        if save_model and (run_model_dir / "deep_learning_best_model.pth").exists():
             logger.info("Loading best model for final evaluation")
             try:
-                checkpoint = torch.load(run_model_dir / "best_model.pth", map_location=device, weights_only=False)
+                checkpoint = torch.load(run_model_dir / "deep_learning_best_model.pth", map_location=device, weights_only=False)
                 model.load_state_dict(checkpoint['model_state_dict'])
                 logger.info(f"Loaded best model from epoch {checkpoint['epoch']+1}")
             except Exception as e:
@@ -52508,7 +52836,7 @@ def train_model(
         if save_model:
             try:
                 # Use run-specific directory
-                final_model_path = run_model_dir / "autoencoder_model.pth"
+                final_model_path = run_model_dir / "deep_learning_final_model.pth"
                 
                 # Use model's save method if it has one
                 if hasattr(model, 'save_model'):
@@ -52526,7 +52854,7 @@ def train_model(
         # Save threshold data
         try:
             # Use run-specific directory
-            threshold_path = run_model_dir / "anomaly_threshold.pkl"
+            threshold_path = run_model_dir / "deep_learning_anomaly_threshold.pkl"
             threshold_data = {
                 'threshold': threshold,
                 'metadata': threshold_metadata,
@@ -52609,7 +52937,7 @@ def train_model(
         if save_training_history:
             try:
                 # Use run-specific directory
-                history_path = run_metrics_dir / "training_history.pkl"
+                history_path = run_history_dir / "deep_learning_training_history.pkl"
                 joblib.dump(training_history, history_path)
                 saved_artifacts['history_path'] = str(history_path)
                 logger.info(f"Training history saved: {history_path}")
@@ -52618,7 +52946,7 @@ def train_model(
         
         # Save configuration used
         try:
-            config_path = run_config_dir / "training_config.json"
+            config_path = run_config_dir / "deep_learning_training_config.json"
             
             # Create a serializable copy of config to avoid circular references
             serializable_config = {}
@@ -52695,7 +53023,7 @@ def train_model(
         # Save final results summary
         try:
             # Use run-specific directory
-            results_path = run_results_dir / "training_results.json"
+            results_path = run_results_dir / "deep_learning_training_results.json"
             
             # Create a serializable copy of final_results to avoid circular references
             serializable_results = {}
@@ -52894,7 +53222,7 @@ def train_model(
         
         # Save error information to file
         try:
-            error_path = run_results_dir / f"training_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            error_path = run_results_dir / f"deep_learning_training_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             
             # Create serializable error info
             serializable_error_info = {}
@@ -53000,7 +53328,7 @@ def train_model(
                     if 'model' in locals() and locals().get('run_model_dir'):
                         try:
                             # Use run-specific directory
-                            partial_model_path = run_model_dir / "partial_model_error_recovery.pth"
+                            partial_model_path = run_model_dir / "deep_learning_partial_model.pth"
                             
                             # Use model's save method if available (from centralized config classes)
                             if hasattr(locals()['model'], 'save_model'):
@@ -53024,7 +53352,7 @@ def train_model(
                 # Save partial results
                 try:
                     if locals().get('run_results_dir'):
-                        partial_results_path = run_results_dir / "partial_training_results.json"
+                        partial_results_path = run_results_dir / "deep_learning_partial_training_results.json"
                         
                         # Create serializable partial results
                         serializable_partial = {}
@@ -57556,9 +57884,6 @@ def _interactive_custom_setup(
 
 def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
     try:
-        print("\nLAUNCHING TRAINING")
-        print("-"*40)
-        
         training_params = {}
         
         model_config = config.get('model', {})
@@ -57738,25 +58063,8 @@ def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[D
         # Launch training
         results = train_model(**training_params)
         
-        if results and results.get('success', False):
-            print("\n" + "="*40)
-            print("TRAINING COMPLETED SUCCESSFULLY!")
-            print("="*40)
-            
+        if results:
             _display_training_results(results)
-            
-        else:
-            print("\nTRAINING FAILED")
-            if results:
-                error_msg = results.get('error', 'Unknown error')
-                print(f"Error: {error_msg}")
-                
-                if results.get('partial_training_completed', False):
-                    print(f"\nPartial training completed:")
-                    print(f"   Epochs: {results.get('epochs_completed', 0)}")
-                    partial_metrics = results.get('training_metrics', {})
-                    if partial_metrics:
-                        print(f"   Best Loss: {partial_metrics.get('best_val_loss', 'N/A')}")
         
         return results
     
@@ -58125,7 +58433,6 @@ def _display_training_results(results: Dict[str, Any]) -> None:
             total_params = model_info.get('parameters', 0)
             trainable_params = model_info.get('trainable_parameters', 0)
             
-            #model_size = model_info.get('size_mb', 0)
             model_size_mb = model_info.get('size_mb', 0)
             model_size_kb = model_info.get('size_kb', 0)
             if model_size_mb >= 1:
@@ -58487,7 +58794,7 @@ def _display_training_results(results: Dict[str, Any]) -> None:
                 model_size = model_info.get('size_mb', 0)
                 model_size_mb = model_info.get('size_mb', 0)
                 model_size_kb = model_info.get('size_kb', 0)
-
+                
                 if model_size_mb > 0:
                     if model_size_mb < 1:
                         additional_info.append("Very compact model")
@@ -58500,7 +58807,7 @@ def _display_training_results(results: Dict[str, Any]) -> None:
             for info in additional_info:
                 print(f"- {info}")
             print("-"*40)
-        
+    
     except Exception as e:
         print(f"\nError displaying training results: {str(e)}")
         print("Raw results structure:")
@@ -58642,8 +58949,8 @@ def train_model_quick(
         save_results = quick_training_config.setdefault('save_results', cleaned_params.get('save_results', True))
         export_onnx = quick_training_config.setdefault('export_onnx', cleaned_params.get('export_onnx', False))
         tensorboard_logging = quick_training_config.setdefault('tensorboard_logging', cleaned_params.get('tensorboard_logging', False))
-        model_dir = quick_training_config.setdefault('model_dir', cleaned_params.get('model_dir', DEFAULT_MODEL_DIR / "quick_test"))
-        results_dir = quick_training_config.setdefault('results_dir', cleaned_params.get('results_dir', RESULTS_DIR / "quick_test"))
+        model_dir = quick_training_config.setdefault('model_dir', cleaned_params.get('model_dir', DEFAULT_MODEL_DIR / 'quick_test'))
+        results_dir = quick_training_config.setdefault('results_dir', cleaned_params.get('results_dir', RESULTS_DIR / 'quick_test'))
         random_seed = quick_training_config.setdefault('random_seed', cleaned_params.get('random_seed', 42))
         non_interactive = quick_training_config.setdefault('non_interactive', cleaned_params.get('non_interactive', False))
         interactive = quick_training_config.setdefault('interactive', cleaned_params.get('interactive', not cleaned_params.get('non_interactive', False)))
@@ -59251,7 +59558,6 @@ def train_model_quick(
                     
                     print(Fore.YELLOW + Style.BRIGHT + "\nModel Information:")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Parameters: " + Fore.YELLOW + Style.BRIGHT + f"{model_info.get('parameters', 0):,}")
-                    #print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Size: " + Fore.YELLOW + Style.BRIGHT + f"{model_info.get('size_mb', 0):.1f} MB")
                     print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Size: " + Fore.YELLOW + Style.BRIGHT + f"{model_size}")
                     print(Fore.GREEN + Style.BRIGHT + f"  └─ Architecture: " + Fore.YELLOW + Style.BRIGHT + f"{quick_features} → {quick_encoding_dim}")
                     
@@ -59339,7 +59645,7 @@ def train_model_quick(
                     quick_results.setdefault('warnings', []).append(f"Failed to save results: {e}")
             
             return quick_results
-            
+        
         except Exception as e:
             # Handle unexpected errors in quick training
             error_msg = f"Quick training failed: {str(e)}"
@@ -59415,13 +59721,6 @@ def train_model_quick(
         
         finally:
             # Restore logging level
-            # if (verbose or minimal_logging) and 'original_level' in locals():
-            #     try:
-            #         logger.setLevel(original_level)
-            #     except Exception:
-            #         pass
-            
-            # Restore logging level
             if (verbose or minimal_logging) and 'original_level' in locals():
                 try:
                     for handler in handlers_to_suppress:
@@ -59454,7 +59753,7 @@ def train_model_quick(
             f"- System resource issues\n"
             f"- Invalid parameter combinations"
         )
-
+        
         print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
         print(Fore.RED + Style.BRIGHT + "QUICK TRAINING SETUP ERROR")
         print(Fore.RED + Style.BRIGHT + "-" * 40)
@@ -68400,7 +68699,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
             'original_trials': original_trials,
             'original_completed': original_completed,
         }
-
+        
         # Build additional configuration sections that will be merged
         additional_config = {
             'data': {
@@ -68565,11 +68864,11 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
             },
             'presets': presets_section
         }
-
+        
         # Merge additional sections into the main config
         merged_config = config.copy() if config else {}
         merged_config['hyperparameter_optimization'] = hpo_config
-
+        
         for section, values in additional_config.items():
             if section not in merged_config:
                 merged_config[section] = {}
@@ -68577,12 +68876,12 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
                 merged_config[section].update(values)
             else:
                 merged_config[section] = values
-
+        
         # Add any additional kwargs that aren't already in hpo_config
         for key, value in kwargs.items():
             if key not in hpo_config and key not in ['config', 'hpo_config', 'interactive', 'skip_prompt']:
                 hpo_config[key] = value
-
+        
         # Ensure study directory exists
         study_dir_path = Path(system_config.get('model_dir', 'models')) / "hpo_studies"
         study_dir_path.mkdir(parents=True, exist_ok=True)
@@ -68600,9 +68899,11 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model Type: " + Fore.YELLOW + Style.BRIGHT + f"{model_type}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ CUDA Available: " + Fore.YELLOW + Style.BRIGHT + f"{cuda_available}")
+        
         if cuda_available:
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU Count: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_count}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ GPU Memory: " + Fore.YELLOW + Style.BRIGHT + f"{gpu_memory_gb}GB")
+        
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ System Memory: " + Fore.YELLOW + Style.BRIGHT + f"{memory_gb:.1f}GB ({memory_available_gb:.1f}GB available)")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ CPU Cores: " + Fore.YELLOW + Style.BRIGHT + f"{cpu_cores} ({physical_cores} physical)")
         
@@ -68643,6 +68944,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         # Data Configuration
         print(Fore.CYAN + Style.BRIGHT + "\nData Configuration:")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Source: " + Fore.YELLOW + Style.BRIGHT + f"{'Real Data' if use_real_data else 'Synthetic Data'}")
+        
         if use_real_data:
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Data Path: " + Fore.YELLOW + Style.BRIGHT + f"{data_path}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Artifacts Path: " + Fore.YELLOW + Style.BRIGHT + f"{artifacts_path}")
@@ -68653,6 +68955,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Features: " + Fore.YELLOW + Style.BRIGHT + f"{features}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Noise Factor: " + Fore.YELLOW + Style.BRIGHT + f"{noise_factor}")
             print(Fore.GREEN + Style.BRIGHT + f"  └─ Complexity: " + Fore.YELLOW + Style.BRIGHT + f"{complexity}")
+        
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Normalization: " + Fore.YELLOW + Style.BRIGHT + f"{normalization}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Validation Split: " + Fore.YELLOW + Style.BRIGHT + f"{validation_split:.1%}")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Test Split: " + Fore.YELLOW + Style.BRIGHT + f"{test_split:.1%}")
@@ -68664,8 +68967,10 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Learning Rate: " + Fore.YELLOW + Style.BRIGHT + f"{learning_rate}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Weight Decay: " + Fore.YELLOW + Style.BRIGHT + f"{weight_decay}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Optimizer: " + Fore.YELLOW + Style.BRIGHT + f"{optimizer.upper()}")
+        
         if early_stopping_training:
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Early Stopping: " + Fore.YELLOW + Style.BRIGHT + f"Enabled (patience: {patience})")
+        
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Mixed Precision: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled' if mixed_precision else 'Disabled'}")
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Data Loaders: " + Fore.YELLOW + Style.BRIGHT + f"Workers: {num_workers}, Pin Memory: {pin_memory}")
         
@@ -68723,8 +69028,10 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Workers: " + Fore.YELLOW + Style.BRIGHT + f"{num_workers}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Random Seed: " + Fore.YELLOW + Style.BRIGHT + f"{random_seed}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Reproducible: " + Fore.YELLOW + Style.BRIGHT + f"{reproducible}")
+        
         if memory_limit:
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Memory Limit: " + Fore.YELLOW + Style.BRIGHT + f"{memory_limit}")
+        
         print(Fore.GREEN + Style.BRIGHT + f"  └─ System Class: " + Fore.YELLOW + Style.BRIGHT + f"{system_class.upper()}")
         
         # Output Configuration hpo_params
@@ -68733,8 +69040,10 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Generate Plots: " + Fore.YELLOW + Style.BRIGHT + f"{generate_plots}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Save Study: " + Fore.YELLOW + Style.BRIGHT + f"{save_study}")
         print(Fore.GREEN + Style.BRIGHT + f"  ├─ Storage: " + Fore.YELLOW + Style.BRIGHT + f"{'Enabled' if storage_enabled else 'Disabled'}")
+        
         if storage_enabled and storage_url:
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Storage URL: " + Fore.YELLOW + Style.BRIGHT + f"{storage_url}")
+        
         print(Fore.GREEN + Style.BRIGHT + f"  └─ Cleanup Trials: " + Fore.YELLOW + Style.BRIGHT + f"{cleanup_trials}")
         
         # Performance Estimation
@@ -68791,6 +69100,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
                         'study_name': study_name,
                         'configuration': config
                     }
+            
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nHPO launch cancelled by user")
                 return {
@@ -68810,6 +69120,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
                 hpo_config=hpo_config,
                 **kwargs
             )
+        
         except Exception as hpo_error:
             logger.error(f"HPO execution failed: {hpo_error}", exc_info=True)
             
@@ -68839,7 +69150,6 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
                     'parameters_used': hpo_config
                 }
             }
-            
             _display_hpo_results(error_results)
             return error_results
         
@@ -68854,8 +69164,8 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
                 'launch_timestamp': datetime.now().isoformat(),
                 'parameters_used': hpo_config
             }
-            
             _display_hpo_results(results)
+        
         else:
             no_results_response = {
                 'success': False,
@@ -68887,7 +69197,7 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
             results = no_results_response
         
         return results
-        
+    
     except KeyboardInterrupt:
         # Handle user interruption
         interrupt_result = {
@@ -68907,10 +69217,9 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
                 'All configuration has been preserved for restart'
             ]
         }
-        
         _display_hpo_results(interrupt_result)
         return interrupt_result
-        
+    
     except ValueError as ve:
         logger.error(f"HPO configuration validation failed: {ve}")
         config_error_result = {
@@ -68924,10 +69233,9 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
             'end_time': datetime.now().isoformat(),
             'recommendations': ['Fix configuration issues and try again']
         }
-        
         _display_hpo_results(config_error_result)
         return config_error_result
-        
+    
     except Exception as e:
         logger.error(f"HPO launch failed with unexpected error: {e}", exc_info=True)
         unexpected_error_result = {
@@ -68945,7 +69253,6 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
                 'Review error logs for more details'
             ]
         }
-        
         _display_hpo_results(unexpected_error_result)
         return unexpected_error_result
 
@@ -69484,7 +69791,7 @@ def run_hyperparameter_optimization_interactive(
     **kwargs
 ) -> Optional[Dict[str, Any]]:
     """
-    Enhanced interactive HPO setup with full preset configuration compatibility.
+    Interactive HPO setup with full preset configuration compatibility.
     
     Args:
         use_real_data: Whether to use real data (legacy parameter)
@@ -69509,7 +69816,7 @@ def run_hyperparameter_optimization_interactive(
         sampler_type: Override sampler type from preset
         pruner_type: Override pruner type from preset
         **kwargs: Additional parameters
-        
+    
     Returns:
         Dictionary with HPO results or None if cancelled/failed
     """
@@ -69517,10 +69824,10 @@ def run_hyperparameter_optimization_interactive(
         # Check if we're being called from quick_test mode to prevent infinite recursion
         recursion_depth = kwargs.get('_recursion_depth', 0)
         max_recursion_depth = 0
-
+        
         # Define operation modes that could cause recursion
         recursive_modes = ['express', 'custom', 'preset', 'continue', 'quick_test', 'model_comparison']
-
+        
         if recursion_depth > max_recursion_depth and operation_mode in recursive_modes:
             logger.warning(f"Recursion depth {recursion_depth} reached for mode '{operation_mode}'. Bypassing interactive setup.")
             print(Fore.YELLOW + Style.BRIGHT + f"\nRecursion Guard: Bypassing interactive setup (depth: {recursion_depth})")
@@ -69675,7 +69982,7 @@ def run_hyperparameter_optimization_interactive(
             hpo_trials = trial_count
         else:
             trial_count = hpo_trials
-
+        
         if timeout_seconds is not None:
             hpo_timeout = timeout_seconds
         else:
@@ -69799,6 +70106,7 @@ def run_hyperparameter_optimization_interactive(
                 config_source_desc = "quick test configuration"
             print(Fore.GREEN + Style.BRIGHT + f"\nUsing {config_source_desc} as base:")
             print(Fore.YELLOW + Style.BRIGHT + "-" * 40 + Style.RESET_ALL)
+        
         elif use_current_config:
             try:
                 base_config = get_current_config()
@@ -69809,6 +70117,7 @@ def run_hyperparameter_optimization_interactive(
                 base_config = deepcopy(PRESET_CONFIGS.get('default', _create_minimal_fallback_config('standard')))
                 print(Fore.RED + Style.BRIGHT + "\nFailed to load current config, using default preset:")
                 print(Fore.YELLOW + Style.BRIGHT + "-" * 40 + Style.RESET_ALL)
+        
         else:
             # Use current preset as base
             base_config = deepcopy(PRESET_CONFIGS.get(preset_name, PRESET_CONFIGS.get('default', _create_minimal_fallback_config('standard'))))
@@ -69850,12 +70159,12 @@ def run_hyperparameter_optimization_interactive(
                     hpo_trials = hpo_settings.get('n_trials', hpo_trials)
                     hpo_timeout = hpo_settings.get('timeout', hpo_timeout)
                     hpo_enabled = hpo_settings.get('enabled', hpo_enabled)
-                    
+                
                 else:
                     available_presets = list(PRESET_CONFIGS.keys())
                     print(Fore.RED + Style.BRIGHT + f"\nPreset '{preset}' not found in PRESET_CONFIGS.")
                     print(Fore.GREEN + Style.BRIGHT + "Available presets: " + Fore.YELLOW + Style.BRIGHT + f"{', '.join(available_presets)}")
-                    
+            
             except Exception as e:
                 logger.warning(f"Failed to apply preset '{preset}': {e}")
                 print(Fore.RED + Style.BRIGHT + f"\nError applying preset '{preset}': {str(e)}")
@@ -69927,6 +70236,7 @@ def run_hyperparameter_optimization_interactive(
                     skip_prompt=skip_prompt,
                     **kwargs
                 )
+            
             elif operation_mode == 'custom':
                 return _interactive_hpo_custom_setup(
                     base_config,
@@ -69950,6 +70260,7 @@ def run_hyperparameter_optimization_interactive(
                     model_types=model_types,
                     **kwargs
                 )
+            
             elif operation_mode == 'preset':
                 return _interactive_hpo_preset_setup(
                     base_config,
@@ -69973,6 +70284,7 @@ def run_hyperparameter_optimization_interactive(
                     model_types=model_types,
                     **kwargs
                 )
+            
             elif operation_mode == 'continue':
                 return _interactive_hpo_continue_setup(
                     base_config,
@@ -69996,6 +70308,7 @@ def run_hyperparameter_optimization_interactive(
                     model_types=model_types,
                     **kwargs
                 )
+            
             elif operation_mode == 'quick_test':
                 # Use hardware-aware quick test parameters
                 return _run_quick_hpo_test(
@@ -70019,6 +70332,7 @@ def run_hyperparameter_optimization_interactive(
                     pruner_type=pruner_type,
                     **kwargs
                 )
+            
             elif operation_mode == 'model_comparison':
                 comparison_models = model_types or list(MODEL_VARIANTS.keys())
                 # Pass all additional parameters to model comparison function
@@ -70085,6 +70399,7 @@ def run_hyperparameter_optimization_interactive(
                     pruner_type=pruner_type,
                     **kwargs
                 )
+            
             elif operation_mode == 'quick_test':
                 return _run_quick_hpo_test(
                     config=base_config,
@@ -70101,6 +70416,7 @@ def run_hyperparameter_optimization_interactive(
                     pruner_type=pruner_type,
                     **kwargs
                 )
+            
             elif operation_mode == 'model_comparison':
                 comparison_models = model_types or list(MODEL_VARIANTS.keys())
                 # Pass all additional parameters to model comparison function
@@ -70122,6 +70438,7 @@ def run_hyperparameter_optimization_interactive(
                     operation_mode=operation_mode,
                     **kwargs
                 )
+            
             else:
                 return _launch_hpo_with_config(config=base_config, hardware_data=hardware_data, **kwargs)
         
@@ -70171,11 +70488,12 @@ def run_hyperparameter_optimization_interactive(
                         print(Fore.RED + Style.BRIGHT + f"\nInvalid choice. Please select {choice_range}.")
                         choice = None
                         continue
+                
                 except ValueError:
                     print(Fore.RED + Style.BRIGHT + f"\nInvalid input. Please enter a number {choice_range}.")
                     choice = None
                     continue
-                    
+            
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nHPO setup interrupted by user!")
                 return None
@@ -70199,7 +70517,7 @@ def run_hyperparameter_optimization_interactive(
                 optimization_focus=optimization_focus,
                 **kwargs
             )
-            
+        
         elif choice_num == 2:
             return _interactive_hpo_custom_setup(
                 base_config,
@@ -70223,7 +70541,7 @@ def run_hyperparameter_optimization_interactive(
                 model_types=model_types,
                 **kwargs
             )
-            
+        
         elif choice_num == 3:
             return _interactive_hpo_preset_setup(
                 base_config,
@@ -70247,7 +70565,7 @@ def run_hyperparameter_optimization_interactive(
                 model_types=model_types,
                 **kwargs
             )
-            
+        
         elif choice_num == 4:
             return _interactive_hpo_continue_setup(
                 base_config,
@@ -70271,7 +70589,7 @@ def run_hyperparameter_optimization_interactive(
                 model_types=model_types,
                 **kwargs
             )
-            
+        
         elif choice_num == 5:
             return _run_quick_hpo_test(
                 config=base_config,
@@ -70286,7 +70604,7 @@ def run_hyperparameter_optimization_interactive(
                 pruner_type=pruner_type,
                 **kwargs
             )
-            
+        
         elif choice_num == 6 and len(MODEL_VARIANTS) > 1:
             comparison_models = model_types or list(MODEL_VARIANTS.keys())
             # Pass all additional parameters to model comparison function
@@ -70305,7 +70623,7 @@ def run_hyperparameter_optimization_interactive(
                 optimization_focus=optimization_focus,
                 **kwargs
             )
-            
+        
         elif data_mode == 'auto':
             # Handle data mode shortcuts
             if choice_num == len(quick_start_options) + 1:
@@ -70324,6 +70642,7 @@ def run_hyperparameter_optimization_interactive(
                     optimization_focus=optimization_focus,
                     **kwargs
                 )
+            
             elif choice_num == len(quick_start_options) + 2:
                 # Real data shortcut: Pass all parameters
                 return _interactive_hpo_express_setup(
@@ -70340,11 +70659,11 @@ def run_hyperparameter_optimization_interactive(
                     optimization_focus=optimization_focus,
                     **kwargs
                 )
-            
+        
         elif choice_num == 0:
             print(Fore.RED + Style.BRIGHT + "\nHPO setup cancelled by user!")
             return None
-            
+    
     except KeyboardInterrupt:
         print(Fore.RED + Style.BRIGHT + "\nHPO setup interrupted by user!")
         return None
@@ -80327,7 +80646,7 @@ def interactive_main():
                 # If empty input, retry
                 if not choice:
                     continue
-                    
+            
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nExiting...")
                 print(Fore.YELLOW + Style.BRIGHT + "Goodbye!")
@@ -80611,11 +80930,6 @@ def model_training_menu(config: Optional[Dict[str, Any]] = None):
         banner_config = show_banner(return_config=True)
         
         # Use the config returned from show_banner or fallback
-        # if banner_config is not None:
-        #     config = banner_config
-        # elif config is None:
-        #     config = get_current_config()
-        
         if config is None and banner_config is not None:
             config = banner_config
         else:
@@ -81049,7 +81363,7 @@ def configuration_menu():
                 # If empty input, retry
                 if not choice:
                     continue
-                    
+            
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
                 return
@@ -81091,7 +81405,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- Configuration validity")
                     print(Fore.WHITE + Style.BRIGHT + "- File path accessibility")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "3":
                 try:
                     select_preset_config()
@@ -81108,7 +81422,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- Preset validation logic")
                     print(Fore.WHITE + Style.BRIGHT + "- Configuration loading mechanisms")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "4":
                 try:
                     load_saved_config_interactive()
@@ -81126,7 +81440,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- Configuration is compatible with current system")
                     print(Fore.WHITE + Style.BRIGHT + "- File is not corrupted")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "5":
                 try:
                     reset_config_interactive()
@@ -81142,7 +81456,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- System file permissions issues")
                     print(Fore.WHITE + Style.BRIGHT + "- Configuration restoration problems")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "6":
                 try:
                     validate_config_interactive(silent=False)
@@ -81159,7 +81473,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- Validation rule definitions")
                     print(Fore.WHITE + Style.BRIGHT + "- System state and dependencies")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "7":
                 try:
                     edit_config_interactive()
@@ -81176,7 +81490,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- Configuration file permissions")
                     print(Fore.WHITE + Style.BRIGHT + "- Interactive input handling")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "8":
                 try:
                     compare_configs_interactive()
@@ -81193,7 +81507,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- Configuration formats are compatible")
                     print(Fore.WHITE + Style.BRIGHT + "- Sufficient system resources available")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "9":
                 try:
                     # Placeholder for configuration health report
@@ -81209,7 +81523,7 @@ def configuration_menu():
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
                     print(Fore.RED + Style.BRIGHT + f"Error generating health report: {str(e)}")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "0":
                 return
             else:
@@ -84538,7 +84852,7 @@ def select_preset_config():
         print("\033c", end="")
         config = show_banner(return_config=True)
         
-        # Use the config returned from show_banner or fallback
+        # Get the current config if none is returned
         if config is None:
             config = get_current_config()
         
@@ -84689,7 +85003,7 @@ def select_preset_config():
                 # If empty input, retry
                 if not choice:
                     continue
-                    
+            
             except (EOFError, KeyboardInterrupt):
                 print(Fore.RED + Style.BRIGHT + "\nSelection cancelled...")
                 return
@@ -84744,7 +85058,7 @@ def select_preset_config():
                         else:
                             print(Fore.RED + Style.BRIGHT + "Please enter Y or N")
                             confirm = None
-                            
+                    
                     except (EOFError, KeyboardInterrupt):
                         print(Fore.RED + Style.BRIGHT + "\nConfirmation cancelled...")
                         return
@@ -84844,7 +85158,7 @@ def select_preset_config():
                                 box=box.ROUNDED
                             )
                             console.print(error_panel)
-                            
+                    
                     except Exception as apply_error:
                         message = (
                             f"Failed to apply preset: {str(apply_error)}\n"
@@ -84870,7 +85184,7 @@ def select_preset_config():
                         logger.error(f"Preset application failed: {apply_error}")
                 else:
                     print(Fore.RED + Style.BRIGHT + "Configuration not applied.")
-                    
+            
             except Exception as selection_error:
                 message = (
                     f"Error during preset selection: {str(selection_error)}\n"
@@ -84906,7 +85220,7 @@ def select_preset_config():
                     box=box.ROUNDED
                 )
             )
-            
+    
     except Exception as e:
         message = (
             f"Unexpected error in preset selection: {str(e)}\n"
@@ -84928,12 +85242,6 @@ def select_preset_config():
             )
         )
         logger.error(f"Preset selection failed: {e}", exc_info=True)
-    
-    # Only continue if not exiting
-    try:
-        input(Fore.YELLOW + Style.BRIGHT + "\nPress Enter to continue..." + Style.RESET_ALL)
-    except (EOFError, KeyboardInterrupt):
-        print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
 
 def show_current_config():
     """Display current configuration in formatted rich tables for each section."""
