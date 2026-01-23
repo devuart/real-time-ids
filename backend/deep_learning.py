@@ -39816,6 +39816,7 @@ def generate_synthetic_data(
         reports_dir = run_specific_dirs.get('reports', run_dir / 'reports') / 'generate_synthetic_data'
         results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'generate_synthetic_data'
         data_dir = run_specific_dirs.get('data', run_dir / 'data') / 'generate_synthetic_data'
+        metrics_dir = run_specific_dirs.get('metrics', run_dir / 'metrics') / 'generate_synthetic_data'
     
     else:
         # Directory defaults
@@ -39824,6 +39825,7 @@ def generate_synthetic_data(
         data_dir = Path(deep_learning_runs / 'data' / 'generate_synthetic_data')
         datasets_dir = Path(deep_learning_runs / 'datasets' / 'generate_synthetic_data')
         results_dir = Path(deep_learning_runs / 'results' / 'generate_synthetic_data')
+        metrics_dir = Path(deep_learning_runs / 'metrics' / 'generate_synthetic_data')
     
     # Export defaults
     file_format = export_config.setdefault('file_format', None)
