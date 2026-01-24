@@ -786,7 +786,7 @@ def loading_screen(
         extended: Whether to run extended initialization-specific checks
         include_performance: Whether to include performance-related checks
         hardware_data: Pre-fetched hardware data (optional, for optimization)
-        
+    
     Returns:
         bool: True if all critical checks pass and user chooses to continue,
               False if critical checks fail or user chooses to quit
@@ -3390,7 +3390,7 @@ def setup_directories(logger: logging.Logger) -> Dict[str, Path]:
         'cache': base_dir / "cache",
         'exports': base_dir / "exports",
         'results': base_dir / "results",
-        'checkpoints': base_dir / "checkpoints" / f"checkpoints_v{VERSION_INFO['torch']}"
+        'checkpoints': base_dir / "checkpoints"
     }
     
     # Create directories
@@ -3441,7 +3441,7 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
             logger.info("Directory configuration completed successfully")
         
         return dirs
-        
+    
     except Exception as e:
         if logger:
             logger.critical(f"Directory configuration failed: {e}")
@@ -3451,7 +3451,6 @@ def configure_directories(logger: logging.Logger) -> Dict[str, Path]:
 def check_global_exception_handler() -> CheckResult:
     """
     Check if global exception handler is properly configured.
-    Enhanced with comprehensive validation and configuration details.
     """
     try:
         # Test if our custom handler is set
@@ -3516,7 +3515,7 @@ def check_global_exception_handler() -> CheckResult:
             level=level,
             details=details
         )
-        
+    
     except Exception as e:
         return CheckResult(
             passed=False,
@@ -3527,7 +3526,6 @@ def check_global_exception_handler() -> CheckResult:
 def check_performance_monitoring() -> CheckResult:
     """
     Check if performance monitoring is available and properly configured.
-    Enhanced with comprehensive validation of monitoring capabilities.
     """
     try:
         monitoring_status = {
@@ -3652,7 +3650,7 @@ def check_performance_monitoring() -> CheckResult:
             level=level,
             details=monitoring_status
         )
-        
+    
     except Exception as e:
         return CheckResult(
             passed=False,
@@ -3842,7 +3840,7 @@ def check_performance_baseline() -> CheckResult:
             level=level,
             details=details
         )
-        
+    
     except Exception as e:
         return CheckResult(
             passed=False,
@@ -3851,10 +3849,7 @@ def check_performance_baseline() -> CheckResult:
         ).with_exception(e)
 
 def check_memory_management() -> CheckResult:
-    """
-    Check if memory management functions are available and properly integrated.
-    Enhanced with comprehensive validation of memory management capabilities.
-    """
+    """Check if memory management functions are available and properly integrated."""
     try:
         memory_status = {
             'functions_available': {},
@@ -4116,7 +4111,7 @@ def check_configuration_system() -> CheckResult:
         finally:
             # Restore original logging level
             config_logger.setLevel(original_level)
-            
+    
     except ValueError as e:
         return CheckResult(
             passed=False,
@@ -4142,7 +4137,7 @@ def check_configuration_system() -> CheckResult:
 
 def check_configuration_system_wrapper() -> CheckResult:
     """
-    Run comprehensive configuration system check with rich table output.
+    Run configuration system check with rich table output.
     
     Returns:
         CheckResult object with detailed configuration information and rich display
@@ -4181,7 +4176,7 @@ def check_configuration_system_wrapper() -> CheckResult:
             metadata=config_result.metadata,
             exception=config_result.exception
         )
-        
+    
     except Exception as e:
         return CheckResult(
             passed=False,
@@ -4265,9 +4260,10 @@ def display_configuration_details(config_result: CheckResult) -> None:
         # Section details table
         if 'section_details' in details and details['section_details']:
             sections_table = Table(
-                title="[bold yellow]Configuration Sections Detail[/bold yellow]",
+                title="Configuration Sections Detail",
                 title_justify="left",
                 box=box.ROUNDED,
+                title_style="bold yellow",
                 header_style="bold magenta",
                 border_style="cyan",
                 show_lines=True,
@@ -4369,22 +4365,10 @@ def check_model_variants() -> CheckResult:
         variant_status = validate_model_variants(logger, silent=True)
         
         # Enhanced status categorization based on updated validation function
-        available_variants = [
-            name for name, status in variant_status.items() 
-            if status == 'available'
-        ]
-        warning_variants = [
-            name for name, status in variant_status.items() 
-            if status.startswith('warning')
-        ]
-        failed_variants = [
-            name for name, status in variant_status.items() 
-            if status.startswith('error') or 'failed' in status or status == 'class_not_found' or status == 'class_not_callable'
-        ]
-        unknown_variants = [
-            name for name, status in variant_status.items() 
-            if name not in available_variants + warning_variants + failed_variants
-        ]
+        available_variants = [name for name, status in variant_status.items() if status == 'available']
+        warning_variants = [name for name, status in variant_status.items() if status.startswith('warning')]
+        failed_variants = [name for name, status in variant_status.items() if status.startswith('error') or 'failed' in status or status == 'class_not_found' or status == 'class_not_callable']
+        unknown_variants = [name for name, status in variant_status.items() if name not in available_variants + warning_variants + failed_variants]
         
         # Collect comprehensive variant information
         variant_details = {}
@@ -4470,7 +4454,7 @@ def check_model_variants() -> CheckResult:
                         variant_info['init_parameters'] = 'signature_unavailable'
                 else:
                     variant_info['init_parameters'] = 'no_init_method'
-                    
+                
                 # Check for model-specific features
                 model_features = []
                 if variant_name == 'EnhancedAutoencoder':
@@ -4485,7 +4469,7 @@ def check_model_variants() -> CheckResult:
                 # Check device compatibility awareness
                 device_aware = any(hasattr(variant_class, attr) for attr in ['device', 'to', 'cuda', 'cpu'])
                 variant_info['device_aware'] = device_aware
-                
+            
             except Exception as e:
                 variant_info['description'] = f"Error analyzing {variant_class.__name__ if variant_class else 'unknown'}"
                 variant_info['analysis_error'] = str(e)
@@ -4519,7 +4503,7 @@ def check_model_variants() -> CheckResult:
                 message = f"Model variants system partially operational ({len(warning_variants)} variants with warnings)"
             else:
                 message = "Model variants system failed - no operational variants"
-            
+        
         except Exception as metrics_error:
             initialization_metrics['metrics_error'] = str(metrics_error)
             passed = False
@@ -4579,7 +4563,7 @@ def check_model_variants() -> CheckResult:
             level=CheckLevel.CRITICAL,
             details=model_variants_details
         )
-        
+    
     except Exception as e:
         return CheckResult(
             passed=False,
@@ -4598,10 +4582,7 @@ def check_model_variants() -> CheckResult:
 
 def check_model_variants_wrapper() -> CheckResult:
     """
-    Run comprehensive model variants check with rich table output.
-    
-    This wrapper has been updated to fully leverage the enhanced check_model_variants()
-    implementation while maintaining rich display capabilities and comprehensive error handling.
+    Run model variants check with rich table output.
     
     Returns:
         CheckResult object with detailed model variants information and rich display
@@ -4699,7 +4680,7 @@ def check_model_variants_wrapper() -> CheckResult:
             metadata=variants_result.metadata,
             exception=variants_result.exception
         )
-        
+    
     except Exception as e:
         return CheckResult(
             passed=False,
@@ -4715,20 +4696,15 @@ def check_model_variants_wrapper() -> CheckResult:
 
 def display_model_variants_details(variants_result: CheckResult) -> None:
     """
-    Display comprehensive model variants information in enhanced rich table format.
-    
-    This function has been updated to fully harmonize with the enhanced check_model_variants()
-    implementation, providing detailed visual presentation of all available metrics,
-    status categories, and system capabilities.
+    Display model variants information in rich table format.
     
     Args:
-        variants_result: CheckResult from check_model_variants() with comprehensive details
+        variants_result: CheckResult from check_model_variants()
     """
     if not isinstance(variants_result.details, dict):
         console.print(Panel.fit(
             "[bold yellow]No detailed model variants information available[/bold yellow]\n"
             f"Details type: [bold yellow]{type(variants_result.details)}[/bold yellow]\n"
-            #f"Check status: {'PASSED' if variants_result.passed else 'FAILED'}\n"
             f"Check status: [bold green]PASSED[/bold green]" if variants_result.passed else "[bold red]FAILED[/bold red]\n"
             f"Message: [bold yellow]{variants_result.message}[/bold yellow]",
             title="Model Variants Details",
@@ -4740,7 +4716,7 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
     try:
         details = variants_result.details
         
-        # Enhanced metrics extraction with comprehensive type safety
+        # Metrics extraction
         total_variants = details.get('total_variants', 0)
         
         # Safe extraction of all variant categories
@@ -4777,7 +4753,7 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
         unknown_variants = details.get('unknown_variants', 0)
         unknown_names = details.get('unknown_names', [])
         
-        # Enhanced success metrics
+        # success metrics
         initialization_summary = details.get('initialization_summary', {})
         success_rate = initialization_summary.get('success_rate', 0)
         operational_status = initialization_summary.get('operational_status', 'unknown')
@@ -4794,9 +4770,10 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
         # Recommendations
         recommendations = details.get('recommendations', {})
         
-        # Main enhanced model variants overview table
+        # Main model variants overview table
         overview_table = Table(
-            title="\n[bold cyan]Model Variants System Overview[/bold cyan]",
+            title="\nModel Variants System Overview",
+            title_style="bold cyan",
             title_justify="left",
             box=box.DOUBLE_EDGE,
             header_style="bold magenta",
@@ -4850,21 +4827,20 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             "Capabilities",
             str(len(capabilities)),
             "[bold green]READY[/bold green]" if capabilities else "[bold red]NONE[/bold red]",
-            f"[bold cyan]{', '.join(capabilities)}[/bold cyan]" if capabilities else "[bold red]No capabilities detected[/bold red]"
+            f"[bold green]{', '.join(capabilities)}[/bold green]" if capabilities else "[bold red]No capabilities detected[/bold red]"
         )
         
         overview_table.add_row(
             "Hardware Context",
             "Available" if not hardware_error else "Error",
             "[bold green]OK[/bold green]" if not hardware_error else "[bold red]ERROR[/bold red]",
-            #f"[bold cyan]{'System aware' if not hardware_error else f'Hardware error: {hardware_error}'}[/bold cyan]"
-            f"[bold cyan]SYSTEM-AWARE[/bold cyan]" if not hardware_error else f"[bold red]HARDWARE ERROR: {hardware_error}[/bold red]"
+            f"[bold green]SYSTEM-AWARE[/bold green]" if not hardware_error else f"[bold red]HARDWARE ERROR: {hardware_error}[/bold red]"
         )
         
         console.print(overview_table)
         console.print()
         
-        # Enhanced variant details table with comprehensive information
+        # variant details table
         variant_details = details.get('variant_details', {})
         if isinstance(variant_details, dict) and variant_details:
             variants_table = Table(
@@ -4888,8 +4864,8 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             for variant_name, variant_info in variant_details.items():
                 if not isinstance(variant_info, dict):
                     continue
-                    
-                # Enhanced detail formatting
+                
+                # detail formatting
                 detail_lines = []
                 
                 # Description
@@ -4913,7 +4889,7 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
                 
                 details_text = "\n".join(detail_lines) if detail_lines else "[bold blue]Standard implementation[/bold blue]"
                 
-                # Enhanced status styling
+                # status styling
                 status = variant_info.get('status', 'unknown')
                 status_str = str(status) if status is not None else 'unknown'
                 
@@ -4965,12 +4941,11 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             console.print(variants_table)
             console.print()
         
-        # Enhanced recommendations panel
+        # recommendations panel
         if recommendations and isinstance(recommendations, dict):
             rec_table = Table(
                 title="[bold green]Model Variants Recommendations[/bold green]",
                 title_justify="left",
-                #box=box.SQUARE,
                 box=box.DOUBLE_EDGE,
                 header_style="bold white",
                 border_style="green",
@@ -4998,7 +4973,7 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
                 console.print(rec_table)
                 console.print()
         
-        # Enhanced operational status summary with corrected styling
+        # operational status summary
         if operational_status == 'fully_operational':
             border_color = "green"
         elif operational_status == 'partial':
@@ -5018,14 +4993,13 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
         )
         
         console.print(status_panel)
-        
+    
     except Exception as e:
         console.print(
             Panel.fit(
-                f"Error displaying enhanced model variants details:\n"
+                f"Error displaying model variants details:\n"
                 f"Error: {str(e)}\n"
                 f"Error Type: {type(e).__name__}\n"
-                #f"Check Status: {'PASSED' if variants_result.passed else 'FAILED'}\n"
                 f"Check status: [bold green]PASSED[/bold green]" if variants_result.passed else "[bold red]FAILED[/bold red]\n"
                 f"Message: {variants_result.message}",
                 title="Enhanced Display Rendering Error",
@@ -5034,22 +5008,16 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             )
         )
         
-        # Comprehensive fallback display
+        # fallback display
         try:
-            #console.print("\n[bold yellow]Comprehensive Fallback Display:[/bold yellow]")
-            print(Fore.YELLOW + Style.BRIGHT + "\nComprehensive Fallback Display:")
-            
             # Basic check information
-            #console.print(f"[cyan]Check Result:[/cyan] {'PASSED' if variants_result.passed else 'FAILED'}")
-            #console.print(f"[cyan]Message:[/cyan] {variants_result.message}")
-            #console.print(f"[cyan]Level:[/cyan] {variants_result.level}")
-            
             variants_result_status = 'PASSED' if variants_result.passed else 'FAILED'
             if variants_result_status == 'PASSED':
                 status_color = Fore.GREEN + Style.BRIGHT
             else:
                 status_color = Fore.RED + Style.BRIGHT
             
+            print(Fore.YELLOW + Style.BRIGHT + "\nFallback Display:")
             print(Fore.YELLOW + Style.BRIGHT + "Check Result: " + f"{status_color}" + f"{variants_result_status}")
             print(Fore.YELLOW + Style.BRIGHT + "Message: " + f"{status_color}" + f"{variants_result.message}")
             print(Fore.YELLOW + Style.BRIGHT + "Level: " + f"{status_color}" + f"{variants_result.level}")
@@ -5057,7 +5025,7 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
             if isinstance(variants_result.details, dict):
                 details = variants_result.details
                 
-                # Enhanced metrics extraction
+                # metrics extraction
                 total_variants = details.get('total_variants', 0)
                 
                 # Safe variant counting
@@ -5092,10 +5060,6 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
                 else:
                     operational_status = f"{Fore.RED + Style.BRIGHT}{operational_status_details}{Style.RESET_ALL}"
                 
-                # console.print(f"[cyan]Variants:[/cyan] {available_count} available, {warning_count} warnings, {failed_count} failed (of {total_variants} total)")
-                # console.print(f"[cyan]Success Rate:[/cyan] {success_rate:.1f}%")
-                # console.print(f"[cyan]Operational Status:[/cyan] {operational_status.replace('_', ' ').title()}")
-                
                 print(Fore.YELLOW + Style.BRIGHT + f"Variants: {available_count_status} available, {warning_count_status} warnings, {failed_count_status} failed (of {total_variants} total)")
                 print(Fore.YELLOW + Style.BRIGHT + f"Success Rate: {success_rate_status}")
                 print(Fore.YELLOW + Style.BRIGHT + f"Operational Status: {operational_status}")
@@ -5103,32 +5067,24 @@ def display_model_variants_details(variants_result: CheckResult) -> None:
                 # Display variant names safely
                 if available_names:
                     safe_names = [str(name) for name in available_names if name is not None]
-                    #console.print(f"[green]Available:[/green] {', '.join(safe_names)}")
                     print(Fore.YELLOW + Style.BRIGHT + f"Available: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(safe_names)}")
                 if warning_names:
                     safe_names = [str(name) for name in warning_names if name is not None]
-                    #console.print(f"[yellow]Warnings:[/yellow] {', '.join(safe_names)}")
                     print(Fore.YELLOW + Style.BRIGHT + f"Warnings: " + Fore.GREEN + Style.BRIGHT + f"{', '.join(safe_names)}")
                 if failed_names:
                     safe_names = [str(name) for name in failed_names if name is not None]
-                    #console.print(f"[red]Failed:[/red] {', '.join(safe_names)}")
                     print(Fore.YELLOW + Style.BRIGHT + f"Failed: " + Fore.RED + Style.BRIGHT + f"{', '.join(safe_names)}")
                 
                 # Capabilities
                 capabilities = details.get('capabilities', [])
                 if capabilities:
-                    #console.print(f"[cyan]Capabilities:[/cyan] {', '.join(capabilities)}")
                     print(Fore.YELLOW + Style.BRIGHT + f"Capabilities: " + Fore.CYAN + Style.BRIGHT + f"{', '.join(capabilities)}")
-                
-            else:
-                #console.print("[yellow]Details format not recognized for fallback display[/yellow]")
-                print(Fore.YELLOW + Style.BRIGHT + "Details format not recognized for fallback display")
-                
-        except Exception as fallback_error:
-            #console.print(f"[red]Comprehensive fallback display also failed: {fallback_error}[/red]")
-            print(Fore.RED + Style.BRIGHT + f"Comprehensive fallback display also failed: " + Fore.YELLOW + Style.BRIGHT + f"{str(fallback_error)}")
             
-            #console.print(f"[red]Original display error: {str(e)}[/red]")
+            else:
+                print(Fore.YELLOW + Style.BRIGHT + "Details format not recognized for fallback display")
+        
+        except Exception as fallback_error:
+            print(Fore.RED + Style.BRIGHT + f"Fallback display also failed: " + Fore.YELLOW + Style.BRIGHT + f"{str(fallback_error)}")
             print(Fore.RED + Style.BRIGHT + f"Original display error: " + Fore.YELLOW + Style.BRIGHT + f"{str(e)}")
 
 # System and environment configuration
@@ -5183,15 +5139,12 @@ def configure_system() -> Dict[str, Any]:
         gpu_count = torch.cuda.device_count() if cuda_available else 0
         config['validation']['error'] = str(e)
     
-    # Intelligent thread configuration based on detected hardware
-    # Conservative approach
-    optimal_threads = min(4, max(1, logical_cores // 2))
+    # Thread configuration based on detected hardware
+    optimal_threads = min(4, max(1, logical_cores // 2))  # Conservative approach
     if total_ram_gb > 16:
-        # More threads if more RAM
-        optimal_threads = min(8, logical_cores)
+        optimal_threads = min(8, logical_cores)  # More threads if more RAM
     elif total_ram_gb < 4:
-        # Fewer threads if limited RAM
-        optimal_threads = min(2, logical_cores)
+        optimal_threads = min(2, logical_cores)  # Fewer threads if limited RAM
     
     # Environment variable configurations
     env_vars = {
@@ -5377,6 +5330,7 @@ def set_seed(seed: int = 42, hardware_info: Optional[Dict[str, Any]] = None) -> 
         
         # Configure deterministic operations based on GPU capabilities
         torch.backends.cudnn.deterministic = True
+        
         # Disable for reproducibility
         torch.backends.cudnn.benchmark = False
         
@@ -5388,8 +5342,7 @@ def set_seed(seed: int = 42, hardware_info: Optional[Dict[str, Any]] = None) -> 
                 compute_cap = gpu.get('compute_capability', '0.0')
                 major_version = int(float(compute_cap))
                 if major_version >= 7:  # Tensor cores available
-                    # For reproducibility
-                    torch.backends.cuda.matmul.allow_tf32 = False
+                    torch.backends.cuda.matmul.allow_tf32 = False  # For reproducibility
         
         seed_config['torch'].update({
             'cuda_seeds': gpu_seeds,
@@ -5423,11 +5376,11 @@ def setup_gpu(logger: logging.Logger, hardware_data: Optional[Dict[str, Any]] = 
     Args:
         logger: Logger instance for recording device information
         hardware_data: Hardware data from check_hardware() (optional)
-        
+    
     Returns:
         Configured torch.device with optimal settings applied
     """
-    # Get comprehensive hardware data if not provided
+    # Get hardware data if not provided
     if hardware_data is None:
         try:
             hardware_data = check_hardware(include_memory_usage=True)
@@ -5541,7 +5494,7 @@ def setup_gpu(logger: logging.Logger, hardware_data: Optional[Dict[str, Any]] = 
         
         # Set the device for current context
         torch.cuda.set_device(best_gpu_idx)
-        
+    
     else:
         # CPU-only optimizations based on hardware
         optimizations = []
@@ -5562,7 +5515,7 @@ def setup_gpu(logger: logging.Logger, hardware_data: Optional[Dict[str, Any]] = 
         
         device_info['optimization_applied'] = optimizations
     
-    # Log comprehensive device information
+    # Log device information
     logger.info(f"Primary device configured: {device}")
     logger.info(f"Device type: {device_info['type']}")
     logger.info(f"Available resources: {device_info['count']} {'GPU(s)' if cuda_available else 'CPU cores'}")
@@ -5595,7 +5548,7 @@ def log_system_configuration(
     Args:
         logger: Logger instance
         include_versions: Whether to log version information
-        include_hardware: Whether to log hardware information  
+        include_hardware: Whether to log hardware information
         include_seed_config: Whether to log seed configuration
     """
     try:
@@ -5690,9 +5643,8 @@ def log_system_configuration(
 
 # Helper functions for system diagnostics and error handling
 def enhanced_global_exception_handler(exc_type, exc_value, exc_traceback):
-    """
-    Enhanced global exception handler with detailed logging and recovery.
-    """
+    """Global exception handler with detailed logging and recovery."""
+    
     if issubclass(exc_type, KeyboardInterrupt):
         logger.info("System interrupted by user")
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
@@ -5702,7 +5654,7 @@ def enhanced_global_exception_handler(exc_type, exc_value, exc_traceback):
     logger.critical("CRITICAL: Uncaught exception occurred", exc_info=(exc_type, exc_value, exc_traceback))
     
     try:
-        # Get comprehensive system state using existing functions
+        # Get system state using existing functions
         system_state = {
             'timestamp': datetime.now().isoformat(),
             'exception_type': exc_type.__name__,
@@ -5712,7 +5664,7 @@ def enhanced_global_exception_handler(exc_type, exc_value, exc_traceback):
             'traceback_summary': traceback.format_exception_only(exc_type, exc_value)
         }
         
-        # Add comprehensive system information using existing functions
+        # Add system information using existing functions
         try:
             system_state['system_info'] = get_system_info(include_versions=True, include_hardware=True)
         except Exception as e:
@@ -5763,19 +5715,19 @@ def enhanced_global_exception_handler(exc_type, exc_value, exc_traceback):
         except Exception as e:
             system_state['process_info_error'] = str(e)
         
-        # Save comprehensive error report
+        # Save error report
         try:
             error_file = LOG_DIR / f"critical_error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             with open(error_file, 'w', encoding='utf-8') as f:
                 json.dump(system_state, f, indent=2, default=str, ensure_ascii=False)
-            logger.info(f"Comprehensive error report saved to: {error_file}")
+            logger.info(f"Error report saved to: {error_file}")
         except Exception as save_error:
             logger.error(f"Failed to save error report: {save_error}")
         
         # Display user-friendly error in interactive mode
         if hasattr(sys, 'ps1') or sys.stdin.isatty():
             console.print(f"[red]CRITICAL ERROR: {exc_value}[/red]")
-            console.print(f"[dim]Comprehensive error report saved to logs directory[/dim]")
+            console.print(f"[dim]Error report saved to logs directory[/dim]")
             console.print(f"[dim]Exception type: {exc_type.__name__}[/dim]")
             console.print(f"[dim]Module: {getattr(exc_type, '__module__', 'unknown')}[/dim]")
             
@@ -5794,14 +5746,13 @@ def enhanced_global_exception_handler(exc_type, exc_value, exc_traceback):
             logger.error(f"Emergency cleanup failed: {cleanup_error}")
         
     except Exception as handler_error:
-        # Fallback if our enhanced handler fails
-        logger.error(f"Enhanced exception handler failed: {handler_error}")
+        # Fallback if handler fails
+        logger.error(f"Exception handler failed: {handler_error}")
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
 def performance_monitor_wrapper(func, include_memory: bool, log_level: int, hardware_data: Optional[Dict[str, Any]] = None):
-    """
-    Enhanced performance monitoring wrapper with hardware awareness.
-    """
+    """Performance monitoring wrapper with hardware awareness."""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         # Get hardware context if not provided
@@ -5907,7 +5858,7 @@ def performance_monitor_wrapper(func, include_memory: bool, log_level: int, hard
                             )
                     except Exception:
                         pass
-                        
+                
                 except Exception as e:
                     end_metrics['memory_error'] = str(e)
             
@@ -5935,7 +5886,7 @@ def performance_monitor_wrapper(func, include_memory: bool, log_level: int, hard
                         total_gpu_delta += allocated_delta
                     
                     end_metrics['gpu_memory']['total_delta_mb'] = total_gpu_delta
-                    
+                
                 except Exception as e:
                     end_metrics['gpu_memory_error'] = str(e)
             
@@ -5949,15 +5900,13 @@ def performance_monitor_wrapper(func, include_memory: bool, log_level: int, hard
                 
                 # Add system memory if significant change
                 sys_delta = end_metrics['memory_usage'].get('system_delta_gb', 0)
-                # > 100MB change
-                if abs(sys_delta) > 0.1:
+                if abs(sys_delta) > 0.1:  # > 100MB change
                     log_message += f" (system: {sys_delta:+.1f}GB)"
             
             # Add GPU information to log
             if cuda_available and 'gpu_memory' in end_metrics:
                 total_gpu_delta = end_metrics['gpu_memory'].get('total_delta_mb', 0)
-                # > 1MB change
-                if abs(total_gpu_delta) > 1:
+                if abs(total_gpu_delta) > 1:  # > 1MB change
                     log_message += f", GPU: {total_gpu_delta:+.1f}MB"
             
             # Performance warnings based on hardware
@@ -5966,8 +5915,7 @@ def performance_monitor_wrapper(func, include_memory: bool, log_level: int, hard
                 warnings.append("long_execution")
             if include_memory and 'memory_usage' in end_metrics:
                 mem_delta = end_metrics['memory_usage'].get('rss_delta_mb', 0)
-                # > 10% of total RAM
-                if mem_delta > (total_ram_gb * 100):
+                if mem_delta > (total_ram_gb * 100):  # > 10% of total RAM
                     warnings.append("high_memory_usage")
             
             if warnings:
@@ -5976,7 +5924,7 @@ def performance_monitor_wrapper(func, include_memory: bool, log_level: int, hard
             else:
                 logger.log(log_level, log_message)
             
-            # Store comprehensive metrics for analysis
+            # Store metrics for analysis
             combined_metrics = {
                 **start_metrics,
                 **end_metrics,
@@ -5988,7 +5936,7 @@ def performance_monitor_wrapper(func, include_memory: bool, log_level: int, hard
             wrapper._performance_metrics.append(combined_metrics)
             
             return result
-            
+        
         except Exception as e:
             duration = time.time() - start_time
             error_message = f"{func.__name__} failed after {duration:.3f}s: {str(e)}"
@@ -6029,13 +5977,13 @@ def enhanced_monitor_performance(
     hardware_data: Optional[Dict[str, Any]] = None
 ):
     """
-    Enhanced performance monitoring decorator with hardware awareness.
+    Performance monitoring decorator with hardware awareness.
     
     Args:
         include_memory: Whether to monitor memory usage
         log_level: Logging level for performance messages
         hardware_data: Pre-fetched hardware data (optional)
-        
+    
     Returns:
         Decorator function with hardware-aware monitoring
     """
@@ -6044,11 +5992,9 @@ def enhanced_monitor_performance(
     return decorator
 
 def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Run performance tests to establish system baselines with hardware awareness.
-    """
+    """Run performance tests to establish system baselines with hardware awareness."""
     try:
-        # Get comprehensive hardware data
+        # Get hardware data
         if hardware_data is None:
             hardware_data = check_hardware(include_memory_usage=True)
         
@@ -6090,13 +6036,10 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
         try:
             # Adaptive matrix size based on available RAM
             if total_ram_gb > 16:
-                # High-end systems
                 matrix_size = 2000
             elif total_ram_gb > 8:
-                # Mid-range systems
                 matrix_size = 1500
             else:
-                # Low-end systems
                 matrix_size = 1000
             
             start_time = time.time()
@@ -6108,13 +6051,12 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
                 'matrix_size': matrix_size,
                 'computation_time': cpu_time,
                 'operations_per_second': (matrix_size ** 3) / cpu_time,
-                # Input + output
                 'memory_used_mb': test_array.nbytes * 2 / 1024 / 1024,
                 'gflops': (2 * matrix_size ** 3) / (cpu_time * 1e9)
             }
             
             del test_array, result
-            
+        
         except Exception as e:
             performance_metrics['baselines']['cpu_error'] = str(e)
             logger.warning(f"CPU baseline test failed: {e}")
@@ -6139,8 +6081,7 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
                     start_time = time.time()
                     
                     # Create tensor of specified size
-                    # 4 bytes per float32
-                    elements = int((size_mb * 1024 * 1024) // 4)
+                    elements = int((size_mb * 1024 * 1024) // 4)  # 4 bytes per float32
                     test_tensor = torch.randn(elements, dtype=torch.float32)
                     
                     allocation_time = time.time() - start_time
@@ -6156,12 +6097,12 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
                     }
                     
                     del test_tensor
-                    
+                
                 except Exception as e:
                     memory_baselines[f'{size_mb}mb_error'] = str(e)
             
             performance_metrics['baselines']['memory'] = memory_baselines
-            
+        
         except Exception as e:
             performance_metrics['baselines']['memory_error'] = str(e)
             logger.warning(f"Memory baseline test failed: {e}")
@@ -6219,13 +6160,13 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
                         }
                         
                         del gpu_tensor, result
-                        
+                    
                     except Exception as e:
                         gpu_baselines[f'gpu_{gpu_id}_error'] = str(e)
                         logger.warning(f"GPU {gpu_id} baseline test failed: {e}")
                 
                 performance_metrics['baselines']['gpu'] = gpu_baselines
-                
+            
             except Exception as e:
                 performance_metrics['baselines']['gpu_error'] = str(e)
                 logger.warning(f"GPU baseline tests failed: {e}")
@@ -6240,8 +6181,7 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
             # Write test
             start_time = time.time()
             with open(test_file, 'wb') as f:
-                # Write 10MB total
-                for _ in range(10):
+                for _ in range(10):  # Write 10MB total
                     f.write(test_data)
             write_time = time.time() - start_time
             
@@ -6262,7 +6202,7 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
                 'read_speed_mbs': 10 / read_time if read_time > 0 else 0,
                 'data_size_mb': 10
             }
-            
+        
         except Exception as e:
             performance_metrics['baselines']['io_error'] = str(e)
             logger.warning(f"I/O baseline test failed: {e}")
@@ -6284,7 +6224,7 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
                 'memory_delta_mb': final_state['memory_rss_mb'] - initial_state.get('memory_rss_mb', 0),
                 'cpu_delta_percent': final_state['cpu_percent'] - initial_state.get('cpu_percent', 0)
             }
-            
+        
         except Exception as e:
             performance_metrics['system_state']['final_error'] = str(e)
         
@@ -6297,11 +6237,7 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
         # Generate performance summary
         summary = {
             'cpu_performance': 'good' if performance_metrics['baselines'].get('cpu', {}).get('gflops', 0) > 1 else 'limited',
-            'memory_performance': 'good' if any(
-                baseline.get('allocation_speed_mbs', 0) > 100 
-                for baseline in performance_metrics['baselines'].get('memory', {}).values()
-                if isinstance(baseline, dict)
-            ) else 'limited',
+            'memory_performance': 'good' if any(baseline.get('allocation_speed_mbs', 0) > 100 for baseline in performance_metrics['baselines'].get('memory', {}).values() if isinstance(baseline, dict)) else 'limited',
             'gpu_available': cuda_available,
             'io_performance': 'good' if performance_metrics['baselines'].get('io', {}).get('write_speed_mbs', 0) > 50 else 'limited',
             'overall_capability': 'high-end' if (
@@ -6315,7 +6251,7 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
         
         logger.debug(f"Performance baseline established: {summary['overall_capability']} system capability")
         return performance_metrics
-        
+    
     except Exception as e:
         logger.error(f"Failed to establish performance baseline: {e}")
         return {
@@ -6326,12 +6262,12 @@ def establish_performance_baseline(hardware_data: Optional[Dict[str, Any]] = Non
 
 def enhanced_clear_memory(aggressive: bool = False, hardware_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Enhanced memory clearing with hardware awareness and detailed reporting.
+    Memory clearing with hardware awareness and reporting.
     
     Args:
         aggressive: Whether to perform aggressive memory clearing
         hardware_data: Hardware data from check_hardware() (optional)
-        
+    
     Returns:
         Dictionary with clearing results and memory statistics
     """
@@ -6341,6 +6277,7 @@ def enhanced_clear_memory(aggressive: bool = False, hardware_data: Optional[Dict
         for handler in logger.handlers:
             if isinstance(handler, logging.StreamHandler) and handler.stream.name in ['<stdout>', '<stderr>']:
                 handlers_to_suppress.append(handler)
+                original_level = handler.level
                 handler.setLevel(logging.CRITICAL)  # Temporarily suppress console output
         
         try:
@@ -6399,15 +6336,13 @@ def enhanced_clear_memory(aggressive: bool = False, hardware_data: Optional[Dict
             
             # Aggressive mode with hardware considerations
             if aggressive:
-                # More aggressive GC for systems with limited RAM
-                gc_rounds = 5 if total_ram_gb < 8 else 3
+                gc_rounds = 5 if total_ram_gb < 8 else 3  # More aggressive GC for systems with limited RAM
                 for _ in range(gc_rounds):
                     gc.collect()
                 clearing_results['actions_taken'].append(f"Aggressive GC ({gc_rounds} rounds)")
                 
                 # Additional PyTorch optimizations for low-memory systems
                 if total_ram_gb < 8:
-                    # Reduce memory overhead
                     torch.backends.cudnn.benchmark = False
                     clearing_results['actions_taken'].append("Disabled cuDNN benchmark for memory conservation")
             
@@ -6434,10 +6369,9 @@ def enhanced_clear_memory(aggressive: bool = False, hardware_data: Optional[Dict
         finally:
             # Restore original logger levels
             for handler in handlers_to_suppress:
-                #handler.setLevel(logging.NOTSET)
-                handler.setLevel(logging.ERROR)
+                handler.setLevel(original_level)
             pass
-        
+    
     except Exception as e:
         logger.warning(f"Memory clearing failed: {e}")
         return {
@@ -6450,11 +6384,11 @@ def enhanced_clear_memory(aggressive: bool = False, hardware_data: Optional[Dict
 # Utility function for external use
 def get_version_info(package_name: str) -> Dict[str, str]:
     """
-    Get comprehensive version information for a package.
+    Get version information for a package.
     
     Args:
         package_name: Name of the package to check
-        
+    
     Returns:
         Dictionary with version information and availability status
     """
@@ -6471,6 +6405,7 @@ def get_version_info(package_name: str) -> Dict[str, str]:
 # List custom presets from config directory
 def list_custom_presets() -> List[str]:
     """List all available custom presets."""
+
     custom_dir = CONFIG_DIR / "custom_presets"
     if not custom_dir.exists():
         return []
@@ -6515,7 +6450,6 @@ STABILITY_PRESET = {
         'compatibility': ['SimpleAutoencoder', 'EnhancedAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            #'architecture': platform.machine(),
             'architecture': platform.architecture(),
             'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
@@ -6526,8 +6460,7 @@ STABILITY_PRESET = {
             'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
         },
         'validation': {
-            'schema_version': '2.1',
-            'required_sections': ['training', 'model', 'security', 'data'],
+            'schema_version': '2.1', 'required_sections': ['training', 'model', 'security', 'data'],
             'optional_sections': ['monitoring', 'hardware', 'presets', 'hyperparameter_optimization']
         }
     },
@@ -6535,8 +6468,7 @@ STABILITY_PRESET = {
         'batch_size': 32, 'epochs': 100, 'learning_rate': 0.0005, 'patience': 15, 'weight_decay': 1e-3,
         'gradient_clip': 0.5, 'gradient_accumulation_steps': 1, 'mixed_precision': False,
         'num_workers': 2, 'optimizer': 'Adam', 'scheduler': None, 'scheduler_params': {},
-        'early_stopping': True, 'validation_split': 0.25, 'shuffle': True,
-        'pin_memory': False, 'persistent_workers': False,
+        'early_stopping': True, 'validation_split': 0.25, 'shuffle': True, 'pin_memory': False, 'persistent_workers': False,
         'adam_betas': (0.9, 0.999), 'adam_eps': 1e-8, 'lr_patience': 5, 'lr_factor': 0.7, 'min_lr': 1e-6
     },
     'model': {
@@ -6544,12 +6476,9 @@ STABILITY_PRESET = {
         'dropout_rates': [0.3], 'activation': 'relu', 'activation_param': 0.0,
         'normalization': None, 'use_batch_norm': False, 'use_layer_norm': False,
         'diversity_factor': 0.0, 'min_features': 5, 'num_models': 1, 'skip_connection': False,
-        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform',
-        'model_types': list(MODEL_VARIANTS.keys()),
-        'available_activations': ['relu', 'leaky_relu', 'gelu', 'tanh'],
-        'available_normalizations': ['batch', 'layer', 'instance', None],
-        'available_initializers': ['xavier_uniform', 'xavier_normal', 'kaiming_uniform'],
-        'legacy_mode': False, 'use_attention': False
+        'residual_blocks': False, 'bias': True, 'weight_init': 'xavier_uniform', 'model_types': list(MODEL_VARIANTS.keys()),
+        'available_activations': ['relu', 'leaky_relu', 'gelu', 'tanh'], 'available_normalizations': ['batch', 'layer', 'instance', None],
+        'available_initializers': ['xavier_uniform', 'xavier_normal', 'kaiming_uniform'], 'legacy_mode': False, 'use_attention': False
     },
     'security': {
         'percentile': 99, 'attack_threshold': 0.2, 'false_negative_cost': 3.0,
@@ -6639,7 +6568,6 @@ PERFORMANCE_PRESET = {
         'compatibility': ['EnhancedAutoencoder', 'AutoencoderEnsemble'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            #'architecture': platform.machine(),
             'architecture': platform.architecture(),
             'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
@@ -6650,8 +6578,7 @@ PERFORMANCE_PRESET = {
             'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
         },
         'validation': {
-            'schema_version': '2.1',
-            'required_sections': ['training', 'model', 'security', 'data'],
+            'schema_version': '2.1', 'required_sections': ['training', 'model', 'security', 'data'],
             'optional_sections': ['monitoring', 'hardware', 'presets', 'hyperparameter_optimization']
         }
     },
@@ -6767,7 +6694,6 @@ BASELINE_PRESET = {
         'compatibility': ['EnhancedAutoencoder', 'SimpleAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            #'architecture': platform.machine(),
             'architecture': platform.architecture(),
             'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
@@ -6778,8 +6704,7 @@ BASELINE_PRESET = {
             'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
         },
         'validation': {
-            'schema_version': '2.1',
-            'required_sections': ['training', 'model', 'security', 'data'],
+            'schema_version': '2.1', 'required_sections': ['training', 'model', 'security', 'data'],
             'optional_sections': ['monitoring', 'hardware', 'presets', 'hyperparameter_optimization']
         }
     },
@@ -6901,8 +6826,7 @@ DEBUG_PRESET = {
             'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
         },
         'validation': {
-            'schema_version': '2.1',
-            'required_sections': ['training', 'model', 'security', 'data'],
+            'schema_version': '2.1', 'required_sections': ['training', 'model', 'security', 'data'],
             'optional_sections': ['monitoring', 'hardware', 'presets']
         }
     },
@@ -6995,7 +6919,6 @@ LIGHTWEIGHT_PRESET = {
         'compatibility': ['SimpleAutoencoder'],
         'system': {
             'python_version': platform.python_version(), 'platform': platform.platform(),
-            #'architecture': platform.machine(),
             'architecture': platform.architecture(),
             'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
@@ -7006,8 +6929,7 @@ LIGHTWEIGHT_PRESET = {
             'os_release': platform.release(), 'cpu_count': os.cpu_count() or 1
         },
         'validation': {
-            'schema_version': '2.1',
-            'required_sections': ['training', 'model', 'security', 'data'],
+            'schema_version': '2.1', 'required_sections': ['training', 'model', 'security', 'data'],
             'optional_sections': ['monitoring', 'hardware', 'presets']
         }
     },
@@ -7100,7 +7022,6 @@ ADVANCED_PRESET = {
         'system': {
             'python_version': platform.python_version(),
             'platform': platform.platform(),
-            #'architecture': platform.machine(),
             'architecture': platform.architecture(),
             'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
@@ -7114,8 +7035,7 @@ ADVANCED_PRESET = {
             'cpu_count': os.cpu_count() or 1
         },
         'validation': {
-            'schema_version': '2.1',
-            'required_sections': ['training', 'model', 'security', 'data'],
+            'schema_version': '2.1', 'required_sections': ['training', 'model', 'security', 'data'],
             'optional_sections': ['monitoring', 'hardware', 'presets', 'hyperparameter_optimization']
         }
     },
@@ -7225,7 +7145,6 @@ DEFAULT_PRESET = {
         'system': {
             'python_version': platform.python_version(),
             'platform': platform.platform(),
-            #'architecture': platform.machine(),
             'architecture': platform.architecture(),
             'machine': platform.machine(),
             'processor': platform.processor() or 'unknown',
@@ -7239,8 +7158,7 @@ DEFAULT_PRESET = {
             'cpu_count': os.cpu_count() or 1
         },
         'validation': {
-            'schema_version': '2.1',
-            'required_sections': ['training', 'model', 'security', 'data'],
+            'schema_version': '2.1', 'required_sections': ['training', 'model', 'security', 'data'],
             'optional_sections': ['monitoring', 'hardware', 'presets', 'hyperparameter_optimization']
         }
     },
@@ -7350,15 +7268,10 @@ PRESET_CONFIGS.update({
         'metadata': {
             **STABILITY_PRESET['metadata'],
             'description': 'Stability-focused configuration for architecture testing',
-            'config_type': 'architecture_test',
-            'base_preset': 'stability'
+            'config_type': 'architecture_test', 'base_preset': 'stability'
         },
         'testing': {
-            'num_architecture_variants': 5,
-            'stability_threshold': 0.95,
-            'convergence_tolerance': 1e-4,
-            'max_variance': 0.1,
-            'test_cycles': 3,
+            'num_architecture_variants': 5, 'stability_threshold': 0.95, 'convergence_tolerance': 1e-4, 'max_variance': 0.1, 'test_cycles': 3,
             'stability_metrics': ['loss_variance', 'gradient_norm', 'parameter_updates']
         }
     },
@@ -7367,16 +7280,10 @@ PRESET_CONFIGS.update({
         'metadata': {
             **PERFORMANCE_PRESET['metadata'],
             'description': 'Performance-optimized configuration for architecture testing',
-            'config_type': 'performance_test',
-            'base_preset': 'performance'
+            'config_type': 'performance_test', 'base_preset': 'performance'
         },
         'performance_metrics': {
-            'target_throughput': 1000,
-            'max_latency': 50,
-            'memory_threshold': 0.8,
-            'warmup_cycles': 3,
-            'measurement_cycles': 5,
-            'stability_requirement': 0.9
+            'target_throughput': 1000, 'max_latency': 50, 'memory_threshold': 0.8, 'warmup_cycles': 3, 'measurement_cycles': 5, 'stability_requirement': 0.9
         },
         'architecture_tests': {
             'variants_to_test': [
@@ -7386,8 +7293,7 @@ PRESET_CONFIGS.update({
                 {'name': 'batch_norm_only', 'use_batch_norm': True, 'use_layer_norm': False}
             ],
             'comparison_metrics': [
-                'throughput', 'latency', 'memory_usage', 
-                'reconstruction_error', 'training_stability'
+                'throughput', 'latency', 'memory_usage', 'reconstruction_error', 'training_stability'
             ]
         }
     }
@@ -7496,7 +7402,7 @@ def ensure_preset_consistency(config: Dict[str, Any]) -> Dict[str, Any]:
             config['presets']['current_preset'] = None
         
         return config
-        
+    
     except Exception as e:
         logger.warning(f"Preset consistency check failed: {e}")
         return config
@@ -7512,17 +7418,15 @@ def get_system_info(
 ) -> Dict[str, Any]:
     """
     Gather system information by fully leveraging existing check functions.
-    Now enhanced with performance monitoring, baseline establishment, and memory management.
-    All helper functions are integrated directly for optimal performance.
     
     Args:
         include_versions: Whether to include version information
-        include_hardware: Whether to include hardware information  
+        include_hardware: Whether to include hardware information
         include_memory_usage: Whether to include current memory usage statistics
         include_detailed_analysis: Whether to include performance analysis and recommendations
         include_performance_baseline: Whether to establish performance baseline during collection
         include_memory_optimization: Whether to perform memory optimization during collection
-        
+    
     Returns:
         Dictionary with system information, analysis, and recommendations
     """
@@ -7552,9 +7456,7 @@ def get_system_info(
         if include_memory_usage or include_memory_optimization:
             try:
                 # Capture detailed memory state for monitoring system info collection impact
-                initial_memory_state = {
-                    'timestamp': datetime.now().isoformat()
-                }
+                initial_memory_state = {'timestamp': datetime.now().isoformat()}
                 
                 # Process memory info
                 if OPTIONAL_DEPENDENCIES.get('psutil', False):
@@ -7612,7 +7514,7 @@ def get_system_info(
             with _monitored_operation("platform_info_collection") as op_monitor:
                 system_info['platform'] = {
                     'system': platform.system(),
-                    'release': platform.release(), 
+                    'release': platform.release(),
                     'version': platform.version(),
                     'platform': platform.platform(),
                     'architecture': platform.architecture(),
@@ -7705,7 +7607,7 @@ def get_system_info(
                     # Add warnings for missing critical packages
                     if version_analysis['missing_required']:
                         system_info['collection_metadata']['warnings'].append(f"Missing required packages: {', '.join(version_analysis['missing_required'])}")
-                        
+            
             except Exception as e:
                 system_info['package_versions_error'] = str(e)
                 system_info['collection_metadata']['errors'].append(f"Package version collection failed: {e}")
@@ -7740,7 +7642,7 @@ def get_system_info(
                         if cores >= 16 and frequency_ghz >= 3.0:
                             cpu_perf_class = 'high'
                         elif cores >= 8 and frequency_ghz >= 2.5:
-                            cpu_perf_class = 'medium-high'  
+                            cpu_perf_class = 'medium-high'
                         elif cores >= 4 and frequency_ghz >= 2.0:
                             cpu_perf_class = 'medium'
                         elif cores >= 2:
@@ -7779,11 +7681,8 @@ def get_system_info(
                             memory_perf_class = 'low'
                         
                         capabilities['memory'] = {
-                            'total_gb': total_gb,
-                            'performance_class': memory_perf_class,
-                            'swap_gb': ram_data.get('swap_total_gb', 0),
-                            'has_swap': ram_data.get('swap_total_gb', 0) > 0
-                        }
+                            'total_gb': total_gb, 'performance_class': memory_perf_class,
+                            'swap_gb': ram_data.get('swap_total_gb', 0), 'has_swap': ram_data.get('swap_total_gb', 0) > 0}
                         
                         if 'current_usage' in ram_data:
                             capabilities['memory'].update({
@@ -7832,18 +7731,14 @@ def get_system_info(
                             capabilities['gpu']['devices'] = []
                             for i, gpu in enumerate(gpus):
                                 gpu_info = {
-                                    'index': i,
-                                    'name': gpu.get('name', 'Unknown'),
-                                    'memory_gb': gpu.get('memory_gb', 0),
-                                    'compute_capability': gpu.get('compute_capability'),
-                                    'multiprocessors': gpu.get('multiprocessors', 0)
+                                    'index': i, 'name': gpu.get('name', 'Unknown'), 'memory_gb': gpu.get('memory_gb', 0),
+                                    'compute_capability': gpu.get('compute_capability'), 'multiprocessors': gpu.get('multiprocessors', 0)
                                 }
                                 
                                 if 'current_usage' in gpu:
                                     gpu_usage = gpu['current_usage']
                                     gpu_info.update({
-                                        'allocated_mb': gpu_usage.get('allocated_mb', 0),
-                                        'reserved_mb': gpu_usage.get('reserved_mb', 0),
+                                        'allocated_mb': gpu_usage.get('allocated_mb', 0), 'reserved_mb': gpu_usage.get('reserved_mb', 0),
                                         'utilization_percent': gpu_usage.get('percent_allocated', 0)
                                     })
                                 
@@ -7867,11 +7762,8 @@ def get_system_info(
                             storage_perf_class = 'low'
                         
                         capabilities['storage'] = {
-                            'free_gb': free_gb,
-                            'total_gb': total_gb,
-                            'used_gb': disk_data.get('used_gb', 0),
-                            'usage_percent': usage_percent,
-                            'performance_class': storage_perf_class
+                            'free_gb': free_gb, 'total_gb': total_gb, 'used_gb': disk_data.get('used_gb', 0),
+                            'usage_percent': usage_percent, 'performance_class': storage_perf_class
                         }
                     
                     # hardware performance score calculation
@@ -7882,7 +7774,7 @@ def get_system_info(
                     cpu_scores = {'high': 100, 'medium-high': 80, 'medium': 60, 'low-medium': 40, 'low': 20}
                     scores.append(cpu_scores.get(cpu_class, 20))
                     
-                    # Memory score  
+                    # Memory score
                     memory_class = capabilities.get('memory', {}).get('performance_class', 'low')
                     memory_scores = {'high': 100, 'medium-high': 80, 'medium': 60, 'low-medium': 40, 'low': 20}
                     scores.append(memory_scores.get(memory_class, 20))
@@ -7908,10 +7800,8 @@ def get_system_info(
                         system_class = 'limited'
                     
                     hardware_analysis.update({
-                        'capabilities': capabilities,
-                        'overall_health': 'healthy' if hardware_analysis['required_failures'] == 0 else 'degraded',
-                        'performance_score': performance_score,
-                        'system_class': system_class
+                        'capabilities': capabilities, 'overall_health': 'healthy' if hardware_analysis['required_failures'] == 0 else 'degraded',
+                        'performance_score': performance_score, 'system_class': system_class
                     })
                     
                     system_info['hardware_analysis'] = hardware_analysis
@@ -7926,7 +7816,7 @@ def get_system_info(
                     if hardware_analysis['required_failures'] > 0:
                         failed_components = [name for name, comp in hardware_data.items() if comp.get('status') == 'FAIL' and comp.get('required', False)]
                         system_info['collection_metadata']['warnings'].append(f"Critical hardware failures: {', '.join(failed_components)}")
-                        
+            
             except Exception as e:
                 system_info['hardware_error'] = str(e)
                 system_info['collection_metadata']['errors'].append(f"Hardware collection failed: {e}")
@@ -7952,9 +7842,9 @@ def get_system_info(
                     # Integrate baseline results with hardware analysis
                     if 'hardware_analysis' in system_info and 'summary' in baseline_results:
                         system_info['hardware_analysis']['performance_baseline'] = baseline_results['summary']
-                        
-                    logger.debug(f"Performance baseline established: {baseline_results.get('summary', {}).get('overall_capability', 'unknown')} system")
                     
+                    logger.debug(f"Performance baseline established: {baseline_results.get('summary', {}).get('overall_capability', 'unknown')} system")
+            
             except Exception as e:
                 system_info['performance_baseline_error'] = str(e)
                 system_info['collection_metadata']['errors'].append(f"Performance baseline establishment failed: {e}")
@@ -8017,11 +7907,7 @@ def get_system_info(
                         # Memory performance analysis
                         if 'memory' in baseline.get('baselines', {}):
                             memory_baseline = baseline['baselines']['memory']
-                            avg_speed = np.mean([
-                                baseline_item.get('allocation_speed_mbs', 0) 
-                                for baseline_item in memory_baseline.values() 
-                                if isinstance(baseline_item, dict) and 'allocation_speed_mbs' in baseline_item
-                            ])
+                            avg_speed = np.mean([baseline_item.get('allocation_speed_mbs', 0) for baseline_item in memory_baseline.values() if isinstance(baseline_item, dict) and 'allocation_speed_mbs' in baseline_item])
                             
                             if avg_speed < 50:
                                 analysis['performance_optimizations'].append(f"Memory allocation is slow ({avg_speed:.0f} MB/s) - consider memory optimization")
@@ -8031,11 +7917,7 @@ def get_system_info(
                         # GPU performance analysis
                         if 'gpu' in baseline.get('baselines', {}):
                             gpu_baseline = baseline['baselines']['gpu']
-                            max_gpu_gflops = max([
-                                gpu.get('gflops', 0) 
-                                for gpu in gpu_baseline.values() 
-                                if isinstance(gpu, dict) and 'gflops' in gpu
-                            ], default=0)
+                            max_gpu_gflops = max([gpu.get('gflops', 0) for gpu in gpu_baseline.values() if isinstance(gpu, dict) and 'gflops' in gpu], default=0)
                             
                             if max_gpu_gflops > 100:
                                 analysis['configuration_suggestions'].append(f"High-performance GPU available ({max_gpu_gflops:.0f} GFLOPS) - enable mixed precision and large batch sizes")
@@ -8087,7 +7969,7 @@ def get_system_info(
                     analysis_metrics['recommendations_generated'] = sum(len(recommendations) for recommendations in analysis.values() if isinstance(recommendations, list))
                     analysis_metrics['analysis_efficiency'] = analysis_metrics['recommendations_generated'] / max(analysis_metrics.get('duration', 0.001), 0.001)
                     system_info['collection_metadata']['performance_metrics']['detailed_analysis'] = analysis_metrics
-                    
+            
             except Exception as e:
                 system_info['detailed_analysis_error'] = str(e)
                 system_info['collection_metadata']['errors'].append(f"Detailed analysis failed: {e}")
@@ -8183,7 +8065,7 @@ def get_system_info(
                     system_info['collection_metadata']['memory_impact'] = memory_impact
                     
                     logger.debug(f"System info collection memory impact: {memory_impact['rss_delta_mb']:+.1f}MB RSS")
-                
+            
             except Exception as e:
                 system_info['collection_metadata']['warnings'].append(f"Failed to capture final memory state: {e}")
         
@@ -8237,12 +8119,12 @@ def get_system_info(
                             
                             if gpu_improvements:
                                 optimization_impact['improvements']['gpu_memory'] = gpu_improvements
-                        
+                    
                     except Exception as e:
                         optimization_impact['error'] = str(e)
                     
                     system_info['collection_metadata']['optimization_impact'] = optimization_impact
-                        
+            
             except Exception as e:
                 system_info['collection_metadata']['errors'].append(f"Post-collection memory optimization failed: {e}")
         
@@ -8269,7 +8151,7 @@ def get_system_info(
         if errors == 0 and warnings == 0:
             data_quality = 'excellent'
         elif errors == 0 and warnings <= 2:
-            data_quality = 'good' 
+            data_quality = 'good'
         elif errors == 0:
             data_quality = 'acceptable'
         elif errors <= 2 and data_sources >= 3:
@@ -8323,14 +8205,14 @@ def get_system_info(
                     base_efficiency = min(ops_per_second * 10, 100)
                     weighted_efficiency = base_efficiency * memory_efficiency
                     summary['efficiency_score'] = round(max(0, min(weighted_efficiency, 100)), 2)
-            
+        
         except Exception as e:
             summary['error'] = str(e)
         
         system_info['collection_metadata']['performance_summary'] = summary
         
         return system_info
-        
+    
     except Exception as e:
         # Fallback error response with performance context
         error_response = {
@@ -8352,7 +8234,7 @@ def get_system_info(
                 error_response['collection_metadata']['performance_metrics'] = locals()['performance_metrics']
         except:
             pass
-            
+        
         return error_response
 
 # Helper functions for system info collection
@@ -8411,8 +8293,7 @@ def _monitored_operation(operation_name: str):
         monitor.get_metrics()
 
 def update_global_config(config: Dict[str, Any]) -> None:
-    """Update module-level constants from config with enhanced validation, logging, preset support,
-    and intelligent memory management.
+    """Update module-level constants from config with validation, logging, preset support, and memory management.
     
     This function synchronizes global configuration variables with the provided configuration
     dictionary, ensuring type safety, value validation, comprehensive change tracking, and
@@ -8420,7 +8301,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
     
     Args:
         config: Configuration dictionary to update from
-        
+    
     Raises:
         ValueError: If any configuration values are invalid
         TypeError: If any configuration values are of incorrect type
@@ -8429,21 +8310,17 @@ def update_global_config(config: Dict[str, Any]) -> None:
     if not isinstance(config, dict):
         raise TypeError(f"Configuration must be a dictionary, got {type(config).__name__}")
     
-    # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
+    # Get hardware context
     hardware_data = None
     total_ram_gb = 8.0  # Conservative default
     
+    # Initial memory optimization
     try:
         hardware_data = check_hardware(include_memory_usage=True)
         total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
         
-        # Initial memory cleanup for memory-constrained systems before processing large configs
         if total_ram_gb < 16 and len(str(config)) > 100000:  # Large config (>100KB serialized)
-            initial_clear_results = enhanced_clear_memory(
-                aggressive=total_ram_gb < 8,  # More aggressive on low-memory systems
-                hardware_data=hardware_data
-            )
-            
+            initial_clear_results = enhanced_clear_memory(aggressive=total_ram_gb < 8, hardware_data=hardware_data)
             if initial_clear_results.get('success'):
                 logger.debug(f"Initial memory optimization for config processing: {', '.join(initial_clear_results.get('actions_taken', []))}")
     except Exception as e:
@@ -8455,7 +8332,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
     if missing_sections:
         raise KeyError(f"Missing required configuration sections: {missing_sections}")
     
-    # Initialize comprehensive change tracking
+    # Initialize change tracking
     changes = {
         'metadata': {
             'config_version': '2.1',
@@ -8476,7 +8353,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
     try:
         training_config = config.get('training', {})
         
-        # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before processing large training configs
+        # Clear memory before processing large training configs
         if len(str(training_config)) > 20000 and total_ram_gb < 16:
             try:
                 training_clear_results = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
@@ -8552,12 +8429,12 @@ def update_global_config(config: Dict[str, Any]) -> None:
             if old_value != new_value:
                 NUM_WORKERS = new_value
                 changes['training']['num_workers'] = {'from': old_value, 'to': new_value}
-                
+    
     except Exception as e:
         logger.error(f"Error updating training configuration: {e}")
         raise ValueError(f"Invalid training configuration: {e}")
     
-    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before model config processing
+    # Clear memory before model config processing
     try:
         model_config = config.get('model', {})
         
@@ -8663,7 +8540,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
         logger.error(f"Error updating model configuration: {e}")
         raise ValueError(f"Invalid model configuration: {e}")
     
-    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before security config processing
+    # Clear memory before security config processing
     try:
         security_config = config.get('security', {})
         
@@ -8708,7 +8585,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
         logger.error(f"Error updating security configuration: {e}")
         raise ValueError(f"Invalid security configuration: {e}")
     
-    # MEMORY OPTIMIZATION CHECKPOINT - Clear memory before data config processing
+    # Clear memory before data config processing
     try:
         data_config = config.get('data', {})
         
@@ -8717,7 +8594,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
             if data_clear_results.get('success'):
                 changes['metadata']['memory_optimizations_applied'] += 1
                 logger.debug("Memory optimized before data config processing")
-    
+
         # Data parameter updates
         global NORMAL_SAMPLES, ATTACK_SAMPLES, FEATURES, ANOMALY_FACTOR, RANDOM_STATE
         
@@ -8760,7 +8637,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
         logger.error(f"Error updating data configuration: {e}")
         raise ValueError(f"Invalid data configuration: {e}")
     
-    # Handle preset application with comprehensive validation and memory optimization
+    # Handle preset application with validation and memory optimization
     try:
         preset_config = config.get('presets', {})
         
@@ -8780,8 +8657,7 @@ def update_global_config(config: Dict[str, Any]) -> None:
             if isinstance(preset_data, dict):
                 # Record preset application
                 changes['system']['preset_applied'] = {
-                    'preset': current_preset,
-                    'description': preset_data.get('metadata', {}).get('description', 'No description'),
+                    'preset': current_preset, 'description': preset_data.get('metadata', {}).get('description', 'No description'),
                     'compatibility': preset_data.get('metadata', {}).get('compatibility', [])
                 }
                 
@@ -8806,13 +8682,9 @@ def update_global_config(config: Dict[str, Any]) -> None:
         logger.warning(f"Error applying preset configuration: {e}")
         changes['system']['preset_error'] = str(e)
     
-    # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
     # Aggressive cleanup after configuration processing completion
     try:
-        final_clear_results = enhanced_clear_memory(
-            aggressive=True,  # Aggressive final cleanup
-            hardware_data=hardware_data
-        )
+        final_clear_results = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
         
         if final_clear_results.get('success'):
             changes['metadata']['final_memory_cleanup'] = {
@@ -8826,14 +8698,13 @@ def update_global_config(config: Dict[str, Any]) -> None:
             
             changes['metadata']['memory_optimizations_applied'] += 1
             logger.debug(f"Final memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-            
+    
     except Exception as e:
         logger.debug(f"Final memory optimization failed: {e}")
         changes['metadata']['final_cleanup_error'] = str(e)
     
     # Calculate total changes and log summary
-    total_changes = sum(len(section) for section in changes.values() 
-                       if isinstance(section, dict) and section != changes['metadata'])
+    total_changes = sum(len(section) for section in changes.values() if isinstance(section, dict) and section != changes['metadata'])
     changes['metadata']['total_changes'] = total_changes
     
     if total_changes > 0:
@@ -8867,22 +8738,22 @@ def update_global_config(config: Dict[str, Any]) -> None:
         logger.debug(f"Failed to save configuration change log: {e}")
 
 def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
-    """Load config file with enhanced validation, error recovery, migration support,
-    integrated named configuration functionality, and intelligent memory management 
-    for optimal performance during large file processing.
+    """Load config file with validation, error recovery, migration support,
+    integrated named configuration functionality, and memory management for
+    optimal performance during large file processing.
     
     Args:
         config_path: Path to the configuration file or name of saved/named configuration
-        
+    
     Returns:
         Dictionary containing the loaded configuration
-        
+    
     Raises:
         ValueError: If configuration format is invalid
         FileNotFoundError: If configuration file not found
     """
     try:
-        # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
+        # Get hardware context early for memory-aware processing
         hardware_data = None
         total_ram_gb = 8.0  # Conservative default
         
@@ -8911,13 +8782,10 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                             logger.warning(f"Named configuration file not found: {actual_config_path}")
                             return {}
                         
-                        # MEMORY OPTIMIZATION - Clear memory before recursive call
+                        # Clear memory before recursive call
                         if total_ram_gb < 8:
                             try:
-                                pre_recursive_clear = enhanced_clear_memory(
-                                    aggressive=True,
-                                    hardware_data=hardware_data
-                                )
+                                pre_recursive_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
                                 if pre_recursive_clear.get('success'):
                                     logger.debug("Memory optimized before named config recursive load")
                             except Exception as e:
@@ -8939,7 +8807,7 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                         
                         # Load the actual config file
                         return load_config(actual_config_path)
-                        
+                
                 except Exception as e:
                     logger.warning(f"Failed to check named config registry: {e}")
             
@@ -8968,7 +8836,7 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             if file_size > 10 * 1024 * 1024:
                 logger.warning(f"Configuration file {config_path} is unusually large ({file_size} bytes)")
             
-            # MEMORY OPTIMIZATION - Clear memory before loading large files
+            # Clear memory before loading large files
             large_file_threshold = 1024 * 1024  # 1MB
             if file_size > large_file_threshold or total_ram_gb < 8:
                 try:
@@ -8981,7 +8849,7 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                 except Exception as e:
                     logger.debug(f"Pre-load memory optimization failed: {e}")
             
-            # Load with enhanced error handling
+            # Load with error handling
             logger.debug(f"Loading configuration from {config_path} ({file_size} bytes)")
             
             with open(config_path, 'r', encoding='utf-8') as f:
@@ -8991,12 +8859,9 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                     # Try to recover from common JSON errors
                     logger.error(f"JSON decode error in {config_path}: {e}")
                     
-                    # MEMORY OPTIMIZATION - Clear memory before intensive recovery operations
+                    # Clear memory before intensive recovery operations
                     try:
-                        recovery_clear = enhanced_clear_memory(
-                            aggressive=total_ram_gb < 8,
-                            hardware_data=hardware_data
-                        )
+                        recovery_clear = enhanced_clear_memory(aggressive=total_ram_gb < 8, hardware_data=hardware_data)
                         if recovery_clear.get('success'):
                             logger.debug("Memory optimized before JSON recovery")
                     except Exception as e:
@@ -9014,13 +8879,10 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                     else:
                         raise ValueError(f"Cannot parse configuration file: {e}")
             
-            # MEMORY OPTIMIZATION - Clear memory after file loading for large configs
+            # Clear memory after file loading for large configs
             if file_size > large_file_threshold and total_ram_gb < 16:
                 try:
-                    post_load_clear = enhanced_clear_memory(
-                        aggressive=file_size > large_file_threshold * 10,
-                        hardware_data=hardware_data
-                    )
+                    post_load_clear = enhanced_clear_memory(aggressive=file_size > large_file_threshold * 10, hardware_data=hardware_data)
                     if post_load_clear.get('success'):
                         logger.debug("Memory optimized after config file loading")
                 except Exception as e:
@@ -9036,13 +8898,10 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                 loaded_config = config_data['config']
                 metadata = config_data['metadata']
                 
-                # MEMORY OPTIMIZATION - Clear memory before intensive metadata processing
+                # Clear memory before intensive metadata processing
                 if len(str(metadata)) > 10000 and total_ram_gb < 16:
                     try:
-                        metadata_clear = enhanced_clear_memory(
-                            aggressive=False,
-                            hardware_data=hardware_data
-                        )
+                        metadata_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
                         if metadata_clear.get('success'):
                             logger.debug("Memory optimized before metadata processing")
                     except Exception as e:
@@ -9063,13 +8922,10 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                     if actual_checksum != expected_checksum:
                         logger.warning("Configuration checksum mismatch - file may have been modified externally")
                 
-                # MEMORY OPTIMIZATION - Clear memory before preset information update
+                # Clear memory before preset information update
                 if len(str(loaded_config)) > 50000 and total_ram_gb < 16:
                     try:
-                        preset_clear = enhanced_clear_memory(
-                            aggressive=False,
-                            hardware_data=hardware_data
-                        )
+                        preset_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
                         if preset_clear.get('success'):
                             logger.debug("Memory optimized before preset information update")
                     except Exception as e:
@@ -9083,19 +8939,16 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                         loaded_config['presets']['custom_presets_available'] = get_safe_custom_presets()
                     except Exception as e:
                         logger.debug(f"Failed to update preset information: {e}")
-                
+            
             else:
                 # Legacy format - assume it's the configuration directly
                 loaded_config = config_data
                 logger.info("Loaded legacy configuration format")
                 
-                # MEMORY OPTIMIZATION - Clear memory before legacy format processing
+                # Clear memory before legacy format processing
                 if len(str(loaded_config)) > 25000 and total_ram_gb < 16:
                     try:
-                        legacy_clear = enhanced_clear_memory(
-                            aggressive=len(str(loaded_config)) > 50000,
-                            hardware_data=hardware_data
-                        )
+                        legacy_clear = enhanced_clear_memory(aggressive=len(str(loaded_config)) > 50000, hardware_data=hardware_data)
                         if legacy_clear.get('success'):
                             logger.debug("Memory optimized before legacy format processing")
                     except Exception as e:
@@ -9124,23 +8977,20 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             required_sections = ['training', 'model', 'security', 'data']
             missing_sections = [section for section in required_sections if section not in loaded_config]
             if missing_sections:
-                logger.warning(f"Missing required sections: {missing_sections}")
                 # Don't fail loading, but warn - these will be filled by defaults
+                logger.warning(f"Missing required sections: {missing_sections}")
             
             # Validate model type compatibility with current MODEL_VARIANTS
             model_config = loaded_config.get('model', {})
             model_type = model_config.get('model_type')
             if model_type and MODEL_VARIANTS and model_type not in MODEL_VARIANTS:
-                logger.warning(f"Model type '{model_type}' not available in current MODEL_VARIANTS")
                 # Don't modify the loaded config, let the caller handle this
+                logger.warning(f"Model type '{model_type}' not available in current MODEL_VARIANTS")
             
-            # MEMORY OPTIMIZATION - Clear memory before final processing steps
+            # Clear memory before final processing steps
             if len(str(loaded_config)) > 75000 and total_ram_gb < 16:
                 try:
-                    final_processing_clear = enhanced_clear_memory(
-                        aggressive=len(str(loaded_config)) > 150000,
-                        hardware_data=hardware_data
-                    )
+                    final_processing_clear = enhanced_clear_memory(aggressive=len(str(loaded_config)) > 150000, hardware_data=hardware_data)
                     if final_processing_clear.get('success'):
                         logger.debug("Memory optimized before final config processing")
                 except Exception as e:
@@ -9161,19 +9011,14 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
             
             # Aggressive cleanup after configuration loading completion
             try:
-                final_clear_results = enhanced_clear_memory(
-                    aggressive=True,
-                    hardware_data=hardware_data
-                )
-                
+                final_clear_results = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
                 if final_clear_results.get('success'):
                     logger.debug(f"Final load memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-                    
             except Exception as e:
                 logger.debug(f"Final load memory optimization failed: {e}")
             
             return loaded_config
-            
+        
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in config file {config_path}: {str(e)}")
             raise ValueError(f"Configuration file contains invalid JSON: {e}")
@@ -9186,12 +9031,9 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Error loading config from {config_path}: {str(e)}", exc_info=True)
             
-            # MEMORY OPTIMIZATION - Clear memory before backup loading attempt
+            # Clear memory before backup loading attempt
             try:
-                backup_clear = enhanced_clear_memory(
-                    aggressive=total_ram_gb < 8,
-                    hardware_data=hardware_data
-                )
+                backup_clear = enhanced_clear_memory(aggressive=total_ram_gb < 8, hardware_data=hardware_data)
                 if backup_clear.get('success'):
                     logger.debug("Memory optimized before backup loading attempt")
             except Exception as cleanup_error:
@@ -9204,7 +9046,7 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
                 return backup_config
             
             raise ValueError(f"Failed to load configuration: {str(e)}")
-            
+    
     except Exception as e:
         logger.error(f"Critical error in load_config: {e}", exc_info=True)
         
@@ -9223,7 +9065,7 @@ def load_config(config_path: Path = CONFIG_FILE) -> Dict[str, Any]:
         raise
 
 def update_named_config_registry(name: str, config_path: Path, metadata: Dict[str, Any]) -> None:
-    """Update the named configuration registry for easier management with enhanced error handling."""
+    """Update the named configuration registry for easier management with error handling."""
     try:
         registry_path = CONFIG_DIR / "named_configs_registry.json"
         
@@ -9254,7 +9096,7 @@ def update_named_config_registry(name: str, config_path: Path, metadata: Dict[st
         # Extract configuration details safely
         config_dict = metadata.get("config", {})
         
-        # Update registry entry with comprehensive information
+        # Update registry entry
         registry_entry = {
             "path": str(config_path),
             "created": metadata.get("created", datetime.now().isoformat()),
@@ -9305,14 +9147,13 @@ def update_named_config_registry(name: str, config_path: Path, metadata: Dict[st
             if registry_path.exists():
                 backup_path = registry_path.with_suffix(f".backup_{int(time.time())}")
                 shutil.copy2(registry_path, backup_path)
-                # Keep only last 5 backups
-                cleanup_registry_backups(registry_path.parent, 5)
+                cleanup_registry_backups(registry_path.parent, 5)  # Keep only last 5 backups
             
             # Atomic replacement
             if os.name == 'nt' and registry_path.exists():
                 registry_path.unlink()
             temp_path.replace(registry_path)
-            
+        
         except Exception as write_error:
             if temp_path.exists():
                 try:
@@ -9322,10 +9163,10 @@ def update_named_config_registry(name: str, config_path: Path, metadata: Dict[st
             raise RuntimeError(f"Failed to write registry: {write_error}") from write_error
         
         logger.debug(f"Updated named configuration registry: {name} -> {config_path}")
-        
+    
     except Exception as e:
-        logger.error(f"Failed to update named configuration registry: {e}", exc_info=True)
         # Don't raise exception to avoid breaking config save operations
+        logger.error(f"Failed to update named configuration registry: {e}", exc_info=True)
 
 def cleanup_registry_backups(registry_dir: Path, keep_count: int):
     """Clean up old registry backup files."""
@@ -9341,16 +9182,15 @@ def cleanup_registry_backups(registry_dir: Path, keep_count: int):
             for old_backup in backup_files[keep_count:]:
                 old_backup.unlink()
                 logger.debug(f"Removed old registry backup: {old_backup}")
-                
     except Exception as e:
         logger.debug(f"Failed to cleanup registry backups: {e}")
 
 def generate_config_checksum(config: Dict[str, Any]) -> str:
-    """Generate a checksum for configuration integrity verification with enhanced stability.
+    """Generate a checksum for configuration integrity verification.
     
     Args:
         config: Configuration dictionary
-        
+    
     Returns:
         String checksum (SHA-256 hash of serialized config)
     """
@@ -9360,8 +9200,7 @@ def generate_config_checksum(config: Dict[str, Any]) -> str:
         
         # Remove volatile/timestamp fields that shouldn't affect checksum
         volatile_fields = [
-            'last_loaded', 'last_accessed', 'last_modified', 'modified',
-            'created', 'timestamp', 'save_time', 'load_time',
+            'last_loaded', 'last_accessed', 'last_modified', 'modified', 'created', 'timestamp', 'save_time', 'load_time',
             'runtime_id', 'process_id', 'collection_duration_ms'
         ]
         
@@ -9382,14 +9221,12 @@ def generate_config_checksum(config: Dict[str, Any]) -> str:
         cleaned_config = remove_volatile_fields(config_copy)
         
         # Create a stable, normalized string representation
-        # Sort keys at all levels for consistency
         config_str = json.dumps(
             cleaned_config,
-            sort_keys=True,
+            sort_keys=True,  # Sort keys at all levels for consistency
             ensure_ascii=True,
             separators=(',', ':'),
-            # Handle any non-serializable objects
-            default=str
+            default=str  # Handle any non-serializable objects
         )
         
         # Generate SHA-256 hash
@@ -9401,7 +9238,7 @@ def generate_config_checksum(config: Dict[str, Any]) -> str:
         logger.debug(f"Generated config checksum: {short_checksum} (from {len(config_str)} chars)")
         
         return short_checksum
-        
+    
     except Exception as e:
         logger.warning(f"Failed to generate config checksum: {e}")
         # Fallback checksum based on timestamp and basic config info
@@ -9413,14 +9250,13 @@ def generate_config_checksum(config: Dict[str, Any]) -> str:
             }
             fallback_str = json.dumps(fallback_data, sort_keys=True)
             fallback_hash = hashlib.sha256(fallback_str.encode('utf-8')).hexdigest()
-            # 'fb' prefix indicates fallback
-            return f"fb_{fallback_hash[:14]}"
+            return f"fb_{fallback_hash[:14]}"  # 'fb' prefix indicates fallback
         except:
             # Minimal fallback
             return f"err_{int(time.time() * 1000) % 1000000:06d}"
 
 def attempt_json_recovery(content: str, config_path: Path) -> Optional[Dict]:
-    """Attempt to recover from common JSON formatting errors with enhanced recovery strategies."""
+    """Attempt to recover from common JSON formatting errors with recovery strategies."""
     try:
         logger.info(f"Attempting JSON recovery for {config_path}")
         
@@ -9577,13 +9413,13 @@ def attempt_json_recovery(content: str, config_path: Path) -> Optional[Dict]:
         
         logger.warning(f"All JSON recovery strategies failed for {config_path}")
         return None
-        
+    
     except Exception as e:
         logger.warning(f"JSON recovery attempt failed with exception: {e}")
         return None
 
 def try_load_from_backup(config_path: Path) -> Optional[Dict]:
-    """Try to load configuration from the most recent backup with enhanced backup discovery."""
+    """Try to load configuration from the most recent backup with backup discovery."""
     try:
         logger.info(f"Attempting to load from backup for {config_path}")
         
@@ -9704,14 +9540,14 @@ def try_load_from_backup(config_path: Path) -> Optional[Dict]:
                         logger.debug(f"Backup config is not a valid dictionary: {type(backup_config)}")
                 else:
                     logger.debug(f"Backup config is empty: {backup_path}")
-                    
+            
             except Exception as e:
                 logger.debug(f"Failed to load backup {backup_path}: {e}")
                 continue
         
         logger.warning("All backup loading attempts failed")
         return None
-        
+    
     except Exception as e:
         logger.warning(f"Error during backup loading process: {e}")
         return None
@@ -9793,10 +9629,9 @@ class ConfigSectionValidators:
         available_normalizations = model.get('available_normalizations', ['batch', 'layer', 'instance', 'group', None])
         if normalization not in available_normalizations:
             errors.append(f"Invalid normalization: {normalization}, available: {available_normalizations}")
-
         use_batch_norm = model.get('use_batch_norm', False)
         use_layer_norm = model.get('use_layer_norm', False)
-
+        
         # Fix inconsistencies: ensure normalization setting matches use_*_norm flags
         if normalization is None:
             # If no normalization specified, both flags should be False
@@ -9826,7 +9661,7 @@ class ConfigSectionValidators:
                 warnings.append(f"normalization='{normalization}' but batch_norm or layer_norm enabled - auto-correcting to disable both")
                 model['use_batch_norm'] = False
                 model['use_layer_norm'] = False
-
+        
         # Final validation check - should not have both enabled after auto-corrections
         final_use_batch_norm = model.get('use_batch_norm', False)
         final_use_layer_norm = model.get('use_layer_norm', False)
@@ -10068,9 +9903,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                     # Use centralized validation for basic parameters
                     basic_params = {k: v for k, v in value.items() if k not in ['hidden_dims', 'dropout_rates', 'num_models', 'diversity_factor']}
                     
-                    validation_passed = ParameterValidator.validate_and_update_with_feedback(
-                        'model', result_model, basic_params, changes_made
-                    )
+                    validation_passed = ParameterValidator.validate_and_update_with_feedback('model', result_model, basic_params, changes_made)
                     
                     if not validation_passed:
                         logger.warning("Model validation failed, skipping basic parameter updates")
@@ -10130,7 +9963,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                         result_model['available_normalizations'] = ['batch', 'layer', 'instance', 'group', None]
                     
                     original[key] = result_model
-                    
+                
                 elif key == 'training':
                     # Integrated deep_update_training_section functionality
                     result_training = original[key].copy()
@@ -10138,9 +9971,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                     # Use centralized validation for basic parameters
                     basic_params = {k: v for k, v in value.items() if k not in ['scheduler_params', 'adam_betas', 'adam_eps']}
                     
-                    validation_passed = ParameterValidator.validate_and_update_with_feedback(
-                        'training', result_training, basic_params, changes_made
-                    )
+                    validation_passed = ParameterValidator.validate_and_update_with_feedback('training', result_training, basic_params, changes_made)
                     
                     if not validation_passed:
                         logger.warning("Training validation failed, skipping basic parameter updates")
@@ -10164,15 +9995,13 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                         result_training['scheduler_params'] = value['scheduler_params']
                     
                     original[key] = result_training
-                    
+                
                 elif key == 'presets':
                     # Integrated deep_update_presets_section functionality
                     result_presets = original[key].copy()
                     
                     # Use centralized validation
-                    validation_passed = ParameterValidator.validate_and_update_with_feedback(
-                        'presets', result_presets, value, changes_made
-                    )
+                    validation_passed = ParameterValidator.validate_and_update_with_feedback('presets', result_presets, value, changes_made)
                     
                     if not validation_passed:
                         logger.warning("Presets validation failed, skipping updates")
@@ -10206,7 +10035,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                             stats['last_preset_change'] = datetime.now().isoformat()
                     
                     original[key] = result_presets
-                    
+                
                 elif key == 'metadata':
                     # Integrated deep_update_metadata_section functionality
                     result_metadata = deepcopy(original[key]) if original[key] else {}
@@ -10262,7 +10091,7 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
                                 })
                     
                     original[key] = result_metadata
-                    
+                
                 else:
                     # Standard recursive update for other sections
                     original[key] = deep_update(original[key], value)
@@ -10300,11 +10129,11 @@ def deep_update(original: Dict[str, Any], update: Dict[str, Any]) -> Dict[str, A
     return original
 
 def get_current_config() -> Dict[str, Any]:
-    """Return comprehensive configuration with preset awareness, caching, and validation.
+    """Return configuration with preset awareness, caching, and validation.
     
-    This function provides the current active configuration with intelligent fallback
-    mechanisms, system-aware defaults, and comprehensive error recovery. It integrates
-    with the updated preset system, configuration caching, and validation framework.
+    This function provides the current active configuration with fallback mechanisms,
+    system-aware defaults, and comprehensive error recovery. It integrates with
+    the updated preset system, configuration caching, and validation framework.
     
     Returns:
         Dictionary containing all configuration parameters with metadata,
@@ -10317,7 +10146,7 @@ def get_current_config() -> Dict[str, Any]:
     
     current_time = time.time()
     
-    # Check cache validity (30 seconds) with comprehensive validation
+    # Check cache validity (30 seconds) with validation
     if (_cached_config is not None and _config_cache_time is not None and 
         current_time - _config_cache_time < 30):
         return _cached_config
@@ -10336,7 +10165,7 @@ def get_current_config() -> Dict[str, Any]:
     except Exception as e:
         logger.debug(f"Failed to load existing configuration: {e}")
     
-    # Step 2: Determine base configuration source with intelligent selection
+    # Step 2: Determine base configuration source
     base_config = None
     config_source = None
     
@@ -10398,7 +10227,7 @@ def get_current_config() -> Dict[str, Any]:
             logger.warning(f"Failed to merge configurations: {e}")
             # Continue with base_config only
     
-    # Step 6: Add comprehensive runtime metadata
+    # Step 6: Add runtime metadata
     current_timestamp = datetime.now().isoformat()
     
     # Ensure metadata section exists
@@ -10483,7 +10312,7 @@ def list_saved_configs() -> Dict[str, Any]:
             except Exception as e:
                 logger.warning(f"Failed to read named config registry: {e}")
         
-        # Build comprehensive result with metadata
+        # Build result with metadata
         result = {
             "regular_configs": [],
             "named_configs": named_configs,
@@ -10581,24 +10410,24 @@ def load_saved_config_interactive():
         named_configs = saved_configs_info["named_configs"]
         all_configs = saved_configs_info["all_configs"]
         
+        console.print("\nAvailable Saved Configurations\n", style="bold yellow")
+        
         if not regular_configs and not named_configs:
             no_config_panel = Panel.fit(
-                "[bold red]No saved configurations found[/bold red]\n"
-                "Use 'save_config()' to save your current configuration first.",
-                title="[bold yellow]WARNING[/bold yellow]",
+                "No saved configurations found",
+                title="WARNING",
                 border_style="yellow",
+                style="bold yellow",
                 padding=(1, 2)
             )
             console.print(no_config_panel)
             return
         
-        console.print("\n[bold yellow]Available Saved Configurations[/bold yellow]\n")
-        
         # Create main table for saved configurations
         config_table = Table(
             box=box.ROUNDED,
-            header_style="bold bright_magenta",
-            border_style="bright_magenta",
+            header_style="bold magenta",
+            border_style="magenta",
             show_header=True,
             show_lines=True,
             width=min(100, console.width - 4)
@@ -10607,7 +10436,7 @@ def load_saved_config_interactive():
         # Define columns
         config_table.add_column("#", style="bold cyan", width=3, justify="center")
         config_table.add_column("Config Name", style="bold green", width=25)
-        config_table.add_column("Type", style="bold yellow", width=10)
+        config_table.add_column("Type", style="bold magenta", width=10)
         config_table.add_column("File Info", style="bold blue", width=20)
         config_table.add_column("Config Details", style="bold", width=40)
         
@@ -10649,7 +10478,7 @@ def load_saved_config_interactive():
                     preset = config_data.get('preset_used', 'None')
                     
                     config_details = f"Model: {model_type}\nPreset: {preset}\n[Named Config]"
-                
+            
             except Exception as e:
                 config_details = f"[bold red]Error reading: {str(e)[:30]}...[/bold red]"
             
@@ -10672,7 +10501,7 @@ def load_saved_config_interactive():
         choice = console.input(f"\n[bold yellow]{selection_message} or {cancel_message}: [/bold yellow]").strip()
         
         if choice == "0":
-            console.print("[bold red]Loading cancelled[/bold red]")
+            console.print("\nLoading cancelled", style="bold red")
             return
         
         if choice.isdigit() and 1 <= int(choice) <= max_choice:
@@ -10695,7 +10524,7 @@ def load_saved_config_interactive():
                     epochs = config_data.get('training', {}).get('epochs', 'N/A')
                     batch_size = config_data.get('training', {}).get('batch_size', 'N/A')
                     preset = metadata.get('preset_used', 'None')
-                    
+                
                 else:  # named config
                     named_info = named_configs[selected_name]
                     config_path = Path(named_info.get("path", ""))
@@ -10713,24 +10542,26 @@ def load_saved_config_interactive():
                     metadata = {"created": named_info.get("created", "Unknown")}
                 
                 confirm_panel = Panel.fit(
-                    f"[bold]Configuration:[/bold] [green]{selected_name}[/green]\n"
-                    f"[bold]Type:[/bold] {'Named' if config_info['type'] == 'named' else 'Regular'}\n"
-                    f"[bold]File:[/bold] {file_info}\n"
-                    f"[bold]Model:[/bold] {model_type}\n"
-                    f"[bold]Training:[/bold] {epochs} epochs, Batch: {batch_size}\n"
-                    f"[bold]Preset:[/bold] {preset}\n"
-                    f"[bold]Created:[/bold] {metadata.get('created', 'Unknown')}",
-                    title="[bold]CONFIGURATION PREVIEW[/bold]",
-                    border_style="green",
+                    f"Configuration: [bold green]{selected_name}[/bold green]\n"
+                    f"Type: {'Named' if config_info['type'] == 'named' else 'Regular'}\n"
+                    f"File: {file_info}\n"
+                    f"Model: [bold magenta]{model_type}[/bold magenta]\n"
+                    f"Training: [bold yellow]{epochs}[/bold yellow] epochs, Batch: [bold yellow]{batch_size}[/bold yellow]\n"
+                    f"Preset: [bold white]{preset}[/bold white]\n"
+                    f"Created: {metadata.get('created', 'Unknown')}",
+                    title="CONFIGURATION PREVIEW",
+                    border_style="cyan",
+                    style="bold cyan",
                     padding=(1, 2)
                 )
                 console.print(confirm_panel)
-                
+            
             except Exception as e:
                 error_panel = Panel.fit(
-                    f"[bold red]Error reading configuration: {e}[/bold red]",
-                    title="[bold]ERROR[/bold]",
+                    f"Error reading configuration: [bold yellow]{e}[/bold yellow]",
+                    title="ERROR",
                     border_style="red",
+                    style="bold red",
                     padding=(1, 2)
                 )
                 console.print(error_panel)
@@ -10746,39 +10577,43 @@ def load_saved_config_interactive():
                     update_global_config(config)
                     
                     success_panel = Panel.fit(
-                        f"[bold green]Successfully loaded configuration: {selected_name}[/bold green]\n"
+                        f"Successfully loaded configuration: [bold magenta]{selected_name}[/bold magenta]\n"
                         f"All settings have been updated from the saved configuration.",
-                        title="[bold]SUCCESS[/bold]",
+                        title="SUCCESS",
                         border_style="green",
+                        style="bold green",
                         padding=(1, 2)
                     )
                     console.print(success_panel)
-                    
+                
                 except Exception as e:
                     error_panel = Panel.fit(
-                        f"[bold red]Failed to load configuration: {e}[/bold red]",
-                        title="[bold]ERROR[/bold]",
+                        f"Failed to load configuration: [bold yellow]{e}[/bold yellow]",
+                        title="ERROR",
                         border_style="red",
+                        style="bold red",
                         padding=(1, 2)
                     )
                     console.print(error_panel)
             else:
-                console.print("[bold red]Loading cancelled[/bold red]")
+                console.print("Loading cancelled", style="bold red")
         else:
             error_panel = Panel.fit(
-                f"[bold yellow]Invalid selection: {choice}[/bold yellow]\n"
+                f"Invalid selection: [bold green]{choice}[/bold green]\n"
                 f"{selection_message} or {cancel_message}:",
-                title="[bold]WARNING[/bold]",
+                title="WARNING",
                 border_style="yellow",
+                style="bold yellow",
                 padding=(1, 2)
             )
             console.print(error_panel)
-            
+    
     except Exception as e:
         error_panel = Panel.fit(
-            f"[bold red]Error in configuration loading: {e}[/bold red]",
-            title="[bold]FAILED[/bold]",
+            f"Error in configuration loading: [bold yellow]{e}[/bold yellow]",
+            title="FAILED",
             border_style="red",
+            style="bold red",
             padding=(1, 2)
         )
         console.print(error_panel)
@@ -10786,15 +10621,15 @@ def load_saved_config_interactive():
 
 # Helper functions for preset and configuration management
 def migrate_config(legacy_config: Dict, new_template: Dict = None) -> Dict:
-    """Migrate an older configuration to the current version using enhanced preset matching.
+    """Migrate an older configuration to the current version using preset matching.
     
     Args:
         legacy_config: The old configuration dictionary to migrate from
         new_template: Optional template to use as base (defaults to best matching preset)
-        
+    
     Returns:
         New configuration dictionary with migrated values
-        
+    
     Raises:
         ValueError: If legacy_config is invalid
     """
@@ -11097,16 +10932,16 @@ def convert_legacy_config(
     config: Optional[Dict[str, Any]] = None,
     preset_similarity_threshold: Optional[float] = None
 ) -> Dict[str, Any]:
-    """Convert legacy configuration to current format using intelligent preset matching.
+    """Convert legacy configuration to current format using preset matching.
     
     Args:
         legacy_config: The old configuration dictionary to convert
         config: Current configuration dictionary (for migration settings)
         preset_similarity_threshold: Override for similarity threshold (0-1)
-        
+    
     Returns:
         New configuration dictionary in current format with metadata
-        
+    
     Raises:
         ValueError: If legacy_config is invalid or conversion fails
     """
@@ -11701,13 +11536,13 @@ def convert_legacy_config(
         logger.info("Falling back to basic migration")
         return migrate_config(legacy_config)
 
-def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool, List[str], List[str]]:
+def validate_config(
+    config: Dict[str, Any],
+    strict: bool = False
+) -> Tuple[bool, List[str], List[str]]:
     """
     Configuration validation with preset compatibility, hardware requirement validation, automatic
     error correction capabilities, and intelligent memory management for optimal performance.
-    
-    This function provides deep validation of all configuration sections including the new preset
-    features, model configurations, and system-aware validation.
     
     Args:
         config: Configuration dictionary to validate
@@ -11734,7 +11569,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         if not config:
             raise ValueError("Configuration cannot be empty")
         
-        # INITIAL MEMORY OPTIMIZATION - Get hardware context early
+        # Get hardware context early
         hardware_data = None
         total_ram_gb = 8.0  # Conservative default
         cuda_available = False
@@ -11744,7 +11579,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
             total_ram_gb = hardware_data.get('system_ram', {}).get('ram_total_gb', 8.0)
             cuda_available = hardware_data.get('cuda', {}).get('available', False)
         except Exception as e:
-            logger.debug(f"Hardware detection failed during validation: {e}")
+            logger.error(f"Hardware detection failed during validation: {e}")
         
         # Track validation context
         validation_context = {
@@ -11763,17 +11598,14 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         config_size_mb = len(str(config)) / (1024 * 1024)
         if config_size_mb > 1.0 or total_ram_gb < 8:
             try:
-                pre_validation_clear = enhanced_clear_memory(
-                    aggressive=config_size_mb > 5.0 or total_ram_gb < 4,
-                    hardware_data=hardware_data
-                )
+                pre_validation_clear = enhanced_clear_memory(aggressive=config_size_mb > 5.0 or total_ram_gb < 4, hardware_data=hardware_data)
                 if pre_validation_clear.get('success'):
-                    logger.debug(f"Memory optimized before validation of {config_size_mb:.1f}MB config")
+                    logger.info(f"Memory optimized before validation of {config_size_mb:.1f}MB config")
             except Exception as e:
-                logger.debug(f"Pre-validation memory optimization failed: {e}")
+                logger.error(f"Pre-validation memory optimization failed: {e}")
         
-        # 1. STRUCTURAL VALIDATION
-        logger.debug("Starting structural validation")
+        # 1. Structural validation
+        logger.info("Starting structural validation")
         
         # Check for required top-level sections
         required_sections = ['training', 'model', 'security', 'data']
@@ -11791,8 +11623,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         if missing_recommended:
             warnings.append(f"Missing recommended sections: {missing_recommended}")
         
-        # 2. METADATA VALIDATION WITH ENHANCED CHECKS
-        logger.debug("Validating metadata section")
+        # 2. Metadata validation
+        logger.info("Validating metadata section")
         
         if 'metadata' in config:
             metadata = config['metadata']
@@ -11866,17 +11698,14 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         # Clear memory after metadata validation for large configs
         if len(str(metadata)) > 50000 and total_ram_gb < 16:
             try:
-                metadata_clear = enhanced_clear_memory(
-                    aggressive=False,
-                    hardware_data=hardware_data
-                )
+                metadata_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
                 if metadata_clear.get('success'):
-                    logger.debug("Memory optimized after metadata validation")
+                    logger.info("Memory optimized after metadata validation")
             except Exception as e:
-                logger.debug(f"Post-metadata memory optimization failed: {e}")
+                logger.error(f"Post-metadata memory optimization failed: {e}")
         
-        # 3. TRAINING CONFIGURATION VALIDATION WITH PRESET AWARENESS
-        logger.debug("Validating training section")
+        # 3. Training configuration validation
+        logger.info("Validating training section")
         
         if 'training' in config:
             training = config['training']
@@ -11994,8 +11823,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 elif effective_batch_size < 4:
                     warnings.append(f"Small effective batch size ({effective_batch_size}) may cause noisy gradients")
         
-        # 4. MODEL CONFIGURATION VALIDATION WITH ENHANCED PRESET SUPPORT
-        logger.debug("Validating model section")
+        # 4. Model configuration validation
+        logger.info("Validating model section")
         
         if 'model' in config:
             model = config['model']
@@ -12006,14 +11835,11 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 model_complexity = len(str(model))
                 if model_complexity > 10000 and total_ram_gb < 16:
                     try:
-                        model_validation_clear = enhanced_clear_memory(
-                            aggressive=model_complexity > 50000,
-                            hardware_data=hardware_data
-                        )
+                        model_validation_clear = enhanced_clear_memory(aggressive=model_complexity > 50000, hardware_data=hardware_data)
                         if model_validation_clear.get('success'):
-                            logger.debug("Memory optimized before model validation")
+                            logger.info("Memory optimized before model validation")
                     except Exception as e:
-                        logger.debug(f"Model validation memory optimization failed: {e}")
+                        logger.error(f"Model validation memory optimization failed: {e}")
                 
                 # Model type validation with MODEL_VARIANTS checking
                 model_type = model.get('model_type', 'SimpleAutoencoder')
@@ -12101,10 +11927,10 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 available_normalizations = model.get('available_normalizations', ['batch', 'layer', 'instance', 'group', None])
                 if normalization not in available_normalizations:
                     errors.append(f"Invalid normalization: {normalization}, available: {available_normalizations}")
-
+                
                 use_batch_norm = model.get('use_batch_norm', False)
                 use_layer_norm = model.get('use_layer_norm', False)
-
+                
                 # Fix inconsistencies: ensure normalization setting matches use_*_norm flags
                 if normalization is None:
                     # If no normalization specified, both flags should be False
@@ -12134,13 +11960,13 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                         warnings.append(f"normalization='{normalization}' but batch_norm or layer_norm enabled - auto-correcting to disable both")
                         model['use_batch_norm'] = False
                         model['use_layer_norm'] = False
-
+                
                 # Final validation check - should not have both enabled after auto-corrections
                 use_batch_norm = model.get('use_batch_norm', False)
                 use_layer_norm = model.get('use_layer_norm', False)
                 if use_batch_norm and use_layer_norm:
                     warnings.append("Both batch_norm and layer_norm still enabled after auto-correction - may cause conflicts")
-
+                
                 # Batch norm compatibility with batch size
                 if use_batch_norm and 'training' in config:
                     batch_size = config['training'].get('batch_size', 32)
@@ -12194,8 +12020,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                     if data_features < min_features:
                         errors.append(f"Data features ({data_features}) < model min_features ({min_features})")
         
-        # 5. SECURITY CONFIGURATION VALIDATION
-        logger.debug("Validating security section")
+        # 5. Security configuration validation
+        logger.info("Validating security section")
         
         if 'security' in config:
             security = config['security']
@@ -12231,10 +12057,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 if not isinstance(detection_methods, list):
                     errors.append("detection_methods must be a list")
                 else:
-                    valid_methods = [
-                        'reconstruction_error', 'statistical_analysis', 'mahalanobis_distance',
-                        'isolation_forest', 'ensemble_voting', 'neural_network'
-                    ]
+                    valid_methods = ['reconstruction_error', 'statistical_analysis', 'mahalanobis_distance', 'isolation_forest', 'ensemble_voting', 'neural_network']
                     invalid_methods = [method for method in detection_methods if method not in valid_methods]
                     if invalid_methods:
                         errors.append(f"Invalid detection methods: {invalid_methods}")
@@ -12249,8 +12072,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 if not isinstance(confidence_interval, (int, float)) or not (0 < confidence_interval < 1):
                     errors.append(f"Invalid confidence_interval: {confidence_interval}, must be between 0 and 1")
         
-        # 6. DATA CONFIGURATION VALIDATION
-        logger.debug("Validating data section")
+        # 6. Data configuration validation
+        logger.info("Validating data section")
         
         if 'data' in config:
             data = config['data']
@@ -12335,17 +12158,14 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         # Clear memory before hardware validation for low-memory systems
         if total_ram_gb < 8:
             try:
-                mid_validation_clear = enhanced_clear_memory(
-                    aggressive=True,
-                    hardware_data=hardware_data
-                )
+                mid_validation_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
                 if mid_validation_clear.get('success'):
-                    logger.debug("Memory optimized mid-validation for low-memory system")
+                    logger.info("Memory optimized mid-validation for low-memory system")
             except Exception as e:
-                logger.debug(f"Mid-validation memory optimization failed: {e}")
+                logger.error(f"Mid-validation memory optimization failed: {e}")
         
-        # 7. HARDWARE CONFIGURATION VALIDATION
-        logger.debug("Validating hardware section")
+        # 7. Hardware configuration validation
+        logger.info("Validating hardware section")
         
         if 'hardware' in config:
             hardware = config['hardware']
@@ -12400,8 +12220,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                         if benchmark_mode and deterministic:
                             warnings.append("benchmark_mode and deterministic may conflict")
         
-        # 8. PRESET CONFIGURATION VALIDATION
-        logger.debug("Validating presets section")
+        # 8. Preset configuration validation
+        logger.info("Validating presets section")
         
         if 'presets' in config:
             presets = config['presets']
@@ -12441,8 +12261,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 if not isinstance(auto_apply, bool):
                     errors.append("auto_apply must be boolean")
         
-        # 9. HYPERPARAMETER OPTIMIZATION VALIDATION
-        logger.debug("Validating hyperparameter optimization section")
+        # 9. Hyperparameter Optimization validation
+        logger.info("Validating hyperparameter optimization section")
         
         if 'hyperparameter_optimization' in config:
             hpo = config['hyperparameter_optimization']
@@ -12479,8 +12299,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                         elif not opt_space:
                             warnings.append("Empty optimization space - HPO will have no effect")
         
-        # 10. CROSS-SECTION VALIDATION
-        logger.debug("Performing cross-section validation")
+        # 10. Cross-section validation
+        logger.info("Performing cross-section validation")
         
         # Model-Training compatibility
         if 'model' in config and 'training' in config:
@@ -12558,18 +12378,15 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         # Clear memory before strict mode validation for low-memory systems
         if strict and total_ram_gb < 8:
             try:
-                strict_mode_clear = enhanced_clear_memory(
-                    aggressive=True,
-                    hardware_data=hardware_data
-                )
+                strict_mode_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
                 if strict_mode_clear.get('success'):
-                    logger.debug("Memory optimized before strict mode validation")
+                    logger.info("Memory optimized before strict mode validation")
             except Exception as e:
-                logger.debug(f"Strict mode memory optimization failed: {e}")
+                logger.error(f"Strict mode memory optimization failed: {e}")
         
-        # 11. STRICT MODE ADDITIONAL VALIDATIONS
+        # 11. Strict mode validations
         if strict:
-            logger.debug("Applying strict mode validations")
+            logger.info("Applying strict mode validations")
             
             # Require all recommended sections
             if missing_recommended:
@@ -12610,8 +12427,8 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
                 extreme_warnings = [w for w in warnings if "Very high" in w or "Very low" in w]
                 errors.extend([f"Strict mode: {warning}" for warning in extreme_warnings])
         
-        # 12. FINAL VALIDATION SUMMARY
-        logger.debug("Generating validation summary")
+        # 12. Final validation summary
+        logger.info("Generating validation summary")
         
         # Calculate validation statistics
         total_checks = len(errors) + len(warnings)
@@ -12634,21 +12451,16 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         
         # Cleanup after validation completion
         try:
-            final_clear_results = enhanced_clear_memory(
-                aggressive=True,  # Aggressive final cleanup
-                hardware_data=hardware_data
-            )
-            
+            final_clear_results = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
             if final_clear_results.get('success'):
-                logger.debug(f"Final validation memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-        
+                logger.info(f"Final validation memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
         except Exception as e:
-            logger.debug(f"Final validation memory optimization failed: {e}")
+            logger.error(f"Final validation memory optimization failed: {e}")
         
         # Log validation summary
         if error_count == 0:
             if warning_count == 0:
-                logger.debug("Configuration validation passed with no issues")
+                logger.info("Configuration validation passed with no issues")
             else:
                 logger.warning(f"Configuration validation passed with {warning_count} warnings")
         else:
@@ -12657,7 +12469,7 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
             for err in errors:
                 logger.error(f"Validation Error: {err}")
             for warn in warnings:
-                logger.warning(f"Validation Warning: {warn}")
+                logger.error(f"Validation Warning: {warn}")
         
         # Return results
         is_valid = error_count == 0
@@ -12671,20 +12483,15 @@ def validate_config(config: Dict[str, Any], strict: bool = False) -> Tuple[bool,
         # Emergency memory cleanup on error
         try:
             emergency_clear = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
-            logger.debug("Emergency memory cleanup performed after validation error")
+            logger.info("Emergency memory cleanup performed after validation error")
         except Exception as cleanup_error:
-            logger.debug(f"Emergency cleanup failed: {cleanup_error}")
+            logger.error(f"Emergency cleanup failed: {cleanup_error}")
         
         return False, errors, warnings
 
 def validate_model_preset_compatibility(model_type: str, config: Dict[str, Any]) -> bool:
     """
     Validate model type compatibility with preset configurations.
-    
-    This function has been updated to work harmoniously with initialize_model_variants() and
-    validate_model_variants(), providing thorough compatibility validation for all preset
-    configurations including DEFAULT_PRESET, STABILITY_PRESET, PERFORMANCE_PRESET, and
-    custom configurations while maintaining consistency with the validation approach.
     
     Args:
         model_type: The model type to validate (e.g., 'SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble')
@@ -13158,28 +12965,33 @@ def validate_model_preset_compatibility(model_type: str, config: Dict[str, Any])
                     f"warnings={validation_details.get('total_warnings', 0)}, "
                     f"errors={validation_details.get('total_errors', 0)}")
 
-def validate_config_interactive(silent: bool = False):
+def validate_config_interactive(
+    silent: bool = False,
+    config: Optional[Dict[str, Any]] = None
+):
     """
-    Interactive configuration validation with comprehensive analysis and recommendations.
+    Interactive configuration validation with analysis and recommendations.
     
     This implementation provides:
     - Interactive validation with detailed progress tracking
-    - Comprehensive system analysis and recommendations
+    - System analysis and recommendations
     - Preset compatibility checking and suggestions
     - Resource requirement estimation and warnings
     - Actionable recommendations for configuration improvements
     - User-friendly error reporting and auto-fix suggestions
     
     Args:
-        silent: If True, suppress detailed logging messages and progress bars during system checks
+        silent: If True, suppress logging messages and progress bars during system checks
     """
     try:
         # Clear screen and show banner
         print("\033c", end="")
-        config = show_banner(return_config=True)
+        banner_config = show_banner(return_config=True)
         
         # Use the config returned from show_banner or fallback
-        if config is None:
+        if config is None and banner_config is not None:
+            config = banner_config
+        else:
             config = get_current_config()
         
         # Extract configuration sections with error handling
@@ -13254,7 +13066,7 @@ def validate_config_interactive(silent: bool = False):
         preset_count = len(PRESET_CONFIGS) if 'PRESET_CONFIGS' in globals() else 'Unknown'
         config_version = metadata_config.get('config_version', 'unknown')
         
-        # Header with context display
+        # Header
         if not silent:
             print(Fore.MAGENTA + Style.BRIGHT + "INTERACTIVE CONFIGURATION VALIDATION")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40 + Style.RESET_ALL)
@@ -13306,7 +13118,7 @@ def validate_config_interactive(silent: bool = False):
                 )
                 validation_context['system_analysis_completed'] = True
                 validation_context['config_loaded'] = True
-                
+            
             except Exception as e:
                 print(Fore.RED + Style.BRIGHT + f"\nError loading configuration: {str(e)}")
                 logger.error(f"Configuration load failed: {e}", exc_info=True)
@@ -13316,19 +13128,19 @@ def validate_config_interactive(silent: bool = False):
             with alive_bar(5, title='Loading Configuration\t') as bar:
                 try:
                     # Load configuration (already loaded from banner)
-                    bar.text = 'Configuration loaded from banner...'
+                    bar.text = 'Configuration loaded from banner'
                     validation_context['config_loaded'] = True
                     bar()
                     time.sleep(0.1)
                     
                     # Get hardware information
-                    bar.text = 'Detecting hardware capabilities...'
+                    bar.text = 'Detecting hardware capabilities'
                     hardware_data = check_hardware(include_memory_usage=True)
                     bar()
                     time.sleep(0.1)
                     
                     # Perform system analysis
-                    bar.text = 'Analyzing system configuration...'
+                    bar.text = 'Analyzing system configuration'
                     system_analysis = get_system_info(
                         include_versions=True,
                         include_hardware=True,
@@ -13340,7 +13152,7 @@ def validate_config_interactive(silent: bool = False):
                     time.sleep(0.1)
                     
                     # Extract configuration details
-                    bar.text = 'Extracting configuration details...'
+                    bar.text = 'Extracting configuration details'
                     config_version = config.get('metadata', {}).get('config_version', 'unknown')
                     bar()
                     time.sleep(0.1)
@@ -13348,7 +13160,7 @@ def validate_config_interactive(silent: bool = False):
                     # Complete loading phase
                     bar.text = 'Configuration loaded successfully'
                     bar()
-                    
+                
                 except Exception as e:
                     print(Fore.RED + Style.BRIGHT + f"\nError loading configuration: {str(e)}")
                     logger.error(f"Configuration load failed: {e}", exc_info=True)
@@ -13385,28 +13197,28 @@ def validate_config_interactive(silent: bool = False):
             print(Fore.WHITE + Style.BRIGHT + f"  ├─ CPU Cores: " + Fore.CYAN + Style.BRIGHT + f"{cpu_cores}")
             print(Fore.WHITE + Style.BRIGHT + f"  └─ System Class: " + Fore.CYAN + Style.BRIGHT + f"{system_class}")
         
-        # Step 2: Perform comprehensive validation
+        # Step 2: Perform validation
         if not silent:
             print(Fore.YELLOW + Style.BRIGHT + "\nVALIDATION PROCESS")
             print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-
+        
         validation_errors = []
         validation_warnings = []
         validation_passed = False
         checks_performed = 0  # Initialize checks counter
-
+        
         # Use text-based progress if silent mode is enabled
         if silent:
             try:
                 # Run validation phases without progress bars
                 validation_passed, validation_errors, validation_warnings = validate_config(config, strict=False)
-                checks_performed += 1  # Count comprehensive validation
+                checks_performed += 1
                 validation_context['validation_passed'] = validation_passed
                 
                 # Check preset compatibility
                 is_compatible = validate_model_preset_compatibility(model_type, config)
                 checks_performed += 1  # Count preset compatibility check
-                
+            
             except Exception as e:
                 validation_errors.append(f"Validation process failed: {str(e)}")
                 logger.error(f"Validation error: {e}", exc_info=True)
@@ -13415,56 +13227,56 @@ def validate_config_interactive(silent: bool = False):
             with alive_bar(10, title='Validating Configuration') as bar:
                 try:
                     # Phase 1: Structural validation
-                    bar.text = 'Validating configuration structure...'
+                    bar.text = 'Validating configuration structure'
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
                     # Phase 2: Training configuration
-                    bar.text = 'Validating training parameters...'
+                    bar.text = 'Validating training parameters'
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
                     # Phase 3: Model configuration
-                    bar.text = 'Validating model architecture...'
+                    bar.text = 'Validating model architecture'
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
                     # Phase 4: Security configuration
-                    bar.text = 'Validating security settings...'
+                    bar.text = 'Validating security settings'
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
                     # Phase 5: Data configuration
-                    bar.text = 'Validating data parameters...'
+                    bar.text = 'Validating data parameters'
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
                     # Phase 6: Hardware compatibility
-                    bar.text = 'Checking hardware compatibility...'
+                    bar.text = 'Checking hardware compatibility'
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
                     # Phase 7: Preset compatibility
-                    bar.text = 'Validating preset compatibility...'
+                    bar.text = 'Validating preset compatibility'
                     is_compatible = validate_model_preset_compatibility(model_type, config)
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
                     # Phase 8: Cross-section validation
-                    bar.text = 'Performing cross-section validation...'
+                    bar.text = 'Performing cross-section validation'
                     checks_performed += 1
                     bar()
                     time.sleep(0.1)
                     
-                    # Phase 9: Comprehensive validation
-                    bar.text = 'Running comprehensive validation checks...'
+                    # Phase 9: Validation checks
+                    bar.text = 'Running validation checks...'
                     validation_passed, validation_errors, validation_warnings = validate_config(config, strict=False)
                     checks_performed += 1
                     validation_context['validation_passed'] = validation_passed
@@ -13474,11 +13286,11 @@ def validate_config_interactive(silent: bool = False):
                     # Phase 10: Complete
                     bar.text = 'Validation complete'
                     bar()
-                    
+                
                 except Exception as e:
                     validation_errors.append(f"Validation process failed: {str(e)}")
                     logger.error(f"Validation error: {e}", exc_info=True)
-
+        
         # Display validation results
         if not silent:
             if validation_passed:
@@ -13507,7 +13319,7 @@ def validate_config_interactive(silent: bool = False):
                 for i, warning in enumerate(validation_warnings, 1):
                     prefix = "  └─" if i == len(validation_warnings) else "  ├─"
                     print(Fore.YELLOW + Style.BRIGHT + f"{prefix} {warning}")
-
+        
         # Step 3: Configuration Analysis
         if validation_context['config_loaded'] and validation_context['system_analysis_completed']:
             if not silent:
@@ -13541,7 +13353,7 @@ def validate_config_interactive(silent: bool = False):
                     checks_performed += 1
                     
                     validation_context['recommendations_generated'] = True
-                    
+                
                 except Exception as e:
                     if not silent:
                         print(Fore.RED + Style.BRIGHT + f"  └─ Analysis failed: {str(e)}")
@@ -13551,7 +13363,7 @@ def validate_config_interactive(silent: bool = False):
                 with alive_bar(6, title='Analyzing Configuration\t') as bar:
                     try:
                         # Complexity analysis
-                        bar.text = 'Analyzing configuration complexity...'
+                        bar.text = 'Analyzing configuration complexity'
                         complexity = estimate_config_complexity(config)
                         analysis_results['complexity'] = complexity
                         checks_performed += 1
@@ -13559,7 +13371,7 @@ def validate_config_interactive(silent: bool = False):
                         time.sleep(0.1)
                         
                         # Resource estimation
-                        bar.text = 'Estimating resource requirements...'
+                        bar.text = 'Estimating resource requirements'
                         memory_req = estimate_memory_requirements(config)
                         analysis_results['memory'] = memory_req
                         checks_performed += 1
@@ -13567,7 +13379,7 @@ def validate_config_interactive(silent: bool = False):
                         time.sleep(0.1)
                         
                         # Training time estimation
-                        bar.text = 'Estimating training time...'
+                        bar.text = 'Estimating training time'
                         training_time = estimate_training_time(config)
                         analysis_results['training_time'] = training_time
                         checks_performed += 1
@@ -13575,7 +13387,7 @@ def validate_config_interactive(silent: bool = False):
                         time.sleep(0.1)
                         
                         # Resource level determination
-                        bar.text = 'Determining resource level...'
+                        bar.text = 'Determining resource level'
                         resource_level = determine_resource_level(config)
                         analysis_results['resource_level'] = resource_level
                         checks_performed += 1
@@ -13583,7 +13395,7 @@ def validate_config_interactive(silent: bool = False):
                         time.sleep(0.1)
                         
                         # Preset recommendations
-                        bar.text = 'Generating preset recommendations...'
+                        bar.text = 'Generating preset recommendations'
                         preset_recommendations = determine_preset_recommendations(config)
                         analysis_results['recommendations'] = preset_recommendations
                         checks_performed += 1
@@ -13594,7 +13406,7 @@ def validate_config_interactive(silent: bool = False):
                         bar.text = 'Analysis complete'
                         validation_context['recommendations_generated'] = True
                         bar()
-                        
+                    
                     except Exception as e:
                         print(Fore.RED + Style.BRIGHT + f"  └─ Analysis failed: {str(e)}")
                         logger.error(f"Configuration analysis failed: {e}", exc_info=True)
@@ -13606,7 +13418,7 @@ def validate_config_interactive(silent: bool = False):
                 print(Fore.WHITE + Style.BRIGHT + f"  ├─ Memory Requirements: " + Fore.CYAN + Style.BRIGHT + f"{memory_req}")
                 print(Fore.WHITE + Style.BRIGHT + f"  ├─ Training Time Estimate: " + Fore.CYAN + Style.BRIGHT + f"{training_time}")
                 print(Fore.WHITE + Style.BRIGHT + f"  └─ Resource Level: " + Fore.CYAN + Style.BRIGHT + f"{resource_level}")
-
+        
         # Step 4: System Compatibility Check
         compatibility = {}
         if system_analysis and not silent:
@@ -13658,7 +13470,7 @@ def validate_config_interactive(silent: bool = False):
             
             if len(recommendations) > max_display:
                 print(Fore.GREEN + Style.BRIGHT + f"  └─ ... and {len(recommendations) - max_display} more use cases")
-
+        
         # Step 6: Summary and Final Report
         if not silent:
             print(Fore.YELLOW + Style.BRIGHT + "\nVALIDATION SUMMARY")
@@ -13691,10 +13503,6 @@ def validate_config_interactive(silent: bool = False):
             print(Fore.WHITE + Style.BRIGHT + f"  └─ Validation Time: " + Fore.CYAN + Style.BRIGHT + f"{elapsed_time:.2f} seconds")
             
             # Step 7: Interactive Options
-            #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-" * 40)
-            print(Fore.YELLOW + Style.BRIGHT + "VALIDATION INTERACTIVE MENU")
-            print(Fore.CYAN + Style.BRIGHT + "-" * 40)
-            
             print(Fore.YELLOW + Style.BRIGHT + "Validation Context:")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Preset: " + Fore.CYAN + Style.BRIGHT + f"{preset_name}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Model: " + Fore.CYAN + Style.BRIGHT + f"{model_type}")
@@ -13714,7 +13522,7 @@ def validate_config_interactive(silent: bool = False):
             categories.append(Fore.RED + Style.BRIGHT + "0. Return to Main Menu")
             
             def display_validation_menu():
-                """Display the validation menu categories with styling."""
+                """Display the validation menu categories."""
                 print(Fore.YELLOW + Style.BRIGHT + "\nAvailable Validation Options:")
                 for category in categories:
                     if category.startswith("0."):
@@ -13757,17 +13565,17 @@ def validate_config_interactive(silent: bool = False):
                         for i, error in enumerate(validation_errors, 1):
                             print(Fore.RED + Style.BRIGHT + f"  {i}. {error}")
                     
-                    # Show detailed warning analysis if any
+                    # Show warning analysis if any
                     if validation_warnings:
-                        print(Fore.YELLOW + Style.BRIGHT + "\nDetailed Warning Analysis:")
+                        print(Fore.YELLOW + Style.BRIGHT + "\nWarning Analysis:")
                         for i, warning in enumerate(validation_warnings, 1):
                             print(Fore.YELLOW + Style.BRIGHT + f"  {i}. {warning}")
-                            
+                
                 except Exception as e:
                     print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
                     print(Fore.RED + Style.BRIGHT + "REPORT ERROR")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    print(Fore.RED + Style.BRIGHT + f"Error displaying detailed report: {str(e)}")
+                    print(Fore.RED + Style.BRIGHT + f"Error displaying report: {str(e)}")
                     print(Fore.YELLOW + Style.BRIGHT + "Please check the validation logs for more information.")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
             
@@ -13864,7 +13672,7 @@ def validate_config_interactive(silent: bool = False):
                         print(Fore.GREEN + Style.BRIGHT + "-" * 40)
                     else:
                         print(Fore.RED + Style.BRIGHT + "\nNo files were exported due to errors.")
-                        
+                
                 except Exception as e:
                     print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
                     print(Fore.RED + Style.BRIGHT + "EXPORT ERROR")
@@ -13925,7 +13733,7 @@ def validate_config_interactive(silent: bool = False):
                         print(Fore.RED + Style.BRIGHT + "System analysis not available for preset recommendation.")
                     
                     return False
-                    
+                
                 except Exception as e:
                     print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
                     print(Fore.RED + Style.BRIGHT + "PRESET ERROR")
@@ -13964,7 +13772,7 @@ def validate_config_interactive(silent: bool = False):
                         print(Fore.CYAN + Style.BRIGHT + "\nOptimization Recommendations:")
                         for i, rec in enumerate(compatibility['recommendations'], 1):
                             print(Fore.CYAN + Style.BRIGHT + f"  {i}. {rec}")
-                            
+                
                 except Exception as e:
                     print(Fore.RED + Style.BRIGHT + "\n" + "-" * 40)
                     print(Fore.RED + Style.BRIGHT + "COMPATIBILITY ERROR")
@@ -14057,7 +13865,7 @@ def validate_config_interactive(silent: bool = False):
                     else:
                         print(Fore.RED + Style.BRIGHT + f"Invalid selection '{choice}'. Please enter a number from 0-7.")
                         display_validation_menu()
-                        
+                
                 except KeyboardInterrupt:
                     print(Fore.RED + Style.BRIGHT + "\nValidation menu interrupted by user")
                     break
@@ -14107,7 +13915,7 @@ def validate_config_interactive(silent: bool = False):
                 'config_version': config.get('metadata', {}).get('config_version', 'unknown')
             }
         }
-        
+    
     except KeyboardInterrupt:
         if not silent:
             print(Fore.RED + Style.BRIGHT + "\nValidation cancelled by user")
@@ -14125,11 +13933,11 @@ def validate_config_interactive(silent: bool = False):
         return {'validation_passed': False, 'errors': [f'Unexpected error: {str(e)}'], 'warnings': []}
 
 def get_default_config() -> Dict[str, Any]:
-    """Get comprehensive default system configuration leveraging PRESET_CONFIGS and system analysis.
+    """Get default system configuration leveraging PRESET_CONFIGS and system analysis.
     
     This function loads the default preset from PRESET_CONFIGS and enhances it with
-    comprehensive system information and runtime-specific updates. It provides intelligent
-    system-aware configuration with performance optimizations and compatibility checks.
+    system information and runtime-specific updates. It provides system-aware
+    configuration with performance optimizations and compatibility checks.
     
     Returns:
         Dictionary containing the complete default configuration with system analysis
@@ -14747,7 +14555,7 @@ def _get_basic_system_info() -> Dict[str, Any]:
         }
 
 def reset_config() -> None:
-    """Reset configuration to default values with comprehensive cleanup.
+    """Reset configuration to default values with cleanup.
     
     This function now leverages get_default_config() to obtain a fresh, system-aware
     default configuration instead of creating one from scratch, reducing code
@@ -14813,7 +14621,7 @@ def reset_config() -> None:
                 # Re-validate after fixes
                 validate_config(default_config)
                 logger.info("Successfully fixed validation issues in default configuration")
-                
+            
             except Exception as fix_error:
                 logger.critical(f"Could not fix default configuration: {fix_error}")
                 # Last resort - use emergency fallback
@@ -14909,8 +14717,8 @@ def reset_config() -> None:
         for param_name, param_value in verification_checks:
             logger.debug(f"  - {param_name}: {param_value}")
         
-        logger.info("[SUCCESS] Configuration has been reset to system-aware defaults")
-        
+        logger.info("Configuration has been reset to system-aware defaults")
+    
     except Exception as e:
         logger.error(f"Critical failure during configuration reset: {e}", exc_info=True)
         
@@ -14974,9 +14782,9 @@ def reset_config() -> None:
             except:
                 logger.critical("Could not save emergency configuration to file")
             
-            logger.critical("[EMERGENCY] Applied minimal emergency configuration")
+            logger.critical("Applied minimal emergency configuration")
             logger.critical("System is in degraded state - manual intervention recommended")
-            
+        
         except Exception as recovery_error:
             logger.critical(f"Emergency recovery also failed: {recovery_error}")
             logger.critical("System configuration is in critical failure state")
@@ -14986,7 +14794,7 @@ def reset_config() -> None:
         raise RuntimeError(f"Configuration reset failed: {str(e)}. Emergency recovery applied.")
 
 def reset_config_interactive():
-    """Interactive configuration reset with enhanced confirmation and feedback."""
+    """Interactive configuration reset with confirmation and feedback."""
     try:
         # clear screen and show banner
         print("\033c", end="")
@@ -15493,15 +15301,15 @@ def _check_preset_system_compatibility(config: Dict[str, Any], system_analysis: 
         }
 
 def save_custom_preset(name: str, config: Dict) -> Path:
-    """Save a custom preset configuration with enhanced validation and metadata.
+    """Save a custom preset configuration with validation and metadata.
     
     Args:
         name: Name for the custom preset
         config: Configuration dictionary to save as preset
-        
+    
     Returns:
         Path: Path to the saved preset file
-        
+    
     Raises:
         ValueError: If name or config is invalid
         RuntimeError: If save operation fails
@@ -15681,11 +15489,11 @@ def save_custom_preset(name: str, config: Dict) -> Path:
 
 # Helper functions for save_custom_preset
 def estimate_config_complexity(config: Dict[str, Any]) -> str:
-    """Estimate configuration complexity level with comprehensive analysis.
+    """Estimate configuration complexity level with analysis.
     
     Args:
         config: Configuration dictionary to analyze
-        
+    
     Returns:
         String indicating complexity level: 'low', 'medium', 'high', or 'very_high'
     """
@@ -15890,11 +15698,11 @@ def estimate_config_complexity(config: Dict[str, Any]) -> str:
         return 'unknown'
 
 def determine_preset_recommendations(config: Dict[str, Any]) -> List[str]:
-    """Determine comprehensive recommendations for what this preset is suitable for.
+    """Determine usage recommendations for specific preset.
     
     Args:
         config: Configuration dictionary to analyze
-        
+    
     Returns:
         List of recommendation strings
     """
@@ -16113,11 +15921,11 @@ def determine_preset_recommendations(config: Dict[str, Any]) -> List[str]:
         return ['general purpose']
 
 def estimate_memory_requirements(config: Dict[str, Any]) -> str:
-    """Estimate comprehensive memory requirements for the configuration.
+    """Estimate memory requirements for the configuration.
     
     Args:
         config: Configuration dictionary to analyze
-        
+    
     Returns:
         Formatted string describing memory requirements
     """
@@ -16327,7 +16135,7 @@ def estimate_training_time(config: Dict[str, Any]) -> str:
     
     Args:
         config: Configuration dictionary to analyze
-        
+    
     Returns:
         Formatted string describing estimated training time
     """
@@ -16542,7 +16350,7 @@ def determine_resource_level(config: Dict[str, Any]) -> str:
     
     Args:
         config: Configuration dictionary to analyze
-        
+    
     Returns:
         String indicating resource level: 'minimal', 'low', 'medium', 'high', or 'extreme'
     """
@@ -16734,14 +16542,14 @@ def get_config_cache_info() -> Dict[str, Any]:
     return cache_info
 
 def save_config_interactive():
-    """Interactive configuration saving with enhanced options, better error handling,
-    and intelligent memory management for optimal performance during extensive operations."""
+    """Interactive configuration saving with error handling, and intelligent
+    memory management for optimal performance during extensive operations."""
     try:
         # clear screen and show banner
         print("\033c", end="")
         show_banner()
         
-        # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
+        # Get hardware context early for memory-aware processing
         hardware_data = None
         total_ram_gb = 8.0  # Conservative default
         
@@ -16762,7 +16570,6 @@ def save_config_interactive():
         
         config = get_current_config()
         
-        #print(Fore.CYAN + Style.BRIGHT + "\n" + "="*40)
         print(Fore.GREEN + Style.BRIGHT + "INTERACTIVE CONFIGURATION SAVE")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
@@ -16790,7 +16597,7 @@ def save_config_interactive():
                 if choice == '1':
                     # Save to default location
                     try:
-                        # MEMORY OPTIMIZATION - Clear memory before save operation
+                        # Clear memory before save operation
                         if total_ram_gb < 16:
                             try:
                                 pre_save_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
@@ -16811,7 +16618,7 @@ def save_config_interactive():
                     name = input(Fore.YELLOW + Style.BRIGHT + "Enter configuration name: ").strip()
                     if name:
                         try:
-                            # MEMORY OPTIMIZATION - Clear memory before save operation
+                            # Clear memory before save operation
                             if total_ram_gb < 16:
                                 try:
                                     pre_save_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
@@ -16834,7 +16641,7 @@ def save_config_interactive():
                     path_str = input(Fore.YELLOW + Style.BRIGHT + "Enter custom path: ").strip()
                     if path_str:
                         try:
-                            # MEMORY OPTIMIZATION - Clear memory before save operation
+                            # Clear memory before save operation
                             if total_ram_gb < 16:
                                 try:
                                     pre_save_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
@@ -16858,7 +16665,7 @@ def save_config_interactive():
                     name = input(Fore.YELLOW + Style.BRIGHT + "Enter configuration name: ").strip()
                     if name:
                         try:
-                            # MEMORY OPTIMIZATION - Clear memory before dual save operation
+                            # Clear memory before dual save operation
                             if total_ram_gb < 16:
                                 try:
                                     pre_save_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
@@ -16879,14 +16686,11 @@ def save_config_interactive():
                         print(Fore.YELLOW + Style.BRIGHT + "Name cannot be empty")
                 
                 elif choice == '5':
-                    # Show named configurations with improved error handling and memory optimization
+                    # Show named configurations with error handling and memory optimization
                     try:
-                        # MEMORY OPTIMIZATION - Clear memory before intensive list operation
+                        # Clear memory before intensive list operation
                         try:
-                            pre_list_clear = enhanced_clear_memory(
-                                aggressive=total_ram_gb < 8,  # More aggressive for low-memory systems
-                                hardware_data=hardware_data
-                            )
+                            pre_list_clear = enhanced_clear_memory(aggressive=total_ram_gb < 8, hardware_data=hardware_data)
                             if pre_list_clear.get('success'):
                                 logger.debug(f"Memory optimized before config listing: {', '.join(pre_list_clear.get('actions_taken', []))}")
                         except Exception as e:
@@ -16894,7 +16698,7 @@ def save_config_interactive():
                         
                         saved_configs_info = list_saved_configs()
                         
-                        # Ensure we have the expected dictionary structure
+                        # Ensure expected dictionary structure
                         if not isinstance(saved_configs_info, dict):
                             print(Fore.RED + Style.BRIGHT + "Invalid configuration data format")
                             continue
@@ -16907,7 +16711,7 @@ def save_config_interactive():
                             print(Fore.WHITE + Style.BRIGHT + f"{'Name':<20} {'Type':<8} {'Model Type':<15} {'Preset':<15} {'Modified':<20}")
                             print("-" * 85)
                             
-                            # MEMORY OPTIMIZATION - Process configs in chunks for large lists
+                            # Process configs in chunks for large lists
                             config_items = list(all_configs.items())
                             chunk_size = 50 if total_ram_gb >= 8 else 25  # Smaller chunks on low-memory systems
                             
@@ -16937,12 +16741,12 @@ def save_config_interactive():
                                             modified_str = 'unknown'[:19]
                                         
                                         print(Fore.WHITE + Style.BRIGHT + f"{name[:19]:<20} {config_type:<8} {model_type:<15} {preset:<15} {modified_str:<20}")
-                                        
+                                    
                                     except Exception as e:
                                         logger.debug(f"Error displaying config info for {name}: {e}")
                                         print(Fore.RED + Style.BRIGHT + f"{name[:19]:<20} {'error':<8} {'N/A':<15} {'N/A':<15} {'unknown':<20}")
                                 
-                                # MEMORY OPTIMIZATION - Clear memory between chunks for very large lists
+                                # Clear memory between chunks for very large lists
                                 if len(config_items) > 100 and total_ram_gb < 16 and i + chunk_size < len(config_items):
                                     try:
                                         chunk_clear = enhanced_clear_memory(aggressive=False, hardware_data=hardware_data)
@@ -16957,18 +16761,15 @@ def save_config_interactive():
                         else:
                             print(Fore.RED + Style.BRIGHT + "\nNo configurations found.")
                         
-                        # MEMORY OPTIMIZATION - Clear memory after displaying large config lists
+                        # Clear memory after displaying large config lists
                         if len(all_configs) > 50:
                             try:
-                                post_list_clear = enhanced_clear_memory(
-                                    aggressive=len(all_configs) > 100,  # More aggressive for very large lists
-                                    hardware_data=hardware_data
-                                )
+                                post_list_clear = enhanced_clear_memory(aggressive=len(all_configs) > 100, hardware_data=hardware_data)
                                 if post_list_clear.get('success'):
                                     logger.debug(f"Post-list memory optimization: {', '.join(post_list_clear.get('actions_taken', []))}")
                             except Exception as e:
                                 logger.debug(f"Post-list memory optimization failed: {e}")
-                            
+                    
                     except Exception as e:
                         print(Fore.RED + Style.BRIGHT + f"Failed to list configurations: {e}")
                         logger.error(Fore.RED + Style.BRIGHT + f"Configuration listing failed: {e}")
@@ -16981,7 +16782,7 @@ def save_config_interactive():
                 
                 else:
                     print("Please enter 0-5")
-                    
+            
             except KeyboardInterrupt:
                 print(Fore.RED + Style.BRIGHT + "\nSave cancelled.")
                 break
@@ -16990,20 +16791,14 @@ def save_config_interactive():
                 logger.error(f"Interactive save error: {e}")
                 break
         
-        # FINAL COMPREHENSIVE MEMORY OPTIMIZATION
         # Aggressive cleanup after interactive session completion
         try:
-            final_clear_results = enhanced_clear_memory(
-                aggressive=True,  # Aggressive final cleanup
-                hardware_data=hardware_data
-            )
-            
+            final_clear_results = enhanced_clear_memory(aggressive=True, hardware_data=hardware_data)
             if final_clear_results.get('success'):
                 logger.debug(f"Final interactive save memory optimization: {', '.join(final_clear_results.get('actions_taken', []))}")
-                
         except Exception as e:
             logger.debug(f"Final interactive save memory optimization failed: {e}")
-                
+    
     except Exception as e:
         print(Fore.RED + Style.BRIGHT + f"Failed to start interactive save: {e}")
         logger.error(f"Interactive save initialization failed: {e}")
@@ -17029,17 +16824,17 @@ def save_config(config: Dict, config_path: Optional[Union[Path, str]] = None, na
         config: Configuration dictionary to save
         config_path: Optional path where to save the configuration. If None, uses CONFIG_FILE
         name: Optional name for creating a named configuration file. Creates file as "{name}.json"
-        
+    
     Returns:
         Path: The primary path where the configuration was saved
-        
+    
     Raises:
         RuntimeError: If configuration save fails
         ValueError: If configuration is invalid or parameters are invalid
         TypeError: If parameters are of wrong type
     """
     try:
-        # INITIAL MEMORY OPTIMIZATION - Get hardware context early for memory-aware processing
+        # Get hardware context early for memory-aware processing
         hardware_data = None
         total_ram_gb = 8.0  # Conservative default
         
@@ -18560,14 +18355,14 @@ def validate_global_config_state() -> None:
 # System initialization validation and setup
 def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]:
     """
-    Initialize the complete system with comprehensive setup and validation.
+    Initialize the complete system with setup and validation.
     
     This function performs a complete system initialization by leveraging the
     existing System Check Framework and loading_screen functionality.
     
     Returns:
         Tuple containing:
-            - Dict: Comprehensive system status and configuration
+            - Dict: System status and configuration
             - Dict: Active configuration dictionary
             - Logger: Configured logger instance
     
@@ -18639,7 +18434,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
     try:
         # Step 1: Early Setup - Basic configuration with hardware detection
         step_start = time.time()
-
+        
         # Use the existing setup_directories function for consistency
         try:
             log_dir = Path(__file__).resolve().parent / "logs"
@@ -18671,8 +18466,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                             directories_created.remove(dir_name)
                     except (IndexError, ValueError):
                         # If parsing fails, log but continue
-                        logger.debug(f"Could not parse directory name from error: {issue}")
-
+                        logger.error(f"Could not parse directory name from error: {issue}")
+        
         except Exception as e:
             # Fallback to minimal directory creation if setup_directories fails
             system_state['errors_encountered'].append(f"setup_directories failed: {e}")
@@ -18726,14 +18521,14 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         
         # Seed configuration with hardware awareness
         seed_config = set_seed(42, system_state.get('hardware_detected'))
-
+        
         # Configure global directories to ensure consistency across the system
         try:
             configure_directories(logger)
         except Exception as e:
             logger.warning(f"configure_directories failed: {e}")
             system_state['warnings_issued'].append(f"Global directory configuration failed: {e}")
-
+        
         step_duration = time.time() - step_start
         
         # Calculate early setup health score
@@ -18821,7 +18616,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         additional_checks.append(f"Memory management: {'COMPREHENSIVE' if comprehensive else 'BASIC' if result.passed else 'LIMITED'}")
                 else:
                     additional_checks.append("System check results not available")
-                
+            
             except Exception as e:
                 additional_checks = [f"Error extracting system check results: {e}"]
                 system_state['errors_encountered'].append(f"System check result extraction failed: {e}")
@@ -18845,7 +18640,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 f"Extended system checks completed\n" + "\n".join(additional_checks),
                 validation_health
             )
-            
+        
         except Exception as e:
             step_duration = time.time() - step_start
             system_state['errors_encountered'].append(f"System validation failed: {e}")
@@ -18967,7 +18762,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 try:
                     display_configuration_changes(config_changes, console, logger)
                 except Exception as display_error:
-                    logger.debug(f"Could not display configuration changes: {display_error}")
+                    logger.error(f"Could not display configuration changes: {display_error}")
             
             step_duration = time.time() - step_start
             system_state['health_metrics']['configuration'] = config_health
@@ -19053,7 +18848,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         _ = test_model(test_input)
                     
                     model_details.append(f"Model validation: PASSED (tested {test_variant})")
-                    
+                
                 except Exception as test_error:
                     model_health -= 20
                     model_details.append(f"Model validation: PARTIAL - {str(test_error)}")
@@ -19342,7 +19137,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         )
         
         # Display the initialization table
-        console.print(init_table)
+        console.print("\n", init_table)
         
         # Add user prompt based on initialization outcome
         banner_width = min(console_width - 8, 100)
@@ -19401,7 +19196,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         break
                     except Exception as input_error:
                         if logger:
-                            logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
+                            logger.error(f"Input error on attempt {attempt + 1}: {input_error}")
                         if attempt < max_attempts - 1:
                             print(Fore.RED + Style.BRIGHT + "\nInput error, please try again.")
                 
@@ -19513,7 +19308,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         break
                     except Exception as input_error:
                         if logger:
-                            logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
+                            logger.error(f"Input error on attempt {attempt + 1}: {input_error}")
                         if attempt < max_attempts - 1:
                             print(Fore.RED + Style.BRIGHT + "\nInput error, please try again.")
                 
@@ -19572,8 +19367,8 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     print(Fore.GREEN + Style.BRIGHT + f"\nCONTINUING:\n{continue_message}")
                 
                 if logger:
-                    logger.info(f"User chose to continue despite {overall_health:.1f}% health score")
-                    logger.info(f"System has {len(system_state.get('errors_encountered', []))} errors and {len(system_state.get('warnings_issued', []))} warnings")
+                    logger.warning(f"User chose to continue despite {overall_health:.1f}% health score")
+                    logger.warning(f"System has {len(system_state.get('errors_encountered', []))} errors and {len(system_state.get('warnings_issued', []))} warnings")
             
             else:
                 # Critical issues - system health too low
@@ -19625,7 +19420,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         break
                     except Exception as input_error:
                         if logger:
-                            logger.debug(f"Input error on attempt {attempt + 1}: {input_error}")
+                            logger.error(f"Input error on attempt {attempt + 1}: {input_error}")
                         if attempt < max_attempts - 1:
                             print(Fore.RED + Style.BRIGHT + "\nInput error, please try again.")
                 
@@ -19725,7 +19520,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         
         except Exception as cleanup_error:
             if logger:
-                logger.debug(f"Input buffer cleanup failed: {cleanup_error}")
+                logger.error(f"Input buffer cleanup failed: {cleanup_error}")
         
         # Clear console before continuing
         try:
@@ -19825,36 +19620,36 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
         # Save initialization report
         try:
             save_initialization_report(system_status, essential_dirs['reports'])
-            logger.debug(f"Initialization report saved to {essential_dirs['reports']}")
+            logger.info(f"Initialization report saved to {essential_dirs['reports']}")
         except Exception as e:
             logger.warning(f"Failed to save initialization report: {e}")
         
         # Final logging summary with health metrics
-        logger.debug("-" * 40)
-        logger.debug("DEEP LEARNING SYSTEM INITIALIZATION COMPLETED")
-        logger.debug("-" * 40)
-        logger.debug(f"Overall Health Score: {overall_health:.1f}%")
-        logger.debug(f"Initialization Time: {initialization_time:.2f} seconds")
-        logger.debug(f"Configuration: {config.get('_preset_name', 'custom')} preset")
-        logger.debug(f"Model Variants: {system_state.get('model_variants', {}).get('available', 0)}/{system_state.get('model_variants', {}).get('total', 0)} available")
-        logger.debug(f"Hardware: {'GPU-accelerated' if cuda_available else 'CPU-only'} ({logical_cores} cores, {total_ram_gb:.1f}GB RAM)")
-        logger.debug(f"System Status: {'OPTIMAL' if overall_health >= 90 else 'GOOD' if overall_health >= 70 else 'SUBOPTIMAL' if overall_health >= 50 else 'CRITICAL'}")
+        logger.info("-" * 40)
+        logger.info("DEEP LEARNING SYSTEM INITIALIZATION COMPLETED")
+        logger.info("-" * 40)
+        logger.info(f"Overall Health Score: {overall_health:.1f}%")
+        logger.info(f"Initialization Time: {initialization_time:.2f} seconds")
+        logger.info(f"Configuration: {config.get('_preset_name', 'custom')} preset")
+        logger.info(f"Model Variants: {system_state.get('model_variants', {}).get('available', 0)}/{system_state.get('model_variants', {}).get('total', 0)} available")
+        logger.info(f"Hardware: {'GPU-accelerated' if cuda_available else 'CPU-only'} ({logical_cores} cores, {total_ram_gb:.1f}GB RAM)")
+        logger.info(f"System Status: {'OPTIMAL' if overall_health >= 90 else 'GOOD' if overall_health >= 70 else 'SUBOPTIMAL' if overall_health >= 50 else 'CRITICAL'}")
         
         if system_state.get('errors_encountered'):
-            logger.warning(f"Errors encountered: {len(system_state['errors_encountered'])}")
+            logger.info(f"Errors encountered: {len(system_state['errors_encountered'])}")
             for error in system_state['errors_encountered']:
-                logger.warning(f"  - {error}")
+                logger.info(f"  - {error}")
         
         if system_state.get('warnings_issued'):
-            logger.debug(f"Warnings issued: {len(system_state['warnings_issued'])}")
+            logger.info(f"Warnings issued: {len(system_state['warnings_issued'])}")
             # Limit to first 5
             for warning in system_state['warnings_issued'][:5]:
-                logger.debug(f"  - {warning}")
+                logger.info(f"  - {warning}")
         
-        logger.debug("-" * 40)
+        logger.info("-" * 40)
         
         return system_status, config, logger
-        
+    
     except KeyboardInterrupt:
         # Handle user interruption gracefully
         for step_name, status, duration, details, status_style, health_display in initialization_steps:
@@ -19874,13 +19669,13 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             "[bold red]0%[/]"
         )
         
-        console.print(init_table)
+        console.print("\n", init_table)
         logger.warning("System initialization interrupted by user (Ctrl+C)")
         sys.exit(0)
     
     except SystemExit:
         # User chose to quit during loading_screen or configuration
-        logger.debug("System initialization cancelled by user choice")
+        logger.warning("System initialization cancelled by user choice")
         raise
     
     except Exception as e:
@@ -19905,7 +19700,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             "[bold red]0%[/]"
         )
         
-        console.print(init_table)
+        console.print("\n", init_table)
         
         # Create error status report
         error_status = {
@@ -20065,7 +19860,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                             }
                         }
                     
-                    logger.debug(f"Loaded existing error log from {consolidated_error_file}")
+                    logger.info(f"Loaded existing error log from {consolidated_error_file}")
                     
                 except (json.JSONDecodeError, IOError) as load_error:
                     logger.warning(f"Failed to load existing error log, creating new: {load_error}")
@@ -20103,7 +19898,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             # Keep only last 100 errors per day to prevent files from growing too large
             max_errors_per_day = 100
             if len(error_log_data['errors']) > max_errors_per_day:
-                logger.debug(f"Trimming error log to last {max_errors_per_day} entries")
+                logger.info(f"Trimming error log to last {max_errors_per_day} entries")
                 error_log_data['errors'] = error_log_data['errors'][-max_errors_per_day:]
                 error_log_data['metadata']['total_errors'] = len(error_log_data['errors'])
                 error_log_data['metadata']['trimmed'] = True
@@ -20113,9 +19908,9 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
             try:
                 with open(consolidated_error_file, 'w', encoding='utf-8') as f:
                     json.dump(error_log_data, f, indent=2, ensure_ascii=False)
-                logger.error(f"Saved critical failure to consolidated error log: {consolidated_error_file}")
-                logger.error(f"Total errors in log today: {error_log_data['metadata']['total_errors']}")
-                
+                logger.info(f"Saved critical failure to consolidated error log: {consolidated_error_file}")
+                logger.info(f"Total errors in log today: {error_log_data['metadata']['total_errors']}")
+            
             except Exception as write_error:
                 logger.error(f"Failed to write consolidated error log: {write_error}")
                 
@@ -20124,7 +19919,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     backup_file = reports_dir / f"system_initialization_errors_{date_str}_backup.json"
                     with open(backup_file, 'w', encoding='utf-8') as f:
                         json.dump(error_log_data, f, indent=2, ensure_ascii=False)
-                    logger.warning(f"Saved error log to backup location: {backup_file}")
+                    logger.info(f"Saved error log to backup location: {backup_file}")
                 except Exception as backup_error:
                     logger.error(f"Failed to save error log backup: {backup_error}")
             
@@ -20164,10 +19959,10 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                 with open(summary_file, 'a', encoding='utf-8') as f:
                     f.write(error_summary)
                 
-                logger.debug(f"Appended error summary to {summary_file}")
-                
+                logger.info(f"Appended error summary to {summary_file}")
+            
             except Exception as summary_error:
-                logger.debug(f"Failed to update error summary file: {summary_error}")
+                logger.error(f"Failed to update error summary file: {summary_error}")
             
             # Update latest error log symlink/pointer
             try:
@@ -20186,7 +19981,7 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         f.write(f"Total errors today: {error_log_data['metadata']['total_errors']}\n")
                 
             except Exception as symlink_error:
-                logger.debug(f"Failed to update latest error pointer: {symlink_error}")
+                logger.error(f"Failed to update latest error pointer: {symlink_error}")
             
             # Generate error analytics if this is a significant number of errors
             if error_log_data['metadata']['total_errors'] % 20 == 0:
@@ -20227,11 +20022,11 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                     with open(analytics_file, 'w', encoding='utf-8') as f:
                         json.dump(analytics, f, indent=2, ensure_ascii=False)
                     
-                    logger.debug(f"Generated error analytics: {analytics_file}")
-                    
+                    logger.info(f"Generated error analytics: {analytics_file}")
+                
                 except Exception as analytics_error:
-                    logger.debug(f"Failed to generate error analytics: {analytics_error}")
-            
+                    logger.error(f"Failed to generate error analytics: {analytics_error}")
+        
         except Exception as save_error:
             logger.error(f"Failed to save critical failure report using consolidated system: {save_error}")
             
@@ -20251,20 +20046,20 @@ def initialize_system() -> Tuple[Dict[str, Any], Dict[str, Any], logging.Logger]
                         'initialization_time': float(initialization_time)
                     }, f, indent=2, ensure_ascii=False)
                 
-                logger.warning(f"Emergency error report saved to: {emergency_file}")
-                
+                logger.info(f"Emergency error report saved to: {emergency_file}")
+            
             except Exception as emergency_error:
-                logger.critical(f"Failed to save emergency error report: {emergency_error}")
-
+                logger.error(f"Failed to save emergency error report: {emergency_error}")
+        
         raise RuntimeError(f"System initialization failed: {e}") from e
 
 def display_configuration_changes(changes: List[Dict], console: Console = None, logger: logging.Logger = None):
     """
-    Display configuration changes in a rich table format with enhanced styling and comprehensive information.
+    Display configuration changes in a rich table format.
     
-    This updated function provides improved visual presentation of configuration changes
-    that occur during system initialization, including change categorization, impact assessment,
-    and detailed formatting that matches the enhanced initialization system's visual style.
+    This function provides a visual presentation of configuration changes that occur during system
+    initialization, including change categorization, impact assessment, and formatting that
+    matches the initialization system's visual style.
     
     Args:
         changes: List of configuration change dictionaries with enhanced metadata
@@ -23278,10 +23073,11 @@ def _display_text_report(file_path, title=None):
         console.print(
             Panel.fit(
                 f"[bold green]{title}[/bold green]\n"
-                f"File: [cyan]{file_path.name}[/cyan]\n"
-                f"Size: [cyan]{len(content)} characters[/cyan]",
+                f"File: [bold magenta]{file_path.name}[/bold magenta]\n"
+                f"Size: [bold cyan]{len(content)} characters[/bold cyan]",
                 title="TEXT REPORT",
                 border_style="green",
+                style="bold",
                 padding=(1, 2)
             )
         )
@@ -23299,12 +23095,12 @@ def _display_text_report(file_path, title=None):
                 end_idx = min((current_page + 1) * page_size, len(lines))
                 
                 page_content = '\n'.join(lines[start_idx:end_idx])
-                print(f"\n{Fore.CYAN}--- Page {current_page + 1} of {(len(lines) - 1) // page_size + 1} ---{Style.RESET_ALL}")
+                print(f"\n{Fore.CYAN + Style.BRIGHT}--- Page {current_page + 1} of {(len(lines) - 1) // page_size + 1} ---{Style.RESET_ALL}")
                 print(page_content)
                 
                 if end_idx < len(lines):
                     try:
-                        user_input = input(f"\n{Fore.YELLOW}Press Enter for next page, 'q' to quit, or 'a' for all: {Style.RESET_ALL}").strip().lower()
+                        user_input = input(f"\n{Fore.YELLOW + Style.BRIGHT}Press Enter for next page, 'q' to quit, or 'a' for all: {Style.RESET_ALL}").strip().lower()
                         if user_input == 'q':
                             break
                         elif user_input == 'a':
@@ -23314,7 +23110,7 @@ def _display_text_report(file_path, title=None):
                         break
                 
                 current_page += 1
-        
+    
     except Exception as e:
         print(f"{Fore.RED}Error reading file: {str(e)}{Style.RESET_ALL}")
 
@@ -23332,6 +23128,7 @@ def _display_json_report(file_path):
                 f"Entries: [cyan]{len(data.get('reports', []))}[/cyan]",
                 title="JSON REPORT",
                 border_style="green",
+                style="bold",
                 padding=(1, 2)
             )
         )
@@ -23339,7 +23136,7 @@ def _display_json_report(file_path):
         # Display summary of entries
         reports = data.get('reports', [])
         if reports:
-            print(f"\n{Fore.CYAN}Report Entries:{Style.RESET_ALL}")
+            print(f"\n{Fore.CYAN + Style.BRIGHT}Report Entries:{Style.RESET_ALL}")
             # Show first 10
             for i, report in enumerate(reports[:10], 1):
                 timestamp = report.get('timestamp', 'Unknown')
@@ -23352,7 +23149,7 @@ def _display_json_report(file_path):
         
         # Ask if user wants to see full JSON
         try:
-            show_full = input(f"\n{Fore.YELLOW}Show full JSON content? (y/N): {Style.RESET_ALL}").strip().lower()
+            show_full = input(f"\n{Fore.YELLOW + Style.BRIGHT}Show full JSON content? (y/N): {Style.RESET_ALL}").strip().lower()
             if show_full in ('y', 'yes'):
                 formatted_json = json.dumps(data, indent=2, default=str)
                 print(f"\n{formatted_json}")
@@ -23360,7 +23157,7 @@ def _display_json_report(file_path):
             pass
             
     except Exception as e:
-        print(f"{Fore.RED}Error reading JSON file: {str(e)}{Style.RESET_ALL}")
+        print(f"{Fore.RED + Style.BRIGHT}Error reading JSON file: {str(e)}{Style.RESET_ALL}")
 
 def _display_status_report(file_path):
     """Display a status report with compact formatting."""
@@ -23379,12 +23176,13 @@ def _display_status_report(file_path):
                 f"Last Updated: [cyan]{metadata.get('last_updated', 'unknown')}[/cyan]",
                 title="STATUS REPORT",
                 border_style="green",
+                style="bold",
                 padding=(1, 2)
             )
         )
         
         if entries:
-            print(f"\n{Fore.CYAN}Initialization Status Summary:{Style.RESET_ALL}")
+            print(f"\n{Fore.CYAN + Style.BRIGHT}Initialization Status Summary:{Style.RESET_ALL}")
             print(f"{'Time':<10} {'Status':<10} {'Health':<8} {'Duration':<10} {'CUDA':<6} {'Models':<7}")
             print("-" * 60)
             # Show last 20 entries
@@ -23398,9 +23196,9 @@ def _display_status_report(file_path):
                 models = str(entry_data.get('model_variants', 0))
                 
                 print(f"{time_str:<10} {status:<10} {health:<8} {duration:<10} {cuda:<6} {models:<7}")
-                
+    
     except Exception as e:
-        print(f"{Fore.RED}Error reading status file: {str(e)}{Style.RESET_ALL}")
+        print(f"{Fore.RED + Style.BRIGHT}Error reading status file: {str(e)}{Style.RESET_ALL}")
 
 def _display_diagnostic_report(file_path):
     """Display a diagnostic report with technical details."""
@@ -23419,6 +23217,7 @@ def _display_diagnostic_report(file_path):
                 f"Framework Version: [cyan]{metadata.get('version', 'unknown')}[/cyan]",
                 title="DIAGNOSTIC REPORT",
                 border_style="green",
+                style="bold",
                 padding=(1, 2)
             )
         )
@@ -23428,12 +23227,12 @@ def _display_diagnostic_report(file_path):
             latest_entry = entries[-1]
             entry_data = latest_entry.get('data', {})
             
-            print(f"\n{Fore.CYAN}Latest Diagnostic Entry ({latest_entry.get('timestamp', 'unknown')}):{Style.RESET_ALL}")
+            print(f"\n{Fore.CYAN + Style.BRIGHT}Latest Diagnostic Entry ({latest_entry.get('timestamp', 'unknown')}):{Style.RESET_ALL}")
             
             # Hardware analysis
             hw_analysis = entry_data.get('hardware_analysis', {})
             if hw_analysis:
-                print(f"\n  {Fore.GREEN}Hardware Analysis:{Style.RESET_ALL}")
+                print(f"\n  {Fore.GREEN + Style.BRIGHT}Hardware Analysis:{Style.RESET_ALL}")
                 cuda_info = hw_analysis.get('cuda', {})
                 if cuda_info:
                     print(f"    CUDA: {cuda_info.get('status', 'unknown')} - {cuda_info.get('gpu_count', 0)} GPUs")
@@ -23444,19 +23243,19 @@ def _display_diagnostic_report(file_path):
             # Version validation
             version_validation = entry_data.get('version_validation', {})
             if version_validation:
-                print(f"\n  {Fore.GREEN}Version Validation:{Style.RESET_ALL}")
+                print(f"\n  {Fore.GREEN + Style.BRIGHT}Version Validation:{Style.RESET_ALL}")
                 compatible_count = sum(1 for v in version_validation.values() if v.get('compatible', False))
                 print(f"    Compatible dependencies: {compatible_count}/{len(version_validation)}")
             
             # Reproducibility config
             repro_config = entry_data.get('reproducibility_config', {})
             if repro_config:
-                print(f"\n  {Fore.GREEN}Reproducibility:{Style.RESET_ALL}")
+                print(f"\n  {Fore.GREEN + Style.BRIGHT}Reproducibility:{Style.RESET_ALL}")
                 print(f"    Seed config passed: {repro_config.get('seed_config_passed', False)}")
                 print(f"    Compliance score: {repro_config.get('compliance_score', 0):.1f}%")
-                
+    
     except Exception as e:
-        print(f"{Fore.RED}Error reading diagnostic file: {str(e)}{Style.RESET_ALL}")
+        print(f"{Fore.RED + Style.BRIGHT}Error reading diagnostic file: {str(e)}{Style.RESET_ALL}")
 
 def _display_dashboard_data(file_path):
     """Display dashboard data with visualization options."""
@@ -23475,6 +23274,7 @@ def _display_dashboard_data(file_path):
                 f"Last Updated: [cyan]{metadata.get('last_updated', 'unknown')}[/cyan]",
                 title="DASHBOARD DATA",
                 border_style="green",
+                style="bold",
                 padding=(1, 2)
             )
         )
@@ -23488,7 +23288,7 @@ def _display_dashboard_data(file_path):
             avg_duration = sum(durations) / len(durations)
             success_count = sum(1 for e in entries if e.get('data', {}).get('status', '').lower() == 'success')
             
-            print(f"\n{Fore.CYAN}Statistics Summary:{Style.RESET_ALL}")
+            print(f"\n{Fore.CYAN + Style.BRIGHT}Statistics Summary:{Style.RESET_ALL}")
             print(f"  Average Health Score: {avg_health:.1f}%")
             print(f"  Average Duration: {avg_duration:.2f}s")
             print(f"  Success Rate: {success_count}/{len(entries)} ({success_count/len(entries)*100:.1f}%)")
@@ -23499,13 +23299,13 @@ def _display_dashboard_data(file_path):
                 overall_health = sum(health_scores) / len(health_scores)
                 trend = "↑" if recent_health > overall_health else "↓" if recent_health < overall_health else "→"
                 print(f"  Health Trend: {trend} Recent avg: {recent_health:.1f}%")
-                
+    
     except Exception as e:
-        print(f"{Fore.RED}Error reading dashboard data: {str(e)}{Style.RESET_ALL}")
+        print(f"{Fore.RED + Style.BRIGHT}Error reading dashboard data: {str(e)}{Style.RESET_ALL}")
 
 def _show_all_report_files(report_dir, report_files):
     """Show all available report files with details."""
-    print(f"\n{Fore.CYAN}All Available Report Files:{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN + Style.BRIGHT}All Available Report Files:{Style.RESET_ALL}")
     print(f"Location: {report_dir}\n")
     
     all_files = []
@@ -23544,7 +23344,7 @@ def model_instantiation(
     Helper function for model instantiation with error handling and fallback support.
     
     This function can be used by validate_model_variants(), initialize_model_variants() and other functions
-    that need to instantiate model variants with robust error handling and configuration fallbacks.
+    that need to instantiate model variants with error handling and configuration fallbacks.
     
     Args:
         variant_class: The model class to instantiate
@@ -23727,7 +23527,7 @@ def model_instantiation_with_validation(
         hardware_data: Hardware information for adaptive configuration
         silent: If True, suppress detailed logging
         logger: Logger instance for reporting results
-        
+    
     Returns:
         Tuple containing:
         - model_instance: Instantiated model or None if failed
@@ -24021,17 +23821,16 @@ def model_instantiation_with_validation(
 
 def _get_system_context(silent: bool = False) -> Dict[str, Any]:
     """
-    Comprehensive system analysis and hardware context collection.
+    System analysis and hardware context collection.
     
-    This function gathers detailed system information including hardware capabilities,
+    This function gathers system information including hardware capabilities,
     memory usage, performance baselines, and applies memory optimization if needed.
     
     Args:
         silent (bool): Whether to suppress logging output
-        
+    
     Returns:
-        Dict[str, Any]: Comprehensive system context including hardware data, 
-                       system class, and collection status
+        Dict[str, Any]: System context including hardware data, system class, and collection status
     """
     # Initialize context structure
     system_context = {
@@ -24043,7 +23842,7 @@ def _get_system_context(silent: bool = False) -> Dict[str, Any]:
     }
     
     try:
-        # Comprehensive system information collection
+        # System information collection
         system_info = get_system_info(
             include_versions=True,
             include_hardware=True,
@@ -24057,14 +23856,14 @@ def _get_system_context(silent: bool = False) -> Dict[str, Any]:
         system_class = hardware_analysis.get('system_class', 'unknown')
         baseline_results = system_info.get('performance_baseline', {})
         
-        # Extract comprehensive hardware information
+        # Extract hardware information
         gpu_available = capabilities.get('gpu', {}).get('available', False)
         gpu_memory_gb = capabilities.get('gpu', {}).get('total_memory_gb', 0)
         cpu_count = capabilities.get('cpu', {}).get('logical_cores', os.cpu_count() or 1)
         system_memory_gb = capabilities.get('memory', {}).get('total_gb', 8)
         memory_usage_percent = capabilities.get('memory', {}).get('usage_percent', 0)
         
-        # Create comprehensive hardware_data structure
+        # Create hardware_data structure
         hardware_data = {
             'gpu_available': gpu_available,
             'gpu_memory_gb': gpu_memory_gb,
@@ -24075,7 +23874,7 @@ def _get_system_context(silent: bool = False) -> Dict[str, Any]:
             'hardware_analysis': hardware_analysis,
             'capabilities': capabilities,
             'performance_baseline': baseline_results,
-            'collection_method': 'comprehensive_system_info'
+            'collection_method': 'system_info'
         }
         
         # Additional detailed information from system_info
@@ -24089,11 +23888,7 @@ def _get_system_context(silent: bool = False) -> Dict[str, Any]:
         total_ram_gb = system_memory_gb
         
         if not silent:
-            logger.debug(f"Comprehensive system analysis: "
-                    f"Class={system_class}, "
-                    f"GPU={gpu_available} ({gpu_memory_gb:.1f}GB), "
-                    f"CPU={cpu_count} cores, "
-                    f"RAM={system_memory_gb:.1f}GB ({memory_usage_percent:.1f}% used)")
+            logger.debug(f"System analysis: Class:{system_class}, GPU:{gpu_available} ({gpu_memory_gb:.1f}GB), CPU:{cpu_count} cores, RAM:{system_memory_gb:.1f}GB ({memory_usage_percent:.1f}% used)")
         
         # Update system context with successful collection
         system_context.update({
@@ -24103,10 +23898,10 @@ def _get_system_context(silent: bool = False) -> Dict[str, Any]:
             'collection_success': True,
             'collection_error': None
         })
-        
+    
     except Exception as e:
         if not silent:
-            logger.warning(f"Comprehensive system analysis failed, using fallbacks: {e}")
+            logger.warning(f"System analysis failed, using fallbacks: {e}")
         
         # Fallback to basic hardware detection
         hardware_data = {
@@ -24150,14 +23945,16 @@ def _get_system_context(silent: bool = False) -> Dict[str, Any]:
     
     return system_context
 
-def _optimize_memory_if_needed(condition: bool, hardware_data: Dict[str, Any], aggressive: bool = False, silent: bool = False) -> bool:
+def _optimize_memory_if_needed(
+    condition: bool,
+    hardware_data: Dict[str, Any],
+    aggressive: bool = False,
+    silent: bool = False
+) -> bool:
     """Shared memory optimization routine."""
     if condition:
         try:
-            results = enhanced_clear_memory(
-                aggressive=aggressive,
-                hardware_data=hardware_data
-            )
+            results = enhanced_clear_memory(aggressive=aggressive, hardware_data=hardware_data)
             if results.get('success') and not silent:
                 logger.debug("Memory optimization completed")
             return results.get('success', False)
@@ -24297,10 +24094,10 @@ def _create_model_test_definition(
     This function now performs upfront validation of class availability before
     creating lambda functions, preventing runtime errors and providing clear
     feedback about missing classes.
-        
+    
     Returns:
         Dictionary mapping model names to their test definitions
-        
+    
     Raises:
         RuntimeError: If no model classes are available for definition creation
     """
@@ -24958,7 +24755,11 @@ def _extract_and_validate_config_param(
             logger.debug(f"Error extracting parameter {key}: {e}, using default: {default}")
         return default
 
-def _validate_and_adjust_parameters(hidden_dims: list, dropout_rates: list, silent: bool = False) -> tuple:
+def _validate_and_adjust_parameters(
+    hidden_dims: list,
+    dropout_rates: list,
+    silent: bool = False
+) -> tuple:
     """Validates and adjusts parameters for consistency."""
     
     # Ensure hidden_dims is a valid list
@@ -25034,20 +24835,23 @@ def _validate_and_adjust_parameters(hidden_dims: list, dropout_rates: list, sile
     
     return hidden_dims, dropout_rates
 
-def compare_model_architectures(input_dim: int = None, silent: bool = False) -> Dict[str, Any]:
+def compare_model_architectures(
+    input_dim: int = None,
+    silent: bool = False
+) -> Dict[str, Any]:
     """
-    Compare parameter counts and complexity of different model architectures with comprehensive analysis.
+    Compare parameter counts and complexity of different model architectures.
     
-    This function performs detailed architectural comparison, performance analysis, and resource requirements
+    This function performs architectural comparison, performance analysis, and resource requirements
     for all preset configurations and model variants following the initialization and validation of all the
     model variants registered/initialized in the MODEL_VARIANTS dictionary.
     
     Args:
         input_dim: Input dimension for comparison (uses config/default if None)
-        silent: If True, suppress detailed logging messages during validation
+        silent: If True, suppress logging messages during validation
     
     Returns:
-        Dictionary containing detailed comparison results, recommendations, and optimization guidance
+        Dictionary containing comparison results, recommendations, and optimization guidance
     """
     print_color("\nComparing Model Architectures...", 'yellow')
     
@@ -25982,15 +25786,14 @@ def compare_model_architectures(input_dim: int = None, silent: bool = False) -> 
 
 def analyze_model_layers(model: torch.nn.Module) -> Dict[str, Any]:
     """
-    Analyze model layers and return comprehensive layer information.
+    Analyze model layers and return layer information.
     
-    This function provides detailed layer analysis that harmonizes with the
-    compare_model_architectures() function, focusing on parameter distribution,
-    layer types, and architectural characteristics.
+    This function provides layer analysis that harmonizes with the compare_model_architectures()
+    function, focusing on parameter distribution, layer types, and architectural characteristics.
     
     Args:
         model: PyTorch model to analyze
-        
+    
     Returns:
         Dictionary containing layer analysis results
     """
@@ -26072,14 +25875,13 @@ def calculate_architecture_efficiency(total_params: int, layer_analysis: Dict[st
     """
     Calculate architecture efficiency score based on parameter count and layer analysis.
     
-    This function provides an efficiency metric that harmonizes with the
-    compare_model_architectures() function's architecture analysis, considering
-    parameter distribution and layer structure.
+    This function provides an efficiency metric that harmonizes with the compare_model_architectures()
+    function's architecture analysis, considering parameter distribution and layer structure.
     
     Args:
         total_params: Total number of model parameters
         layer_analysis: Layer analysis results from analyze_model_layers()
-        
+    
     Returns:
         Float efficiency score (0-100, higher is better)
     """
@@ -26167,7 +25969,7 @@ def execute_performance_testing(
     scenario_filter: List[str] = None
 ) -> Dict[str, Any]:
     """
-    Execute comprehensive performance testing leveraging full system analysis.
+    Execute performance testing leveraging full system analysis.
     
     This function is harmonized with compare_model_architectures() and uses
     the same parameter structure as called in the main comparison function.
@@ -26183,7 +25985,7 @@ def execute_performance_testing(
         scenario_filter: Optional list of scenario names to run (for targeted testing)
     
     Returns:
-        Dictionary containing comprehensive performance metrics
+        Dictionary containing performance metrics
     """
     performance_metrics = {}
     
@@ -26201,7 +26003,7 @@ def execute_performance_testing(
         else:
             system_class = 'standard'
         
-        # ADAPTIVE TEST SCENARIOS based on system capabilities and mode
+        # Adaptive test scenarios based on system capabilities and mode
         if system_class == 'high_performance':
             base_scenarios = [
                 {'batch_size': 1, 'name': 'single_sample', 'description': 'Single sample inference test'},
@@ -26258,7 +26060,7 @@ def execute_performance_testing(
         
         test_scenarios = filtered_scenarios
         
-        # SYSTEM-AWARE PERFORMANCE ANALYSIS
+        # Performance analysis
         performance_metrics.update({
             'system_class': system_class,
             'cpu_count': cpu_count,
@@ -26284,7 +26086,7 @@ def execute_performance_testing(
             scenario_description = scenario['description']
             
             try:
-                # SYSTEM-AWARE BATCH SIZE ADJUSTMENT
+                # Batch size adjustment
                 test_batch_size = scenario_batch_size
                 
                 # Adjust based on available memory
@@ -26298,15 +26100,14 @@ def execute_performance_testing(
                     }
                 
                 # Adjust for batch normalization requirements
-                if ((config_used and config_used.get('model', {}).get('use_batch_norm', False)) or 
-                    (config_used and config_used.get('model', {}).get('normalization') == 'batch')) and test_batch_size == 1:
+                if ((config_used and config_used.get('model', {}).get('use_batch_norm', False)) or (config_used and config_used.get('model', {}).get('normalization') == 'batch')) and test_batch_size == 1:
                     test_batch_size = 2
                     performance_metrics[f'{scenario_name}_adjusted_batch_size'] = test_batch_size
                 
                 # Create test input with optimal device placement
                 test_input = torch.randn(test_batch_size, input_dim)
                 
-                # ENHANCED DEVICE MANAGEMENT
+                # Device management
                 if hasattr(model, 'device'):
                     test_input = test_input.to(model.device)
                     device = model.device
@@ -26318,7 +26119,7 @@ def execute_performance_testing(
                     test_input = test_input.to(device)
                     model = model.to(device)
                 
-                # SYSTEM-AWARE WARMUP
+                # Warmup
                 warmup_runs = 10 if system_class == 'high_performance' else 5
                 timing_runs = 30 if system_class == 'high_performance' else 20
                 
@@ -26335,7 +26136,7 @@ def execute_performance_testing(
                         if torch.cuda.is_available() and device.type == 'cuda':
                             torch.cuda.synchronize()
                 
-                # ENHANCED TIMING with system-aware statistics
+                # Timing with system-aware statistics
                 times = []
                 outputs = []
                 memory_usage = []
@@ -26365,16 +26166,12 @@ def execute_performance_testing(
                         mem_after = torch.cuda.memory_allocated(device) / 1024**2
                         memory_usage.append(mem_after - mem_before)
                 
-                # ENHANCED STATISTICS with system context
-                #avg_time = sum(times) / len(times)
+                # Statistics with system context
                 avg_time = max(sum(times) / len(times), 1e-6)  # Minimum 1 microsecond
-                #std_time = (sum((t - avg_time) ** 2 for t in times) / len(times)) ** 0.5
                 std_time = max((sum((t - avg_time) ** 2 for t in times) / len(times)) ** 0.5, 1e-6)
-                #min_time = min(times)
                 min_time = max(min(times), 1e-6)
-                #max_time = max(times)
                 max_time = max(max(times), 1e-6)
-                #throughput = test_batch_size / avg_time
+                
                 # Safe throughput calculation with bounds checking
                 if avg_time > 0 and test_batch_size > 0:
                     throughput = test_batch_size / avg_time
@@ -26384,7 +26181,7 @@ def execute_performance_testing(
                     throughput = 1000000.0  # 1M samples/sec as fallback for very fast models
                     time_per_sample = 1e-6  # 1 microsecond per sample as fallback
                     performance_metrics[f'{scenario_name}_timing_warning'] = "Inference too fast for accurate measurement"
-
+                
                 # Ensure throughput is reasonable (not infinite)
                 throughput = min(throughput, 1e8)  # Cap at 100M samples/sec
                 time_per_sample = max(time_per_sample, 1e-9)  # Minimum 1 nanosecond
@@ -26418,7 +26215,7 @@ def execute_performance_testing(
                     else: 
                         performance_rating = 'poor'
                 
-                # Store comprehensive performance metrics
+                # Store performance metrics
                 scenario_metrics = {
                     f'{scenario_name}_inference_time_ms': avg_time * 1000,
                     f'{scenario_name}_inference_std_ms': std_time * 1000,
@@ -26440,7 +26237,7 @@ def execute_performance_testing(
                 
                 performance_metrics.update(scenario_metrics)
                 
-                # ENHANCED OUTPUT QUALITY ANALYSIS for validation mode
+                # Output quality analysis for validation mode
                 output = outputs[-1]
                 quality_metrics = {}
                 validation_status = 'passed'
@@ -26470,7 +26267,7 @@ def execute_performance_testing(
                         validation_status = 'failed'
                 
                 if not has_nan and not has_inf:
-                    # Enhanced statistics
+                    # Compute output statistics
                     output_range = (output.max() - output.min()).item()
                     output_mean = output.mean().item()
                     output_std = output.std().item()
@@ -26537,7 +26334,7 @@ def execute_performance_testing(
                     'quality_score': quality_metrics.get(f'{scenario_name}_quality_score', 0),
                     'validation_status': validation_status if validation_mode else 'not_tested'
                 }
-                
+            
             except Exception as scenario_error:
                 error_msg = f"{scenario_name}: {str(scenario_error)}"
                 logger.warning(f"{model_name} performance test failed for {scenario_name}: {scenario_error}")
@@ -26558,7 +26355,7 @@ def execute_performance_testing(
                     'validation_status': 'failed' if validation_mode else 'error'
                 }
         
-        # Generate comprehensive recommendations
+        # Generate recommendations
         recommendations = []
         
         # Get average throughput
@@ -26599,7 +26396,7 @@ def execute_performance_testing(
         performance_metrics['scenario_summary'] = scenario_results
         
         return performance_metrics
-        
+    
     except Exception as e:
         logger.error(f"Performance testing failed for {model_name}: {e}")
         return {
@@ -26614,7 +26411,7 @@ def estimate_flops(
     model: torch.nn.Module
 ) -> Dict[str, Any]:
     """
-    Comprehensive FLOP estimation with detailed analysis and breakdown.
+    FLOP estimation with detailed analysis and breakdown.
     
     This function provides enhanced FLOP estimation including forward pass,
     backward pass, layer-wise breakdown, and computational complexity classification.
@@ -26624,9 +26421,9 @@ def estimate_flops(
         input_dim: Input dimension size
         batch_size: Batch size for calculation
         model: PyTorch model to analyze
-        
+    
     Returns:
-        Dictionary containing comprehensive FLOP analysis
+        Dictionary containing FLOP analysis
     """
     flop_start_time = time.time()
     
@@ -26665,14 +26462,14 @@ def estimate_flops(
                 'memory_compute_ratio': 0
             },
             'analysis_metadata': {
-                'estimation_method': 'comprehensive_layer_analysis',
+                'estimation_method': 'layer_analysis',
                 'accuracy_level': 'high',
                 'analysis_time_seconds': 0,
                 'warnings': []
             }
         }
         
-        logger.debug(f"Starting comprehensive FLOP estimation for model with {sum(p.numel() for p in model.parameters())} parameters")
+        logger.debug(f"Starting FLOP estimation for model with {sum(p.numel() for p in model.parameters())} parameters")
         
         # Phase 1: Detailed Layer-by-Layer Analysis
         model.eval()
@@ -26731,9 +26528,7 @@ def estimate_flops(
                     layer_info['computational_intensity'] = 'high'
                     
                     # Memory access estimation (weights + input + output)
-                    layer_info['memory_access'] = (in_features * out_features + 
-                                                 in_features * batch_size + 
-                                                 out_features * batch_size) * 4  # bytes
+                    layer_info['memory_access'] = (in_features * out_features + in_features * batch_size + out_features * batch_size) * 4  # bytes
                     
                     # Arithmetic intensity (FLOPs per byte)
                     layer_info['arithmetic_intensity'] = layer_flops / max(layer_info['memory_access'], 1)
@@ -26747,7 +26542,7 @@ def estimate_flops(
                         'weight_flops': mac_operations * 2,
                         'bias_flops': out_features * batch_size if module.bias is not None else 0
                     })
-                    
+                
                 elif isinstance(module, torch.nn.Conv1d):
                     # 1D Convolution analysis
                     kernel_size = module.kernel_size[0] if isinstance(module.kernel_size, tuple) else module.kernel_size
@@ -26773,7 +26568,7 @@ def estimate_flops(
                     layer_info['computational_intensity'] = 'high'
                     
                     operation_counts['convolution'] += layer_flops
-                    
+                
                 elif isinstance(module, torch.nn.Conv2d):
                     # 2D Convolution analysis
                     kernel_h, kernel_w = (module.kernel_size if isinstance(module.kernel_size, tuple) 
@@ -26785,8 +26580,7 @@ def estimate_flops(
                     spatial_dim = int(input_dim ** 0.5)
                     output_h = output_w = spatial_dim  # Simplified
                     
-                    conv_operations = (kernel_h * kernel_w * in_channels * out_channels * 
-                                     output_h * output_w * batch_size)
+                    conv_operations = (kernel_h * kernel_w * in_channels * out_channels * output_h * output_w * batch_size)
                     layer_flops = conv_operations * 2
                     
                     if module.bias is not None:
@@ -26795,14 +26589,13 @@ def estimate_flops(
                     layer_info['operation_class'] = 'convolution'
                     layer_info['computational_intensity'] = 'very_high'
                     operation_counts['convolution'] += layer_flops
-                    
+                
                 elif isinstance(module, (torch.nn.BatchNorm1d, torch.nn.LayerNorm)):
                     # Normalization layers
                     if hasattr(module, 'num_features'):
                         num_features = module.num_features
                     elif hasattr(module, 'normalized_shape'):
-                        num_features = (module.normalized_shape[0] if isinstance(module.normalized_shape, tuple) 
-                                      else module.normalized_shape)
+                        num_features = (module.normalized_shape[0] if isinstance(module.normalized_shape, tuple) else module.normalized_shape)
                     else:
                         num_features = current_shape[-1] if current_shape else input_dim
                     
@@ -26820,7 +26613,7 @@ def estimate_flops(
                         'num_features': num_features,
                         'affine': getattr(module, 'affine', True)
                     })
-                    
+                
                 elif isinstance(module, torch.nn.GroupNorm):
                     # Group normalization
                     num_groups = module.num_groups
@@ -26832,16 +26625,15 @@ def estimate_flops(
                     layer_info['operation_class'] = 'normalization'
                     layer_info['computational_intensity'] = 'medium'
                     operation_counts['normalization'] += layer_flops
-                    
+                
                 elif isinstance(module, torch.nn.Dropout):
                     # Dropout: minimal cost during inference (0 in eval mode)
                     layer_flops = 0
                     layer_info['operation_class'] = 'dropout'
                     layer_info['computational_intensity'] = 'none'
                     operation_counts['dropout'] += layer_flops
-                    
-                elif isinstance(module, (torch.nn.ReLU, torch.nn.LeakyReLU, torch.nn.ELU, 
-                                        torch.nn.GELU, torch.nn.Sigmoid, torch.nn.Tanh)):
+                
+                elif isinstance(module, (torch.nn.ReLU, torch.nn.LeakyReLU, torch.nn.ELU, torch.nn.GELU, torch.nn.Sigmoid, torch.nn.Tanh)):
                     # Activation functions
                     estimated_neurons = current_shape[-1] if current_shape else input_dim
                     
@@ -26863,9 +26655,8 @@ def estimate_flops(
                     layer_info['operation_class'] = 'activation'
                     layer_info['computational_intensity'] = 'low' if layer_flops <= estimated_neurons * batch_size else 'medium'
                     operation_counts['activation'] += layer_flops
-                    
                     layer_info['activation_type'] = type(module).__name__
-                    
+                
                 elif hasattr(module, '__class__') and 'Attention' in module.__class__.__name__:
                     # Multi-head attention (custom implementation)
                     if hasattr(module, 'dim'):
@@ -26875,10 +26666,8 @@ def estimate_flops(
                         
                         # Attention FLOPs: Q, K, V projections + attention computation + output projection
                         projection_flops = 3 * (dim * dim * batch_size)  # Q, K, V
-                        attention_flops = (dim * seq_len * seq_len * batch_size * num_heads +  # Attention scores
-                                         dim * seq_len * seq_len * batch_size * num_heads)  # Value combination
+                        attention_flops = (dim * seq_len * seq_len * batch_size * num_heads + dim * seq_len * seq_len * batch_size * num_heads)
                         output_projection_flops = dim * dim * batch_size
-                        
                         layer_flops = projection_flops + attention_flops + output_projection_flops
                         
                         layer_info['operation_class'] = 'attention'
@@ -26915,7 +26704,7 @@ def estimate_flops(
                         'flops': layer_flops,
                         'percentage_of_total': (layer_flops / max(total_forward_flops, 1)) * 100
                     })
-                
+            
             except Exception as e:
                 logger.debug(f"FLOP estimation failed for layer {name}: {e}")
                 layer_info['estimation_error'] = str(e)
@@ -27022,8 +26811,7 @@ def estimate_flops(
         flop_analysis['comparative_metrics'].update({
             'flops_vs_mobilenet': total_forward_flops / mobilenet_flops,
             'flops_vs_resnet18': total_forward_flops / resnet18_flops,
-            'relative_complexity': 'lightweight' if total_forward_flops < mobilenet_flops else 
-                                  'moderate' if total_forward_flops < resnet18_flops else 'heavy'
+            'relative_complexity': 'lightweight' if total_forward_flops < mobilenet_flops else 'moderate' if total_forward_flops < resnet18_flops else 'heavy'
         })
         
         # Phase 7: Optimization Analysis
@@ -27040,8 +26828,7 @@ def estimate_flops(
             optimization_opportunities.append('Focus optimization on identified bottleneck layers')
         
         # Memory-compute ratio
-        total_memory_accesses = sum(layer['memory_access'] for layer in layer_details 
-                                  if 'memory_access' in layer and layer['memory_access'] > 0)
+        total_memory_accesses = sum(layer['memory_access'] for layer in layer_details if 'memory_access' in layer and layer['memory_access'] > 0)
         memory_compute_ratio = total_memory_accesses / max(total_forward_flops, 1)
         
         flop_analysis['optimization_analysis'].update({
@@ -27074,13 +26861,12 @@ def estimate_flops(
             'warnings': warnings
         })
         
-        logger.debug(f"Comprehensive FLOP estimation completed: {total_forward_flops:,} FLOPs "
-                    f"for {len(layer_details)} layers in {time.time() - flop_start_time:.3f}s")
+        logger.debug(f"FLOP estimation completed: {total_forward_flops:,} FLOPs for {len(layer_details)} layers in {time.time() - flop_start_time:.3f}s")
         
         return flop_analysis
-        
+    
     except Exception as e:
-        logger.error(f"Comprehensive FLOP estimation failed: {e}")
+        logger.error(f"FLOP estimation failed: {e}")
         
         # Fallback estimation
         try:
@@ -27118,7 +26904,7 @@ def analyze_scaling_behavior(
     model_name: str
 ) -> Dict[str, Any]:
     """
-    Comprehensive analysis of model scaling behavior with enhanced metrics and predictions.
+    Analysis of model scaling behavior with metrics and predictions.
     
     This function analyzes how models scale with different input dimensions, batch sizes,
     and architectural parameters, providing detailed scaling curves, performance predictions,
@@ -27129,9 +26915,9 @@ def analyze_scaling_behavior(
         base_params: Base parameters for model instantiation
         input_dim: Base input dimension
         model_name: Name of the model for logging
-        
+    
     Returns:
-        Dictionary containing comprehensive scaling analysis
+        Dictionary containing scaling analysis
     """
     scaling_start_time = time.time()
     
@@ -27184,12 +26970,12 @@ def analyze_scaling_behavior(
             }
         }
         
-        logger.debug(f"Starting comprehensive scaling analysis for {model_name}")
+        logger.debug(f"Starting scaling analysis for {model_name}")
         
         # Phase 1: Input Dimension Scaling Analysis
         logger.debug("Phase 1: Input dimension scaling analysis")
         
-        # Define comprehensive test dimensions
+        # Define test dimensions
         dimension_multipliers = [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0]
         test_input_dims = [max(5, int(input_dim * mult)) for mult in dimension_multipliers]
         
@@ -27264,7 +27050,7 @@ def analyze_scaling_behavior(
                             'samples_per_second': test_batch / batch_time,
                             'time_per_sample_ms': (batch_time / test_batch) * 1000
                         })
-                        
+                    
                     except Exception as batch_error:
                         logger.debug(f"Batch test failed for dim={test_dim}, batch={test_batch}: {batch_error}")
                 
@@ -27290,7 +27076,7 @@ def analyze_scaling_behavior(
                         # Clean up
                         del test_model_gpu, test_input_gpu
                         torch.cuda.empty_cache()
-                        
+                
                 except Exception as memory_error:
                     logger.debug(f"GPU memory analysis failed for dim={test_dim}: {memory_error}")
                 
@@ -27335,7 +27121,7 @@ def analyze_scaling_behavior(
                 
                 # Clean up
                 del test_model
-                
+            
             except Exception as dim_error:
                 logger.debug(f"Dimension scaling test failed for dim={test_dim}: {dim_error}")
                 scaling_analysis['analysis_metadata']['failed_tests'] += 1
@@ -27424,7 +27210,7 @@ def analyze_scaling_behavior(
                         'memory_scaling_exponent': float(memory_scaling_exp),
                         'memory_growth': f"O(n^{memory_scaling_exp:.2f})"
                     }
-                
+            
             except Exception as e:
                 logger.debug(f"Scaling coefficient analysis failed: {e}")
                 scaling_analysis['analysis_metadata']['warnings'].append(f"Scaling analysis failed: {str(e)}")
@@ -27505,7 +27291,7 @@ def analyze_scaling_behavior(
                     }
                     
                     batch_scaling_data.append(batch_data)
-                    
+                
                 except Exception as batch_error:
                     logger.debug(f"Batch scaling test failed for batch={batch_size}: {batch_error}")
                     continue
@@ -27539,13 +27325,13 @@ def analyze_scaling_behavior(
                             batch_sizes[min(len(batch_sizes) - 1, max_efficiency_idx + 1)]
                         ]
                     }
-                    
+                
                 except Exception as analysis_error:
                     logger.debug(f"Batch scaling analysis failed: {analysis_error}")
             
             # Clean up
             del base_test_model
-            
+        
         except Exception as batch_error:
             logger.debug(f"Batch size scaling analysis failed: {batch_error}")
             scaling_analysis['analysis_metadata']['warnings'].append(f"Batch scaling analysis failed: {str(batch_error)}")
@@ -27584,7 +27370,7 @@ def analyze_scaling_behavior(
                         })
                         
                         del variant_model
-                        
+                    
                     except Exception as enc_error:
                         logger.debug(f"Encoding dimension test failed for dim={enc_dim}: {enc_error}")
                 
@@ -27621,7 +27407,7 @@ def analyze_scaling_behavior(
                         })
                         
                         del variant_model
-                        
+                    
                     except Exception as ens_error:
                         logger.debug(f"Ensemble size test failed for size={ensemble_size}: {ens_error}")
                 
@@ -27645,7 +27431,7 @@ def analyze_scaling_behavior(
                 
                 scaling_analysis['parameter_scaling']['complexity_growth'] = complexity_growth
                 scaling_analysis['parameter_scaling']['parameter_growth_ratio'] = param_growth_ratio
-            
+        
         except Exception as param_error:
             logger.debug(f"Parameter scaling analysis failed: {param_error}")
             scaling_analysis['analysis_metadata']['warnings'].append(f"Parameter scaling analysis failed: {str(param_error)}")
@@ -27684,7 +27470,7 @@ def analyze_scaling_behavior(
                             'predictions_ms': time_predictions,
                             'model_type': 'polynomial_degree_2'
                         }
-                        
+                    
                     except Exception as pred_error:
                         logger.debug(f"Time prediction modeling failed: {pred_error}")
                 
@@ -27710,7 +27496,7 @@ def analyze_scaling_behavior(
                             'predictions_mb': mem_predictions,
                             'model_type': 'polynomial_degree_2'
                         }
-                        
+                    
                     except Exception as mem_pred_error:
                         logger.debug(f"Memory prediction modeling failed: {mem_pred_error}")
         
@@ -27784,7 +27570,7 @@ def analyze_scaling_behavior(
                     recommendations['configuration_suggestions'].append("Large model - consider mixed precision training")
             
             scaling_analysis['optimization_recommendations'] = recommendations
-            
+        
         except Exception as rec_error:
             logger.debug(f"Optimization recommendations generation failed: {rec_error}")
         
@@ -27800,12 +27586,12 @@ def analyze_scaling_behavior(
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         
-        logger.debug(f"Comprehensive scaling analysis completed for {model_name} in {time.time() - scaling_start_time:.2f}s")
+        logger.debug(f"Scaling analysis completed for {model_name} in {time.time() - scaling_start_time:.2f}s")
         
         return scaling_analysis
-        
+    
     except Exception as e:
-        logger.error(f"Comprehensive scaling analysis failed for {model_name}: {e}")
+        logger.error(f"Scaling analysis failed for {model_name}: {e}")
         
         return {
             'error': f'Scaling analysis failed: {str(e)}',
@@ -27824,9 +27610,9 @@ def analyze_memory_usage(
     hardware_data: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Comprehensive memory usage analysis with system awareness.
+    Memory usage analysis with system awareness.
     
-    This function provides detailed memory analysis including GPU memory usage,
+    This function provides memory analysis including GPU memory usage,
     CPU memory estimation, and system-aware recommendations. Harmonized with
     compare_model_architectures() parameter structure.
     
@@ -27836,9 +27622,9 @@ def analyze_memory_usage(
         model_name: Name of the model for logging
         model: PyTorch model to analyze
         hardware_data: Hardware information from system context
-        
+    
     Returns:
-        Dictionary containing comprehensive memory analysis
+        Dictionary containing memory analysis
     """
     try:
         memory_analysis = {
@@ -27872,13 +27658,13 @@ def analyze_memory_usage(
             },
             'recommendations': [],
             'analysis_metadata': {
-                'analysis_method': 'comprehensive_system_aware',
+                'analysis_method': 'system_aware',
                 'gpu_analysis_performed': False,
                 'warnings': []
             }
         }
         
-        logger.debug(f"Starting comprehensive memory analysis for {model_name}")
+        logger.debug(f"Starting memory analysis for {model_name}")
         
         # Extract hardware information from the provided hardware_data
         gpu_available = hardware_data.get('gpu_available', False)
@@ -27918,7 +27704,7 @@ def analyze_memory_usage(
                 
                 test_input_gpu = torch.randn(test_batch_size, input_dim).cuda()
                 
-                # COMPREHENSIVE MEMORY PROFILING
+                # MEMORY PROFILING
                 memory_snapshots = []
                 
                 # Baseline measurement
@@ -27970,7 +27756,7 @@ def analyze_memory_usage(
                 
                 torch.cuda.empty_cache()
                 memory_analysis['analysis_metadata']['gpu_analysis_performed'] = True
-                
+            
             except Exception as gpu_error:
                 logger.debug(f"GPU memory analysis failed: {gpu_error}")
                 memory_analysis['analysis_metadata']['warnings'].append(f"GPU analysis failed: {str(gpu_error)}")
@@ -28033,7 +27819,7 @@ def analyze_memory_usage(
             'memory_efficiency_score': 0  # Will be updated if throughput data is available
         })
         
-        # COMPREHENSIVE RECOMMENDATIONS using system analysis
+        # RECOMMENDATIONS using system analysis
         recommendations = []
         
         # System class based recommendations
@@ -28061,12 +27847,12 @@ def analyze_memory_usage(
         
         memory_analysis['recommendations'] = recommendations
         
-        logger.debug(f"Comprehensive memory analysis completed for {model_name}")
+        logger.debug(f"Memory analysis completed for {model_name}")
         
         return memory_analysis
-        
+    
     except Exception as e:
-        logger.error(f"Comprehensive memory analysis failed for {model_name}: {e}")
+        logger.error(f"Memory analysis failed for {model_name}: {e}")
         
         return {
             'error': f'Memory analysis failed: {str(e)}',
@@ -28085,7 +27871,7 @@ def estimate_training_resources(
     hardware_data: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Comprehensive training resource estimation with detailed analysis and recommendations.
+    Training resource estimation with detailed analysis and recommendations.
     
     This function provides enhanced resource estimation including memory requirements,
     computational needs, time estimates, hardware recommendations, and optimization
@@ -28098,9 +27884,9 @@ def estimate_training_resources(
         config: Configuration dictionary for detailed analysis
         model_name: Model name for logging and recommendations
         hardware_data: Hardware information from system context
-        
+    
     Returns:
-        Dictionary containing comprehensive resource requirement estimates
+        Dictionary containing resource requirement estimates
     """
     estimation_start_time = time.time()
     
@@ -28773,7 +28559,7 @@ def model_specific_feature_analysis(
         model_name: Name of the model for feature analysis
         test_config: Configuration dictionary containing model parameters
         model: The model instance to analyze
-        
+    
     Returns:
         Dictionary containing model-specific feature analysis
     """
@@ -28925,7 +28711,7 @@ def generate_model_recommendations(
         total_params: Number of parameters
         hardware_data: Hardware information from system context
         performance_metrics: Performance measurement results
-        
+    
     Returns:
         List of recommendation strings
     """
@@ -29040,7 +28826,7 @@ def generate_comparative_summary(
     hardware_data: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Generate comprehensive comparative summary and recommendations.
+    Generate comparative summary and recommendations.
     
     This function analyzes all model results and provides comparative analysis,
     rankings, and recommendations. Harmonized with compare_model_architectures().
@@ -32354,7 +32140,7 @@ def display_model_initialization_summary(
     show_panels: Union[bool, Dict[str, bool]] = False
 ) -> None:
     """
-    Display comprehensive model initialization summary with rich formatting.
+    Display model initialization summary with rich formatting.
     
     This function provides rich console output and logs detailed information to file
     for SimpleAutoencoder, EnhancedAutoencoder, and AutoencoderEnsemble classes.
@@ -33111,7 +32897,7 @@ def _structure_kwargs_into_config_sections(kwargs: Dict[str, Any]) -> Dict[str, 
     
     Args:
         kwargs: Flat dictionary of parameters
-        
+    
     Returns:
         Structured configuration dictionary with proper sections
     """
@@ -33882,12 +33668,7 @@ def _initialize_autoencoder_config(
     }
 
 class SimpleAutoencoder(nn.Module):
-    """
-    Streamlined SimpleAutoencoder using centralized configuration initialization.
-    
-    This class leverages the _initialize_autoencoder_config() helper function to eliminate
-    redundancy and provide consistent parameter processing across all autoencoder variants.
-    """
+    """Streamlined SimpleAutoencoder using centralized configuration initialization."""
     
     def __init__(
         self,
@@ -34717,14 +34498,7 @@ class SimpleAutoencoder(nn.Module):
                 f"centralized_config=True)")
 
 class EnhancedAutoencoder(nn.Module):
-    """
-    Streamlined EnhancedAutoencoder using centralized configuration initialization.
-    
-    This class leverages the _initialize_autoencoder_config() helper function to eliminate
-    redundancy and provide consistent parameter processing across all autoencoder variants.
-    Enhanced features include attention mechanisms, residual blocks, skip connections, and
-    advanced architectures while maintaining full compatibility with all preset parameters.
-    """
+    """Streamlined EnhancedAutoencoder using centralized configuration initialization."""
     
     def __init__(
         self,
@@ -35801,14 +35575,7 @@ class EnhancedAutoencoder(nn.Module):
                 f"centralized_config=True)")
 
 class AutoencoderEnsemble(nn.Module):
-    """
-    Streamlined AutoencoderEnsemble using centralized configuration initialization.
-    
-    This class leverages the _initialize_autoencoder_config() helper function to eliminate
-    redundancy and provide consistent parameter processing across all autoencoder variants.
-    The ensemble creates diverse autoencoder models for improved robustness and performance
-    while maintaining full compatibility with all preset parameters.
-    """
+    """Streamlined AutoencoderEnsemble using centralized configuration initialization."""
     
     def __init__(
         self,
@@ -36921,7 +36688,7 @@ def load_autoencoder_model(
     **kwargs
 ) -> Union[SimpleAutoencoder, EnhancedAutoencoder, AutoencoderEnsemble]:
     """
-    Load autoencoder with automatic architecture detection and comprehensive config handling.
+    Load autoencoder with automatic architecture detection and config handling.
     
     This function supports loading all three autoencoder types (SimpleAutoencoder,
     EnhancedAutoencoder, AutoencoderEnsemble) with full configuration compatibility.
@@ -36933,10 +36700,10 @@ def load_autoencoder_model(
         config: Optional configuration dictionary for model parameters
         model_type: Force specific model type ('SimpleAutoencoder', 'EnhancedAutoencoder', 'AutoencoderEnsemble')
         **kwargs: Additional parameters passed to model constructors
-        
+    
     Returns:
         Loaded model instance with proper configuration
-        
+    
     Raises:
         FileNotFoundError: If model file doesn't exist
         RuntimeError: If model loading fails
@@ -37343,7 +37110,7 @@ def save_autoencoder_model(
     include_training_state: bool = True
 ) -> None:
     """
-    Save autoencoder model with comprehensive metadata and configuration.
+    Save autoencoder model with metadata and configuration.
     
     Args:
         model: Model instance to save
@@ -37411,7 +37178,7 @@ def create_autoencoder_from_config(
     Args:
         config: Configuration dictionary
         model_type: Force specific model type
-        
+    
     Returns:
         Created model instance
     """
@@ -37468,7 +37235,7 @@ def get_preprocessing_outputs(
         - Configuration dictionary from the test run (or None if not found)
         - Summary dictionary from preprocessing (or None if not found)
     
-    Example usage in another script:
+    Example usage:
         csv_path, pkl_path, test_config, preprocess_summary = get_preprocessing_outputs(
             config_path="results/preprocessing/run_001/",
             interactive=False
@@ -42524,11 +42291,11 @@ def create_synthetic_data_pipeline(
     config: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Create a comprehensive synthetic data generation pipeline based on configuration.
+    Create a synthetic data generation pipeline based on configuration.
     
     Args:
         config: Complete configuration dictionary
-        
+    
     Returns:
         Synthetic data pipeline configuration
     """
@@ -42752,9 +42519,7 @@ class EnhancedCollateFn:
                 self.base_collate = default_collate
 
 class WorkerInitializer:
-    """
-    Picklable worker initialization class for DataLoader multiprocessing support.
-    """
+    """Picklable worker initialization class for DataLoader multiprocessing support."""
     
     def __init__(self, config=None):
         """
@@ -42838,7 +42603,7 @@ def create_enhanced_collate_fn(config=None, dtype=torch.float32, error_handling=
         config: Configuration dictionary containing processing parameters
         dtype: Target PyTorch data type for tensors
         error_handling: Error handling strategy ('strict' or 'graceful')
-        
+    
     Returns:
         EnhancedCollateFn instance that can be used as a collate function
     """
@@ -44520,7 +44285,7 @@ def _adapt_batch_size(
         metrics: Current training metrics
         device: Device being used
         logger: Logger instance
-        
+    
     Returns:
         New batch size
     """
@@ -44595,7 +44360,7 @@ def _create_variable_batch_iterator(
         batch_processing_state: Batch processing state dictionary
         device: Target device
         non_blocking_transfer: Whether to use non-blocking transfers
-        
+    
     Yields:
         (batch_idx, batch) tuples with potentially variable batch sizes
     """
@@ -53497,6 +53262,7 @@ def train_model_interactive(
     **kwargs
 ) -> Optional[Dict[str, Any]]:
     """Interactive model training setup with context display and error handling."""
+    
     try:
         # Clear screen and show banner with config
         print("\033c", end="")
@@ -53831,12 +53597,8 @@ def _interactive_express_setup(
     use_real_data: Optional[bool],
     **kwargs
 ) -> Optional[Dict[str, Any]]:
-    """
-    Interactive express setup for quick model training configuration.
+    """Interactive express setup for quick model training configuration."""
     
-    Provides a streamlined setup process with smart defaults while maintaining
-    full compatibility with the centralized configuration system.
-    """
     try:
         # Clear screen and show banner
         print("\033c", end="")
@@ -55220,12 +54982,8 @@ def _interactive_preset_setup(
     use_real_data: Optional[bool],
     **kwargs
 ) -> Optional[Dict[str, Any]]:
-    """
-    Interactive preset configuration setup with context integration.
+    """Interactive preset configuration setup with context integration."""
     
-    Provides a streamlined preset selection experience while maintaining full
-    compatibility with the centralized configuration system.
-    """
     try:
         # Clear screen and show banner
         print("\033c", end="")
@@ -57884,7 +57642,10 @@ def _interactive_custom_setup(
         )
         return None
 
-def _launch_training_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
+def _launch_training_with_config(
+    config: Dict[str, Any],
+    **kwargs
+) -> Optional[Dict[str, Any]]:
     try:
         training_params = {}
         
@@ -58097,7 +57858,10 @@ def _merge_configs(base_config: Dict[str, Any], preset_config: Dict[str, Any]) -
     
     return merged
 
-def _apply_model_type_defaults(config: Dict[str, Any], model_type: str) -> None:
+def _apply_model_type_defaults(
+    config: Dict[str, Any],
+    model_type: str
+) -> None:
     model_config = config.setdefault('model', {})
     training_config = config.setdefault('training', {})
     hardware_config = config.setdefault('hardware', {})
@@ -58303,7 +58067,11 @@ def _apply_model_type_defaults(config: Dict[str, Any], model_type: str) -> None:
     security_config.setdefault('ensemble_voting', 'average' if model_type == 'AutoencoderEnsemble' else None)
     security_config.setdefault('uncertainty_threshold', None)
 
-def _estimate_training_time(epochs: int, model_type: str, batch_size: int = 64) -> str:
+def _estimate_training_time(
+    epochs: int,
+    model_type: str,
+    batch_size: int = 64
+) -> str:
     base_time_per_epoch = {
         'SimpleAutoencoder': 3.0,
         'EnhancedAutoencoder': 8.0,
@@ -58355,7 +58123,9 @@ def _estimate_training_time(epochs: int, model_type: str, batch_size: int = 64) 
             remaining_hours = hours % 24
             return f"{days}d {remaining_hours}h"
 
-def _display_training_results(results: Dict[str, Any]) -> None:
+def _display_training_results(
+    results: Dict[str, Any]
+) -> None:
     try:
         print("\n" + "="*40)
         print("TRAINING RESULTS SUMMARY")
@@ -59764,7 +59534,9 @@ def train_model_quick(
         
         return {'success': False, 'error': str(e), 'message': 'Quick training setup failed'}
 
-def train_model_custom(config: Optional[Dict[str, Any]] = None):
+def train_model_custom(
+    config: Optional[Dict[str, Any]] = None
+):
     """Custom model training configuration with context display and error handling."""
     try:
         # Clear screen and show banner with config
@@ -68149,7 +67921,10 @@ def run_hyperparameter_optimization(
         except Exception:
             pass
 
-def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[str, Any]]:
+def _launch_hpo_with_config(
+    config: Dict[str, Any],
+    **kwargs
+) -> Optional[Dict[str, Any]]:
     """
     Launch hyperparameter optimization with configuration support and error handling.
     
@@ -69258,7 +69033,10 @@ def _launch_hpo_with_config(config: Dict[str, Any], **kwargs) -> Optional[Dict[s
         _display_hpo_results(unexpected_error_result)
         return unexpected_error_result
 
-def hpo_training_menu(config: Optional[Dict[str, Any]] = None, **kwargs):
+def hpo_training_menu(
+    config: Optional[Dict[str, Any]] = None,
+    **kwargs
+):
     """Menu for hyperparameter optimization options with context display and error handling."""
     while True:
         # Clear screen and show banner
@@ -71986,7 +71764,10 @@ def _run_hpo_model_comparison(
         
         return None
 
-def _display_model_comparison_summary(result: Dict[str, Any], models: List[str]) -> None:
+def _display_model_comparison_summary(
+    result: Dict[str, Any],
+    models: List[str]
+) -> None:
     """
     Display summary of model comparison results with context.
     
@@ -71996,7 +71777,7 @@ def _display_model_comparison_summary(result: Dict[str, Any], models: List[str])
     """
     try:
         print(Fore.CYAN + Style.BRIGHT + "\n" + "-"*40)
-        print(Fore.MAGENTA + Style.BRIGHT + "DETAILED MODEL COMPARISON SUMMARY")
+        print(Fore.MAGENTA + Style.BRIGHT + "MODEL COMPARISON SUMMARY")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         
         # Extract metadata and context from result
@@ -72363,7 +72144,10 @@ def _display_model_comparison_summary(result: Dict[str, Any], models: List[str])
         print(Fore.RED + Style.BRIGHT + "  ├─ Error details: " + Fore.YELLOW + Style.BRIGHT + f"{str(e)}")
         print(Fore.RED + Style.BRIGHT + "  └─ Basic results are still available above.")
 
-def _handle_hpo_result(result: Optional[Dict[str, Any]], hpo_type: str) -> None:
+def _handle_hpo_result(
+    result: Optional[Dict[str, Any]],
+    hpo_type: str
+) -> None:
     """
     Handle and display HPO results with formatting and context awareness.
     
@@ -72569,12 +72353,7 @@ def _interactive_hpo_express_setup(
     model_types: Optional[List[str]] = None,
     **kwargs
 ) -> Optional[Dict[str, Any]]:
-    """
-    Interactive express HPO setup for quick hyperparameter optimization configuration.
-    
-    Provides a streamlined HPO setup process with smart defaults while maintaining
-    full compatibility with the centralized configuration system and preset configurations.
-    """
+    """Interactive express HPO setup for quick hyperparameter optimization configuration."""
     try:
         # Clear screen and show banner
         print("\033c", end="")
@@ -74236,12 +74015,7 @@ def _interactive_hpo_preset_setup(
     model_types: Optional[List[str]] = None,
     **kwargs
 ) -> Optional[Dict[str, Any]]:
-    """
-    Interactive HPO preset configuration setup with context integration.
-    
-    Provides a streamlined HPO preset selection experience while maintaining full
-    compatibility with the centralized configuration system.
-    """
+    """Interactive HPO preset configuration setup with context integration."""
     try:
         # Clear screen and show banner for consistency
         print("\033c", end="")
@@ -75570,8 +75344,8 @@ def _interactive_hpo_custom_setup(
     **kwargs
 ) -> Optional[Dict[str, Any]]:
     """
-    Enhanced full custom HPO configuration with complete parameter compatibility.
-    Updated to align with preset configurations: STABILITY, PERFORMANCE, BASELINE, 
+    Full custom HPO configuration with complete parameter compatibility.
+    Updated to align with preset configurations: STABILITY, PERFORMANCE, BASELINE,
     DEBUG, LIGHTWEIGHT, ADVANCED, and DEFAULT presets.
     
     Args:
@@ -75595,7 +75369,7 @@ def _interactive_hpo_custom_setup(
         force_express: Force express mode even if other options specified
         model_types: List of model types for comparison
         **kwargs: Additional parameters for forward compatibility
-        
+    
     Returns:
         Dictionary with HPO results or None if cancelled/failed
     """
@@ -77465,7 +77239,7 @@ def _interactive_hpo_continue_setup(
     **kwargs
 ) -> Optional[Dict[str, Any]]:
     """
-    Enhanced setup to continue an existing HPO study with full parameter compatibility.
+    Setup to continue an existing HPO study with full parameter compatibility.
     
     Args:
         base_config: Base configuration to use
@@ -77488,7 +77262,7 @@ def _interactive_hpo_continue_setup(
         force_express: Force express mode even if other options specified
         model_types: List of model types for comparison
         **kwargs: Additional parameters passed from main function
-        
+    
     Returns:
         Dictionary with HPO results or None if cancelled/failed
     """
@@ -78977,7 +78751,7 @@ def _display_hpo_results(results: Dict[str, Any]) -> None:
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Intensity: {Fore.YELLOW + Style.BRIGHT}{express_intensity}")
             print(Fore.GREEN + Style.BRIGHT + f"  ├─ Focus: {Fore.YELLOW + Style.BRIGHT}{optimization_focus.title()}")
             print(Fore.GREEN + Style.BRIGHT + f"  └─ System Class: {Fore.YELLOW + Style.BRIGHT}{system_class.upper()}")
-
+        
         # Handle failure cases with error information
         if not success:
             error_msg = results.get('error', 'Unknown error occurred')
@@ -79002,7 +78776,7 @@ def _display_hpo_results(results: Dict[str, Any]) -> None:
                 print(Fore.YELLOW + Style.BRIGHT + "\nProgress Before Failure:")
                 print(Fore.GREEN + Style.BRIGHT + f"  ├─ Stages Completed: {stages_completed}/{Fore.YELLOW + Style.BRIGHT}{total_stages}")
                 print(Fore.GREEN + Style.BRIGHT + f"  └─ Failed During: {Fore.RED + Style.BRIGHT}{current_stage}")
-
+            
             # Show continuation information if this was a continuation attempt
             continuation_info = results.get('launch_config', {}).get('continuation_info')
             if continuation_info:
@@ -79028,7 +78802,6 @@ def _display_hpo_results(results: Dict[str, Any]) -> None:
                     best_params = results.get('best_params', {})
                     if best_params:
                         print(Fore.GREEN + Style.BRIGHT + f"  └─ Best Parameters (Top 10):")
-                        # Display top 10 parameters in organized format
                         param_items = list(best_params.items())[:10]
                         for i, (param, value) in enumerate(param_items, 1):
                             prefix = "      └─ " if i == len(param_items) else "      ├─ "
@@ -79943,7 +79716,7 @@ def export_to_onnx(
     config: Optional[Dict] = None
 ) -> Optional[Path]:
     """
-    Export model to ONNX format with memory protection and comprehensive error handling.
+    Export model to ONNX format with memory protection and error handling.
     
     Args:
         model: PyTorch model to export
@@ -80105,7 +79878,7 @@ def validate_onnx_model(
     strict: bool = False
 ) -> Dict:
     """
-    Memory-safe ONNX model validation with comprehensive error handling.
+    Memory-safe ONNX model validation with error handling.
     
     Args:
         model: PyTorch model to validate against
@@ -80131,10 +79904,7 @@ def validate_onnx_model(
             onnx.checker.check_model(onnx_model)
             
             # 2. Runtime validation
-            ort_session = ort.InferenceSession(
-                str(onnx_path),
-                providers=['CPUExecutionProvider']
-            )
+            ort_session = ort.InferenceSession(str(onnx_path), providers=['CPUExecutionProvider'])
             
             # Create test input in chunks to reduce memory usage
             input_shape = onnx_model.graph.input[0].type.tensor_type.shape.dim[1].dim_value
@@ -80194,7 +79964,7 @@ def create_export_metadata(
     validation_result: Optional[Dict],
     memory_stats: Dict
 ) -> Dict:
-    """Generate comprehensive export metadata"""
+    """Generate export metadata"""
     return {
         "export_timestamp": datetime.now().isoformat(),
         "model_type": type(model).__name__,
@@ -80213,7 +79983,10 @@ def create_export_metadata(
         "config": config.get('system', {}).get('onnx_export', {})
     }
 
-def save_metadata(metadata: Dict, path: Path) -> None:
+def save_metadata(
+    metadata: Dict,
+    path: Path
+) -> None:
     """Safely save metadata with error handling"""
     try:
         with open(path, 'w') as f:
@@ -80435,7 +80208,10 @@ def save_tensorboard_data(
         logger.error(f"Failed to save TensorBoard data: {str(e)}")
         return saved_files
 
-def prompt_user(prompt: str, default: bool = True) -> bool:
+def prompt_user(
+    prompt: str,
+    default: bool = True
+) -> bool:
     """Interactive user prompt with default handling."""
     while True:
         response = input(f"{prompt} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
@@ -80447,7 +80223,9 @@ def prompt_user(prompt: str, default: bool = True) -> bool:
             return False
         print("Please answer yes/y or no/n")
 
-def show_banner(return_config=False) -> None:
+def show_banner(
+    return_config=False
+) -> None:
     """Display the application banner"""
     # ASCII art banner
     console.print("\n" , Panel.fit(
@@ -80469,8 +80247,8 @@ def show_banner(return_config=False) -> None:
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⠇⠀⠀⠀⠀⠀⠀⠀
 
     """,
-        style="bold cyan", 
-        title="[bold yellow]GreyChamp | IDS[/]", 
+        style="bold cyan",
+        title="[bold yellow]GreyChamp | IDS[/]",
         subtitle="[magenta]DEEP LEARNING SUITE[/]",
         border_style="bold blue",
         box=box.DOUBLE,
@@ -80569,7 +80347,9 @@ def show_banner(return_config=False) -> None:
         if return_config:
             return {}
 
-def print_main_menu(config: Optional[Dict[str, Any]] = None):
+def print_main_menu(
+    config: Optional[Dict[str, Any]] = None
+):
     """Print the main menu options with context display."""
     
     # Get configuration context if available
@@ -80924,7 +80704,9 @@ def interactive_main():
                 print(Fore.YELLOW + Style.BRIGHT + "Goodbye!" + Style.RESET_ALL)
                 break
 
-def model_training_menu(config: Optional[Dict[str, Any]] = None):
+def model_training_menu(
+    config: Optional[Dict[str, Any]] = None
+):
     """Menu for model training options with context display and error handling."""
     while True:
         # Clear screen and show banner
@@ -81389,7 +81171,7 @@ def configuration_menu():
                     print(Fore.WHITE + Style.BRIGHT + "- Display formatting issues")
                     print(Fore.WHITE + Style.BRIGHT + "- System resource constraints")
                     print(Fore.RED + Style.BRIGHT + "-" * 40)
-                    
+            
             elif choice == "2":
                 try:
                     save_config_interactive()
@@ -83125,7 +82907,9 @@ def run_performance_benchmark_interactive():
     except (EOFError, KeyboardInterrupt):
         print(Fore.RED + Style.BRIGHT + "\nReturning to main menu...")
 
-def run_performance_benchmark(args: argparse.Namespace) -> None:
+def run_performance_benchmark(
+    args: argparse.Namespace
+) -> None:
     """Run performance benchmark across different configurations with error handling and reporting."""
     try:
         logger.info("Running performance benchmark...")
@@ -83152,7 +82936,7 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
         # Display benchmark progress header
         console.print(
             Panel.fit(
-                f"[bold cyan]Running {total_configs} benchmark configurations...[/bold cyan]",
+                f"Running {total_configs} benchmark configurations...",
                 title="BENCHMARK PROGRESS",
                 style="bold cyan",
                 border_style="cyan",
@@ -83228,7 +83012,7 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
                 )
                 console.print(
                     Panel.fit(
-                        f"[bold green]{success_message}[/bold green]",
+                        f"{success_message}",
                         title=f"BENCHMARK COMPLETE - {name.upper()}",
                         style="bold green",
                         border_style="green",
@@ -83236,7 +83020,7 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
                         box=box.ROUNDED
                     )
                 )
-                
+            
             except Exception as e:
                 duration = time.time() - start_time
                 results[name] = {
@@ -83255,7 +83039,7 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
                 )
                 console.print(
                     Panel.fit(
-                        f"[bold red]{error_message}[/bold red]",
+                        f"{error_message}",
                         title=f"BENCHMARK FAILED - {name.upper()}",
                         style="bold red",
                         border_style="red",
@@ -83286,7 +83070,7 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
         # Results display
         console.print(
             Panel.fit(
-                f"[bold cyan]Benchmark Complete![/bold cyan]\n\n"
+                f"Benchmark Complete!\n\n"
                 f"Results saved to: {benchmark_path}\n"
                 f"Total configurations: {total_configs}\n"
                 f"Successful: {benchmark_metadata['successful_runs']}\n"
@@ -83304,12 +83088,10 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
         logger.info("=" * 70)
         for name, result in results.items():
             if result['success']:
-                logger.info(f"{name:>10}: {result['duration']:6.1f}s | Loss: {result['final_loss']:.4f} | "
-                           f"Params: {result['parameters']:,} | Acc: {result['training_accuracy']:.2%} | "
-                           f"Memory: {result['memory_usage']:.1f}MB")
+                logger.info(f"{name:>10}: {result['duration']:6.1f}s | Loss: {result['final_loss']:.4f} | Params: {result['parameters']:,} | Acc: {result['training_accuracy']:.2%} | Memory: {result['memory_usage']:.1f}MB")
             else:
                 logger.info(f"{name:>10}: {result['duration']:6.1f}s | FAILED: {result['error']}")
-        
+    
     except Exception as e:
         logger.error(f"Performance benchmark execution error: {e}", exc_info=True)
         message = (
@@ -83320,7 +83102,7 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
         )
         console.print(
             Panel.fit(
-                f"[bold red]{message}[/bold red]",
+                f"{message}",
                 title="BENCHMARK CRITICAL ERROR",
                 style="bold red",
                 border_style="red",
@@ -83331,11 +83113,11 @@ def run_performance_benchmark(args: argparse.Namespace) -> None:
         raise
 
 def show_system_info():
-    """Enhanced system information display leveraging comprehensive get_system_info() analysis.
+    """System information display leveraging get_system_info() analysis.
     
     This function provides a rich, detailed system overview using Rich tables
-    for improved readability and organization. Now fully integrated with the
-    enhanced get_system_info() capabilities including performance metrics,
+    for improved readability and organization. Now fully integrated with
+    get_system_info() capabilities including performance metrics,
     memory optimization, and detailed analysis.
     """
     try:
@@ -83391,7 +83173,6 @@ def show_system_info():
             config_source = config["metadata"].get("config_source", "Unknown")
         
         # Menu display with context
-        #print(Fore.YELLOW + Style.BRIGHT + "\n" + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + "SYSTEM INFORMATION & ANALYSIS")
         print(Fore.CYAN + Style.BRIGHT + "-"*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Active System Context:")
@@ -83411,34 +83192,9 @@ def show_system_info():
             )
             analysis_available = True
             collection_successful = system_info.get('collection_metadata', {}).get('success', True)
-            
+        
         except Exception as e:
             logger.error(f"Failed to generate comprehensive system analysis: {e}")
-            
-            # Display errors with context
-            message = (
-                f"Failed to generate comprehensive system analysis: {str(e)}\n"
-                f"Context:\n"
-                f"- Current Preset: {preset_name}\n"
-                f"- Model Type: {model_type}\n"
-                f"- Config Source: {config_source}\n\n"
-                f"This could be due to:\n"
-                f"- System resource constraints\n"
-                f"- Hardware detection issues\n"
-                f"- Missing system dependencies\n"
-                f"- Permission or access problems\n\n"
-                f"Attempting fallback analysis..."
-            )
-            console.print(
-                Panel.fit(
-                    f"{message}",
-                    title="ANALYSIS WARNING",
-                    style="bold yellow",
-                    border_style="yellow",
-                    padding=(1, 2),
-                    box=box.ROUNDED
-                )
-            )
             
             # Fallback to basic hardware check
             try:
@@ -83455,30 +83211,7 @@ def show_system_info():
                 collection_successful = False
             except Exception as fallback_error:
                 logger.error(f"Fallback hardware check also failed: {fallback_error}")
-                message = (
-                    f"Critical: Comprehensive system analysis failed\n"
-                    f"Primary Error: {str(e)}\n"
-                    f"Fallback Error: {str(fallback_error)}\n\n"
-                    f"Context:\n"
-                    f"- Current Preset: {preset_name}\n"
-                    f"- Model Type: {model_type}\n\n"
-                    f"This indicates serious system issues that may affect\n"
-                    f"application functionality. Please check:\n"
-                    f"1. System resource availability\n"
-                    f"2. Hardware detection permissions\n"
-                    f"3. Required system dependencies\n"
-                    f"4. System logs for detailed errors"
-                )
-                console.print(
-                    Panel.fit(
-                        f"{message}",
-                        title="CRITICAL ANALYSIS FAILURE",
-                        style="bold red",
-                        border_style="red",
-                        padding=(1, 2),
-                        box=box.ROUNDED
-                    )
-                )
+                
                 system_info = {
                     'collection_metadata': {
                         'success': False,
@@ -83491,7 +83224,7 @@ def show_system_info():
         
         # Create main system info table
         main_table = Table(
-            title="\n[bold yellow]COMPREHENSIVE SYSTEM INFORMATION & ANALYSIS[/bold yellow]",
+            title="\nSYSTEM INFORMATION & ANALYSIS",
             box=box.ROUNDED,
             header_style="bold yellow",
             border_style="magenta",
@@ -83507,7 +83240,7 @@ def show_system_info():
         main_table.add_column("Status", width=12, justify="center")
         main_table.add_column("Details", style="bold", min_width=50, max_width=75)
         
-        # COLLECTION METADATA & PERFORMANCE
+        # Collection metadata and performance
         if analysis_available and 'collection_metadata' in system_info:
             metadata = system_info['collection_metadata']
             collection_quality = metadata.get('data_quality', 'unknown')
@@ -83525,7 +83258,7 @@ def show_system_info():
             # Data quality
             quality_colors = {
                 'excellent': "bold green",
-                'good': "bold green", 
+                'good': "bold green",
                 'acceptable': "bold yellow",
                 'degraded': "bold yellow",
                 'poor': "bold red",
@@ -83572,7 +83305,7 @@ def show_system_info():
                 system_info.get('timestamp', 'unknown')
             )
         
-        # PLATFORM & SYSTEM INFORMATION
+        # Platform and system information
         main_table.add_row(
             Text("PLATFORM & SYSTEM", style="bold white on blue"),
             "",
@@ -83584,10 +83317,11 @@ def show_system_info():
             
             # System with boot time if available
             system_detail = f"{platform_info.get('system', 'Unknown')} {platform_info.get('release', '')}"
+            
             if platform_info.get('boot_time'):
                 boot_time = platform_info['boot_time'][:19].replace('T', ' ')
                 system_detail += f" | Boot: {boot_time}"
-                
+            
             main_table.add_row(
                 "Operating System",
                 Text("INFO", style="bold blue"),
@@ -83597,6 +83331,7 @@ def show_system_info():
             # Platform architecture info
             arch_info = platform_info.get('architecture', ['Unknown', ''])
             platform_detail = platform_info.get('platform', 'Unknown')
+            
             if len(arch_info) > 1 and arch_info[1]:
                 platform_detail += f" ({arch_info[0]} - {arch_info[1]})"
             else:
@@ -83612,9 +83347,10 @@ def show_system_info():
             processor = platform_info.get('processor', 'Unknown')
             processor_detail = processor[:60] + "..." if len(processor) > 60 else processor
             machine = platform_info.get('machine', '')
+            
             if machine and machine not in processor_detail:
                 processor_detail += f" ({machine})"
-                
+            
             main_table.add_row(
                 "Processor",
                 Text("INFO", style="bold blue"),
@@ -83626,6 +83362,7 @@ def show_system_info():
                 Text("INFO", style="bold blue"),
                 platform_info.get('node', 'Unknown')
             )
+        
         else:
             # Fallback to basic platform info
             main_table.add_row(
@@ -83646,7 +83383,7 @@ def show_system_info():
                 platform.node()
             )
         
-        # PYTHON ENVIRONMENT
+        # Python environment
         main_table.add_row(
             Text("PYTHON ENVIRONMENT", style="bold white on blue"),
             "",
@@ -83660,9 +83397,10 @@ def show_system_info():
             # Version string with implementation
             version_str = f"Python {version_info.get('major', '?')}.{version_info.get('minor', '?')}.{version_info.get('micro', '?')}"
             implementation = python_info.get('implementation', 'Unknown')
+            
             if implementation != 'CPython':
                 version_str += f" ({implementation})"
-                
+            
             main_table.add_row(
                 "Python Version",
                 Text("INFO", style="bold blue"),
@@ -83673,9 +83411,10 @@ def show_system_info():
             build_info = python_info.get('build', ['Unknown', ''])
             compiler = python_info.get('compiler', 'Unknown')
             build_detail = f"{build_info[0] if build_info else 'Unknown'}"
+            
             if compiler != 'Unknown' and compiler not in build_detail:
                 build_detail += f" | {compiler}"
-                
+            
             main_table.add_row(
                 "Build & Compiler",
                 Text("INFO", style="bold blue"),
@@ -83686,6 +83425,7 @@ def show_system_info():
             executable = python_info.get('executable', 'Unknown')
             if len(executable) > 50:
                 executable = "..." + executable[-47:]
+            
             main_table.add_row(
                 "Executable Path",
                 Text("INFO", style="bold blue"),
@@ -83696,6 +83436,7 @@ def show_system_info():
             encoding = python_info.get('encoding', {})
             encoding_detail = f"Default: {encoding.get('default', 'Unknown')}"
             fs_encoding = encoding.get('filesystem', '')
+            
             if fs_encoding and fs_encoding != encoding.get('default'):
                 encoding_detail += f" | Filesystem: {fs_encoding}"
                 
@@ -83713,6 +83454,7 @@ def show_system_info():
                 Text("INFO", style="bold blue"),
                 f"Loaded modules: {modules_count} | Path entries: {path_count}"
             )
+        
         else:
             # Fallback Python info
             version_parts = sys.version.split()
@@ -83725,13 +83467,14 @@ def show_system_info():
             executable = sys.executable
             if len(executable) > 50:
                 executable = "..." + executable[-47:]
+            
             main_table.add_row(
                 "Executable Path",
                 Text("INFO", style="bold blue"),
                 executable
             )
         
-        # PACKAGE ENVIRONMENT
+        # Package environment
         if 'package_versions' in system_info and 'package_analysis' in system_info:
             pkg_analysis = system_info['package_analysis']
             env_health = pkg_analysis.get('environment_health', {})
@@ -83746,7 +83489,7 @@ def show_system_info():
             health_status = env_health.get('overall_status', 'unknown')
             health_colors = {
                 'healthy': "bold green",
-                'degraded': "bold yellow", 
+                'degraded': "bold yellow",
                 'critical': "bold red"
             }
             health_style = health_colors.get(health_status, "bold yellow")
@@ -83755,6 +83498,7 @@ def show_system_info():
             health_detail = f"Compatibility: {compat_score:.1f}% | Completeness: {complete_score:.1f}%"
             critical_issues = env_health.get('critical_issues', 0)
             warnings_count = env_health.get('warnings', 0)
+            
             if critical_issues > 0 or warnings_count > 0:
                 health_detail += f" | Issues: {critical_issues} critical, {warnings_count} warnings"
             
@@ -83769,11 +83513,12 @@ def show_system_info():
             total_packages = pkg_analysis.get('total_packages', 0)
             available_packages = pkg_analysis.get('available_packages', 0)
             status_details = []
+            
             for status, count in status_summary.items():
                 if count > 0:
                     status_color = "green" if status == "OK" else "yellow" if status == "WARNING" else "red"
                     status_details.append(f"[{status_color}]{status}: {count}[/{status_color}]")
-                    
+            
             main_table.add_row(
                 "Package Status",
                 Text("INFO", style="bold blue"),
@@ -83792,6 +83537,7 @@ def show_system_info():
                     if possible_key in packages:
                         pkg_info = packages[possible_key]
                         break
+                
                 if pkg_info:
                     status = pkg_info.get('status', 'UNKNOWN')
                     version = pkg_info.get('version', 'Unknown')
@@ -83821,7 +83567,7 @@ def show_system_info():
                     Text("ERROR", style="bold red"),
                     missing_display
                 )
-            
+        
         else:
             # Fallback package environment check
             main_table.add_row(
@@ -83861,7 +83607,7 @@ def show_system_info():
                     " | ".join(fallback_packages)
                 )
         
-        # HARDWARE ANALYSIS
+        # Hardware analysis
         if analysis_available and 'hardware_analysis' in system_info:
             hw_analysis = system_info['hardware_analysis']
             capabilities = hw_analysis.get('capabilities', {})
@@ -83905,6 +83651,7 @@ def show_system_info():
                 total = hw_analysis['components_detected']
                 warning = hw_analysis.get('components_warning', 0)
                 failed = hw_analysis.get('components_failed', 0)
+                
                 if total > 0:
                     components_info.append(f"Components: {healthy}/{total} healthy")
                     if warning > 0:
@@ -84092,6 +83839,7 @@ def show_system_info():
                     Text(f"{usage_percent:.1f}%", style=f"bold {usage_color}"),
                     f"Used: {used_gb:.1f}GB | Available: {free_gb:.1f}GB"
                 )
+        
         else:
             # Fallback hardware information
             main_table.add_row(
@@ -84119,6 +83867,7 @@ def show_system_info():
                     logical_cores = cpu_info.get('logical_cores', os.cpu_count() or 'Unknown')
                     physical_cores = cpu_info.get('physical_cores', 'Unknown')
                     cpu_detail = f"Logical: {logical_cores}"
+                    
                     if physical_cores != 'Unknown' and physical_cores != logical_cores:
                         cpu_detail += f" | Physical: {physical_cores}"
                     
@@ -84190,7 +83939,7 @@ def show_system_info():
                     cuda_detail
                 )
         
-        # CURRENT CONFIGURATION
+        # Current configuration
         if config:
             main_table.add_row(
                 Text("CURRENT CONFIGURATION", style="bold white on blue"),
@@ -84383,11 +84132,11 @@ def show_system_info():
         console.print(main_table)
         console.print()
         
-        # SYSTEM STATUS & HEALTH
+        # System status and health
         status_table = Table(
-            title="[bold yellow]SYSTEM STATUS & HEALTH[/bold yellow]",
+            title="SYSTEM STATUS & HEALTH",
             box=box.ROUNDED,
-            header_style="bold yellow",
+            header_style="bold magenta",
             border_style="white",
             title_style="bold yellow",
             title_justify="left",
@@ -84465,7 +84214,7 @@ def show_system_info():
             
             else:
                 status_table.add_row(
-                    "[bold cyan]Model Variants[/bold cyan]", 
+                    "[bold cyan]Model Variants[/bold cyan]",
                     Text("INIT", style="bold yellow"),
                     "Not initialized or empty", style="bold yellow"
                 )
@@ -84577,7 +84326,7 @@ def show_system_info():
             
             elif availability_score > 60:
                 opt_style = "bold blue"
-                opt_status = "GOOD"  
+                opt_status = "GOOD"
             
             elif availability_score > 40:
                 opt_style = "bold yellow"
@@ -84659,7 +84408,7 @@ def show_system_info():
         console.print(status_table)
         console.print()
         
-        # WARNINGS & RECOMMENDATIONS
+        # Warnings and recommendations
         if analysis_available and 'detailed_analysis' in system_info:
             analysis = system_info['detailed_analysis']
             
@@ -84674,11 +84423,10 @@ def show_system_info():
             
             if all_warnings:
                 recommendations_table = Table(
-                    title="[bold yellow]SYSTEM ANALYSIS & RECOMMENDATIONS[/bold yellow]",
-                    #box=box.ROUNDED,
+                    title="SYSTEM ANALYSIS & RECOMMENDATIONS",
                     box=box.DOUBLE_EDGE,
                     header_style="bold cyan",
-                    border_style="cyan", 
+                    border_style="cyan",
                     title_style="bold yellow",
                     title_justify="left",
                     show_lines=True,
@@ -84735,12 +84483,12 @@ def show_system_info():
             
             if errors or warnings:
                 issues_table = Table(
-                    title="[bold red]COLLECTION ISSUES[/bold red]" if errors else "[bold yellow]COLLECTION WARNINGS[/bold yellow]",
+                    title="COLLECTION ISSUES" if errors else "COLLECTION WARNINGS",
                     box=box.ROUNDED,
                     header_style="bold white",
                     border_style="red" if errors else "yellow",
                     title_style="bold red" if errors else "bold yellow",
-                    title_justify="left", 
+                    title_justify="left",
                     show_lines=True,
                     expand=True,
                     width=min(120, console.width - 4)
@@ -84783,14 +84531,12 @@ def show_system_info():
     
     except Exception as e:
         error_msg = f"CRITICAL ERROR in show_system_info(): {e}"
-        console.print(f"[bold red]{error_msg}[/bold red]")
-        console.print("This indicates a serious system issue that should be investigated.")
         logger.error(error_msg, exc_info=True)
         
         # Last resort basic info with error handling
         try:
             basic_table = Table(
-                title="[bold red]BASIC SYSTEM INFO (EMERGENCY FALLBACK)[/bold red]",
+                title="BASIC SYSTEM INFO (EMERGENCY FALLBACK)",
                 box=box.SIMPLE,
                 show_header=False,
                 width=min(80, console.width - 4),
@@ -84836,11 +84582,11 @@ def show_system_info():
                     basic_table.add_row("CUDA Support", cuda_status)
                 except:
                     basic_table.add_row("CUDA Support", "Unknown")
-                
+            
             basic_table.add_row("Error Context", str(e)[:50] + "..." if len(str(e)) > 50 else str(e))
             
             console.print(basic_table)
-            
+        
         except Exception as basic_error:
             console.print(f"[bold red]Even basic system info failed: {basic_error}[/bold red]")
             console.print(f"[bold red]Original error: {e}[/bold red]")
@@ -84886,7 +84632,7 @@ def select_preset_config():
         elif isinstance(current_preset, str):
             current_preset = current_preset.title()
         
-        # Menu header with current context
+        # Menu header
         print(Fore.MAGENTA + Style.BRIGHT + "PRESET CONFIGURATION SELECTION")
         print(Fore.CYAN + Style.BRIGHT + "="*40)
         print(Fore.YELLOW + Style.BRIGHT + f"Current Context:")
@@ -84972,18 +84718,18 @@ def select_preset_config():
             title_style = "bold green" if name == current_preset else "bold white"
             
             detail_panel = Panel.fit(
-                f"[bold]Description:[/bold] {description}\n"
-                f"[bold]Training:[/bold] {training_config.get('epochs', 'N/A')} epochs, "
+                f"Description: {description}\n"
+                f"Training: {training_config.get('epochs', 'N/A')} epochs, "
                 f"Batch: {training_config.get('batch_size', 'N/A')}, "
                 f"LR: {training_config.get('learning_rate', 'N/A')}\n"
-                f"[bold]Model:[/bold] {model_config.get('model_type', 'N/A')}, "
+                f"Model: {model_config.get('model_type', 'N/A')}, "
                 f"Encoding: {model_config.get('encoding_dim', 'N/A')}, "
                 f"Hidden: {len(model_config.get('hidden_dims', []))} layers\n"
-                f"[bold]Data:[/bold] Samples: {data_config.get('normal_samples', 'N/A')}, "
+                f"Data: Samples: {data_config.get('normal_samples', 'N/A')}, "
                 f"Path: {data_config.get('data_path', 'N/A')}\n"
-                f"[bold]Security:[/bold] Threshold: {security_config.get('attack_threshold', 'N/A')}, "
+                f"Security: Threshold: {security_config.get('attack_threshold', 'N/A')}, "
                 f"Percentile: {security_config.get('percentile', 'N/A')}%",
-                title=f"[{i}] {name.title()}",
+                title=f"{i} {name.title()}",
                 style=title_style,
                 border_style=border_style,
                 padding=(1, 2)
@@ -85007,7 +84753,7 @@ def select_preset_config():
                     continue
             
             except (EOFError, KeyboardInterrupt):
-                print(Fore.RED + Style.BRIGHT + "\nSelection cancelled...")
+                print(Fore.RED + Style.BRIGHT + "\nSelection cancelled")
                 return
         
         if choice == "0":
@@ -85031,17 +84777,17 @@ def select_preset_config():
                 
                 # Show confirmation pane
                 confirm_panel = Panel.fit(
-                    f"[bold]Selected Preset:[/bold] [green]{preset_name.title()}[/green]\n"
-                    f"[bold]Description:[/bold] {description}\n"
-                    f"[bold]Model Type:[/bold] {preset_model_config.get('model_type', 'N/A')}\n"
-                    f"[bold]Training:[/bold] {preset_training_config.get('epochs', 'N/A')} epochs, "
+                    f"Selected Preset: [bold magenta]{preset_name.title()}[/bold magenta]\n"
+                    f"Description: {description}\n"
+                    f"Model Type: {preset_model_config.get('model_type', 'N/A')}\n"
+                    f"Training: {preset_training_config.get('epochs', 'N/A')} epochs, "
                     f"Batch: {preset_training_config.get('batch_size', 'N/A')}, "
                     f"LR: {preset_training_config.get('learning_rate', 'N/A')}\n"
-                    f"[bold]Data:[/bold] Samples: {preset_data_config.get('normal_samples', 'N/A')}, "
+                    f"Data: Samples: {preset_data_config.get('normal_samples', 'N/A')}, "
                     f"Path: {preset_data_config.get('data_path', 'N/A')}",
-                    title="[bold]PRESET CONFIRMATION[/bold]",
-                    style="bold",
-                    border_style="green",
+                    title="PRESET CONFIRMATION",
+                    style="bold cyan",
+                    border_style="cyan",
                     padding=(1, 2),
                     box=box.ROUNDED
                 )
@@ -85116,10 +84862,10 @@ def select_preset_config():
                         
                         if verification_preset == preset_name:
                             success_panel = Panel.fit(
-                                f"[bold green]✓ Successfully applied preset: [bold yellow]{preset_name.title()}[/bold yellow][/bold green]\n"
-                                f"[bold green]Configuration updated with preset settings[/bold green]\n"
-                                f"[bold green]Active preset: {verification_preset}[/bold green]",
-                                title="[bold]SUCCESS[/bold]",
+                                f"✓ Successfully applied preset: [bold magenta]{preset_name.title()}[/bold magenta]\n"
+                                f"Configuration updated with preset settings\n"
+                                f"Active preset: {verification_preset}",
+                                title="SUCCESS",
                                 border_style="green",
                                 style="bold green",
                                 padding=(1, 2),
@@ -85134,26 +84880,26 @@ def select_preset_config():
                             
                             if preset_training or preset_model:
                                 changes_panel = Panel.fit(
-                                    f"[bold]Key Configuration Changes:[/bold]\n"
+                                    f"Key Configuration Changes:\n"
                                     f"Model Type: {preset_model.get('model_type', 'N/A')}\n"
                                     f"Epochs: {preset_training.get('epochs', 'N/A')}\n"
                                     f"Batch Size: {preset_training.get('batch_size', 'N/A')}\n"
                                     f"Learning Rate: {preset_training.get('learning_rate', 'N/A')}\n"
                                     f"Encoding Dim: {preset_model.get('encoding_dim', 'N/A')}\n"
                                     f"Data Samples: {preset_data.get('normal_samples', 'N/A')}",
-                                    title="[bold]APPLIED SETTINGS[/bold]",
-                                    border_style="blue",
-                                    style="bold blue",
+                                    title="APPLIED SETTINGS",
+                                    border_style="cyan",
+                                    style="bold cyan",
                                     padding=(1, 2),
                                     box=box.ROUNDED
                                 )
                                 console.print(changes_panel)
                         else:
                             error_panel = Panel.fit(
-                                f"[bold red]Warning: Preset application may not have completed successfully[/bold red]\n"
+                                f"Warning: Preset application may not have completed successfully\n"
                                 f"Expected: {preset_name}, Current: {verification_preset}\n\n"
                                 f"Please try again or check configuration files.",
-                                title="[bold]WARNING[/bold]",
+                                title="WARNING",
                                 border_style="yellow",
                                 style="bold yellow",
                                 padding=(1, 2),
@@ -85245,22 +84991,28 @@ def select_preset_config():
         )
         logger.error(f"Preset selection failed: {e}", exc_info=True)
 
-def show_current_config():
-    """Display current configuration in formatted rich tables for each section."""
-    config = None
+def show_current_config(
+    config: Optional[Dict[str, Any]] = None
+):
+    """Display current configuration."""
     try:
         # clear screen and show banner
         console.clear()
+        banner_config = show_banner(return_config=True)
         
-        # Get configuration from show_banner function
-        config = show_banner(return_config=True)
+        # Use the config returned from show_banner or fallback
+        if config is None and banner_config is not None:
+            config = banner_config
+        else:
+            config = get_current_config()
         
-        console.print("\n[bold yellow]CURRENT CONFIGURATION[/bold yellow]\n")
+        console.print("\nCURRENT CONFIGURATION\n", style="bold underline magenta")
         
         metadata = config.get('metadata', {})
         if metadata:
             meta_table = Table(
-                title="[bold yellow]Metadata[/bold yellow]",
+                title="Metadata",
+                title_style="bold yellow",
                 title_justify="left",
                 box=box.ROUNDED,
                 header_style="bold cyan",
@@ -85284,11 +85036,12 @@ def show_current_config():
             
             console.print(meta_table)
             console.print()
-
+        
         system_info = config.get('metadata', {}).get('system', {})
         if system_info:
             sys_table = Table(
-                title="[bold yellow]System Information[/bold yellow]",
+                title="System Information",
+                title_style="bold yellow",
                 title_justify="left",
                 box=box.ROUNDED,
                 header_style="bold cyan",
@@ -85307,7 +85060,7 @@ def show_current_config():
             
             console.print(sys_table)
             console.print()
-
+        
         sections = [
             ('training', 'Training Configuration', 'yellow'),
             ('model', 'Model Architecture', 'magenta'),
@@ -85315,10 +85068,10 @@ def show_current_config():
             ('data', 'Data Configuration', 'blue'),
             ('monitoring', 'Monitoring Settings', 'cyan'),
             ('hardware', 'Hardware Requirements', 'green'),
-            ('presets', 'Preset Information', 'bright_blue'),
-            ('hyperparameter_optimization', 'HPO Settings', 'bright_magenta'),
-            ('validation', 'Validation Settings', 'bright_yellow'),
-            ('experimental', 'Experimental Features', 'bright_red')
+            ('presets', 'Preset Information', 'blue'),
+            ('hyperparameter_optimization', 'HPO Settings', 'magenta'),
+            ('validation', 'Validation Settings', 'yellow'),
+            ('experimental', 'Experimental Features', 'red')
         ]
         
         for section_key, section_title, color in sections:
@@ -85326,7 +85079,8 @@ def show_current_config():
                 section_data = config[section_key]
                 
                 section_table = Table(
-                    title=f"[bold yellow]{section_title}[/bold yellow]",
+                    title=f"{section_title}",
+                    title_style="bold yellow",
                     title_justify="left",
                     box=box.ROUNDED,
                     header_style=f"bold {color}",
@@ -85379,7 +85133,7 @@ def show_current_config():
                                     formatted_value = "none"
                             else:
                                 formatted_value = f"{len(value)} parameters"
-                                
+                        
                         elif isinstance(value, list):
                             if key == 'hidden_dims':
                                 formatted_value = f"[{', '.join(map(str, value))}] ({len(value)} layers)"
@@ -85418,13 +85172,14 @@ def show_current_config():
                 
                 console.print(section_table)
                 console.print()
-
+        
         hardware = config.get('hardware', {})
         system_info = config.get('metadata', {}).get('system', {})
         
         if hardware and system_info:
             compat_table = Table(
-                title="[bold yellow]Hardware Compatibility Check[/bold yellow]",
+                title="Hardware Compatibility Check",
+                title_style="bold yellow",
                 title_justify="left",
                 box=box.ROUNDED,
                 header_style="bold yellow",
@@ -85476,7 +85231,7 @@ def show_current_config():
             
             console.print(compat_table)
             console.print()
-
+        
         presets = config.get('presets', {})
         runtime = config.get('runtime', {})
         current_preset = presets.get('current_preset')
@@ -85499,7 +85254,7 @@ def show_current_config():
             
             available_count = len(presets.get('available_presets', []))
             custom_count = len(presets.get('custom_presets_available', []))
-            last_applied = presets.get('last_applied', 'Unknown')
+            last_applied = presets.get('last_modified', 'Unknown')
             # Handle various timestamp formats
             if last_applied != 'Unknown':
                 try:
@@ -85511,17 +85266,16 @@ def show_current_config():
                         applied_dt = datetime.fromisoformat(last_applied)
                     last_applied = applied_dt.strftime('%Y-%m-%d %H:%M:%S')
                 except (ValueError, TypeError):
-                    # truncate if invalid
                     last_applied = str(last_applied)[:19]
             else:
                 last_applied = 'Unknown'
             
             preset_info_content.extend([
-                f"Active Preset: [bold green]{current_preset}[/bold green]",
-                f"Description: [dim]{description}[/dim]",
-                f"Available Presets: [bold]{available_count}[/bold]",
-                f"Custom Presets: [bold]{custom_count}[/bold]",
-                f"Last Applied: [dim]{last_applied}[/dim]"
+                f"Active Preset: [bold green]{current_preset.upper()}[/bold green]",
+                f"Description: [bold white]{description}[/bold white]",
+                f"Available Presets: [bold yellow]{available_count}[/bold yellow]",
+                f"Custom Presets: [bold green]{custom_count}[/bold green]",
+                f"Last Applied: [bold blue]{last_applied}[/bold blue]"
             ])
         else:
             preset_info_content.append("Active Preset: [bold yellow]None (custom configuration)[/bold yellow]")
@@ -85598,43 +85352,38 @@ def show_current_config():
         # Add runtime information to the content
         preset_info_content.extend([
             "",
-            f"Config Source: [bold blue]{config_source}[/bold blue]",
-            f"Loaded At: [dim]{loaded_str}[/dim]",
-            f"Health Status: [bold {health_color}]{health_status.upper()}[/bold {health_color}]",
-            f"Warnings: [bold yellow]{warning_count}[/bold yellow]",
-            f"Recommendations: [bold cyan]{recommendation_count}[/bold cyan]"
+            f"Config Source: [bold magenta]{config_source.replace('_', '').title()}[/bold magenta]",
+            f"Loaded At: [bold white]{loaded_str}[/bold white]",
+            f"Health Status: [bold {health_color}]{health_status.replace('_', ' ').upper()}[/bold {health_color}]",
+            f"Warnings: [bold red]{warning_count}[/bold red]",
+            f"Recommendations: [bold yellow]{recommendation_count}[/bold yellow]"
         ])
         
         # Create combined panel
         combined_panel = Panel.fit(
             "\n".join(preset_info_content),
-            title="[bold]Configuration Status & Runtime Information[/bold]",
+            title="Configuration Status & Runtime Information",
             border_style="cyan",
-            style="bold",
+            style="bold cyan",
             padding=(1, 2)
         )
         console.print(combined_panel)
-
+    
     except Exception as e:
-        console.print(f"[bold red]Failed to display configuration: {e}[/bold red]")
+        console.print(f"Failed to display configuration: {e}", style="bold red")
         try:
             if config is not None and isinstance(config, dict):
-                console.print("\n[bold yellow]Fallback: Configuration as JSON:[/bold yellow]")
+                console.print("\nFallback: Configuration as JSON:", style="bold yellow")
                 console.print(json.dumps(config, indent=2, default=str))
             else:
                 try:
                     fallback_config = get_current_config()
-                    console.print("\n[bold yellow]Fallback: Fresh configuration as JSON:[/bold yellow]")
+                    console.print("\nFallback: Fresh configuration as JSON:", style="bold yellow")
                     console.print(json.dumps(fallback_config, indent=2, default=str))
                 except Exception as fallback_error:
-                    console.print(f"[bold red]Could not retrieve configuration for fallback: {fallback_error}[/bold red]")
-                    console.print("[bold yellow]Minimal configuration information:[/bold yellow]")
-                    console.print("[bold yellow]Training: batch_size=32, epochs=100[/bold yellow]")
-                    console.print("[bold yellow]Model: SimpleAutoencoder with encoding_dim=8[/bold yellow]")
-                    console.print("[bold yellow]Status: Emergency fallback active[/bold yellow]")
+                    console.print(f"Could not retrieve configuration for fallback: [bold yellow]{fallback_error}[/bold yellow]", style="bold red")
         except Exception as fallback_error:
-            console.print(f"[bold red]Fallback display also failed: {fallback_error}[/bold red]")
-            console.print("[bold yellow]Configuration system requires attention[/bold yellow]")
+            console.print(f"Fallback display also failed: [bold yellow]{fallback_error}[/bold yellow]", style="bold red")
 
 def load_config_from_file():
     """Load configuration from file."""
@@ -85667,7 +85416,7 @@ def compare_configs_interactive():
     print(Fore.YELLOW + Style.BRIGHT + "This feature will allow side-by-side comparison of different configurations.")
 
 def main(logger: logging.Logger):
-    """Main entry point with comprehensive argument parsing and system orchestration."""
+    """Main entry point with argument parsing and system orchestration."""
     # Initialize system to set up logging and configuration
     try:
         system_status, config, logger = initialize_system()
@@ -85690,12 +85439,11 @@ def main(logger: logging.Logger):
     hpo_config = config.get('hyperparameter_optimization', {})
     monitoring_config = config.get('monitoring', {})
     
-    # Create argument parser with comprehensive configuration integration
+    # Create argument parser with configuration integration
     parser = argparse.ArgumentParser(
         description="Enhanced Anomaly Detection Model Training with Configuration Management",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        epilog="""
-Examples:
+        epilog="""Examples:
   %(prog)s --preset development               # Use development preset
   %(prog)s --epochs 100 --batch-size 64     # Custom training parameters
   %(prog)s --hpo-trials 50                   # Hyperparameter optimization
@@ -85918,25 +85666,25 @@ Examples:
     hpo_group.add_argument(
         "--hpo-trials",
         type=int,
-        default=hpo_config.get('n_trials', 50),
+        default=hpo_config.get('n_trials', 5),
         help=f"Number of hyperparameter optimization trials (config: {hpo_config.get('n_trials', 50)})"
     )
     hpo_group.add_argument(
         "--hpo-timeout",
         type=int,
-        default=hpo_config.get('timeout_seconds', 3600),
+        default=hpo_config.get('timeout_seconds', 600),
         help="Timeout for hyperparameter optimization in seconds (0 for no timeout)"
     )
     hpo_group.add_argument(
         "--hpo-sampler",
         choices=['TPE', 'Random', 'CmaEs'],
-        default=hpo_config.get('sampler', {}).get('type', 'TPE'),
+        default=hpo_config.get('sampler', 'TPE'),
         help="Sampler type for hyperparameter optimization"
     )
     hpo_group.add_argument(
         "--hpo-pruner",
         choices=['Median', 'Hyperband', 'None'],
-        default=hpo_config.get('pruner', {}).get('type', 'Median'),
+        default=hpo_config.get('pruner', 'Median'),
         help="Pruner type for hyperparameter optimization"
     )
     
@@ -86021,26 +85769,22 @@ Examples:
     
     # Handle configuration commands first (these exit after completion)
     if args.show_config:
-        current_config = get_current_config()
-        #current_config = config  # Use the config we have
-        print("Current Configuration:")
-        print("=" * 60)
-        print(json.dumps(current_config, indent=2, default=str))
+        current_config = config
+        show_current_config(config)
         return
     
     if args.validate_config:
         try:
             validate_config(config)
-            logger.info("[INFO] Configuration is valid")
+            #logger.info("Configuration is valid")
         except ValueError as e:
-            logger.error(f"[ERROR] Configuration validation failed: {e}")
+            logger.error(f"Configuration validation failed: {e}")
             sys.exit(1)
         return
     
     if args.list_configs:
-        print("Available Configurations:")
-        print("=" * 40)
-        print("\nPreset Configurations:")
+        print("\nAvailable Preset Configurations:")
+        print("=" * 50)
         for name, preset in PRESET_CONFIGS.items():
             print(f"  [+] {name}: {preset.get('description', 'No description')}")
         
@@ -86055,7 +85799,6 @@ Examples:
     if args.reset_config:
         if args.non_interactive or prompt_user("Reset configuration to defaults?", default=False):
             reset_config()
-            logger.info("[INFO] Configuration reset to defaults")
         return
     
     if args.compare_models:
@@ -86072,15 +85815,14 @@ Examples:
             #config = load_saved_config(args.load_config)
             config = load_config(args.load_config)
             update_global_config(config)
-            logger.info(f"[INFO] Loaded configuration: {args.load_config}")
         except FileNotFoundError:
-            logger.error(f"[ERROR] Configuration '{args.load_config}' not found")
+            logger.error(f"Configuration '{args.load_config}' not found")
             sys.exit(1)
     
     # Apply preset configuration if specified
     if args.preset:
         if args.preset not in PRESET_CONFIGS:
-            logger.error(f"[ERROR] Invalid preset: {args.preset}")
+            logger.error(f"Invalid preset: {args.preset}")
             logger.info(f"Available presets: {list(PRESET_CONFIGS.keys())}")
             sys.exit(1)
         
@@ -86088,7 +85830,7 @@ Examples:
         current_config = get_current_config()
         merged_config = deep_update(current_config, preset_config)
         update_global_config(merged_config)
-        logger.info(f"[INFO] Applied preset configuration: {args.preset}")
+        logger.info(f"Applied preset configuration: {args.preset}")
     
     # Configure logging level early
     if args.debug:
@@ -86179,39 +85921,21 @@ Examples:
         try:
             #save_named_config(args.save_config, current_config)
             save_config(args.save_config, current_config)
-            logger.info(f"[INFO] Configuration saved as: {args.save_config}")
         except Exception as e:
-            logger.error(f"[ERROR] Failed to save configuration: {e}")
+            logger.error(f"Failed to save configuration: {e}")
     
     # Validate final configuration
     try:
         validate_config(current_config)
     except ValueError as e:
-        logger.error(f"[ERROR] Configuration validation failed: {e}")
+        logger.error(f"Configuration validation failed: {e}")
         if not args.non_interactive and prompt_user("Continue with invalid configuration?", default=False):
             logger.warning("Proceeding with potentially invalid configuration")
         else:
             sys.exit(1)
     
-    # Log system information
-    logger.info("=" * 80)
-    logger.info("SYSTEM INITIALIZATION")
-    logger.info("=" * 80)
-    logger.info(f"Python version: {sys.version}")
-    logger.info(f"PyTorch version: {torch.__version__}")
-    logger.info(f"CUDA available: {torch.cuda.is_available()}")
-    if torch.cuda.is_available():
-        logger.info(f"CUDA version: {torch.version.cuda}")
-        logger.info(f"GPU count: {torch.cuda.device_count()}")
-    logger.info(f"Working directory: {os.getcwd()}")
-    logger.info(f"Configuration preset: {args.preset or 'custom'}")
-    
     # Run hyperparameter optimization if requested
     if args.hpo or args.hpo_trials > 0:
-        logger.info("=" * 80)
-        logger.info("HYPERPARAMETER OPTIMIZATION")
-        logger.info("=" * 80)
-        
         try:
             hpo_results = setup_hyperparameter_optimization(args, current_config)
             
@@ -86221,7 +85945,7 @@ Examples:
                 merged_config = deep_update(current_config, best_config)
                 update_global_config(merged_config)
                 
-                logger.info("[INFO] Hyperparameter optimization completed")
+                logger.info("Hyperparameter optimization completed")
                 logger.info(f"Best objective value: {hpo_results['best_value']:.5f}")
                 logger.info("Best parameters:")
                 for key, value in hpo_results['best_params'].items():
@@ -86237,7 +85961,7 @@ Examples:
             else:
                 logger.warning("Hyperparameter optimization failed to produce results")
                 return
-                
+        
         except Exception as e:
             logger.error(f"Hyperparameter optimization failed: {e}")
             if args.debug:
@@ -86291,19 +86015,15 @@ Examples:
             logger.info(f"  {key}: {value}")
     
     # Save final configuration to model directory
-    final_config_path = args.model_dir / "run_configuration.json"
+    final_config_path = args.model_dir / "deep_learning_run_configuration.json"
     try:
         with open(final_config_path, 'w') as f:
             json.dump(final_config, f, indent=2, default=str)
-        logger.info(f"[INFO] Configuration saved to: {final_config_path}")
+        logger.info(f"Configuration saved to: {final_config_path}")
     except Exception as e:
         logger.warning(f"Could not save run configuration: {e}")
     
     # Run training
-    logger.info("=" * 80)
-    logger.info("STARTING TRAINING")
-    logger.info("=" * 80)
-    
     try:
         training_results = train_model(args)
         
@@ -86322,7 +86042,7 @@ Examples:
             logger.info(f"  Model parameters: {training_results.get('model', {}).get('total_parameters', 'N/A'):,}")
             
             # Save training summary
-            summary_path = args.model_dir / "training_complete.json"
+            summary_path = args.model_dir / "deep_learning_training_complete.json"
             try:
                 with open(summary_path, 'w') as f:
                     json.dump({
@@ -86335,11 +86055,11 @@ Examples:
                 logger.warning(f"Could not save training summary: {e}")
         
         logger.info("=" * 80)
-        
+    
     except KeyboardInterrupt:
         logger.info("Training interrupted by user")
         # Save interruption info
-        interruption_path = args.model_dir / "training_interrupted.json"
+        interruption_path = args.model_dir / "deep_learning_training_interrupted.json"
         try:
             with open(interruption_path, 'w') as f:
                 json.dump({
@@ -86350,14 +86070,14 @@ Examples:
         except:
             pass
         sys.exit(0)
-        
+    
     except Exception as e:
         logger.error(f"Training failed: {str(e)}")
         if args.debug:
             logger.exception("Training error details:")
         
         # Save error info
-        error_path = args.model_dir / "training_failed.json"
+        error_path = args.model_dir / "deep_learning_training_failed.json"
         try:
             with open(error_path, 'w') as f:
                 json.dump({
@@ -86371,7 +86091,7 @@ Examples:
             pass
         
         sys.exit(1)
-        
+    
     finally:
         # Cleanup
         try:
