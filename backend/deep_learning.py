@@ -47135,6 +47135,1389 @@ def train_epoch(
         except:
             pass
 
+def calculate_threshold(
+    # Core Threshold Calculation Parameters
+    model: Optional[nn.Module] = None,
+    loader: Optional[DataLoader] = None,
+    data: Optional[Union[np.ndarray, torch.Tensor]] = None,
+    reconstruction_errors: Optional[np.ndarray] = None,
+    percentile: Optional[float] = None,
+    device: Optional[torch.device] = None,
+    
+    # Threshold Method Parameters
+    threshold_method: Optional[str] = None,
+    threshold_strategy: Optional[str] = None,
+    threshold_type: Optional[str] = None,
+    adaptive_threshold: Optional[bool] = None,
+    dynamic_threshold: Optional[bool] = None,
+    multi_threshold: Optional[bool] = None,
+    hierarchical_threshold: Optional[bool] = None,
+    
+    # Statistical Threshold Parameters
+    statistical_method: Optional[str] = None,
+    confidence_level: Optional[float] = None,
+    significance_level: Optional[float] = None,
+    z_score_threshold: Optional[float] = None,
+    iqr_multiplier: Optional[float] = None,
+    mad_multiplier: Optional[float] = None,
+    std_multiplier: Optional[float] = None,
+    contamination_rate: Optional[float] = None,
+    
+    # Percentile-based Parameters
+    percentile_method: Optional[str] = None,
+    percentile_range: Optional[Tuple[float, float]] = None,
+    multi_percentile: Optional[List[float]] = None,
+    percentile_interpolation: Optional[str] = None,
+    robust_percentile: Optional[bool] = None,
+    
+    # Distribution-based Parameters
+    distribution_type: Optional[str] = None,
+    distribution_params: Optional[Dict[str, float]] = None,
+    distribution_fit_method: Optional[str] = None,
+    use_empirical_distribution: Optional[bool] = None,
+    kernel_density_estimation: Optional[bool] = None,
+    kde_bandwidth: Optional[Union[str, float]] = None,
+    
+    # Machine Learning Threshold Parameters
+    ml_threshold_method: Optional[str] = None,
+    isolation_forest_contamination: Optional[float] = None,
+    local_outlier_factor_neighbors: Optional[int] = None,
+    one_class_svm_nu: Optional[float] = None,
+    one_class_svm_kernel: Optional[str] = None,
+    elliptic_envelope_contamination: Optional[float] = None,
+    
+    # Cross-validation Parameters
+    cross_validation_threshold: Optional[bool] = None,
+    cv_folds: Optional[int] = None,
+    cv_strategy: Optional[str] = None,
+    threshold_stability_analysis: Optional[bool] = None,
+    bootstrap_threshold: Optional[bool] = None,
+    bootstrap_samples: Optional[int] = None,
+    
+    # Time Series Threshold Parameters
+    temporal_threshold: Optional[bool] = None,
+    window_size: Optional[int] = None,
+    sliding_window: Optional[bool] = None,
+    seasonal_adjustment: Optional[bool] = None,
+    trend_adjustment: Optional[bool] = None,
+    change_point_detection: Optional[bool] = None,
+    
+    # Multi-modal Threshold Parameters
+    mixture_model_threshold: Optional[bool] = None,
+    n_components: Optional[int] = None,
+    mixture_type: Optional[str] = None,
+    component_weights: Optional[List[float]] = None,
+    
+    # Validation and Quality Parameters
+    validate_threshold: Optional[bool] = None,
+    threshold_validation_data: Optional[np.ndarray] = None,
+    quality_metrics: Optional[List[str]] = None,
+    stability_check: Optional[bool] = None,
+    sensitivity_analysis: Optional[bool] = None,
+    robustness_test: Optional[bool] = None,
+    
+    # Performance Parameters
+    performance_mode: Optional[str] = None,
+    batch_processing: Optional[bool] = None,
+    parallel_processing: Optional[bool] = None,
+    n_jobs: Optional[int] = None,
+    memory_efficient: Optional[bool] = None,
+    cache_results: Optional[bool] = None,
+    
+    # Data Processing Parameters
+    data_preprocessing: Optional[bool] = None,
+    outlier_removal: Optional[bool] = None,
+    outlier_method: Optional[str] = None,
+    data_transformation: Optional[str] = None,
+    normalization: Optional[str] = None,
+    scaling_method: Optional[str] = None,
+    
+    # Model Evaluation Parameters
+    eval_mode: Optional[bool] = None,
+    no_grad: Optional[bool] = None,
+    mixed_precision: Optional[bool] = None,
+    batch_size: Optional[int] = None,
+    model_ensemble: Optional[bool] = None,
+    ensemble_method: Optional[str] = None,
+    
+    # Advanced Analysis Parameters
+    feature_importance: Optional[bool] = None,
+    feature_weights: Optional[np.ndarray] = None,
+    weighted_threshold: Optional[bool] = None,
+    dimension_reduction: Optional[bool] = None,
+    dimension_reduction_method: Optional[str] = None,
+    n_components_pca: Optional[int] = None,
+    
+    # Uncertainty Quantification Parameters
+    uncertainty_estimation: Optional[bool] = None,
+    confidence_intervals: Optional[bool] = None,
+    prediction_intervals: Optional[bool] = None,
+    bayesian_threshold: Optional[bool] = None,
+    mcmc_samples: Optional[int] = None,
+    
+    # Multi-class Threshold Parameters
+    multi_class_threshold: Optional[bool] = None,
+    class_specific_thresholds: Optional[bool] = None,
+    class_weights: Optional[Dict[str, float]] = None,
+    threshold_per_class: Optional[Dict[str, float]] = None,
+    
+    # Cost-sensitive Parameters
+    cost_sensitive_threshold: Optional[bool] = None,
+    false_positive_cost: Optional[float] = None,
+    false_negative_cost: Optional[float] = None,
+    cost_matrix: Optional[np.ndarray] = None,
+    business_objective: Optional[str] = None,
+    
+    # Monitoring and Logging Parameters
+    verbose: Optional[bool] = None,
+    debug_mode: Optional[bool] = None,
+    log_level: Optional[str] = None,
+    progress_bar: Optional[bool] = None,
+    timing_analysis: Optional[bool] = None,
+    memory_profiling: Optional[bool] = None,
+    
+    # Export and Visualization Parameters
+    save_results: Optional[bool] = None,
+    results_path: Optional[str] = None,
+    save_threshold_analysis: Optional[bool] = None,
+    visualization: Optional[bool] = None,
+    plot_distribution: Optional[bool] = None,
+    plot_threshold: Optional[bool] = None,
+    plot_roc_curve: Optional[bool] = None,
+    
+    # Error Handling Parameters
+    error_handling: Optional[str] = None,
+    handle_edge_cases: Optional[bool] = None,
+    min_samples_required: Optional[int] = None,
+    fallback_threshold: Optional[float] = None,
+    graceful_degradation: Optional[bool] = None,
+    
+    # Experimental Parameters
+    experimental_methods: Optional[bool] = None,
+    deep_learning_threshold: Optional[bool] = None,
+    autoencoder_threshold: Optional[bool] = None,
+    gan_threshold: Optional[bool] = None,
+    
+    # System Parameters
+    random_state: Optional[int] = None,
+    reproducible: Optional[bool] = None,
+    deterministic: Optional[bool] = None,
+
+    # Run Tracking Parameters
+    run_id: Optional[str] = None,
+    run_number: Optional[int] = None,
+    run_specific_dirs: Optional[Dict[str, Path]] = None,
+    use_run_tracking: Optional[bool] = None,
+    
+    # Direct Configuration Override
+    config: Optional[Dict[str, Any]] = None,
+    threshold_config: Optional[Dict[str, Any]] = None,
+    
+    **kwargs
+) -> Tuple[Union[float, Dict[str, float]], Dict[str, Any]]:
+    
+    # Start timing
+    start_time = datetime.now()
+    
+    # Initialize configuration
+    if config is None:
+        try:
+            config = get_current_config() if 'get_current_config' in globals() else {}
+        except Exception:
+            config = {}
+    
+    # Apply threshold-specific configuration
+    if threshold_config:
+        config.setdefault('threshold', {}).update(threshold_config)
+    
+    # Apply all parameters to configuration
+    final_config = {}
+    
+    # Merge with existing config
+    final_config.update(config)
+    
+    # Apply individual parameters
+    params = locals().copy()
+    params.update(kwargs)
+    
+    # Remove non-parameter items
+    params_to_remove = {
+        'config', 'threshold_config', 'kwargs', 'start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
+        'nullcontext', 'nn', 'optim', 'DataLoader', 'stats', 'IsolationForest', 'LocalOutlierFactor', 'OneClassSVM', 'EllipticEnvelope', 'GaussianMixture'
+    }
+    
+    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
+    
+    # Organize parameters into logical sections
+    param_sections = {
+        'core_threshold': [
+            'percentile', 'threshold_method', 'threshold_strategy', 'threshold_type', 'adaptive_threshold', 'dynamic_threshold', 'multi_threshold', 'hierarchical_threshold'
+        ],
+        'statistical_methods': [
+            'statistical_method', 'confidence_level', 'significance_level', 'z_score_threshold', 'iqr_multiplier', 'mad_multiplier', 'std_multiplier', 'contamination_rate'
+        ],
+        'percentile_methods': [
+            'percentile_method', 'percentile_range', 'multi_percentile', 'percentile_interpolation', 'robust_percentile'
+        ],
+        'distribution_methods': [
+            'distribution_type', 'distribution_params', 'distribution_fit_method', 'use_empirical_distribution', 'kernel_density_estimation', 'kde_bandwidth'
+        ],
+        'ml_methods': [
+            'ml_threshold_method', 'isolation_forest_contamination', 'local_outlier_factor_neighbors', 'one_class_svm_nu', 'one_class_svm_kernel', 'elliptic_envelope_contamination'
+        ],
+        'cross_validation': [
+            'cross_validation_threshold', 'cv_folds', 'cv_strategy', 'threshold_stability_analysis', 'bootstrap_threshold', 'bootstrap_samples'
+        ],
+        'temporal': [
+            'temporal_threshold', 'window_size', 'sliding_window', 'seasonal_adjustment', 'trend_adjustment', 'change_point_detection'
+        ],
+        'multi_modal': [
+            'mixture_model_threshold', 'n_components', 'mixture_type', 'component_weights'
+        ],
+        'validation': [
+            'validate_threshold', 'threshold_validation_data', 'quality_metrics', 'stability_check', 'sensitivity_analysis', 'robustness_test'
+        ],
+        'performance': [
+            'performance_mode', 'batch_processing', 'parallel_processing', 'n_jobs', 'memory_efficient', 'cache_results'
+        ],
+        'data_processing': [
+            'data_preprocessing', 'outlier_removal', 'outlier_method', 'data_transformation', 'normalization', 'scaling_method'
+        ],
+        'model_evaluation': [
+            'eval_mode', 'no_grad', 'mixed_precision', 'batch_size', 'model_ensemble', 'ensemble_method'
+        ],
+        'advanced_analysis': [
+            'feature_importance', 'feature_weights', 'weighted_threshold', 'dimension_reduction', 'dimension_reduction_method', 'n_components_pca'
+        ],
+        'uncertainty': [
+            'uncertainty_estimation', 'confidence_intervals', 'prediction_intervals', 'bayesian_threshold', 'mcmc_samples'
+        ],
+        'multi_class': [
+            'multi_class_threshold', 'class_specific_thresholds', 'class_weights', 'threshold_per_class'
+        ],
+        'cost_sensitive': [
+            'cost_sensitive_threshold', 'false_positive_cost', 'false_negative_cost', 'cost_matrix', 'business_objective'
+        ],
+        'monitoring': [
+            'verbose', 'debug_mode', 'log_level', 'progress_bar', 'timing_analysis', 'memory_profiling'
+        ],
+        'export': [
+            'save_results', 'results_path', 'save_threshold_analysis', 'visualization', 'plot_distribution', 'plot_threshold', 'plot_roc_curve'
+        ],
+        'error_handling': [
+            'error_handling', 'handle_edge_cases', 'min_samples_required', 'fallback_threshold', 'graceful_degradation'
+        ],
+        'experimental': [
+            'experimental_methods', 'deep_learning_threshold', 'autoencoder_threshold', 'gan_threshold'
+        ],
+        'system': [
+            'random_state', 'reproducible', 'deterministic'
+        ],
+        'run_tracking': [
+            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
+        ]
+    }
+    
+    # Apply parameters to appropriate sections
+    for section, param_list in param_sections.items():
+        section_config = final_config.setdefault(section, {})
+        for param in param_list:
+            if param in cleaned_params:
+                section_config[param] = cleaned_params[param]
+    
+    # Core threshold parameters
+    core_config = final_config.setdefault('core_threshold', {})
+    percentile = core_config.setdefault('percentile', DEFAULT_PERCENTILE)
+    threshold_method = core_config.setdefault('threshold_method', 'percentile')
+    threshold_strategy = core_config.get('threshold_strategy')
+    threshold_type = core_config.get('threshold_type')
+    adaptive_threshold = core_config.setdefault('adaptive_threshold', True)
+    dynamic_threshold = core_config.setdefault('dynamic_threshold', False)
+    multi_threshold = core_config.setdefault('multi_threshold', False)
+    hierarchical_threshold = core_config.setdefault('hierarchical_threshold', False)
+    
+    # Statistical parameters
+    statistical_config = final_config.setdefault('statistical_methods', {})
+    statistical_method = statistical_config.setdefault('statistical_method', 'mean_std')
+    confidence_level = statistical_config.setdefault('confidence_level', 0.95)
+    significance_level = statistical_config.setdefault('significance_level', 0.05)
+    z_score_threshold = statistical_config.setdefault('z_score_threshold', 2.0)
+    iqr_multiplier = statistical_config.setdefault('iqr_multiplier', 1.5)
+    mad_multiplier = statistical_config.setdefault('mad_multiplier', 2.0)
+    std_multiplier = statistical_config.setdefault('std_multiplier', 2.0)
+    contamination_rate = statistical_config.setdefault('contamination_rate', 0.1)
+    
+    # Percentile parameters
+    percentile_config = final_config.setdefault('percentile_methods', {})
+    percentile_method = percentile_config.get('percentile_method')
+    percentile_range = percentile_config.get('percentile_range')
+    multi_percentile = percentile_config.get('multi_percentile')
+    percentile_interpolation = percentile_config.setdefault('percentile_interpolation', 'linear')
+    robust_percentile = percentile_config.setdefault('robust_percentile', False)
+    
+    # Distribution parameters
+    distribution_config = final_config.setdefault('distribution_methods', {})
+    distribution_type = distribution_config.setdefault('distribution_type', 'normal')
+    distribution_params = distribution_config.get('distribution_params')
+    distribution_fit_method = distribution_config.get('distribution_fit_method')
+    use_empirical_distribution = distribution_config.setdefault('use_empirical_distribution', False)
+    kernel_density_estimation = distribution_config.setdefault('kernel_density_estimation', False)
+    kde_bandwidth = distribution_config.setdefault('kde_bandwidth', 'scott')
+    
+    # ML parameters
+    ml_config = final_config.setdefault('ml_methods', {})
+    ml_threshold_method = ml_config.setdefault('ml_threshold_method', 'isolation_forest')
+    isolation_forest_contamination = ml_config.setdefault('isolation_forest_contamination', contamination_rate)
+    local_outlier_factor_neighbors = ml_config.setdefault('local_outlier_factor_neighbors', 20)
+    one_class_svm_nu = ml_config.setdefault('one_class_svm_nu', contamination_rate)
+    one_class_svm_kernel = ml_config.setdefault('one_class_svm_kernel', 'rbf')
+    elliptic_envelope_contamination = ml_config.setdefault('elliptic_envelope_contamination', contamination_rate)
+    
+    # Cross-validation parameters
+    cv_config = final_config.setdefault('cross_validation', {})
+    cross_validation_threshold = cv_config.setdefault('cross_validation_threshold', False)
+    cv_folds = cv_config.setdefault('cv_folds', 5)
+    cv_strategy = cv_config.get('cv_strategy')
+    threshold_stability_analysis = cv_config.setdefault('threshold_stability_analysis', False)
+    bootstrap_threshold = cv_config.setdefault('bootstrap_threshold', False)
+    bootstrap_samples = cv_config.setdefault('bootstrap_samples', 1000)
+    
+    # Temporal parameters
+    temporal_config = final_config.setdefault('temporal', {})
+    temporal_threshold = temporal_config.setdefault('temporal_threshold', False)
+    window_size = temporal_config.setdefault('window_size', 100)
+    sliding_window = temporal_config.setdefault('sliding_window', True)
+    seasonal_adjustment = temporal_config.setdefault('seasonal_adjustment', False)
+    trend_adjustment = temporal_config.setdefault('trend_adjustment', False)
+    change_point_detection = temporal_config.setdefault('change_point_detection', False)
+    
+    # Multi-modal parameters
+    multi_modal_config = final_config.setdefault('multi_modal', {})
+    mixture_model_threshold = multi_modal_config.setdefault('mixture_model_threshold', False)
+    n_components = multi_modal_config.setdefault('n_components', 2)
+    mixture_type = multi_modal_config.setdefault('mixture_type', 'gaussian')
+    component_weights = multi_modal_config.get('component_weights')
+    
+    # Validation parameters
+    validation_config = final_config.setdefault('validation', {})
+    validate_threshold = validation_config.setdefault('validate_threshold', False)
+    threshold_validation_data = validation_config.get('threshold_validation_data')
+    quality_metrics = validation_config.get('quality_metrics', [])
+    stability_check = validation_config.setdefault('stability_check', False)
+    sensitivity_analysis = validation_config.setdefault('sensitivity_analysis', False)
+    robustness_test = validation_config.setdefault('robustness_test', False)
+    
+    # Performance parameters
+    performance_config = final_config.setdefault('performance', {})
+    performance_mode = performance_config.setdefault('performance_mode', 'standard')
+    batch_processing = performance_config.setdefault('batch_processing', True)
+    parallel_processing = performance_config.setdefault('parallel_processing', False)
+    n_jobs = performance_config.setdefault('n_jobs', -1)
+    memory_efficient = performance_config.setdefault('memory_efficient', True)
+    cache_results = performance_config.setdefault('cache_results', False)
+    
+    # Data processing parameters
+    data_processing_config = final_config.setdefault('data_processing', {})
+    data_preprocessing = data_processing_config.setdefault('data_preprocessing', False)
+    outlier_removal = data_processing_config.setdefault('outlier_removal', False)
+    outlier_method = data_processing_config.setdefault('outlier_method', 'iqr')
+    data_transformation = data_processing_config.get('data_transformation')
+    normalization = data_processing_config.get('normalization')
+    scaling_method = data_processing_config.get('scaling_method')
+    
+    # Model evaluation parameters
+    model_config = final_config.setdefault('model_evaluation', {})
+    eval_mode = model_config.setdefault('eval_mode', True)
+    no_grad = model_config.setdefault('no_grad', True)
+    mixed_precision = model_config.setdefault('mixed_precision', torch.cuda.is_available())
+    batch_size = model_config.setdefault('batch_size', 32)
+    model_ensemble = model_config.setdefault('model_ensemble', False)
+    ensemble_method = model_config.get('ensemble_method')
+    
+    # Advanced analysis parameters
+    advanced_config = final_config.setdefault('advanced_analysis', {})
+    feature_importance = advanced_config.setdefault('feature_importance', False)
+    feature_weights = advanced_config.get('feature_weights')
+    weighted_threshold = advanced_config.setdefault('weighted_threshold', False)
+    dimension_reduction = advanced_config.setdefault('dimension_reduction', False)
+    dimension_reduction_method = advanced_config.get('dimension_reduction_method')
+    n_components_pca = advanced_config.setdefault('n_components_pca', 2)
+    
+    # Uncertainty parameters
+    uncertainty_config = final_config.setdefault('uncertainty', {})
+    uncertainty_estimation = uncertainty_config.setdefault('uncertainty_estimation', False)
+    confidence_intervals = uncertainty_config.setdefault('confidence_intervals', False)
+    prediction_intervals = uncertainty_config.setdefault('prediction_intervals', False)
+    bayesian_threshold = uncertainty_config.setdefault('bayesian_threshold', False)
+    mcmc_samples = uncertainty_config.setdefault('mcmc_samples', 1000)
+    
+    # Multi-class parameters
+    multi_class_config = final_config.setdefault('multi_class', {})
+    multi_class_threshold = multi_class_config.setdefault('multi_class_threshold', False)
+    class_specific_thresholds = multi_class_config.setdefault('class_specific_thresholds', False)
+    class_weights = multi_class_config.get('class_weights')
+    threshold_per_class = multi_class_config.get('threshold_per_class')
+    
+    # Cost-sensitive parameters
+    cost_config = final_config.setdefault('cost_sensitive', {})
+    cost_sensitive_threshold = cost_config.setdefault('cost_sensitive_threshold', False)
+    false_positive_cost = cost_config.setdefault('false_positive_cost', 1.0)
+    false_negative_cost = cost_config.setdefault('false_negative_cost', 1.0)
+    cost_matrix = cost_config.get('cost_matrix')
+    business_objective = cost_config.get('business_objective')
+    
+    # Monitoring parameters
+    monitoring_config = final_config.setdefault('monitoring', {})
+    verbose = monitoring_config.setdefault('verbose', False)
+    debug_mode = monitoring_config.setdefault('debug_mode', False)
+    log_level = monitoring_config.get('log_level')
+    progress_bar = monitoring_config.setdefault('progress_bar', True)
+    timing_analysis = monitoring_config.setdefault('timing_analysis', False)
+    memory_profiling = monitoring_config.setdefault('memory_profiling', False)
+    
+    # Export parameters
+    export_config = final_config.setdefault('export', {})
+    save_results = export_config.setdefault('save_results', True)
+    results_path = export_config.setdefault('results_path', None)
+    save_threshold_analysis = export_config.setdefault('save_threshold_analysis', True)
+    visualization = export_config.setdefault('visualization', True)
+    plot_distribution = export_config.setdefault('plot_distribution', True)
+    plot_threshold = export_config.setdefault('plot_threshold', True)
+    plot_roc_curve = export_config.setdefault('plot_roc_curve', False)
+    
+    # Error handling parameters
+    error_config = final_config.setdefault('error_handling', {})
+    error_handling = error_config.setdefault('error_handling', 'strict')
+    handle_edge_cases = error_config.setdefault('handle_edge_cases', True)
+    min_samples_required = error_config.setdefault('min_samples_required', 10)
+    fallback_threshold = error_config.setdefault('fallback_threshold', 0.1)
+    graceful_degradation = error_config.setdefault('graceful_degradation', True)
+    
+    # Experimental parameters
+    experimental_config = final_config.setdefault('experimental', {})
+    experimental_methods = experimental_config.setdefault('experimental_methods', False)
+    deep_learning_threshold = experimental_config.setdefault('deep_learning_threshold', False)
+    autoencoder_threshold = experimental_config.setdefault('autoencoder_threshold', False)
+    gan_threshold = experimental_config.setdefault('gan_threshold', False)
+    
+    # System parameters
+    system_config = final_config.setdefault('system', {})
+    random_state = system_config.setdefault('random_state', 42)
+    reproducible = system_config.setdefault('reproducible', True)
+    deterministic = system_config.setdefault('deterministic', False)
+    
+    # Run tracking parameters
+    run_tracking_config = final_config.setdefault('run_tracking', {})
+    run_id = run_tracking_config.get('run_id', run_id)
+    run_number = run_tracking_config.get('run_number', run_number)
+    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
+    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
+    
+    # Determine output directories with run-specific support
+    deep_learning_runs = Path(__file__).resolve().parent / 'deep_learning_runs'
+    if use_run_tracking and run_id and run_specific_dirs:
+        run_tracking = True
+        run_dir = deep_learning_runs / f"{run_id}"
+        # Use run-specific directories for outputs
+        metrics_dir = run_specific_dirs.get('metrics', run_dir / 'metrics') / 'calculate_threshold'
+        results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'calculate_threshold'
+        figures_dir = run_specific_dirs.get('figures', run_dir / 'figures') / 'calculate_threshold'
+    
+    else:
+        run_tracking = False
+        # Directory defaults
+        metrics_dir = deep_learning_runs / 'metrics' / 'calculate_threshold'
+        results_dir = deep_learning_runs / 'results' / 'calculate_threshold'
+        figures_dir = deep_learning_runs / 'figures' / 'calculate_threshold'
+    
+    # Set up logging level
+    if verbose:
+        original_level = logger.level
+        logger.setLevel(logging.INFO)
+    
+    # Initialize variables for cleanup
+    pbar = None
+    
+    try:
+        # Initialize calculation statistics
+        calculation_stats = {
+            'start_time': start_time.isoformat(),
+            'threshold_method': threshold_method,
+            'config_applied': final_config,
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_dirs_available': list(run_specific_dirs.keys()) if run_specific_dirs else []
+            } if use_run_tracking else None
+        }
+        
+        # Set random seed for reproducibility
+        if reproducible:
+            np.random.seed(random_state)
+            if torch.cuda.is_available():
+                torch.manual_seed(random_state)
+        
+        # Device configuration
+        if device is None:
+            if model is not None:
+                device = next(model.parameters()).device
+            else:
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        titles = ["Threshold Calculation"]
+        
+        # Set up main progress bar for the entire threshold calculation process
+        if progress_bar:
+            if verbose:
+                logger.info(f"\nStarting threshold calculation using method: {threshold_method}")
+            
+            try:
+                progress = ProgressHelper(titles)
+                pbar_context = progress.bar(
+                    title="Threshold Calculation",
+                    total=None,
+                    unit=None
+                )
+                pbar = pbar_context.__enter__()  # Get the actual progress bar iterator
+            except ImportError:
+                logger.warning("alive-progress not available, progress bar disabled")
+                pbar = None
+                pbar_context = None
+            except Exception as e:
+                logger.warning(f"Failed to initialize alive-progress bar: {e}")
+                pbar = None
+                pbar_context = None
+        
+        # Ensure run-specific directories exist when saving
+        if use_run_tracking and run_specific_dirs:
+            for dir_type, dir_path in run_specific_dirs.items():
+                if not dir_path.exists():
+                    try:
+                        dir_path.mkdir(parents=True, exist_ok=True)
+                    except Exception as e:
+                        logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
+        
+        # Data preparation and validation
+        if pbar:
+            pbar.text = "Preparing and validating input data"
+        logger.info("Preparing and validating input data")
+        
+        mse_values = None
+        data_source = None
+        
+        # Extract reconstruction errors from various sources
+        if reconstruction_errors is not None:
+            mse_values = np.array(reconstruction_errors)
+            data_source = "provided_reconstruction_errors"
+            logger.debug(f"Using provided reconstruction errors: {len(mse_values)} samples")
+        
+        elif data is not None and model is not None:
+            # Calculate reconstruction errors from data and model
+            if pbar:
+                pbar.text = "Calculating reconstruction errors from model and data"
+            logger.info("Calculating reconstruction errors from model and data")
+            data_source = "calculated_from_model"
+            
+            if eval_mode:
+                model.eval()
+            
+            mse_list = []
+            
+            # Convert data to tensor if needed
+            if isinstance(data, np.ndarray):
+                data_tensor = torch.tensor(data, dtype=torch.float32)
+            else:
+                data_tensor = data
+            
+            # Batch processing for memory efficiency
+            if batch_processing:
+                batch_size = model_config.get('batch_size', 32)
+                n_samples = len(data_tensor)
+                total_batches = n_samples // batch_size + 1
+                
+                context = torch.no_grad() if no_grad else nullcontext()
+                
+                with context:
+                    for i in range(0, n_samples, batch_size):
+                        current_batch = i // batch_size + 1
+                        
+                        # Update progress bar with batch processing status
+                        if pbar:
+                            pbar.text = f"Processing batch {current_batch}/{total_batches} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
+                        
+                        batch_data = data_tensor[i:i+batch_size].to(device)
+                        
+                        # Mixed precision inference
+                        autocast_context = get_autocast_context(device, mixed_precision, True)
+                        with autocast_context:
+                            outputs = model(batch_data)
+                        
+                        # Calculate MSE per sample with proper shape handling
+                        if outputs.shape != batch_data.shape:
+                            if outputs.numel() == batch_data.numel():
+                                outputs = outputs.view_as(batch_data)
+                            else:
+                                # For autoencoders, ensure output matches input
+                                min_features = min(outputs.size(-1), batch_data.size(-1))
+                                batch_data_adjusted = batch_data[..., :min_features]
+                                outputs_adjusted = outputs[..., :min_features]
+                                outputs = outputs_adjusted
+                                batch_data = batch_data_adjusted
+                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
+                            if 'batch_mse' not in locals():
+                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
+                        else:
+                            batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
+                        mse_list.extend(batch_mse)
+                        
+                        # Memory management
+                        if memory_efficient and torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                
+                mse_values = np.array(mse_list)
+            
+            else:
+                # Process all data at once
+                data_tensor = data_tensor.to(device)
+                
+                context = torch.no_grad() if no_grad else nullcontext()
+                
+                with context:
+                    autocast_context = get_autocast_context(device, mixed_precision, True)
+                    with autocast_context:
+                        outputs = model(data_tensor)
+                    
+                    # Calculate MSE per sample with proper shape handling
+                    if data_tensor.shape != outputs.shape:
+                        if outputs.numel() == data_tensor.numel():
+                            outputs = outputs.view_as(data_tensor)
+                        else:
+                            min_features = min(outputs.size(-1), data_tensor.size(-1))
+                            outputs_adjusted = outputs[..., :min_features]
+                            outputs = outputs_adjusted
+                            data_tensor_adjusted = data_tensor[..., :min_features]
+                            data_tensor = data_tensor_adjusted
+                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
+                        if 'batch_mse' not in locals():
+                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
+                    else:
+                        batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
+                    mse_list.extend(batch_mse)
+                    
+                    if memory_efficient and torch.cuda.is_available():
+                        torch.cuda.empty_cache
+                    
+                    if 'mse_list' in locals():
+                        mse_values = np.array(mse_list)
+                    else:
+                        mse_values = batch_mse
+        
+        elif loader is not None and model is not None:
+            # Calculate reconstruction errors from DataLoader
+            if pbar:
+                pbar.text = "Calculating reconstruction errors from DataLoader"
+            logger.info("Calculating reconstruction errors from DataLoader")
+            data_source = "calculated_from_dataloader"
+            
+            if eval_mode:
+                model.eval()
+            
+            mse_list = []
+            context = torch.no_grad() if no_grad else nullcontext()
+            
+            with context:
+                for batch_idx, batch in enumerate(loader):
+                    # Update progress bar with DataLoader processing status
+                    if pbar:
+                        pbar.text = f"Processing batch {batch_idx+1}/{len(loader)} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
+                    
+                    if isinstance(batch, (list, tuple)):
+                        inputs = batch[0].to(device)
+                    else:
+                        inputs = batch.to(device)
+                    
+                    autocast_context = get_autocast_context(device, mixed_precision, True)
+                    with autocast_context:
+                        outputs = model(inputs)
+                    
+                    batch_mse = torch.mean((inputs - outputs)**2, dim=tuple(range(1, inputs.dim()))).cpu().numpy()
+                    mse_list.extend(batch_mse)
+                    
+                    # Memory management
+                    if memory_efficient and torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+            
+            mse_values = np.array(mse_list)
+        
+        else:
+            raise ValueError("Must provide either reconstruction_errors, or (model and data), or (model and loader)")
+        
+        # Validate data
+        if mse_values is None or len(mse_values) == 0:
+            raise ValueError("No reconstruction errors available for threshold calculation")
+        
+        if len(mse_values) < min_samples_required:
+            if graceful_degradation:
+                logger.warning(f"Only {len(mse_values)} samples available, less than minimum {min_samples_required}")
+                logger.warning(f"Using fallback threshold: {fallback_threshold}")
+                return fallback_threshold, {'method': 'fallback', 'samples': len(mse_values)}
+            else:
+                raise ValueError(f"Insufficient samples: {len(mse_values)}, minimum required: {min_samples_required}")
+        
+        calculation_stats['n_samples'] = len(mse_values)
+        calculation_stats['data_source'] = data_source
+        
+        # Data preprocessing if requested
+        if data_preprocessing:
+            if pbar:
+                pbar.text = "Applying data preprocessing"
+            logger.info("Applying data preprocessing")
+            
+            # Remove outliers if requested
+            if outlier_removal:
+                original_size = len(mse_values)
+                
+                if outlier_method == 'iqr':
+                    Q1 = np.percentile(mse_values, 25)
+                    Q3 = np.percentile(mse_values, 75)
+                    IQR = Q3 - Q1
+                    lower_bound = Q1 - 1.5 * IQR
+                    upper_bound = Q3 + 1.5 * IQR
+                    mse_values = mse_values[(mse_values >= lower_bound) & (mse_values <= upper_bound)]
+                elif outlier_method == 'zscore':
+                    z_scores = np.abs(stats.zscore(mse_values))
+                    mse_values = mse_values[z_scores < 3]
+                
+                logger.info(f"Outlier removal: {original_size} -> {len(mse_values)} samples")
+            
+            # Apply data transformation
+            if data_transformation == 'log':
+                mse_values = np.log(mse_values + 1e-8)
+            elif data_transformation == 'sqrt':
+                mse_values = np.sqrt(mse_values)
+            elif data_transformation == 'box_cox':
+                try:
+                    mse_values, lambda_param = stats.boxcox(mse_values + 1e-8)
+                    calculation_stats['box_cox_lambda'] = lambda_param
+                except Exception as e:
+                    logger.warning(f"Box-Cox transformation failed: {e}")
+        
+        # Calculate basic statistics
+        if pbar:
+            pbar.text = "Calculating basic statistics"
+        
+        basic_stats = {
+            'mean': float(np.mean(mse_values)),
+            'std': float(np.std(mse_values)),
+            'min': float(np.min(mse_values)),
+            'max': float(np.max(mse_values)),
+            'median': float(np.median(mse_values)),
+            'q25': float(np.percentile(mse_values, 25)),
+            'q75': float(np.percentile(mse_values, 75)),
+            'skewness': float(stats.skew(mse_values)),
+            'kurtosis': float(stats.kurtosis(mse_values))
+        }
+        
+        calculation_stats['basic_statistics'] = basic_stats
+        
+        # Main threshold calculation based on method
+        threshold_results = {}
+        
+        if threshold_method == 'percentile':
+            if pbar:
+                pbar.text = f"Calculating percentile-based threshold: P{percentile}"
+            logger.info(f"Calculating percentile-based threshold: P{percentile}")
+            
+            threshold = np.percentile(mse_values, percentile, interpolation=percentile_interpolation)
+            
+            # Multi-percentile analysis if requested
+            if multi_percentile:
+                multi_thresholds = {}
+                for p in multi_percentile:
+                    multi_thresholds[f'P{p}'] = float(np.percentile(mse_values, p, interpolation=percentile_interpolation))
+                threshold_results['multi_percentile_thresholds'] = multi_thresholds
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'percentile',
+                'percentile_used': percentile,
+                'interpolation': percentile_interpolation
+            })
+        
+        elif threshold_method == 'statistical':
+            if pbar:
+                pbar.text = f"Calculating statistical threshold using: {statistical_method}"
+            logger.info(f"Calculating statistical threshold using: {statistical_method}")
+            
+            if statistical_method == 'mean_std':
+                threshold = basic_stats['mean'] + std_multiplier * basic_stats['std']
+            
+            elif statistical_method == 'median_mad':
+                mad = np.median(np.abs(mse_values - basic_stats['median']))
+                threshold = basic_stats['median'] + mad_multiplier * mad
+                threshold_results['mad'] = float(mad)
+            
+            elif statistical_method == 'iqr':
+                IQR = basic_stats['q75'] - basic_stats['q25']
+                threshold = basic_stats['q75'] + iqr_multiplier * IQR
+                threshold_results['iqr'] = float(IQR)
+            
+            elif statistical_method == 'z_score':
+                threshold = basic_stats['mean'] + z_score_threshold * basic_stats['std']
+            
+            elif statistical_method == 'modified_z_score':
+                mad = np.median(np.abs(mse_values - basic_stats['median']))
+                modified_z_scores = 0.6745 * (mse_values - basic_stats['median']) / mad
+                threshold = basic_stats['median'] + z_score_threshold * mad / 0.6745
+                threshold_results['modified_z_mad'] = float(mad)
+            
+            else:
+                threshold = basic_stats['mean'] + 2 * basic_stats['std']
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'statistical',
+                'statistical_method': statistical_method,
+                'multiplier_used': std_multiplier if statistical_method == 'mean_std' else iqr_multiplier
+            })
+        
+        elif threshold_method == 'distribution':
+            if pbar:
+                pbar.text = f"Calculating distribution-based threshold using: {distribution_type}"
+            logger.info(f"Calculating distribution-based threshold using: {distribution_type}")
+            
+            if distribution_type == 'normal':
+                # Fit normal distribution
+                mu, sigma = stats.norm.fit(mse_values)
+                threshold = stats.norm.ppf(confidence_level, mu, sigma)
+                threshold_results.update({
+                    'mu': float(mu),
+                    'sigma': float(sigma),
+                    'distribution_params': {'mu': mu, 'sigma': sigma}
+                })
+            
+            elif distribution_type == 'gamma':
+                # Fit gamma distribution
+                shape, loc, scale = stats.gamma.fit(mse_values)
+                threshold = stats.gamma.ppf(confidence_level, shape, loc, scale)
+                threshold_results.update({
+                    'shape': float(shape),
+                    'loc': float(loc),
+                    'scale': float(scale),
+                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
+                })
+            
+            elif distribution_type == 'lognorm':
+                # Fit lognormal distribution
+                shape, loc, scale = stats.lognorm.fit(mse_values)
+                threshold = stats.lognorm.ppf(confidence_level, shape, loc, scale)
+                threshold_results.update({
+                    'shape': float(shape),
+                    'loc': float(loc),
+                    'scale': float(scale),
+                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
+                })
+            
+            elif distribution_type == 'exponential':
+                # Fit exponential distribution
+                loc, scale = stats.expon.fit(mse_values)
+                threshold = stats.expon.ppf(confidence_level, loc, scale)
+                threshold_results.update({
+                    'loc': float(loc),
+                    'scale': float(scale),
+                    'distribution_params': {'loc': loc, 'scale': scale}
+                })
+            
+            else:
+                # Default to normal distribution
+                mu, sigma = stats.norm.fit(mse_values)
+                threshold = stats.norm.ppf(confidence_level, mu, sigma)
+                threshold_results['distribution_params'] = {'mu': mu, 'sigma': sigma}
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'distribution',
+                'distribution_type': distribution_type,
+                'confidence_level': confidence_level
+            })
+        
+        elif threshold_method == 'ml':
+            if pbar:
+                pbar.text = f"Calculating ML-based threshold using: {ml_threshold_method}"
+            logger.info(f"Calculating ML-based threshold using: {ml_threshold_method}")
+            
+            # Reshape data for sklearn
+            X = mse_values.reshape(-1, 1)
+            
+            if ml_threshold_method == 'isolation_forest':
+                clf = IsolationForest(contamination=isolation_forest_contamination, random_state=random_state)
+                clf.fit(X)
+                
+                # Get decision scores
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, (1 - isolation_forest_contamination) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'contamination': isolation_forest_contamination,
+                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
+                })
+            
+            elif ml_threshold_method == 'local_outlier_factor':
+                clf = LocalOutlierFactor(n_neighbors=local_outlier_factor_neighbors, contamination=contamination_rate)
+                outlier_labels = clf.fit_predict(X)
+                
+                # Get LOF scores
+                lof_scores = -clf.negative_outlier_factor_
+                threshold = np.percentile(lof_scores, (1 - contamination_rate) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'n_neighbors': local_outlier_factor_neighbors,
+                    'contamination': contamination_rate,
+                    'lof_scores_range': [float(np.min(lof_scores)), float(np.max(lof_scores))]
+                })
+            
+            elif ml_threshold_method == 'one_class_svm':
+                clf = OneClassSVM(nu=one_class_svm_nu, kernel=one_class_svm_kernel)
+                clf.fit(X)
+                
+                # Get decision scores
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, one_class_svm_nu * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'nu': one_class_svm_nu,
+                    'kernel': one_class_svm_kernel,
+                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
+                })
+            
+            elif ml_threshold_method == 'elliptic_envelope':
+                clf = EllipticEnvelope(contamination=elliptic_envelope_contamination, random_state=random_state)
+                clf.fit(X)
+                
+                # Get Mahalanobis distances
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, (1 - elliptic_envelope_contamination) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': ml_threshold_method,
+                    'contamination': elliptic_envelope_contamination,
+                    'mahalanobis_distances_range': [float(np.min(scores)), float(np.max(scores))]
+                })
+            
+            else:
+                # Fallback to isolation forest
+                clf = IsolationForest(contamination=contamination_rate, random_state=random_state)
+                clf.fit(X)
+                scores = clf.decision_function(X)
+                threshold = np.percentile(scores, (1 - contamination_rate) * 100)
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'ml',
+                    'ml_method': 'isolation_forest_fallback',
+                    'contamination': contamination_rate
+                })
+        
+        elif threshold_method == 'mixture':
+            if pbar:
+                pbar.text = "Calculating mixture model threshold"
+            logger.info("Calculating mixture model threshold")
+            
+            if mixture_type == 'gaussian':
+                # Fit Gaussian Mixture Model
+                gmm = GaussianMixture(n_components=n_components, random_state=random_state)
+                gmm.fit(mse_values.reshape(-1, 1))
+                
+                # Get component with highest mean (anomaly component)
+                component_means = gmm.means_.flatten()
+                anomaly_component = np.argmax(component_means)
+                
+                # Calculate threshold based on anomaly component
+                anomaly_mean = component_means[anomaly_component]
+                anomaly_std = np.sqrt(gmm.covariances_[anomaly_component].flatten()[0])
+                threshold = anomaly_mean - 2 * anomaly_std  # Conservative threshold
+                
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'mixture',
+                    'mixture_type': mixture_type,
+                    'n_components': n_components,
+                    'component_means': component_means.tolist(),
+                    'component_weights': gmm.weights_.tolist(),
+                    'anomaly_component': int(anomaly_component)
+                })
+            
+            else:
+                # Fallback to percentile method
+                threshold = np.percentile(mse_values, percentile)
+                threshold_results.update({
+                    'threshold': float(threshold),
+                    'method': 'mixture_fallback_percentile',
+                    'percentile_used': percentile
+                })
+        
+        elif threshold_method == 'adaptive':
+            if pbar:
+                pbar.text = "Calculating adaptive threshold"
+            logger.info("Calculating adaptive threshold")
+            
+            # Calculate multiple thresholds and select based on data characteristics
+            percentile_thresh = np.percentile(mse_values, percentile)
+            statistical_thresh = basic_stats['mean'] + 2 * basic_stats['std']
+            iqr_thresh = basic_stats['q75'] + 1.5 * (basic_stats['q75'] - basic_stats['q25'])
+            
+            # Selection based on distribution characteristics
+            if basic_stats['skewness'] > 1:  # Right-skewed
+                threshold = percentile_thresh
+                method_used = 'percentile_skewed'
+            
+            elif basic_stats['kurtosis'] > 3:  # Heavy-tailed
+                threshold = iqr_thresh
+                method_used = 'iqr_heavy_tailed'
+            
+            else:  # Approximately normal
+                threshold = statistical_thresh
+                method_used = 'statistical_normal'
+            
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'adaptive',
+                'adaptive_method_used': method_used,
+                'candidate_thresholds': {
+                    'percentile': float(percentile_thresh),
+                    'statistical': float(statistical_thresh),
+                    'iqr': float(iqr_thresh)
+                },
+                'selection_criteria': {
+                    'skewness': basic_stats['skewness'],
+                    'kurtosis': basic_stats['kurtosis']
+                }
+            })
+        
+        else:
+            # Default to percentile method
+            logger.warning(f"Unknown threshold method '{threshold_method}', using percentile")
+            threshold = np.percentile(mse_values, percentile)
+            threshold_results.update({
+                'threshold': float(threshold),
+                'method': 'percentile_default',
+                'percentile_used': percentile
+            })
+        
+        # Cross-validation if requested
+        cv_results = {}
+        if cross_validation_threshold:
+            if pbar:
+                pbar.text = "Performing cross-validation threshold analysis"
+            logger.info("Performing cross-validation threshold analysis")
+            
+            fold_thresholds = []
+            
+            # Simple k-fold validation
+            fold_size = len(mse_values) // cv_folds
+            for fold in range(cv_folds):
+                start_idx = fold * fold_size
+                end_idx = start_idx + fold_size if fold < cv_folds - 1 else len(mse_values)
+                fold_data = mse_values[start_idx:end_idx]
+                
+                # Calculate threshold for this fold
+                fold_threshold = np.percentile(fold_data, percentile)
+                fold_thresholds.append(fold_threshold)
+                
+                # Update progress bar with CV status
+                if pbar:
+                    pbar.text = f"Cross-validation: Fold {fold+1}/{cv_folds} | Threshold: {fold_threshold:.4f} | Samples: {len(fold_data):,}"
+            
+            cv_results = {
+                'cv_folds': cv_folds,
+                'fold_thresholds': [float(t) for t in fold_thresholds],
+                'cv_mean_threshold': float(np.mean(fold_thresholds)),
+                'cv_std_threshold': float(np.std(fold_thresholds)),
+                'cv_min_threshold': float(np.min(fold_thresholds)),
+                'cv_max_threshold': float(np.max(fold_thresholds))
+            }
+        
+        # Bootstrap confidence intervals if requested
+        bootstrap_results = {}
+        if bootstrap_threshold:
+            if pbar:
+                pbar.text = "Performing bootstrap confidence interval analysis"
+            logger.info("Performing bootstrap confidence interval analysis")
+            
+            bootstrap_thresholds = []
+            
+            for i in range(bootstrap_samples):
+                # Bootstrap sample
+                bootstrap_data = np.random.choice(mse_values, size=len(mse_values), replace=True)
+                bootstrap_threshold = np.percentile(bootstrap_data, percentile)
+                bootstrap_thresholds.append(bootstrap_threshold)
+                
+                # Update progress bar every 100 samples to avoid performance hit
+                if pbar and i % 100 == 0:
+                    pbar.text = f"Bootstrap: {i+1}/{bootstrap_samples} | Current CI: [{np.percentile(bootstrap_thresholds, 2.5):.4f}, {np.percentile(bootstrap_thresholds, 97.5):.4f}]"
+            
+            bootstrap_results = {
+                'bootstrap_samples': bootstrap_samples,
+                'bootstrap_mean': float(np.mean(bootstrap_thresholds)),
+                'bootstrap_std': float(np.std(bootstrap_thresholds)),
+                'bootstrap_ci_lower': float(np.percentile(bootstrap_thresholds, 2.5)),
+                'bootstrap_ci_upper': float(np.percentile(bootstrap_thresholds, 97.5))
+            }
+        
+        # Validation if requested
+        validation_results = {}
+        if validate_threshold:
+            if pbar:
+                pbar.text = "Performing threshold validation"
+            logger.info("Performing threshold validation")
+            
+            # Calculate some validation metrics
+            threshold_value = threshold_results['threshold']
+            anomalies = mse_values > threshold_value
+            
+            validation_results = {
+                'anomaly_rate': float(np.mean(anomalies)),
+                'n_anomalies': int(np.sum(anomalies)),
+                'n_normal': int(np.sum(~anomalies)),
+                'threshold_percentile_actual': float(stats.percentileofscore(mse_values, threshold_value)),
+                'validation_passed': True
+            }
+            
+            # Additional validation checks
+            for metric in quality_metrics:
+                if metric == 'stability':
+                    # Simple stability check
+                    validation_results['stability_score'] = 1.0 - (np.std(mse_values) / np.mean(mse_values))
+                elif metric == 'sensitivity':
+                    # Sensitivity to threshold changes
+                    thresh_variations = [threshold_value * 0.9, threshold_value * 1.1]
+                    anomaly_rates = []
+                    for tv in thresh_variations:
+                        anomaly_rates.append(np.mean(mse_values > tv))
+                    validation_results['sensitivity_score'] = float(np.std(anomaly_rates))
+        
+        # Calculate final timing
+        calculation_time = (datetime.now() - start_time).total_seconds()
+        
+        # Prepare comprehensive results
+        final_threshold = threshold_results.get('threshold', fallback_threshold)
+        
+        comprehensive_results = {
+            # Core results
+            'threshold': final_threshold,
+            'method': threshold_results.get('method', threshold_method),
+            'calculation_time_seconds': calculation_time,
+            
+            # Data information
+            'n_samples': len(mse_values),
+            'data_source': data_source,
+            'basic_statistics': basic_stats,
+            
+            # Method-specific results
+            'method_details': threshold_results,
+            
+            # Configuration applied
+            'config_applied': final_config,
+            
+            # Additional analyses
+            'cross_validation': cv_results if cv_results else None,
+            'bootstrap_analysis': bootstrap_results if bootstrap_results else None,
+            'validation_results': validation_results if validation_results else None,
+            
+            # System information
+            'device': str(device),
+            'random_state': random_state,
+            'reproducible': reproducible,
+            
+            # Run tracking information
+            'run_tracking': {
+                'run_id': run_id,
+                'run_number': run_number,
+                'use_run_tracking': use_run_tracking,
+                'run_specific_directories': {
+                    k: str(v) for k, v in run_specific_dirs.items()
+                } if run_specific_dirs else None,
+                'threshold_calculated_for_run': run_id if use_run_tracking else None,
+                'is_run_specific_output': use_run_tracking and run_id is not None
+            } if use_run_tracking else None
+        }
+        
+        # Add calculation statistics
+        comprehensive_results.update(calculation_stats)
+        
+        # Save results if requested
+        if save_results:
+            if pbar:
+                pbar.text = "Saving results"
+            
+            # Determine results path with run tracking support
+            if run_tracking:
+                results_path = results_dir / 'threshold_calculation_results.json'
+            else:
+                results_path = results_dir / f"threshold_calculation_results_{start_time.strftime('%Y%m%d_%H%M%S')}.json"
+            
+            # Ensure Path object
+            if results_path:
+                results_path = Path(results_path)
+                results_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Save JSON
+            try:
+                # Make results JSON serializable
+                serializable_results = {}
+                for key, value in comprehensive_results.items():
+                    try:
+                        json.dumps(value)
+                        serializable_results[key] = value
+                    except TypeError:
+                        serializable_results[key] = str(value)
+                
+                with open(results_path, 'w') as f:
+                    json.dump(serializable_results, f, indent=2)
+                logger.info(f"Saved threshold results to {results_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save results: {e}")
+        
+        # Visualization if requested
+        if visualization:
+            if pbar:
+                pbar.text = "Generating visualization"
+            
+            # Determine plot path with run tracking support
+            if run_tracking:
+                plot_path = figures_dir / 'threshold_distribution_visualization.png'
+            else:
+                plot_path = figures_dir / f"threshold_distribution_visualization_{start_time.strftime('%Y%m%d_%H%M%S')}.png"
+            
+            # Ensure Path object
+            if plot_path:
+                plot_path = Path(plot_path)
+                plot_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            try:
+                if plot_distribution:
+                    plt.figure(figsize=(10, 6))
+                    plt.hist(mse_values, bins=50, alpha=0.7, density=True, label='Reconstruction Errors')
+                    plt.axvline(final_threshold, color='red', linestyle='--', label=f'Threshold ({threshold_method}): {final_threshold:.4f}')
+                    plt.xlabel('Reconstruction Error (MSE)')
+                    plt.ylabel('Density')
+                    plt.title('Reconstruction Error Distribution and Threshold')
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+                    
+                    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+                    plt.close()
+                    logger.info(f"Saved distribution plot to {plot_path}")
+            
+            except ImportError:
+                logger.warning("Matplotlib not available, skipping visualization")
+            except Exception as e:
+                logger.warning(f"Visualization failed: {e}")
+        
+        # Final progress bar update
+        if pbar:
+            pbar.text = f"Threshold calculation completed: {final_threshold:.4f}"
+        
+        # Log summary
+        logger.info("=" * 80)
+        logger.info("THRESHOLD CALCULATION SUMMARY")
+        logger.info("=" * 80)
+        logger.info(f"Method: {threshold_results.get('method', threshold_method)}")
+        logger.info(f"Threshold: {final_threshold:.6f}")
+        logger.info(f"Samples Used: {len(mse_values):,}")
+        logger.info(f"Data Source: {data_source}")
+        logger.info(f"Calculation Time: {calculation_time:.3f} seconds")
+        
+        if 'anomaly_rate' in validation_results:
+            logger.info(f"Expected Anomaly Rate: {validation_results['anomaly_rate']*100:.2f}%")
+        
+        logger.info(f"Data Statistics:")
+        logger.info(f"  Mean: {basic_stats['mean']:.6f}")
+        logger.info(f"  Std: {basic_stats['std']:.6f}")
+        logger.info(f"  Min: {basic_stats['min']:.6f}")
+        logger.info(f"  Max: {basic_stats['max']:.6f}")
+        logger.info(f"  Skewness: {basic_stats['skewness']:.3f}")
+        
+        if cv_results:
+            logger.info(f"Cross-validation: {cv_results['cv_mean_threshold']:.6f} ± {cv_results['cv_std_threshold']:.6f}")
+        
+        if bootstrap_results:
+            logger.info(f"Bootstrap CI: [{bootstrap_results['bootstrap_ci_lower']:.6f}, {bootstrap_results['bootstrap_ci_upper']:.6f}]")
+        
+        logger.info("=" * 80)
+        
+        # Restore original logging level
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        # Return threshold and comprehensive results
+        return final_threshold, comprehensive_results
+    
+    except (EOFError, KeyboardInterrupt):
+        logger.warning("Threshold calculation interrupted by user")
+    
+    except Exception as e:
+        # Restore original logging level on error
+        if verbose and 'original_level' in locals():
+            logger.setLevel(original_level)
+        
+        error_msg = f"Threshold calculation failed: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        
+        # Provide helpful error context
+        logger.error(f"Method used: {threshold_method}")
+        logger.error(f"Configuration: {final_config}")
+        
+        # Attempt graceful recovery if enabled
+        if graceful_degradation:
+            logger.warning(f"Using fallback threshold: {fallback_threshold}")
+            
+            fallback_results = {
+                'threshold': fallback_threshold,
+                'method': 'fallback',
+                'error': str(e),
+                'graceful_degradation': True,
+                'config_applied': final_config,
+                # Include run tracking in fallback
+                'run_tracking': {
+                    'run_id': run_id,
+                    'run_number': run_number,
+                    'use_run_tracking': use_run_tracking
+                } if use_run_tracking else None
+            }
+            
+            return fallback_threshold, fallback_results
+        
+        raise RuntimeError(error_msg) from e
+    
+    finally:
+        # Final cleanup
+        try:
+            if pbar_context:
+                # Properly exit the context manager
+                pbar_context.__exit__(None, None, None)
+            
+            if memory_efficient:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                gc.collect()
+        except:
+            pass
+
 def _default_security_metrics(inputs, outputs, targets, loss):
     """
     Custom metrics for intrusion detection validation.
@@ -47708,7 +49091,18 @@ def _default_validation_callbacks():
                 std_loss = np.std(recent_losses)
                 dynamic_threshold = mean_loss + 5 * std_loss
             else:
-                dynamic_threshold = 5.0  # Baseline threshold
+                # For early batches or untrained model, use multiple of current loss
+                if 'losses' in metrics and len(metrics['losses']) > 0:
+                    # Use recent loss history to establish baseline
+                    current_losses = metrics['losses']
+                    mean_loss = np.mean(current_losses)
+                    std_loss = np.std(current_losses)
+                    
+                    # Require at least 150% above mean to trigger alert
+                    dynamic_threshold = max(mean_loss + 3 * std_loss, mean_loss * 1.5)
+                else:
+                    # Very first batch - use 50% above current as threshold
+                    dynamic_threshold = loss * 1.5
             
             if loss > dynamic_threshold:
                 logger.critical(f"CRITICAL VALIDATION ALERT: Batch {batch_idx} loss {loss:.4f} exceeds dynamic threshold {dynamic_threshold:.4f}!")
@@ -49353,1389 +50747,6 @@ def validate(
         except:
             pass
 
-def calculate_threshold(
-    # Core Threshold Calculation Parameters
-    model: Optional[nn.Module] = None,
-    loader: Optional[DataLoader] = None,
-    data: Optional[Union[np.ndarray, torch.Tensor]] = None,
-    reconstruction_errors: Optional[np.ndarray] = None,
-    percentile: Optional[float] = None,
-    device: Optional[torch.device] = None,
-    
-    # Threshold Method Parameters
-    threshold_method: Optional[str] = None,
-    threshold_strategy: Optional[str] = None,
-    threshold_type: Optional[str] = None,
-    adaptive_threshold: Optional[bool] = None,
-    dynamic_threshold: Optional[bool] = None,
-    multi_threshold: Optional[bool] = None,
-    hierarchical_threshold: Optional[bool] = None,
-    
-    # Statistical Threshold Parameters
-    statistical_method: Optional[str] = None,
-    confidence_level: Optional[float] = None,
-    significance_level: Optional[float] = None,
-    z_score_threshold: Optional[float] = None,
-    iqr_multiplier: Optional[float] = None,
-    mad_multiplier: Optional[float] = None,
-    std_multiplier: Optional[float] = None,
-    contamination_rate: Optional[float] = None,
-    
-    # Percentile-based Parameters
-    percentile_method: Optional[str] = None,
-    percentile_range: Optional[Tuple[float, float]] = None,
-    multi_percentile: Optional[List[float]] = None,
-    percentile_interpolation: Optional[str] = None,
-    robust_percentile: Optional[bool] = None,
-    
-    # Distribution-based Parameters
-    distribution_type: Optional[str] = None,
-    distribution_params: Optional[Dict[str, float]] = None,
-    distribution_fit_method: Optional[str] = None,
-    use_empirical_distribution: Optional[bool] = None,
-    kernel_density_estimation: Optional[bool] = None,
-    kde_bandwidth: Optional[Union[str, float]] = None,
-    
-    # Machine Learning Threshold Parameters
-    ml_threshold_method: Optional[str] = None,
-    isolation_forest_contamination: Optional[float] = None,
-    local_outlier_factor_neighbors: Optional[int] = None,
-    one_class_svm_nu: Optional[float] = None,
-    one_class_svm_kernel: Optional[str] = None,
-    elliptic_envelope_contamination: Optional[float] = None,
-    
-    # Cross-validation Parameters
-    cross_validation_threshold: Optional[bool] = None,
-    cv_folds: Optional[int] = None,
-    cv_strategy: Optional[str] = None,
-    threshold_stability_analysis: Optional[bool] = None,
-    bootstrap_threshold: Optional[bool] = None,
-    bootstrap_samples: Optional[int] = None,
-    
-    # Time Series Threshold Parameters
-    temporal_threshold: Optional[bool] = None,
-    window_size: Optional[int] = None,
-    sliding_window: Optional[bool] = None,
-    seasonal_adjustment: Optional[bool] = None,
-    trend_adjustment: Optional[bool] = None,
-    change_point_detection: Optional[bool] = None,
-    
-    # Multi-modal Threshold Parameters
-    mixture_model_threshold: Optional[bool] = None,
-    n_components: Optional[int] = None,
-    mixture_type: Optional[str] = None,
-    component_weights: Optional[List[float]] = None,
-    
-    # Validation and Quality Parameters
-    validate_threshold: Optional[bool] = None,
-    threshold_validation_data: Optional[np.ndarray] = None,
-    quality_metrics: Optional[List[str]] = None,
-    stability_check: Optional[bool] = None,
-    sensitivity_analysis: Optional[bool] = None,
-    robustness_test: Optional[bool] = None,
-    
-    # Performance Parameters
-    performance_mode: Optional[str] = None,
-    batch_processing: Optional[bool] = None,
-    parallel_processing: Optional[bool] = None,
-    n_jobs: Optional[int] = None,
-    memory_efficient: Optional[bool] = None,
-    cache_results: Optional[bool] = None,
-    
-    # Data Processing Parameters
-    data_preprocessing: Optional[bool] = None,
-    outlier_removal: Optional[bool] = None,
-    outlier_method: Optional[str] = None,
-    data_transformation: Optional[str] = None,
-    normalization: Optional[str] = None,
-    scaling_method: Optional[str] = None,
-    
-    # Model Evaluation Parameters
-    eval_mode: Optional[bool] = None,
-    no_grad: Optional[bool] = None,
-    mixed_precision: Optional[bool] = None,
-    batch_size: Optional[int] = None,
-    model_ensemble: Optional[bool] = None,
-    ensemble_method: Optional[str] = None,
-    
-    # Advanced Analysis Parameters
-    feature_importance: Optional[bool] = None,
-    feature_weights: Optional[np.ndarray] = None,
-    weighted_threshold: Optional[bool] = None,
-    dimension_reduction: Optional[bool] = None,
-    dimension_reduction_method: Optional[str] = None,
-    n_components_pca: Optional[int] = None,
-    
-    # Uncertainty Quantification Parameters
-    uncertainty_estimation: Optional[bool] = None,
-    confidence_intervals: Optional[bool] = None,
-    prediction_intervals: Optional[bool] = None,
-    bayesian_threshold: Optional[bool] = None,
-    mcmc_samples: Optional[int] = None,
-    
-    # Multi-class Threshold Parameters
-    multi_class_threshold: Optional[bool] = None,
-    class_specific_thresholds: Optional[bool] = None,
-    class_weights: Optional[Dict[str, float]] = None,
-    threshold_per_class: Optional[Dict[str, float]] = None,
-    
-    # Cost-sensitive Parameters
-    cost_sensitive_threshold: Optional[bool] = None,
-    false_positive_cost: Optional[float] = None,
-    false_negative_cost: Optional[float] = None,
-    cost_matrix: Optional[np.ndarray] = None,
-    business_objective: Optional[str] = None,
-    
-    # Monitoring and Logging Parameters
-    verbose: Optional[bool] = None,
-    debug_mode: Optional[bool] = None,
-    log_level: Optional[str] = None,
-    progress_bar: Optional[bool] = None,
-    timing_analysis: Optional[bool] = None,
-    memory_profiling: Optional[bool] = None,
-    
-    # Export and Visualization Parameters
-    save_results: Optional[bool] = None,
-    results_path: Optional[str] = None,
-    save_threshold_analysis: Optional[bool] = None,
-    visualization: Optional[bool] = None,
-    plot_distribution: Optional[bool] = None,
-    plot_threshold: Optional[bool] = None,
-    plot_roc_curve: Optional[bool] = None,
-    
-    # Error Handling Parameters
-    error_handling: Optional[str] = None,
-    handle_edge_cases: Optional[bool] = None,
-    min_samples_required: Optional[int] = None,
-    fallback_threshold: Optional[float] = None,
-    graceful_degradation: Optional[bool] = None,
-    
-    # Experimental Parameters
-    experimental_methods: Optional[bool] = None,
-    deep_learning_threshold: Optional[bool] = None,
-    autoencoder_threshold: Optional[bool] = None,
-    gan_threshold: Optional[bool] = None,
-    
-    # System Parameters
-    random_state: Optional[int] = None,
-    reproducible: Optional[bool] = None,
-    deterministic: Optional[bool] = None,
-
-    # Run Tracking Parameters
-    run_id: Optional[str] = None,
-    run_number: Optional[int] = None,
-    run_specific_dirs: Optional[Dict[str, Path]] = None,
-    use_run_tracking: Optional[bool] = None,
-    
-    # Direct Configuration Override
-    config: Optional[Dict[str, Any]] = None,
-    threshold_config: Optional[Dict[str, Any]] = None,
-    
-    **kwargs
-) -> Tuple[Union[float, Dict[str, float]], Dict[str, Any]]:
-    
-    # Start timing
-    start_time = datetime.now()
-    
-    # Initialize configuration
-    if config is None:
-        try:
-            config = get_current_config() if 'get_current_config' in globals() else {}
-        except Exception:
-            config = {}
-    
-    # Apply threshold-specific configuration
-    if threshold_config:
-        config.setdefault('threshold', {}).update(threshold_config)
-    
-    # Apply all parameters to configuration
-    final_config = {}
-    
-    # Merge with existing config
-    final_config.update(config)
-    
-    # Apply individual parameters
-    params = locals().copy()
-    params.update(kwargs)
-    
-    # Remove non-parameter items
-    params_to_remove = {
-        'config', 'threshold_config', 'kwargs', 'start_time', 'datetime', 'traceback', 'time', 'gc', 'warnings', 'defaultdict', 'deque',
-        'nullcontext', 'nn', 'optim', 'DataLoader', 'stats', 'IsolationForest', 'LocalOutlierFactor', 'OneClassSVM', 'EllipticEnvelope', 'GaussianMixture'
-    }
-    
-    cleaned_params = {k: v for k, v in params.items() if k not in params_to_remove and v is not None}
-    
-    # Organize parameters into logical sections
-    param_sections = {
-        'core_threshold': [
-            'percentile', 'threshold_method', 'threshold_strategy', 'threshold_type', 'adaptive_threshold', 'dynamic_threshold', 'multi_threshold', 'hierarchical_threshold'
-        ],
-        'statistical_methods': [
-            'statistical_method', 'confidence_level', 'significance_level', 'z_score_threshold', 'iqr_multiplier', 'mad_multiplier', 'std_multiplier', 'contamination_rate'
-        ],
-        'percentile_methods': [
-            'percentile_method', 'percentile_range', 'multi_percentile', 'percentile_interpolation', 'robust_percentile'
-        ],
-        'distribution_methods': [
-            'distribution_type', 'distribution_params', 'distribution_fit_method', 'use_empirical_distribution', 'kernel_density_estimation', 'kde_bandwidth'
-        ],
-        'ml_methods': [
-            'ml_threshold_method', 'isolation_forest_contamination', 'local_outlier_factor_neighbors', 'one_class_svm_nu', 'one_class_svm_kernel', 'elliptic_envelope_contamination'
-        ],
-        'cross_validation': [
-            'cross_validation_threshold', 'cv_folds', 'cv_strategy', 'threshold_stability_analysis', 'bootstrap_threshold', 'bootstrap_samples'
-        ],
-        'temporal': [
-            'temporal_threshold', 'window_size', 'sliding_window', 'seasonal_adjustment', 'trend_adjustment', 'change_point_detection'
-        ],
-        'multi_modal': [
-            'mixture_model_threshold', 'n_components', 'mixture_type', 'component_weights'
-        ],
-        'validation': [
-            'validate_threshold', 'threshold_validation_data', 'quality_metrics', 'stability_check', 'sensitivity_analysis', 'robustness_test'
-        ],
-        'performance': [
-            'performance_mode', 'batch_processing', 'parallel_processing', 'n_jobs', 'memory_efficient', 'cache_results'
-        ],
-        'data_processing': [
-            'data_preprocessing', 'outlier_removal', 'outlier_method', 'data_transformation', 'normalization', 'scaling_method'
-        ],
-        'model_evaluation': [
-            'eval_mode', 'no_grad', 'mixed_precision', 'batch_size', 'model_ensemble', 'ensemble_method'
-        ],
-        'advanced_analysis': [
-            'feature_importance', 'feature_weights', 'weighted_threshold', 'dimension_reduction', 'dimension_reduction_method', 'n_components_pca'
-        ],
-        'uncertainty': [
-            'uncertainty_estimation', 'confidence_intervals', 'prediction_intervals', 'bayesian_threshold', 'mcmc_samples'
-        ],
-        'multi_class': [
-            'multi_class_threshold', 'class_specific_thresholds', 'class_weights', 'threshold_per_class'
-        ],
-        'cost_sensitive': [
-            'cost_sensitive_threshold', 'false_positive_cost', 'false_negative_cost', 'cost_matrix', 'business_objective'
-        ],
-        'monitoring': [
-            'verbose', 'debug_mode', 'log_level', 'progress_bar', 'timing_analysis', 'memory_profiling'
-        ],
-        'export': [
-            'save_results', 'results_path', 'save_threshold_analysis', 'visualization', 'plot_distribution', 'plot_threshold', 'plot_roc_curve'
-        ],
-        'error_handling': [
-            'error_handling', 'handle_edge_cases', 'min_samples_required', 'fallback_threshold', 'graceful_degradation'
-        ],
-        'experimental': [
-            'experimental_methods', 'deep_learning_threshold', 'autoencoder_threshold', 'gan_threshold'
-        ],
-        'system': [
-            'random_state', 'reproducible', 'deterministic'
-        ],
-        'run_tracking': [
-            'run_id', 'run_number', 'run_specific_dirs', 'use_run_tracking'
-        ]
-    }
-    
-    # Apply parameters to appropriate sections
-    for section, param_list in param_sections.items():
-        section_config = final_config.setdefault(section, {})
-        for param in param_list:
-            if param in cleaned_params:
-                section_config[param] = cleaned_params[param]
-    
-    # Core threshold parameters
-    core_config = final_config.setdefault('core_threshold', {})
-    percentile = core_config.setdefault('percentile', DEFAULT_PERCENTILE)
-    threshold_method = core_config.setdefault('threshold_method', 'percentile')
-    threshold_strategy = core_config.get('threshold_strategy')
-    threshold_type = core_config.get('threshold_type')
-    adaptive_threshold = core_config.setdefault('adaptive_threshold', True)
-    dynamic_threshold = core_config.setdefault('dynamic_threshold', False)
-    multi_threshold = core_config.setdefault('multi_threshold', False)
-    hierarchical_threshold = core_config.setdefault('hierarchical_threshold', False)
-    
-    # Statistical parameters
-    statistical_config = final_config.setdefault('statistical_methods', {})
-    statistical_method = statistical_config.setdefault('statistical_method', 'mean_std')
-    confidence_level = statistical_config.setdefault('confidence_level', 0.95)
-    significance_level = statistical_config.setdefault('significance_level', 0.05)
-    z_score_threshold = statistical_config.setdefault('z_score_threshold', 2.0)
-    iqr_multiplier = statistical_config.setdefault('iqr_multiplier', 1.5)
-    mad_multiplier = statistical_config.setdefault('mad_multiplier', 2.0)
-    std_multiplier = statistical_config.setdefault('std_multiplier', 2.0)
-    contamination_rate = statistical_config.setdefault('contamination_rate', 0.1)
-    
-    # Percentile parameters
-    percentile_config = final_config.setdefault('percentile_methods', {})
-    percentile_method = percentile_config.get('percentile_method')
-    percentile_range = percentile_config.get('percentile_range')
-    multi_percentile = percentile_config.get('multi_percentile')
-    percentile_interpolation = percentile_config.setdefault('percentile_interpolation', 'linear')
-    robust_percentile = percentile_config.setdefault('robust_percentile', False)
-    
-    # Distribution parameters
-    distribution_config = final_config.setdefault('distribution_methods', {})
-    distribution_type = distribution_config.setdefault('distribution_type', 'normal')
-    distribution_params = distribution_config.get('distribution_params')
-    distribution_fit_method = distribution_config.get('distribution_fit_method')
-    use_empirical_distribution = distribution_config.setdefault('use_empirical_distribution', False)
-    kernel_density_estimation = distribution_config.setdefault('kernel_density_estimation', False)
-    kde_bandwidth = distribution_config.setdefault('kde_bandwidth', 'scott')
-    
-    # ML parameters
-    ml_config = final_config.setdefault('ml_methods', {})
-    ml_threshold_method = ml_config.setdefault('ml_threshold_method', 'isolation_forest')
-    isolation_forest_contamination = ml_config.setdefault('isolation_forest_contamination', contamination_rate)
-    local_outlier_factor_neighbors = ml_config.setdefault('local_outlier_factor_neighbors', 20)
-    one_class_svm_nu = ml_config.setdefault('one_class_svm_nu', contamination_rate)
-    one_class_svm_kernel = ml_config.setdefault('one_class_svm_kernel', 'rbf')
-    elliptic_envelope_contamination = ml_config.setdefault('elliptic_envelope_contamination', contamination_rate)
-    
-    # Cross-validation parameters
-    cv_config = final_config.setdefault('cross_validation', {})
-    cross_validation_threshold = cv_config.setdefault('cross_validation_threshold', False)
-    cv_folds = cv_config.setdefault('cv_folds', 5)
-    cv_strategy = cv_config.get('cv_strategy')
-    threshold_stability_analysis = cv_config.setdefault('threshold_stability_analysis', False)
-    bootstrap_threshold = cv_config.setdefault('bootstrap_threshold', False)
-    bootstrap_samples = cv_config.setdefault('bootstrap_samples', 1000)
-    
-    # Temporal parameters
-    temporal_config = final_config.setdefault('temporal', {})
-    temporal_threshold = temporal_config.setdefault('temporal_threshold', False)
-    window_size = temporal_config.setdefault('window_size', 100)
-    sliding_window = temporal_config.setdefault('sliding_window', True)
-    seasonal_adjustment = temporal_config.setdefault('seasonal_adjustment', False)
-    trend_adjustment = temporal_config.setdefault('trend_adjustment', False)
-    change_point_detection = temporal_config.setdefault('change_point_detection', False)
-    
-    # Multi-modal parameters
-    multi_modal_config = final_config.setdefault('multi_modal', {})
-    mixture_model_threshold = multi_modal_config.setdefault('mixture_model_threshold', False)
-    n_components = multi_modal_config.setdefault('n_components', 2)
-    mixture_type = multi_modal_config.setdefault('mixture_type', 'gaussian')
-    component_weights = multi_modal_config.get('component_weights')
-    
-    # Validation parameters
-    validation_config = final_config.setdefault('validation', {})
-    validate_threshold = validation_config.setdefault('validate_threshold', False)
-    threshold_validation_data = validation_config.get('threshold_validation_data')
-    quality_metrics = validation_config.get('quality_metrics', [])
-    stability_check = validation_config.setdefault('stability_check', False)
-    sensitivity_analysis = validation_config.setdefault('sensitivity_analysis', False)
-    robustness_test = validation_config.setdefault('robustness_test', False)
-    
-    # Performance parameters
-    performance_config = final_config.setdefault('performance', {})
-    performance_mode = performance_config.setdefault('performance_mode', 'standard')
-    batch_processing = performance_config.setdefault('batch_processing', True)
-    parallel_processing = performance_config.setdefault('parallel_processing', False)
-    n_jobs = performance_config.setdefault('n_jobs', -1)
-    memory_efficient = performance_config.setdefault('memory_efficient', True)
-    cache_results = performance_config.setdefault('cache_results', False)
-    
-    # Data processing parameters
-    data_processing_config = final_config.setdefault('data_processing', {})
-    data_preprocessing = data_processing_config.setdefault('data_preprocessing', False)
-    outlier_removal = data_processing_config.setdefault('outlier_removal', False)
-    outlier_method = data_processing_config.setdefault('outlier_method', 'iqr')
-    data_transformation = data_processing_config.get('data_transformation')
-    normalization = data_processing_config.get('normalization')
-    scaling_method = data_processing_config.get('scaling_method')
-    
-    # Model evaluation parameters
-    model_config = final_config.setdefault('model_evaluation', {})
-    eval_mode = model_config.setdefault('eval_mode', True)
-    no_grad = model_config.setdefault('no_grad', True)
-    mixed_precision = model_config.setdefault('mixed_precision', torch.cuda.is_available())
-    batch_size = model_config.setdefault('batch_size', 32)
-    model_ensemble = model_config.setdefault('model_ensemble', False)
-    ensemble_method = model_config.get('ensemble_method')
-    
-    # Advanced analysis parameters
-    advanced_config = final_config.setdefault('advanced_analysis', {})
-    feature_importance = advanced_config.setdefault('feature_importance', False)
-    feature_weights = advanced_config.get('feature_weights')
-    weighted_threshold = advanced_config.setdefault('weighted_threshold', False)
-    dimension_reduction = advanced_config.setdefault('dimension_reduction', False)
-    dimension_reduction_method = advanced_config.get('dimension_reduction_method')
-    n_components_pca = advanced_config.setdefault('n_components_pca', 2)
-    
-    # Uncertainty parameters
-    uncertainty_config = final_config.setdefault('uncertainty', {})
-    uncertainty_estimation = uncertainty_config.setdefault('uncertainty_estimation', False)
-    confidence_intervals = uncertainty_config.setdefault('confidence_intervals', False)
-    prediction_intervals = uncertainty_config.setdefault('prediction_intervals', False)
-    bayesian_threshold = uncertainty_config.setdefault('bayesian_threshold', False)
-    mcmc_samples = uncertainty_config.setdefault('mcmc_samples', 1000)
-    
-    # Multi-class parameters
-    multi_class_config = final_config.setdefault('multi_class', {})
-    multi_class_threshold = multi_class_config.setdefault('multi_class_threshold', False)
-    class_specific_thresholds = multi_class_config.setdefault('class_specific_thresholds', False)
-    class_weights = multi_class_config.get('class_weights')
-    threshold_per_class = multi_class_config.get('threshold_per_class')
-    
-    # Cost-sensitive parameters
-    cost_config = final_config.setdefault('cost_sensitive', {})
-    cost_sensitive_threshold = cost_config.setdefault('cost_sensitive_threshold', False)
-    false_positive_cost = cost_config.setdefault('false_positive_cost', 1.0)
-    false_negative_cost = cost_config.setdefault('false_negative_cost', 1.0)
-    cost_matrix = cost_config.get('cost_matrix')
-    business_objective = cost_config.get('business_objective')
-    
-    # Monitoring parameters
-    monitoring_config = final_config.setdefault('monitoring', {})
-    verbose = monitoring_config.setdefault('verbose', False)
-    debug_mode = monitoring_config.setdefault('debug_mode', False)
-    log_level = monitoring_config.get('log_level')
-    progress_bar = monitoring_config.setdefault('progress_bar', True)
-    timing_analysis = monitoring_config.setdefault('timing_analysis', False)
-    memory_profiling = monitoring_config.setdefault('memory_profiling', False)
-    
-    # Export parameters
-    export_config = final_config.setdefault('export', {})
-    save_results = export_config.setdefault('save_results', True)
-    results_path = export_config.setdefault('results_path', None)
-    save_threshold_analysis = export_config.setdefault('save_threshold_analysis', True)
-    visualization = export_config.setdefault('visualization', True)
-    plot_distribution = export_config.setdefault('plot_distribution', True)
-    plot_threshold = export_config.setdefault('plot_threshold', True)
-    plot_roc_curve = export_config.setdefault('plot_roc_curve', False)
-    
-    # Error handling parameters
-    error_config = final_config.setdefault('error_handling', {})
-    error_handling = error_config.setdefault('error_handling', 'strict')
-    handle_edge_cases = error_config.setdefault('handle_edge_cases', True)
-    min_samples_required = error_config.setdefault('min_samples_required', 10)
-    fallback_threshold = error_config.setdefault('fallback_threshold', 0.1)
-    graceful_degradation = error_config.setdefault('graceful_degradation', True)
-    
-    # Experimental parameters
-    experimental_config = final_config.setdefault('experimental', {})
-    experimental_methods = experimental_config.setdefault('experimental_methods', False)
-    deep_learning_threshold = experimental_config.setdefault('deep_learning_threshold', False)
-    autoencoder_threshold = experimental_config.setdefault('autoencoder_threshold', False)
-    gan_threshold = experimental_config.setdefault('gan_threshold', False)
-    
-    # System parameters
-    system_config = final_config.setdefault('system', {})
-    random_state = system_config.setdefault('random_state', 42)
-    reproducible = system_config.setdefault('reproducible', True)
-    deterministic = system_config.setdefault('deterministic', False)
-    
-    # Run tracking parameters
-    run_tracking_config = final_config.setdefault('run_tracking', {})
-    run_id = run_tracking_config.get('run_id', run_id)
-    run_number = run_tracking_config.get('run_number', run_number)
-    run_specific_dirs = run_tracking_config.get('run_specific_dirs', run_specific_dirs or {})
-    use_run_tracking = run_tracking_config.setdefault('use_run_tracking', run_id is not None)
-    
-    # Determine output directories with run-specific support
-    deep_learning_runs = Path(__file__).resolve().parent / 'deep_learning_runs'
-    if use_run_tracking and run_id and run_specific_dirs:
-        run_tracking = True
-        run_dir = deep_learning_runs / f"{run_id}"
-        # Use run-specific directories for outputs
-        metrics_dir = run_specific_dirs.get('metrics', run_dir / 'metrics') / 'calculate_threshold'
-        results_dir = run_specific_dirs.get('results', run_dir / 'results') / 'calculate_threshold'
-        figures_dir = run_specific_dirs.get('figures', run_dir / 'figures') / 'calculate_threshold'
-    
-    else:
-        run_tracking = False
-        # Directory defaults
-        metrics_dir = deep_learning_runs / 'metrics' / 'calculate_threshold'
-        results_dir = deep_learning_runs / 'results' / 'calculate_threshold'
-        figures_dir = deep_learning_runs / 'figures' / 'calculate_threshold'
-    
-    # Set up logging level
-    if verbose:
-        original_level = logger.level
-        logger.setLevel(logging.INFO)
-    
-    # Initialize variables for cleanup
-    pbar = None
-    
-    try:
-        # Initialize calculation statistics
-        calculation_stats = {
-            'start_time': start_time.isoformat(),
-            'threshold_method': threshold_method,
-            'config_applied': final_config,
-            # Run tracking information
-            'run_tracking': {
-                'run_id': run_id,
-                'run_number': run_number,
-                'use_run_tracking': use_run_tracking,
-                'run_specific_dirs_available': list(run_specific_dirs.keys()) if run_specific_dirs else []
-            } if use_run_tracking else None
-        }
-        
-        # Set random seed for reproducibility
-        if reproducible:
-            np.random.seed(random_state)
-            if torch.cuda.is_available():
-                torch.manual_seed(random_state)
-        
-        # Device configuration
-        if device is None:
-            if model is not None:
-                device = next(model.parameters()).device
-            else:
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        
-        titles = ["Threshold Calculation"]
-        
-        # Set up main progress bar for the entire threshold calculation process
-        if progress_bar:
-            if verbose:
-                logger.info(f"\nStarting threshold calculation using method: {threshold_method}")
-            
-            try:
-                progress = ProgressHelper(titles)
-                pbar_context = progress.bar(
-                    title="Threshold Calculation",
-                    total=None,
-                    unit=None
-                )
-                pbar = pbar_context.__enter__()  # Get the actual progress bar iterator
-            except ImportError:
-                logger.warning("alive-progress not available, progress bar disabled")
-                pbar = None
-                pbar_context = None
-            except Exception as e:
-                logger.warning(f"Failed to initialize alive-progress bar: {e}")
-                pbar = None
-                pbar_context = None
-        
-        # Ensure run-specific directories exist when saving
-        if use_run_tracking and run_specific_dirs:
-            for dir_type, dir_path in run_specific_dirs.items():
-                if not dir_path.exists():
-                    try:
-                        dir_path.mkdir(parents=True, exist_ok=True)
-                    except Exception as e:
-                        logger.warning(f"Failed to create run-specific {dir_type} directory: {e}")
-        
-        # Data preparation and validation
-        if pbar:
-            pbar.text = "Preparing and validating input data"
-        logger.info("Preparing and validating input data")
-        
-        mse_values = None
-        data_source = None
-        
-        # Extract reconstruction errors from various sources
-        if reconstruction_errors is not None:
-            mse_values = np.array(reconstruction_errors)
-            data_source = "provided_reconstruction_errors"
-            logger.debug(f"Using provided reconstruction errors: {len(mse_values)} samples")
-        
-        elif data is not None and model is not None:
-            # Calculate reconstruction errors from data and model
-            if pbar:
-                pbar.text = "Calculating reconstruction errors from model and data"
-            logger.info("Calculating reconstruction errors from model and data")
-            data_source = "calculated_from_model"
-            
-            if eval_mode:
-                model.eval()
-            
-            mse_list = []
-            
-            # Convert data to tensor if needed
-            if isinstance(data, np.ndarray):
-                data_tensor = torch.tensor(data, dtype=torch.float32)
-            else:
-                data_tensor = data
-            
-            # Batch processing for memory efficiency
-            if batch_processing:
-                batch_size = model_config.get('batch_size', 32)
-                n_samples = len(data_tensor)
-                total_batches = n_samples // batch_size + 1
-                
-                context = torch.no_grad() if no_grad else nullcontext()
-                
-                with context:
-                    for i in range(0, n_samples, batch_size):
-                        current_batch = i // batch_size + 1
-                        
-                        # Update progress bar with batch processing status
-                        if pbar:
-                            pbar.text = f"Processing batch {current_batch}/{total_batches} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
-                        
-                        batch_data = data_tensor[i:i+batch_size].to(device)
-                        
-                        # Mixed precision inference
-                        autocast_context = get_autocast_context(device, mixed_precision, True)
-                        with autocast_context:
-                            outputs = model(batch_data)
-                        
-                        # Calculate MSE per sample with proper shape handling
-                        if outputs.shape != batch_data.shape:
-                            if outputs.numel() == batch_data.numel():
-                                outputs = outputs.view_as(batch_data)
-                            else:
-                                # For autoencoders, ensure output matches input
-                                min_features = min(outputs.size(-1), batch_data.size(-1))
-                                batch_data_adjusted = batch_data[..., :min_features]
-                                outputs_adjusted = outputs[..., :min_features]
-                                outputs = outputs_adjusted
-                                batch_data = batch_data_adjusted
-                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
-                            if 'batch_mse' not in locals():
-                                batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
-                        else:
-                            batch_mse = torch.mean((batch_data - outputs)**2, dim=tuple(range(1, batch_data.dim()))).cpu().numpy()
-                        mse_list.extend(batch_mse)
-                        
-                        # Memory management
-                        if memory_efficient and torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                
-                mse_values = np.array(mse_list)
-            
-            else:
-                # Process all data at once
-                data_tensor = data_tensor.to(device)
-                
-                context = torch.no_grad() if no_grad else nullcontext()
-                
-                with context:
-                    autocast_context = get_autocast_context(device, mixed_precision, True)
-                    with autocast_context:
-                        outputs = model(data_tensor)
-                    
-                    # Calculate MSE per sample with proper shape handling
-                    if data_tensor.shape != outputs.shape:
-                        if outputs.numel() == data_tensor.numel():
-                            outputs = outputs.view_as(data_tensor)
-                        else:
-                            min_features = min(outputs.size(-1), data_tensor.size(-1))
-                            outputs_adjusted = outputs[..., :min_features]
-                            outputs = outputs_adjusted
-                            data_tensor_adjusted = data_tensor[..., :min_features]
-                            data_tensor = data_tensor_adjusted
-                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
-                        if 'batch_mse' not in locals():
-                            batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
-                    else:
-                        batch_mse = torch.mean((data_tensor - outputs)**2, dim=tuple(range(1, data_tensor.dim()))).cpu().numpy()
-                    mse_list.extend(batch_mse)
-                    
-                    if memory_efficient and torch.cuda.is_available():
-                        torch.cuda.empty_cache
-                    
-                    if 'mse_list' in locals():
-                        mse_values = np.array(mse_list)
-                    else:
-                        mse_values = batch_mse
-        
-        elif loader is not None and model is not None:
-            # Calculate reconstruction errors from DataLoader
-            if pbar:
-                pbar.text = "Calculating reconstruction errors from DataLoader"
-            logger.info("Calculating reconstruction errors from DataLoader")
-            data_source = "calculated_from_dataloader"
-            
-            if eval_mode:
-                model.eval()
-            
-            mse_list = []
-            context = torch.no_grad() if no_grad else nullcontext()
-            
-            with context:
-                for batch_idx, batch in enumerate(loader):
-                    # Update progress bar with DataLoader processing status
-                    if pbar:
-                        pbar.text = f"Processing batch {batch_idx+1}/{len(loader)} | Samples: {len(mse_list):,} | Avg MSE: {np.mean(mse_list) if mse_list else 0:.4f}"
-                    
-                    if isinstance(batch, (list, tuple)):
-                        inputs = batch[0].to(device)
-                    else:
-                        inputs = batch.to(device)
-                    
-                    autocast_context = get_autocast_context(device, mixed_precision, True)
-                    with autocast_context:
-                        outputs = model(inputs)
-                    
-                    batch_mse = torch.mean((inputs - outputs)**2, dim=tuple(range(1, inputs.dim()))).cpu().numpy()
-                    mse_list.extend(batch_mse)
-                    
-                    # Memory management
-                    if memory_efficient and torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-            
-            mse_values = np.array(mse_list)
-        
-        else:
-            raise ValueError("Must provide either reconstruction_errors, or (model and data), or (model and loader)")
-        
-        # Validate data
-        if mse_values is None or len(mse_values) == 0:
-            raise ValueError("No reconstruction errors available for threshold calculation")
-        
-        if len(mse_values) < min_samples_required:
-            if graceful_degradation:
-                logger.warning(f"Only {len(mse_values)} samples available, less than minimum {min_samples_required}")
-                logger.warning(f"Using fallback threshold: {fallback_threshold}")
-                return fallback_threshold, {'method': 'fallback', 'samples': len(mse_values)}
-            else:
-                raise ValueError(f"Insufficient samples: {len(mse_values)}, minimum required: {min_samples_required}")
-        
-        calculation_stats['n_samples'] = len(mse_values)
-        calculation_stats['data_source'] = data_source
-        
-        # Data preprocessing if requested
-        if data_preprocessing:
-            if pbar:
-                pbar.text = "Applying data preprocessing"
-            logger.info("Applying data preprocessing")
-            
-            # Remove outliers if requested
-            if outlier_removal:
-                original_size = len(mse_values)
-                
-                if outlier_method == 'iqr':
-                    Q1 = np.percentile(mse_values, 25)
-                    Q3 = np.percentile(mse_values, 75)
-                    IQR = Q3 - Q1
-                    lower_bound = Q1 - 1.5 * IQR
-                    upper_bound = Q3 + 1.5 * IQR
-                    mse_values = mse_values[(mse_values >= lower_bound) & (mse_values <= upper_bound)]
-                elif outlier_method == 'zscore':
-                    z_scores = np.abs(stats.zscore(mse_values))
-                    mse_values = mse_values[z_scores < 3]
-                
-                logger.info(f"Outlier removal: {original_size} -> {len(mse_values)} samples")
-            
-            # Apply data transformation
-            if data_transformation == 'log':
-                mse_values = np.log(mse_values + 1e-8)
-            elif data_transformation == 'sqrt':
-                mse_values = np.sqrt(mse_values)
-            elif data_transformation == 'box_cox':
-                try:
-                    mse_values, lambda_param = stats.boxcox(mse_values + 1e-8)
-                    calculation_stats['box_cox_lambda'] = lambda_param
-                except Exception as e:
-                    logger.warning(f"Box-Cox transformation failed: {e}")
-        
-        # Calculate basic statistics
-        if pbar:
-            pbar.text = "Calculating basic statistics"
-        
-        basic_stats = {
-            'mean': float(np.mean(mse_values)),
-            'std': float(np.std(mse_values)),
-            'min': float(np.min(mse_values)),
-            'max': float(np.max(mse_values)),
-            'median': float(np.median(mse_values)),
-            'q25': float(np.percentile(mse_values, 25)),
-            'q75': float(np.percentile(mse_values, 75)),
-            'skewness': float(stats.skew(mse_values)),
-            'kurtosis': float(stats.kurtosis(mse_values))
-        }
-        
-        calculation_stats['basic_statistics'] = basic_stats
-        
-        # Main threshold calculation based on method
-        threshold_results = {}
-        
-        if threshold_method == 'percentile':
-            if pbar:
-                pbar.text = f"Calculating percentile-based threshold: P{percentile}"
-            logger.info(f"Calculating percentile-based threshold: P{percentile}")
-            
-            threshold = np.percentile(mse_values, percentile, interpolation=percentile_interpolation)
-            
-            # Multi-percentile analysis if requested
-            if multi_percentile:
-                multi_thresholds = {}
-                for p in multi_percentile:
-                    multi_thresholds[f'P{p}'] = float(np.percentile(mse_values, p, interpolation=percentile_interpolation))
-                threshold_results['multi_percentile_thresholds'] = multi_thresholds
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'percentile',
-                'percentile_used': percentile,
-                'interpolation': percentile_interpolation
-            })
-        
-        elif threshold_method == 'statistical':
-            if pbar:
-                pbar.text = f"Calculating statistical threshold using: {statistical_method}"
-            logger.info(f"Calculating statistical threshold using: {statistical_method}")
-            
-            if statistical_method == 'mean_std':
-                threshold = basic_stats['mean'] + std_multiplier * basic_stats['std']
-            
-            elif statistical_method == 'median_mad':
-                mad = np.median(np.abs(mse_values - basic_stats['median']))
-                threshold = basic_stats['median'] + mad_multiplier * mad
-                threshold_results['mad'] = float(mad)
-            
-            elif statistical_method == 'iqr':
-                IQR = basic_stats['q75'] - basic_stats['q25']
-                threshold = basic_stats['q75'] + iqr_multiplier * IQR
-                threshold_results['iqr'] = float(IQR)
-            
-            elif statistical_method == 'z_score':
-                threshold = basic_stats['mean'] + z_score_threshold * basic_stats['std']
-            
-            elif statistical_method == 'modified_z_score':
-                mad = np.median(np.abs(mse_values - basic_stats['median']))
-                modified_z_scores = 0.6745 * (mse_values - basic_stats['median']) / mad
-                threshold = basic_stats['median'] + z_score_threshold * mad / 0.6745
-                threshold_results['modified_z_mad'] = float(mad)
-            
-            else:
-                threshold = basic_stats['mean'] + 2 * basic_stats['std']
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'statistical',
-                'statistical_method': statistical_method,
-                'multiplier_used': std_multiplier if statistical_method == 'mean_std' else iqr_multiplier
-            })
-        
-        elif threshold_method == 'distribution':
-            if pbar:
-                pbar.text = f"Calculating distribution-based threshold using: {distribution_type}"
-            logger.info(f"Calculating distribution-based threshold using: {distribution_type}")
-            
-            if distribution_type == 'normal':
-                # Fit normal distribution
-                mu, sigma = stats.norm.fit(mse_values)
-                threshold = stats.norm.ppf(confidence_level, mu, sigma)
-                threshold_results.update({
-                    'mu': float(mu),
-                    'sigma': float(sigma),
-                    'distribution_params': {'mu': mu, 'sigma': sigma}
-                })
-            
-            elif distribution_type == 'gamma':
-                # Fit gamma distribution
-                shape, loc, scale = stats.gamma.fit(mse_values)
-                threshold = stats.gamma.ppf(confidence_level, shape, loc, scale)
-                threshold_results.update({
-                    'shape': float(shape),
-                    'loc': float(loc),
-                    'scale': float(scale),
-                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
-                })
-            
-            elif distribution_type == 'lognorm':
-                # Fit lognormal distribution
-                shape, loc, scale = stats.lognorm.fit(mse_values)
-                threshold = stats.lognorm.ppf(confidence_level, shape, loc, scale)
-                threshold_results.update({
-                    'shape': float(shape),
-                    'loc': float(loc),
-                    'scale': float(scale),
-                    'distribution_params': {'shape': shape, 'loc': loc, 'scale': scale}
-                })
-            
-            elif distribution_type == 'exponential':
-                # Fit exponential distribution
-                loc, scale = stats.expon.fit(mse_values)
-                threshold = stats.expon.ppf(confidence_level, loc, scale)
-                threshold_results.update({
-                    'loc': float(loc),
-                    'scale': float(scale),
-                    'distribution_params': {'loc': loc, 'scale': scale}
-                })
-            
-            else:
-                # Default to normal distribution
-                mu, sigma = stats.norm.fit(mse_values)
-                threshold = stats.norm.ppf(confidence_level, mu, sigma)
-                threshold_results['distribution_params'] = {'mu': mu, 'sigma': sigma}
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'distribution',
-                'distribution_type': distribution_type,
-                'confidence_level': confidence_level
-            })
-        
-        elif threshold_method == 'ml':
-            if pbar:
-                pbar.text = f"Calculating ML-based threshold using: {ml_threshold_method}"
-            logger.info(f"Calculating ML-based threshold using: {ml_threshold_method}")
-            
-            # Reshape data for sklearn
-            X = mse_values.reshape(-1, 1)
-            
-            if ml_threshold_method == 'isolation_forest':
-                clf = IsolationForest(contamination=isolation_forest_contamination, random_state=random_state)
-                clf.fit(X)
-                
-                # Get decision scores
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, (1 - isolation_forest_contamination) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_threshold_method,
-                    'contamination': isolation_forest_contamination,
-                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
-                })
-            
-            elif ml_threshold_method == 'local_outlier_factor':
-                clf = LocalOutlierFactor(n_neighbors=local_outlier_factor_neighbors, contamination=contamination_rate)
-                outlier_labels = clf.fit_predict(X)
-                
-                # Get LOF scores
-                lof_scores = -clf.negative_outlier_factor_
-                threshold = np.percentile(lof_scores, (1 - contamination_rate) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_threshold_method,
-                    'n_neighbors': local_outlier_factor_neighbors,
-                    'contamination': contamination_rate,
-                    'lof_scores_range': [float(np.min(lof_scores)), float(np.max(lof_scores))]
-                })
-            
-            elif ml_threshold_method == 'one_class_svm':
-                clf = OneClassSVM(nu=one_class_svm_nu, kernel=one_class_svm_kernel)
-                clf.fit(X)
-                
-                # Get decision scores
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, one_class_svm_nu * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_threshold_method,
-                    'nu': one_class_svm_nu,
-                    'kernel': one_class_svm_kernel,
-                    'decision_scores_range': [float(np.min(scores)), float(np.max(scores))]
-                })
-            
-            elif ml_threshold_method == 'elliptic_envelope':
-                clf = EllipticEnvelope(contamination=elliptic_envelope_contamination, random_state=random_state)
-                clf.fit(X)
-                
-                # Get Mahalanobis distances
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, (1 - elliptic_envelope_contamination) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': ml_threshold_method,
-                    'contamination': elliptic_envelope_contamination,
-                    'mahalanobis_distances_range': [float(np.min(scores)), float(np.max(scores))]
-                })
-            
-            else:
-                # Fallback to isolation forest
-                clf = IsolationForest(contamination=contamination_rate, random_state=random_state)
-                clf.fit(X)
-                scores = clf.decision_function(X)
-                threshold = np.percentile(scores, (1 - contamination_rate) * 100)
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'ml',
-                    'ml_method': 'isolation_forest_fallback',
-                    'contamination': contamination_rate
-                })
-        
-        elif threshold_method == 'mixture':
-            if pbar:
-                pbar.text = "Calculating mixture model threshold"
-            logger.info("Calculating mixture model threshold")
-            
-            if mixture_type == 'gaussian':
-                # Fit Gaussian Mixture Model
-                gmm = GaussianMixture(n_components=n_components, random_state=random_state)
-                gmm.fit(mse_values.reshape(-1, 1))
-                
-                # Get component with highest mean (anomaly component)
-                component_means = gmm.means_.flatten()
-                anomaly_component = np.argmax(component_means)
-                
-                # Calculate threshold based on anomaly component
-                anomaly_mean = component_means[anomaly_component]
-                anomaly_std = np.sqrt(gmm.covariances_[anomaly_component].flatten()[0])
-                threshold = anomaly_mean - 2 * anomaly_std  # Conservative threshold
-                
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'mixture',
-                    'mixture_type': mixture_type,
-                    'n_components': n_components,
-                    'component_means': component_means.tolist(),
-                    'component_weights': gmm.weights_.tolist(),
-                    'anomaly_component': int(anomaly_component)
-                })
-            
-            else:
-                # Fallback to percentile method
-                threshold = np.percentile(mse_values, percentile)
-                threshold_results.update({
-                    'threshold': float(threshold),
-                    'method': 'mixture_fallback_percentile',
-                    'percentile_used': percentile
-                })
-        
-        elif threshold_method == 'adaptive':
-            if pbar:
-                pbar.text = "Calculating adaptive threshold"
-            logger.info("Calculating adaptive threshold")
-            
-            # Calculate multiple thresholds and select based on data characteristics
-            percentile_thresh = np.percentile(mse_values, percentile)
-            statistical_thresh = basic_stats['mean'] + 2 * basic_stats['std']
-            iqr_thresh = basic_stats['q75'] + 1.5 * (basic_stats['q75'] - basic_stats['q25'])
-            
-            # Selection based on distribution characteristics
-            if basic_stats['skewness'] > 1:  # Right-skewed
-                threshold = percentile_thresh
-                method_used = 'percentile_skewed'
-            
-            elif basic_stats['kurtosis'] > 3:  # Heavy-tailed
-                threshold = iqr_thresh
-                method_used = 'iqr_heavy_tailed'
-            
-            else:  # Approximately normal
-                threshold = statistical_thresh
-                method_used = 'statistical_normal'
-            
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'adaptive',
-                'adaptive_method_used': method_used,
-                'candidate_thresholds': {
-                    'percentile': float(percentile_thresh),
-                    'statistical': float(statistical_thresh),
-                    'iqr': float(iqr_thresh)
-                },
-                'selection_criteria': {
-                    'skewness': basic_stats['skewness'],
-                    'kurtosis': basic_stats['kurtosis']
-                }
-            })
-        
-        else:
-            # Default to percentile method
-            logger.warning(f"Unknown threshold method '{threshold_method}', using percentile")
-            threshold = np.percentile(mse_values, percentile)
-            threshold_results.update({
-                'threshold': float(threshold),
-                'method': 'percentile_default',
-                'percentile_used': percentile
-            })
-        
-        # Cross-validation if requested
-        cv_results = {}
-        if cross_validation_threshold:
-            if pbar:
-                pbar.text = "Performing cross-validation threshold analysis"
-            logger.info("Performing cross-validation threshold analysis")
-            
-            fold_thresholds = []
-            
-            # Simple k-fold validation
-            fold_size = len(mse_values) // cv_folds
-            for fold in range(cv_folds):
-                start_idx = fold * fold_size
-                end_idx = start_idx + fold_size if fold < cv_folds - 1 else len(mse_values)
-                fold_data = mse_values[start_idx:end_idx]
-                
-                # Calculate threshold for this fold
-                fold_threshold = np.percentile(fold_data, percentile)
-                fold_thresholds.append(fold_threshold)
-                
-                # Update progress bar with CV status
-                if pbar:
-                    pbar.text = f"Cross-validation: Fold {fold+1}/{cv_folds} | Threshold: {fold_threshold:.4f} | Samples: {len(fold_data):,}"
-            
-            cv_results = {
-                'cv_folds': cv_folds,
-                'fold_thresholds': [float(t) for t in fold_thresholds],
-                'cv_mean_threshold': float(np.mean(fold_thresholds)),
-                'cv_std_threshold': float(np.std(fold_thresholds)),
-                'cv_min_threshold': float(np.min(fold_thresholds)),
-                'cv_max_threshold': float(np.max(fold_thresholds))
-            }
-        
-        # Bootstrap confidence intervals if requested
-        bootstrap_results = {}
-        if bootstrap_threshold:
-            if pbar:
-                pbar.text = "Performing bootstrap confidence interval analysis"
-            logger.info("Performing bootstrap confidence interval analysis")
-            
-            bootstrap_thresholds = []
-            
-            for i in range(bootstrap_samples):
-                # Bootstrap sample
-                bootstrap_data = np.random.choice(mse_values, size=len(mse_values), replace=True)
-                bootstrap_threshold = np.percentile(bootstrap_data, percentile)
-                bootstrap_thresholds.append(bootstrap_threshold)
-                
-                # Update progress bar every 100 samples to avoid performance hit
-                if pbar and i % 100 == 0:
-                    pbar.text = f"Bootstrap: {i+1}/{bootstrap_samples} | Current CI: [{np.percentile(bootstrap_thresholds, 2.5):.4f}, {np.percentile(bootstrap_thresholds, 97.5):.4f}]"
-            
-            bootstrap_results = {
-                'bootstrap_samples': bootstrap_samples,
-                'bootstrap_mean': float(np.mean(bootstrap_thresholds)),
-                'bootstrap_std': float(np.std(bootstrap_thresholds)),
-                'bootstrap_ci_lower': float(np.percentile(bootstrap_thresholds, 2.5)),
-                'bootstrap_ci_upper': float(np.percentile(bootstrap_thresholds, 97.5))
-            }
-        
-        # Validation if requested
-        validation_results = {}
-        if validate_threshold:
-            if pbar:
-                pbar.text = "Performing threshold validation"
-            logger.info("Performing threshold validation")
-            
-            # Calculate some validation metrics
-            threshold_value = threshold_results['threshold']
-            anomalies = mse_values > threshold_value
-            
-            validation_results = {
-                'anomaly_rate': float(np.mean(anomalies)),
-                'n_anomalies': int(np.sum(anomalies)),
-                'n_normal': int(np.sum(~anomalies)),
-                'threshold_percentile_actual': float(stats.percentileofscore(mse_values, threshold_value)),
-                'validation_passed': True
-            }
-            
-            # Additional validation checks
-            for metric in quality_metrics:
-                if metric == 'stability':
-                    # Simple stability check
-                    validation_results['stability_score'] = 1.0 - (np.std(mse_values) / np.mean(mse_values))
-                elif metric == 'sensitivity':
-                    # Sensitivity to threshold changes
-                    thresh_variations = [threshold_value * 0.9, threshold_value * 1.1]
-                    anomaly_rates = []
-                    for tv in thresh_variations:
-                        anomaly_rates.append(np.mean(mse_values > tv))
-                    validation_results['sensitivity_score'] = float(np.std(anomaly_rates))
-        
-        # Calculate final timing
-        calculation_time = (datetime.now() - start_time).total_seconds()
-        
-        # Prepare comprehensive results
-        final_threshold = threshold_results.get('threshold', fallback_threshold)
-        
-        comprehensive_results = {
-            # Core results
-            'threshold': final_threshold,
-            'method': threshold_results.get('method', threshold_method),
-            'calculation_time_seconds': calculation_time,
-            
-            # Data information
-            'n_samples': len(mse_values),
-            'data_source': data_source,
-            'basic_statistics': basic_stats,
-            
-            # Method-specific results
-            'method_details': threshold_results,
-            
-            # Configuration applied
-            'config_applied': final_config,
-            
-            # Additional analyses
-            'cross_validation': cv_results if cv_results else None,
-            'bootstrap_analysis': bootstrap_results if bootstrap_results else None,
-            'validation_results': validation_results if validation_results else None,
-            
-            # System information
-            'device': str(device),
-            'random_state': random_state,
-            'reproducible': reproducible,
-            
-            # Run tracking information
-            'run_tracking': {
-                'run_id': run_id,
-                'run_number': run_number,
-                'use_run_tracking': use_run_tracking,
-                'run_specific_directories': {
-                    k: str(v) for k, v in run_specific_dirs.items()
-                } if run_specific_dirs else None,
-                'threshold_calculated_for_run': run_id if use_run_tracking else None,
-                'is_run_specific_output': use_run_tracking and run_id is not None
-            } if use_run_tracking else None
-        }
-        
-        # Add calculation statistics
-        comprehensive_results.update(calculation_stats)
-        
-        # Save results if requested
-        if save_results:
-            if pbar:
-                pbar.text = "Saving results"
-            
-            # Determine results path with run tracking support
-            if run_tracking:
-                results_path = results_dir / 'threshold_calculation_results.json'
-            else:
-                results_path = results_dir / f"threshold_calculation_results_{start_time.strftime('%Y%m%d_%H%M%S')}.json"
-            
-            # Ensure Path object
-            if results_path:
-                results_path = Path(results_path)
-                results_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Save JSON
-            try:
-                # Make results JSON serializable
-                serializable_results = {}
-                for key, value in comprehensive_results.items():
-                    try:
-                        json.dumps(value)
-                        serializable_results[key] = value
-                    except TypeError:
-                        serializable_results[key] = str(value)
-                
-                with open(results_path, 'w') as f:
-                    json.dump(serializable_results, f, indent=2)
-                logger.info(f"Saved threshold results to {results_path}")
-            except Exception as e:
-                logger.warning(f"Failed to save results: {e}")
-        
-        # Visualization if requested
-        if visualization:
-            if pbar:
-                pbar.text = "Generating visualization"
-            
-            # Determine plot path with run tracking support
-            if run_tracking:
-                plot_path = figures_dir / 'threshold_distribution_visualization.png'
-            else:
-                plot_path = figures_dir / f"threshold_distribution_visualization_{start_time.strftime('%Y%m%d_%H%M%S')}.png"
-            
-            # Ensure Path object
-            if plot_path:
-                plot_path = Path(plot_path)
-                plot_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            try:
-                if plot_distribution:
-                    plt.figure(figsize=(10, 6))
-                    plt.hist(mse_values, bins=50, alpha=0.7, density=True, label='Reconstruction Errors')
-                    plt.axvline(final_threshold, color='red', linestyle='--', label=f'Threshold ({threshold_method}): {final_threshold:.4f}')
-                    plt.xlabel('Reconstruction Error (MSE)')
-                    plt.ylabel('Density')
-                    plt.title('Reconstruction Error Distribution and Threshold')
-                    plt.legend()
-                    plt.grid(True, alpha=0.3)
-                    
-                    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-                    plt.close()
-                    logger.info(f"Saved distribution plot to {plot_path}")
-            
-            except ImportError:
-                logger.warning("Matplotlib not available, skipping visualization")
-            except Exception as e:
-                logger.warning(f"Visualization failed: {e}")
-        
-        # Final progress bar update
-        if pbar:
-            pbar.text = f"Threshold calculation completed: {final_threshold:.4f}"
-        
-        # Log summary
-        logger.info("=" * 80)
-        logger.info("THRESHOLD CALCULATION SUMMARY")
-        logger.info("=" * 80)
-        logger.info(f"Method: {threshold_results.get('method', threshold_method)}")
-        logger.info(f"Threshold: {final_threshold:.6f}")
-        logger.info(f"Samples Used: {len(mse_values):,}")
-        logger.info(f"Data Source: {data_source}")
-        logger.info(f"Calculation Time: {calculation_time:.3f} seconds")
-        
-        if 'anomaly_rate' in validation_results:
-            logger.info(f"Expected Anomaly Rate: {validation_results['anomaly_rate']*100:.2f}%")
-        
-        logger.info(f"Data Statistics:")
-        logger.info(f"  Mean: {basic_stats['mean']:.6f}")
-        logger.info(f"  Std: {basic_stats['std']:.6f}")
-        logger.info(f"  Min: {basic_stats['min']:.6f}")
-        logger.info(f"  Max: {basic_stats['max']:.6f}")
-        logger.info(f"  Skewness: {basic_stats['skewness']:.3f}")
-        
-        if cv_results:
-            logger.info(f"Cross-validation: {cv_results['cv_mean_threshold']:.6f} ± {cv_results['cv_std_threshold']:.6f}")
-        
-        if bootstrap_results:
-            logger.info(f"Bootstrap CI: [{bootstrap_results['bootstrap_ci_lower']:.6f}, {bootstrap_results['bootstrap_ci_upper']:.6f}]")
-        
-        logger.info("=" * 80)
-        
-        # Restore original logging level
-        if verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        # Return threshold and comprehensive results
-        return final_threshold, comprehensive_results
-    
-    except (EOFError, KeyboardInterrupt):
-        logger.warning("Threshold calculation interrupted by user")
-    
-    except Exception as e:
-        # Restore original logging level on error
-        if verbose and 'original_level' in locals():
-            logger.setLevel(original_level)
-        
-        error_msg = f"Threshold calculation failed: {str(e)}"
-        logger.error(error_msg)
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        
-        # Provide helpful error context
-        logger.error(f"Method used: {threshold_method}")
-        logger.error(f"Configuration: {final_config}")
-        
-        # Attempt graceful recovery if enabled
-        if graceful_degradation:
-            logger.warning(f"Using fallback threshold: {fallback_threshold}")
-            
-            fallback_results = {
-                'threshold': fallback_threshold,
-                'method': 'fallback',
-                'error': str(e),
-                'graceful_degradation': True,
-                'config_applied': final_config,
-                # Include run tracking in fallback
-                'run_tracking': {
-                    'run_id': run_id,
-                    'run_number': run_number,
-                    'use_run_tracking': use_run_tracking
-                } if use_run_tracking else None
-            }
-            
-            return fallback_threshold, fallback_results
-        
-        raise RuntimeError(error_msg) from e
-    
-    finally:
-        # Final cleanup
-        try:
-            if pbar_context:
-                # Properly exit the context manager
-                pbar_context.__exit__(None, None, None)
-            
-            if memory_efficient:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
-        except:
-            pass
-
 def train_model(
     # Core Training Parameters
     model_type: Optional[str] = None,
@@ -51041,10 +51052,10 @@ def train_model(
         
         This function identifies the active preset and fills in any missing configuration parameters from the
         preset definition, leveraging the existing parameter structuring infrastructure to avoid redundancy.
-
+        
         Args:
             config: Current configuration dictionary (potentially incomplete)
-            
+        
         Returns:
             Configuration with preset parameters filled in
         """
@@ -52219,39 +52230,54 @@ def train_model(
                     config=config
                 )
                 
-                # Validation phase
-                val_loss, val_reconstruction_errors, val_metrics = validate(
-                    model=model,
-                    loader=val_loader,
-                    criterion=criterion,
-                    device=device,
-                    epoch=epoch,
-                    mixed_precision=mixed_precision,
-                    calculate_metrics=True,
-                    detailed_metrics=validation_config.get('detailed_metrics', True),
-                    # Enable IDS-specific features
-                    anomaly_detection=security_config.get('enable_security_metrics', True),
-                    threshold_analysis=security_config.get('adaptive_threshold', True),
-                    # Custom functions for IDS validation
-                    custom_metric_fn=_default_security_metrics if security_config.get('enable_security_metrics', True) else None,
-                    custom_threshold_fn=_default_adaptive_threshold if security_config.get('adaptive_threshold', True) else None,
-                    custom_analysis_fn=_default_validation_analysis if validation_config.get('detailed_metrics', True) else None,
-                    validation_callbacks=_default_validation_callbacks() if monitoring_config.get('real_time_monitoring', True) else [],
-                    progress_bar=False if epoch_pbar else progress_bar,
-                    progress_bar_desc=f"epoch {epoch+1}/{epochs}",
-                    verbose=debug_mode,
-                    config=config,
-                    # Run tracking parameters
-                    run_id=run_id,
-                    run_number=run_number,
-                    run_specific_dirs={
-                        'results': run_results_dir,
-                        'metrics': run_metrics_dir,
-                        'artifacts': run_artifacts_dir,
-                        'checkpoints': run_checkpoint_dir
-                    },
-                    use_run_tracking=True
-                )
+                # Skip validation at epoch 0 (untrained model)
+                if epoch > 0:
+                    # Validation phase
+                    val_loss, val_reconstruction_errors, val_metrics = validate(
+                        model=model,
+                        loader=val_loader,
+                        criterion=criterion,
+                        device=device,
+                        epoch=epoch,
+                        mixed_precision=mixed_precision,
+                        calculate_metrics=True,
+                        detailed_metrics=validation_config.get('detailed_metrics', True),
+                        # Enable IDS-specific features
+                        anomaly_detection=security_config.get('enable_security_metrics', True),
+                        threshold_analysis=security_config.get('adaptive_threshold', True),
+                        # Custom functions for IDS validation
+                        custom_metric_fn=_default_security_metrics if security_config.get('enable_security_metrics', True) else None,
+                        custom_threshold_fn=_default_adaptive_threshold if security_config.get('adaptive_threshold', True) else None,
+                        custom_analysis_fn=_default_validation_analysis if validation_config.get('detailed_metrics', True) else None,
+                        validation_callbacks=_default_validation_callbacks() if monitoring_config.get('real_time_monitoring', True) else [],
+                        progress_bar=False if epoch_pbar else progress_bar,
+                        progress_bar_desc=f"epoch {epoch+1}/{epochs}",
+                        verbose=debug_mode,
+                        config=config,
+                        # Run tracking parameters
+                        run_id=run_id,
+                        run_number=run_number,
+                        run_specific_dirs={
+                            'results': run_results_dir,
+                            'metrics': run_metrics_dir,
+                            'artifacts': run_artifacts_dir,
+                            'checkpoints': run_checkpoint_dir
+                        },
+                        use_run_tracking=True
+                    )
+                else:
+                    # Use placeholder values for epoch 0
+                    val_loss = float('inf')
+                    val_reconstruction_errors = np.array([])
+                    val_metrics = {
+                        'loss': float('inf'),
+                        'epoch': 0,
+                        'num_batches': 0,
+                        'num_samples': 0,
+                        'validation_skipped': True,
+                        'reason': 'untrained_model',
+                        'message': 'Validation skipped for epoch 0 to avoid false alerts from untrained model'
+                    }
                 
                 # Update training history
                 epoch_time = time.time() - epoch_start_time
@@ -52278,13 +52304,13 @@ def train_model(
                         if isinstance(value, (int, float)):
                             training_history['detailed_metrics'].setdefault(f'train_{key}', []).append(value)
                 
-                if val_metrics:
+                if epoch > 0 and val_metrics:
                     for key, value in val_metrics.items():
                         if isinstance(value, (int, float)):
                             training_history['detailed_metrics'].setdefault(f'val_{key}', []).append(value)
                 
                 # Log custom analysis results if available
-                if val_metrics and 'custom_analysis' in val_metrics:
+                if epoch > 0 and val_metrics and 'custom_analysis' in val_metrics:
                     analysis = val_metrics['custom_analysis']
                     
                     # Log model health
@@ -52316,14 +52342,20 @@ def train_model(
                 # Learning rate scheduling
                 if scheduler:
                     if scheduler_type == 'ReduceLROnPlateau':
-                        scheduler.step(val_loss)
+                        # For epoch 0, use train_loss instead of val_loss
+                        scheduler_metric = val_loss if epoch > 0 else train_loss
+                        scheduler.step(scheduler_metric)
                     else:
                         scheduler.step()
                 
                 # TensorBoard logging
                 if tensorboard_logging and writer:
                     writer.add_scalar("Loss/Train", train_loss, epoch)
-                    writer.add_scalar("Loss/Validation", val_loss, epoch)
+                    
+                    # Only log validation loss if validation was performed
+                    if epoch > 0:
+                        writer.add_scalar("Loss/Validation", val_loss, epoch)
+                    
                     writer.add_scalar("Learning_Rate", current_lr, epoch)
                     writer.add_scalar("Epoch_Time", epoch_time, epoch)
                     
@@ -52332,9 +52364,11 @@ def train_model(
                         if isinstance(value, (int, float)):
                             writer.add_scalar(f"Train/{key}", value, epoch)
                     
-                    for key, value in val_metrics.items():
-                        if isinstance(value, (int, float)):
-                            writer.add_scalar(f"Validation/{key}", value, epoch)
+                    # Only log validation metrics if validation was performed
+                    if epoch > 0 and val_metrics:
+                        for key, value in val_metrics.items():
+                            if isinstance(value, (int, float)):
+                                writer.add_scalar(f"Validation/{key}", value, epoch)
                     
                     if device.type == 'cuda':
                         writer.add_scalar("System/GPU_Memory_GB", memory_usage, epoch)
@@ -52342,38 +52376,45 @@ def train_model(
                 # Console logging
                 if epoch % log_frequency == 0 or epoch == epochs - 1:
                     memory_info = f"GPU: {memory_usage:.3f}GB" if device.type == 'cuda' and 'memory_usage' in locals() else f"RAM: {memory_usage:.3f}GB" if device.type == 'cpu' and 'memory_usage' in locals() else "Mem: N/A"
-                    logger.info(f"Epoch {epoch+1:3d}/{epochs}, Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}, Learning Rate: {current_lr:.2e}, Time: {epoch_time:.1f}s, {memory_info}")
+                    if epoch > 0:
+                        logger.info(f"Epoch {epoch+1:3d}/{epochs}, Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}, Learning Rate: {current_lr:.2e}, Time: {epoch_time:.1f}s, {memory_info}")
+                    else:
+                        logger.info(f"Epoch {epoch+1:3d}/{epochs}, Train Loss: {train_loss:.6f}, Val Loss: SKIPPED, Learning Rate: {current_lr:.2e}, Time: {epoch_time:.1f}s, {memory_info}")
                 
                 # Model checkpointing and early stopping
-                is_best = val_loss < best_val_loss
-                if is_best:
-                    best_val_loss = val_loss
-                    patience_counter = 0
-                    
-                    # Save best model
-                    if save_model:
-                        # Use run-specific directory
-                        best_model_path = run_model_dir / "deep_learning_best_model.pth"
-                        torch.save({
-                            'epoch': epoch,
-                            'model_state_dict': model.state_dict(),
-                            'optimizer_state_dict': optimizer.state_dict(),
-                            'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
-                            'best_val_loss': best_val_loss,
-                            'config': config,
-                            'model_type': model_type,
-                            'training_stats': training_stats
-                        }, best_model_path)
+                if epoch > 0:
+                    is_best = val_loss < best_val_loss
+                    if is_best:
+                        best_val_loss = val_loss
+                        patience_counter = 0
                         
-                        if epoch % (checkpoint_frequency * 5) == 0:
-                            logger.info(f"New best model saved (epoch {epoch+1}, best val loss: {best_val_loss:.6f})")
+                        # Save best model
+                        if save_model:
+                            # Use run-specific directory
+                            best_model_path = run_model_dir / "deep_learning_best_model.pth"
+                            torch.save({
+                                'epoch': epoch,
+                                'model_state_dict': model.state_dict(),
+                                'optimizer_state_dict': optimizer.state_dict(),
+                                'scheduler_state_dict': scheduler.state_dict() if scheduler else None,
+                                'best_val_loss': best_val_loss,
+                                'config': config,
+                                'model_type': model_type,
+                                'training_stats': training_stats
+                            }, best_model_path)
+                            
+                            if epoch % (checkpoint_frequency * 5) == 0:
+                                logger.info(f"New best model saved (epoch {epoch+1}, best val loss: {best_val_loss:.6f})")
+                    else:
+                        patience_counter += 1
+                    
+                    # Early stopping check
+                    if early_stopping and patience_counter >= patience:
+                        logger.info(f"Early stopping triggered at epoch {epoch+1} (patience: {patience})")
+                        break
                 else:
-                    patience_counter += 1
-                
-                # Early stopping check
-                if early_stopping and patience_counter >= patience:
-                    logger.info(f"Early stopping triggered at epoch {epoch+1} (patience: {patience})")
-                    break
+                    # For epoch 0, don't update best_val_loss or patience_counter
+                    logger.debug("Epoch 0: Skipping model checkpoint comparison (no validation performed)")
                 
                 # Periodic checkpointing
                 if save_checkpoints and epoch % checkpoint_frequency == 0 and epoch > 0:
@@ -52393,7 +52434,10 @@ def train_model(
                 if epoch_pbar:
                     epoch_pbar()
                     # Update the text with current metrics
-                    epoch_pbar.text = (f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Best Val Loss: {best_val_loss:.4f} | Current Learning Rate: {current_lr:.2e}")
+                    if epoch > 0:
+                        epoch_pbar.text = (f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Best Val Loss: {best_val_loss:.4f} | Current Learning Rate: {current_lr:.2e}")
+                    else:
+                        epoch_pbar.text = (f"Train Loss: {train_loss:.4f} | Val Loss: SKIPPED | Best Val Loss: N/A | Current Learning Rate: {current_lr:.2e}")
             
             except Exception as e:
                 logger.error(f"Training error at epoch {epoch+1}: {e}")
@@ -86104,16 +86148,6 @@ if __name__ == "__main__":
     # Configure warnings and logging before anything else
     warnings.filterwarnings("ignore", category=UserWarning)
     warnings.filterwarnings("ignore", category=FutureWarning)
-    
-    # Ensure required directories exist
-    try:
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
-        DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        TB_DIR.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        print(f"Failed to create required directories: {e}")
-        sys.exit(1)
     
     try:
         main(logger)
